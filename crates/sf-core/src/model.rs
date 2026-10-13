@@ -675,7 +675,7 @@ impl ObjectKind {
             ObjectKind::Run(r) => r.path.bbox(),
             ObjectKind::Satin(s) => s.column.bbox(),
             ObjectKind::Fill(f) => f.shape.bbox(),
-            ObjectKind::Applique(a) => a.shape.bbox(),
+            ObjectKind::Applique(a) => a.pieces().fold(BBox::EMPTY, |b, s| b.union(s.bbox())),
             ObjectKind::Lettering(l) => l.glyphs.iter().fold(BBox::EMPTY, |b, g| b.union(g.shape.bbox())),
             ObjectKind::Stitches(s) => BBox::from_points(s.stitches.iter().filter(|s| s.is_move()).map(Stitch::pos)),
             ObjectKind::Redwork(r) => r.lines.iter().fold(BBox::EMPTY, |b, c| b.union(c.bbox())),
@@ -700,7 +700,12 @@ impl ObjectKind {
                     *p = m.apply(*p);
                 }
             }
-            ObjectKind::Applique(a) => a.shape.transform(m),
+            ObjectKind::Applique(a) => {
+                a.shape.transform(m);
+                for s in &mut a.extra {
+                    s.transform(m);
+                }
+            }
             ObjectKind::Lettering(l) => {
                 l.transform = l.transform.then(m);
                 for g in &mut l.glyphs {
@@ -749,7 +754,7 @@ impl ObjectKind {
             }
             ObjectKind::Satin(s) => vec![crate::geom::polyline::closed(&s.column.outline(tol))],
             ObjectKind::Fill(f) => std::iter::once(&f.shape.outer).chain(&f.shape.holes).map(ring).collect(),
-            ObjectKind::Applique(a) => std::iter::once(&a.shape.outer).chain(&a.shape.holes).map(ring).collect(),
+            ObjectKind::Applique(a) => a.pieces().flat_map(|s| std::iter::once(&s.outer).chain(&s.holes).map(ring).collect::<Vec<_>>()).collect(),
             ObjectKind::Lettering(l) => {
                 l.glyphs.iter().flat_map(|g| std::iter::once(&g.shape.outer).chain(&g.shape.holes).map(ring).collect::<Vec<_>>()).collect()
             }
@@ -1750,6 +1755,60 @@ pub enum CoverKind {
     Triple,
 }
 
+/// The appliqué fabric's look on the canvas (display only): its colour plain or woven in a
+/// pattern with a second colour.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FabricPattern {
+    #[default]
+    Plain,
+    Stripes,
+    /// Gingham: stripes both ways, darker where they cross.
+    Check,
+    Dots,
+    /// A twill's diagonal ribs.
+    Denim,
+    /// Felt's flecked surface.
+    Felt,
+}
+
+impl FabricPattern {
+    pub const ALL: [FabricPattern; 6] =
+        [FabricPattern::Plain, FabricPattern::Stripes, FabricPattern::Check, FabricPattern::Dots, FabricPattern::Denim, FabricPattern::Felt];
+
+    /// How much of the second colour shows at `(u, v)` mm on the fabric, 0–1.
+    pub fn mix(self, u: f64, v: f64) -> f64 {
+        if !(u.is_finite() && v.is_finite()) {
+            return 0.0;
+        }
+        let band = |x: f64, w: f64| (x / w).floor().rem_euclid(2.0);
+        match self {
+            FabricPattern::Plain => 0.0,
+            FabricPattern::Stripes => band(u, 3.0),
+            FabricPattern::Check => (band(u, 3.0) + band(v, 3.0)) / 2.0,
+            FabricPattern::Dots => {
+                // a dot 1.2 mm round each point of a 5 mm grid, every other row shifted
+                let row = (v / 5.0).round();
+                let shift = if row.rem_euclid(2.0) == 1.0 { 2.5 } else { 0.0 };
+                let (du, dv) = ((u - shift) - ((u - shift) / 5.0).round() * 5.0, v - row * 5.0);
+                if du * du + dv * dv < 1.44 { 1.0 } else { 0.0 }
+            }
+            FabricPattern::Denim => {
+                if ((u + v) / 0.6).floor().rem_euclid(3.0) == 0.0 {
+                    0.35
+                } else {
+                    0.0
+                }
+            }
+            FabricPattern::Felt => {
+                // a fixed hash of the 0.4 mm cell: flecks, the same every frame
+                let (a, b) = ((u / 0.4).floor() as i64, (v / 0.4).floor() as i64);
+                let h = (a.wrapping_mul(73_856_093) ^ b.wrapping_mul(19_349_663)).rem_euclid(1000);
+                if h < 90 { 0.5 } else { 0.0 }
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppliqueParams {
@@ -1770,6 +1829,12 @@ pub struct AppliqueParams {
     pub pull_comp: f64,
     /// Colour of the appliqué fabric (display only).
     pub fabric_color: Rgb,
+    /// The fabric's pattern and its second colour (display only).
+    pub fabric_pattern: FabricPattern,
+    pub fabric_color_2: Rgb,
+    /// The pieces of a compound path sewn as one appliqué: every placement line, one stop,
+    /// every tack-down, one stop, every cover (else each piece in turn).
+    pub combine: bool,
     /// Partial cover: the cover leaves out the edges objects sewn later lie over (they hold
     /// the fabric's edge there).
     pub partial: bool,
@@ -1788,6 +1853,9 @@ impl Default for AppliqueParams {
             cover_spacing: 0.45,
             pull_comp: 0.2,
             fabric_color: Rgb::new(0xe9, 0xd8, 0xa6),
+            fabric_pattern: FabricPattern::Plain,
+            fabric_color_2: Rgb::new(0xff, 0xff, 0xff),
+            combine: false,
             partial: false,
         }
     }
@@ -1802,6 +1870,16 @@ pub struct AppliqueObject {
     /// out; set when the design is planned.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub covered: Vec<Vec<Point>>,
+    /// The other pieces sewn with this one (combined appliqué), mm.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra: Vec<Shape>,
+}
+
+impl AppliqueObject {
+    /// Every piece: the shape, then the pieces combined with it.
+    pub fn pieces(&self) -> impl Iterator<Item = &Shape> {
+        std::iter::once(&self.shape).chain(&self.extra)
+    }
 }
 
 // ---------------------------------------------------------------------------

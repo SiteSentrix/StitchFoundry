@@ -1,4 +1,5 @@
-//! Appliqué: placement line → stop → tack-down → stop → cover stitch.
+//! Appliqué: placement line → stop → tack-down → stop → cover stitch; combined pieces sew every
+//! placement line, one stop, every tack-down, one stop, then every cover.
 
 use super::out::Out;
 use super::run::{CORNER_ANGLE, blanket};
@@ -64,8 +65,9 @@ fn uncovered(r: &[Point], covered: &[crate::geom::Polygon]) -> Vec<Vec<Point>> {
     out
 }
 
-pub(crate) fn generate(shape: &Shape, p: &AppliqueParams, covered: &[Vec<Point>], hint: Option<Point>, trim: f64) -> Vec<Stitch> {
-    let base = poly::clean(&[shape.polygon(FLATTEN_TOLERANCE)]);
+pub(crate) fn generate(pieces: &[&Shape], p: &AppliqueParams, covered: &[Vec<Point>], hint: Option<Point>, trim: f64) -> Vec<Stitch> {
+    let polys: Vec<crate::geom::Polygon> = pieces.iter().map(|s| s.polygon(FLATTEN_TOLERANCE)).collect();
+    let base = poly::clean(&polys);
     if base.is_empty() {
         return Vec::new();
     }
@@ -141,7 +143,7 @@ mod tests {
     fn covers_of_every_kind_and_partial_cover() {
         let shape = Shape::ellipse(Point::new(0.0, 0.0), 20.0, 15.0);
         let count =
-            |p: &AppliqueParams, covered: &[Vec<Point>]| generate(&shape, p, covered, None, 2.0).iter().filter(|s| s.cmd == Cmd::Stitch).count();
+            |p: &AppliqueParams, covered: &[Vec<Point>]| generate(&[&shape], p, covered, None, 2.0).iter().filter(|s| s.cmd == Cmd::Stitch).count();
         let base = AppliqueParams { placement: false, tackdown: TackdownKind::None, ..AppliqueParams::default() };
         for cover in [CoverKind::Satin, CoverKind::Blanket, CoverKind::Zigzag, CoverKind::Triple] {
             assert!(count(&AppliqueParams { cover, ..base.clone() }, &[]) > 20, "{cover:?}");
@@ -152,15 +154,27 @@ mod tests {
         assert_eq!(count(&base, &half), whole);
         let part = count(&AppliqueParams { partial: true, ..base.clone() }, &half);
         assert!(part * 10 > whole * 3 && part * 10 < whole * 7, "{part} of {whole}");
-        let st = generate(&shape, &AppliqueParams { partial: true, ..base.clone() }, &half, None, 2.0);
+        let st = generate(&[&shape], &AppliqueParams { partial: true, ..base.clone() }, &half, None, 2.0);
         assert!(st.iter().filter(|s| s.cmd == Cmd::Stitch).all(|s| s.x < 1.6), "the cover stays on the left");
     }
 
     #[test]
     fn applique_sequence_has_two_stops() {
         let shape = Shape::ellipse(Point::new(0.0, 0.0), 20.0, 15.0);
-        let st = generate(&shape, &AppliqueParams::default(), &[], None, 2.0);
+        let st = generate(&[&shape], &AppliqueParams::default(), &[], None, 2.0);
         assert_eq!(st.iter().filter(|s| s.cmd == Cmd::Stop).count(), 2);
         assert!(st.iter().filter(|s| s.cmd == Cmd::Stitch).count() > 300);
+    }
+
+    #[test]
+    fn combined_pieces_share_their_stops() {
+        let a = Shape::ellipse(Point::new(0.0, 0.0), 10.0, 8.0);
+        let b = Shape::ellipse(Point::new(40.0, 0.0), 10.0, 8.0);
+        let st = generate(&[&a, &b], &AppliqueParams::default(), &[], None, 2.0);
+        assert_eq!(st.iter().filter(|s| s.cmd == Cmd::Stop).count(), 2, "one stop after the placement lines, one after the tack-downs");
+        // both placement lines come before the first stop
+        let stop = st.iter().position(|s| s.cmd == Cmd::Stop).unwrap();
+        let before = &st[..stop];
+        assert!(before.iter().any(|s| s.cmd == Cmd::Stitch && s.x < 15.0) && before.iter().any(|s| s.cmd == Cmd::Stitch && s.x > 25.0));
     }
 }

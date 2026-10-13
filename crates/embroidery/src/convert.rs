@@ -337,8 +337,21 @@ pub(crate) fn convert(node: &Node, e: &Embroidery) -> Vec<ObjectKind> {
         }
         StitchType::Applique(params) => {
             let Some((lines, rule)) = node_lines(node) else { return out };
-            for region in regions(&lines, rule) {
-                out.push(ObjectKind::Applique(AppliqueObject { shape: Shape::from_polygon(&region), params: params.clone(), covered: Vec::new() }));
+            let shapes: Vec<Shape> = regions(&lines, rule).iter().map(Shape::from_polygon).collect();
+            if params.combine {
+                // the pieces sewn together: one object, its placement lines, tack-downs and covers each in turn
+                if let Some((first, rest)) = shapes.split_first() {
+                    out.push(ObjectKind::Applique(AppliqueObject {
+                        shape: first.clone(),
+                        params: params.clone(),
+                        covered: Vec::new(),
+                        extra: rest.to_vec(),
+                    }));
+                }
+            } else {
+                for shape in shapes {
+                    out.push(ObjectKind::Applique(AppliqueObject { shape, params: params.clone(), covered: Vec::new(), extra: Vec::new() }));
+                }
             }
         }
     }

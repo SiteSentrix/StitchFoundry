@@ -327,6 +327,18 @@ edges), *Cover width* wide. **Partial cover** (`partial: true`) leaves the cover
 object sewn later lies over the patch's edge: that object holds the fabric there, and the cover
 under it would only add bulk.
 
+The canvas shows each appliqué's fabric under its stitches (*Fabric colour*; *Fabric pattern*:
+plain, stripes, check, dots, denim or felt, woven with the *Pattern colour*), so a design can be
+judged with the fabrics it will use.
+
+**Combine Appliqué** (`embroidery.applique.combine`) makes the selected pieces one compound path
+sewn together (`combine: true`): every piece's placement line, one stop to lay all the fabric,
+every tack-down, one stop to trim, then every cover; without it each piece is sewn whole, two
+stops each. Pieces of one compound path combine with *Sew the pieces together* in the panel.
+**Prepare Appliqué** (`embroidery.applique.prepare {close?, breakUp?}`) makes pieces ready to
+sew: open outlines are closed, and where pieces overlap, each is cut away under the pieces in
+front of it, so every piece lies flat in its own layer.
+
 ## Click to stitch
 
 The **Click-to-Stitch tool** (in the Embroidery tools) turns a region of a placed image into a

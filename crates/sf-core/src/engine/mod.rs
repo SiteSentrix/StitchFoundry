@@ -46,7 +46,7 @@ pub fn object_stitches(obj: &EmbObject, settings: &DesignSettings, entry_hint: O
             let job = FillJob { params: &f.params, splits: &f.splits, flow: &f.flow, extra_angle: 0.0 };
             fill_shape(&f.shape, job, &f.guides, hint, exit, (trim, settings.max_stitch))
         }
-        ObjectKind::Applique(a) => applique::generate(&a.shape, &a.params, &a.covered, hint, trim),
+        ObjectKind::Applique(a) => applique::generate(&a.pieces().collect::<Vec<_>>(), &a.params, &a.covered, hint, trim),
         ObjectKind::Redwork(r) => redwork::generate(&r.lines, &r.params, hint, trim),
         ObjectKind::Lettering(l) => lettering(l, hint, exit, (trim, settings.max_stitch)),
         ObjectKind::Stitches(b) => b.stitches.iter().copied().filter(|s| s.cmd != Cmd::ColorChange && s.cmd != Cmd::End).collect(),
@@ -625,7 +625,7 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
 pub fn object_polygons(obj: &EmbObject) -> Vec<Polygon> {
     match &obj.kind {
         ObjectKind::Fill(f) => vec![f.shape.polygon(FLATTEN_TOLERANCE)],
-        ObjectKind::Applique(a) => vec![a.shape.polygon(FLATTEN_TOLERANCE)],
+        ObjectKind::Applique(a) => a.pieces().map(|s| s.polygon(FLATTEN_TOLERANCE)).collect(),
         ObjectKind::Satin(s) => vec![Polygon::from_ring(s.column.outline(FLATTEN_TOLERANCE))],
         ObjectKind::Lettering(l) => l.glyphs.iter().map(|g| g.shape.polygon(FLATTEN_TOLERANCE)).collect(),
         ObjectKind::Run(_) | ObjectKind::Stitches(_) | ObjectKind::Redwork(_) | ObjectKind::Decor(_) => Vec::new(),
@@ -666,6 +666,7 @@ mod tests {
                 shape: Shape::ellipse(Point::new(0.0, -30.0), 12.0, 8.0),
                 params: AppliqueParams::default(),
                 covered: Vec::new(),
+                extra: Vec::new(),
             }),
             2,
         );

@@ -447,10 +447,10 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BD-01 | Beading: bead runs, fixings, edit runs, manual beads | Done | Beads along lines, in shapes or at points, sewn through and back; edited as the path; counted | 0 |
 | BL-01 | Bling: palettes, runs, fills, borders, manual stones, bling lettering, edit | Done | Rhinestones SS6–SS30 along lines, round edges, packed in shapes, at points, on type (bling lettering); not sewn; shown with facets; templates by Cut File | 0 |
 | AP-01 | Convert vectors to appliqué; create appliqué | Done | Appliqué type | – |
-| AP-02 | Fabric swatches on appliqué (show the fabric) | Missing | Image fill in preview | 4 |
+| AP-02 | Fabric swatches on appliqué (show the fabric) | Done | Each patch's fabric drawn under its stitches: a colour, plain or patterned (stripes, check, dots, denim, felt) with a second colour | 0 |
 | AP-03 | Partial-cover appliqué (cover only uncovered edges) | Done | `partial` on appliqué: the cover leaves out the edges objects sewn later lie over | – |
-| AP-04 | Combine appliqué components (one sequence for several pieces) | Missing | Group-level appliqué sequencing | 4 |
-| AP-05 | Auto-close and break-up appliqué (open shapes, overlapping pieces) | Missing | Close open paths; split overlapping pieces into layers (Embroidery Legacy features) | 4 |
+| AP-04 | Combine appliqué components (one sequence for several pieces) | Done | Combine Appliqué: pieces made one compound sewn as one sequence: all placement lines, one stop, all tack-downs, one stop, all covers | 0 |
+| AP-05 | Auto-close and break-up appliqué (open shapes, overlapping pieces) | Done | Prepare Appliqué: open outlines closed, overlapping pieces trimmed under the ones in front | 0 |
 
 ### 6.11 Lettering, team names, monograms, fonts
 
@@ -579,8 +579,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 221 done,
-8 partial, 15 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 224 done,
+8 partial, 12 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

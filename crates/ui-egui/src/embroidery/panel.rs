@@ -183,6 +183,34 @@ fn lettering_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Embroidery Lettering")).id_salt("emb-lettering").show(ui, |ui| lettering_body(app, ui));
 }
 
+/// The appliqué fabric's look on the canvas: its colour, pattern and second colour.
+fn applique_fabric_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, a: &vectorcraft_embroidery::sf_core::model::AppliqueParams) {
+    use vectorcraft_embroidery::sf_core::model::FabricPattern;
+    let hex = |c: [u8; 3]| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]);
+    ui.horizontal(|ui| {
+        ui.label(tl!("Fabric colour"));
+        let mut c = [a.fabric_color.r, a.fabric_color.g, a.fabric_color.b];
+        if ui.color_edit_button_srgb(&mut c).changed() {
+            set(app, target, json!({ "fabric_color": hex(c) }));
+        }
+    });
+    let names = [tl!("Plain"), tl!("Stripes"), tl!("Check"), tl!("Dots"), tl!("Denim"), tl!("Felt")];
+    let cur = FabricPattern::ALL.iter().position(|k| *k == a.fabric_pattern).unwrap_or(0);
+    if let Some(i) = pick(ui, tl!("Fabric pattern"), "fabpat", cur, &names) {
+        let k = FabricPattern::ALL.get(i).copied().unwrap_or_default();
+        set(app, target, json!({ "fabric_pattern": k }));
+    }
+    if a.fabric_pattern != FabricPattern::Plain {
+        ui.horizontal(|ui| {
+            ui.label(tl!("Pattern colour"));
+            let mut c = [a.fabric_color_2.r, a.fabric_color_2.g, a.fabric_color_2.b];
+            if ui.color_edit_button_srgb(&mut c).changed() {
+                set(app, target, json!({ "fabric_color_2": hex(c) }));
+            }
+        });
+    }
+}
+
 /// A decoration's settings: where the pieces go, their size, shape and colour, how sequins are
 /// held, and whether the machine stops first.
 fn decoration_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, d: &vectorcraft_embroidery::sf_core::decor::DecorParams) {
@@ -2293,6 +2321,10 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             if let Some(v) = num(ui, tl!("Density"), "cd", a.cover_spacing, " mm", 2) {
                 set(app, target, json!({ "cover_spacing": v }));
             }
+            if let Some(v) = check(ui, tl!("Sew the pieces together"), a.combine) {
+                set(app, target, json!({ "combine": v }));
+            }
+            applique_fabric_rows(app, ui, target, a);
         }
         StitchType::Manual => {
             ui.label(tl!("Each anchor point is a needle penetration."));
