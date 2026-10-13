@@ -491,6 +491,16 @@ hoodies the caption, and `belowNeckMm`, say how far below the neckline the desig
 way placements are measured on a garment. Printed life-size placement templates come from the
 worksheet (`kind: template`), and a basting run round the design from the design settings.
 
+## Merging colours
+
+**Merge Colours** (`embroidery.colors.merge {tolerance?, sequence?}`) makes the design's threads of
+the same colour, or near enough to pass for it (`tolerance`, a ΔE: 3 by default, 0 for only the
+very same colour), one thread: each becomes the one sewn first, its name and code kept. The design
+is then sequenced again (as Auto Sequence, keeping objects that overlap in their stacking order) so
+the merged colours' blocks join: fewer colour changes at the machine. An object given its own
+colour block keeps its stop. It is one undo step, and says how many threads and colour blocks
+there were before and after.
+
 ## Thread charts of your own
 
 Besides the built-in charts, the Design section keeps charts of your own: **Import Chart…** reads

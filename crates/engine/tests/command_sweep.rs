@@ -563,6 +563,7 @@ fn structured_junk() {
         ("embroidery.clipart.insert", json!({"name": "Heart", "size": f64::NAN, "at": [f64::INFINITY, 0]})),
         ("embroidery.queue.add", json!({"folder": "\u{0}/x", "format": "zzz", "name": "../x"})),
         ("embroidery.queue.remove", json!({"id": "x", "done": 3})),
+        ("embroidery.colors.merge", json!({"tolerance": f64::NAN, "sequence": "x", "paint": []})),
         ("embroidery.worksheet.setup", json!({"company": 3, "logo": "\u{0}", "hide": [1, null]})),
         ("embroidery.visualize", json!({"image": "\u{0}", "imageWidth": f64::NAN, "at": [f64::INFINITY, 1]})),
         ("embroidery.visualize", json!({"product": "cap", "areas": "yes"})),

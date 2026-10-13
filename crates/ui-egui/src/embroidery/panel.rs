@@ -597,6 +597,13 @@ fn recolor_row(app: &mut VectorcraftApp, ui: &mut Ui) {
         {
             app.status(e);
         }
+        if button(ui, tl!("Merge Colours"))
+            .on_hover_text(tl!("Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back"))
+            .clicked()
+            && let Err(e) = app.run("embroidery.colors.merge", json!({}))
+        {
+            app.status(e);
+        }
     });
 }
 
