@@ -348,13 +348,27 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
 fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize) -> (String, Response, Rect) {
     let t = Tokens::get(ui.ctx());
     let editing = ui.memory(|m| m.has_focus(id));
+    // A press outside the field ends its editing in this frame, so the text typed is committed
+    // before the press acts: the canvas, drawn after the panels, may select another object, and a
+    // frame later the text would be committed to that one.
+    if editing
+        && let Some(at) = ui.input(|i| i.pointer.primary_pressed().then(|| i.pointer.interact_pos()).flatten())
+        && ui.ctx().read_response(id).is_some_and(|r| !r.rect.contains(at))
+    {
+        ui.memory_mut(|m| m.surrender_focus(id));
+    }
     // When the value changes under a focused field (the slider beside it, a preview, another
     // field's edit), its text follows: the text typed for the old value would otherwise go back in
     // on the next Enter, Tab or arrow key (#1457).
     let shown_id = id.with("shown");
     let followed = ui.data_mut(|d| d.get_temp::<String>(shown_id)).is_none_or(|before| before == shown);
     ui.data_mut(|d| d.insert_temp(shown_id, shown.to_string()));
-    let typed = if editing && followed { ui.data_mut(|d| d.get_temp::<String>(id)) } else { None };
+    // A press elsewhere can end the focus outside this field's own drawing (a field drawn before it
+    // takes it, the canvas ends text input), so `editing` is already false on the frame it reports
+    // `lost_focus`: the text typed is still taken then, to be committed (#1637). Escape drops it.
+    let focus_id = id.with("had-focus");
+    let had_focus = ui.data_mut(|d| d.get_temp::<bool>(focus_id)).unwrap_or(false) && !ui.input(|i| i.key_pressed(egui::Key::Escape));
+    let typed = if (editing || had_focus) && followed { ui.data_mut(|d| d.get_temp::<String>(id)) } else { None };
     let mut buf: String = typed.unwrap_or_else(|| shown.to_string());
     // The box is exactly as tall as the other controls of a row (26 points a line), its text
     // centred in it: a frame around the text came out a point taller and stood out next to
@@ -385,7 +399,11 @@ fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize
             (rect, resp)
         })
         .inner;
-    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    let focused = ui.memory(|m| m.has_focus(id));
+    ui.data_mut(|d| {
+        d.insert_temp(id, buf.clone());
+        d.insert_temp(focus_id, focused);
+    });
     (buf, resp, rect)
 }
 
