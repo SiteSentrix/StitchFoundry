@@ -364,6 +364,10 @@ pub struct UiState {
     /// buttons follow ([`crate::panels::align::with_align_to`]).
     #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
     pub align_to: crate::panels::align::AlignTo,
+    /// Color panel: the mode picked last from its menu (`None`: never picked), in which the panel
+    /// shows the defaults for new art ([`crate::panels::color::deserialize_mode`]).
+    #[serde(default, deserialize_with = "crate::panels::color::deserialize_mode")]
+    pub color_mode: Option<crate::panels::color::Mode>,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
@@ -644,6 +648,7 @@ impl Default for UiState {
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
             align_to: Default::default(),
+            color_mode: None,
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,
