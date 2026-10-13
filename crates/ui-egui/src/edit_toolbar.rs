@@ -375,13 +375,16 @@ fn sections() -> &'static [(&'static str, Vec<&'static ToolInfo>)] {
     })
 }
 
+/// A heading of the drawer and the flyout groups listed under it.
+type Heading = (&'static str, Vec<&'static [ToolInfo]>);
+
 /// The headings in order, each with the flyout groups listed under it (a group under the heading
 /// most of its tools have, the first tool's on a tie), each in its tools' order: what the drawer
 /// frames together.
-fn groups() -> &'static [(&'static str, Vec<&'static [ToolInfo]>)] {
-    static GROUPS: OnceLock<Vec<(&'static str, Vec<&'static [ToolInfo]>)>> = OnceLock::new();
+fn groups() -> &'static [Heading] {
+    static GROUPS: OnceLock<Vec<Heading>> = OnceLock::new();
     GROUPS.get_or_init(|| {
-        let mut out: Vec<(&'static str, Vec<&'static [ToolInfo]>)> = sections().iter().map(|(cat, _)| (*cat, vec![])).collect();
+        let mut out: Vec<Heading> = sections().iter().map(|(cat, _)| (*cat, vec![])).collect();
         for g in TOOL_GROUPS {
             let Some(first) = g.first() else { continue };
             let count = |h: &str| g.iter().filter(|t| heading(t.id) == h).count();
