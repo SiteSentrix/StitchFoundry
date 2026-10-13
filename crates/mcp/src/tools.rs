@@ -355,7 +355,7 @@ pub fn tool_definitions() -> Vec<Value> {
             obj(
                 json!({
                     "text": {"type": "string"},
-                    "x": num("Baseline origin x (point/area type: left)"),
+                    "x": num("Baseline origin x (area type: left; point type: where the line starts, or its centre or end with justify center/right)"),
                     "y": num("First baseline y (area type: top)"),
                     "width": num("Area type frame width"),
                     "height": num("Area type frame height"),
@@ -367,6 +367,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "size": num("Font size in pt"),
                     "font": {"type": "string", "description": "Font family"},
                     "color": paint_schema("Text colour (#rrggbb)"),
+                    "justify": {"type": "string", "enum": ["auto", "left", "center", "right", "justifyAll"], "description": "Paragraph alignment (default auto: the start of the text's direction). Point type lines up on x: center centres each line on it, right ends it there"},
                 }),
                 &["text"],
             ),
@@ -579,7 +580,7 @@ fn select_ids(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
 fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let text = a.get("text").and_then(Value::as_str).ok_or("missing string argument `text`")?;
     let mut style = json!({});
-    for k in ["size", "font", "color"] {
+    for k in ["size", "font", "color", "justify"] {
         if let Some(v) = a.get(k) {
             style[k] = v.clone();
         }
