@@ -45,7 +45,7 @@ use serde::{Deserialize, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use atomic::{write_atomic, write_atomic_with, write_new_with};
+pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
 use stream::{Gz, Indent, KeyScan, Out};
 
 /// v4: large data after the JSON (v1 to v3 files still load).

@@ -794,7 +794,7 @@ pub(crate) fn write_new_file(path: &str, bytes: &[u8]) -> Result<()> {
     may_write(path)?;
     let err = |e: std::io::Error| EngineError::Other(format!("{path}: {e}"));
     let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(path).map_err(err)?;
-    let written = f.write_all(bytes).and_then(|()| f.sync_all());
+    let written = f.write_all(bytes).and_then(|()| vectorcraft_format::sync_file(&f));
     drop(f);
     written.map_err(|e| {
         // Best effort: the partly written file is all there is to clean up.
