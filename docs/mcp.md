@@ -111,6 +111,13 @@ accepted too. Clients requesting `2026-07-28` through `initialize`, or through a
 List TTL is 600000 ms; live reads use zero. Older clients keep the original response shapes.
 This does not add streaming or input requests — see [Not implemented](#not-implemented).
 
+One message is one line of at most 16 MiB: a longer line is answered with `-32600` and skipped,
+and the server keeps serving what follows. A batch holds at most 64 messages. `command_batch`
+holds at most 256 steps, and the step results it keeps (for later steps' `"$N.path"` references
+and the reply) total at most 8 MiB — past that the batch stops with the reason, closing its atomic
+undo group as usual. Replies from a connected app are refused past 256 MiB and the connection
+dropped; the call reports uncertainty like any reply that never arrived whole.
+
 `initialize` advertises:
 
 | Capability | What it covers |
@@ -242,7 +249,7 @@ The older names below remain listed because existing workflows use them.
 |---|---|
 | `command_list` | Optional `filter`, `enabled_only`; returns the command array |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)) |
-| `command_batch` | `steps: [{id, params?}]`, optional `stop_on_error` (default true), `atomic` and `label`; returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step, or with `atomic: true` the batch's edits are one undo step named `label` (else after its first edit; `edit.undoGroup.begin`/`end` underneath); failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below) |
+| `command_batch` | `steps: [{id, params?}]` (at most 256), optional `stop_on_error` (default true), `atomic` and `label`; returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step, or with `atomic: true` the batch's edits are one undo step named `label` (else after its first edit; `edit.undoGroup.begin`/`end` underneath); failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below). Kept step results total at most 8 MiB; past that the batch stops with the reason |
 | `doc_inspect` | Optional `depth`, `childLimit`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024) and `artboard` (0-based, default 0); inline PNG of that artboard without editing it. Artboards too large to render within the allocation bound return a tool error |
 | `ui_inspect`, `ui_screenshot` | Connected desktop state/window capture; tool errors in headless mode |

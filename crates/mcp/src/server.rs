@@ -21,6 +21,14 @@ const INVALID_PARAMS: i64 = -32602;
 const INTERNAL_ERROR: i64 = -32603;
 const RESOURCE_NOT_FOUND: i64 = -32002;
 
+/// Longest accepted request line (bytes, without the newline). Requests are small JSON objects;
+/// anything longer is answered with an error and skipped, so one huge line can't make the server
+/// allocate without bound (#1727).
+pub(crate) const MAX_LINE_BYTES: usize = 16 * 1024 * 1024;
+/// Most messages one batch may hold. Batches were removed from the protocol; this only bounds what
+/// older clients can make the server parse and answer at once (#1727).
+pub(crate) const MAX_BATCH_MESSAGES: usize = 64;
+
 const INSTRUCTIONS: &str = "VectorCraft is a professional vector illustration app. Coordinates are \
 points in document space (y down, origin at the first artboard's top-left; a new document is 612×792). \
 Draw with draw_shape / draw_path, change colours with set_paint, look with render_preview and doc_inspect. \
@@ -46,6 +54,49 @@ fn response(id: Value, result: Value) -> Value {
 
 fn error(id: Value, code: i64, message: impl Into<String>) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message.into()}})
+}
+
+/// Read one `\n`-terminated line into `buf` (newline stripped). `Ok(false)` at end of stream.
+/// `buf` holding more than `max` bytes means the line is overlong: no newline arrived within the
+/// bound, so the bytes so far are only its start. Only `max + 1` bytes are ever buffered for one
+/// line, in the reader's own bounded chunks, so a peer can't make us allocate without bound
+/// (#1727).
+pub(crate) fn read_line_capped(reader: &mut impl BufRead, buf: &mut Vec<u8>, max: usize) -> std::io::Result<bool> {
+    buf.clear();
+    loop {
+        let take = {
+            let chunk = reader.fill_buf()?;
+            if chunk.is_empty() {
+                return Ok(!buf.is_empty());
+            }
+            let upto = chunk.iter().position(|&b| b == b'\n').map_or(chunk.len(), |i| i + 1);
+            upto.min(max.saturating_add(1).saturating_sub(buf.len()))
+        };
+        if take == 0 {
+            // Already past the bound: the caller sees `buf.len() > max`.
+            return Ok(true);
+        }
+        // The chunk is still buffered (nothing was consumed), so the same bytes are there; the
+        // `min` keeps even a misbehaving reader from panicking us.
+        let chunk = reader.fill_buf()?;
+        let take = take.min(chunk.len());
+        buf.extend_from_slice(&chunk[..take]);
+        reader.consume(take);
+        if buf.last() == Some(&b'\n') {
+            buf.pop();
+            if buf.last() == Some(&b'\r') {
+                buf.pop();
+            }
+            return Ok(true);
+        }
+    }
+}
+
+/// One reply line on the protocol stream.
+fn write_reply(output: &mut impl Write, line: &str) -> std::io::Result<()> {
+    output.write_all(line.as_bytes())?;
+    output.write_all(b"\n")?;
+    output.flush()
 }
 
 impl Server {
@@ -80,17 +131,36 @@ impl Server {
     /// Serve newline-delimited JSON-RPC until `input` closes. Logs go to stderr only (stdout is
     /// the protocol stream).
     pub fn serve(&mut self, input: impl BufRead, mut output: impl Write) -> std::io::Result<()> {
-        for line in input.lines() {
-            let line = line?;
-            let reply = self.handle_line(&line);
+        let mut reader = input;
+        let mut buf = Vec::new();
+        loop {
+            if !read_line_capped(&mut reader, &mut buf, MAX_LINE_BYTES)? {
+                return Ok(());
+            }
+            if buf.len() > MAX_LINE_BYTES {
+                // Longer than anything a client can mean: answer the framing violation, skip the
+                // rest of the line in bounded chunks, and keep serving what follows.
+                write_reply(
+                    &mut output,
+                    &error(Value::Null, INVALID_REQUEST, format!("request line longer than {MAX_LINE_BYTES} bytes")).to_string(),
+                )?;
+                loop {
+                    if !read_line_capped(&mut reader, &mut buf, MAX_LINE_BYTES)? {
+                        return Ok(());
+                    }
+                    if buf.len() <= MAX_LINE_BYTES {
+                        break;
+                    }
+                }
+                continue;
+            }
+            let line = std::str::from_utf8(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            let reply = self.handle_line(line);
             let notes = self.take_notifications();
             for line in reply.iter().chain(notes.iter()) {
-                output.write_all(line.as_bytes())?;
-                output.write_all(b"\n")?;
+                write_reply(&mut output, line)?;
             }
-            output.flush()?;
         }
-        Ok(())
     }
 
     /// Handle one line; returns the reply line (None for notifications and blank lines).
@@ -104,6 +174,8 @@ impl Server {
                 // Batches were removed in 2025-06-18; still answer older clients sensibly.
                 if batch.is_empty() {
                     Some(error(Value::Null, INVALID_REQUEST, "empty batch"))
+                } else if batch.len() > MAX_BATCH_MESSAGES {
+                    Some(error(Value::Null, INVALID_REQUEST, format!("batch of {} messages exceeds {MAX_BATCH_MESSAGES}", batch.len())))
                 } else {
                     let replies: Vec<Value> = batch.into_iter().filter_map(|m| self.handle(m)).collect();
                     (!replies.is_empty()).then_some(Value::Array(replies))
