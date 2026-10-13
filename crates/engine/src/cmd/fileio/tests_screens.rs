@@ -123,6 +123,35 @@ fn sub_folders_are_made_in_the_export_folder() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// #1713: whatever a suffix or prefix says (`..`, an absolute path, a drive, a share), every file
+/// lands directly in the export folder.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_hostile_suffix_or_prefix_stays_in_the_export_folder() {
+    let mut s = session(1);
+    let top = std::env::temp_dir().join(format!("vc-screens-escape-{}", std::process::id()));
+    let dir = top.join("out");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    for text in ["/../../up", "\\..\\up", "/etc/x", "C:\\Windows\\x", "\\\\server\\share\\x", "/..", ".."] {
+        for key in ["suffix", "prefix"] {
+            let mut p = json!({"folder": folder, "formats": [{"format": "svg"}]});
+            if key == "suffix" {
+                p["formats"][0][key] = json!(text);
+            } else {
+                p[key] = json!(text);
+            }
+            let r = export(&mut s, p);
+            let written = std::path::PathBuf::from(r["files"][0].as_str().unwrap());
+            assert!(written.is_file(), "{key} {text}");
+            assert_eq!(written.parent().unwrap().canonicalize().unwrap(), dir.canonicalize().unwrap(), "{key} {text}");
+        }
+    }
+    // Nothing beside the export folder, no folder inside it.
+    assert_eq!(std::fs::read_dir(&top).unwrap().count(), 1);
+    assert!(std::fs::read_dir(&dir).unwrap().all(|e| e.unwrap().path().is_file()));
+    let _ = std::fs::remove_dir_all(top);
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_zip_is_written_into_the_folder() {
