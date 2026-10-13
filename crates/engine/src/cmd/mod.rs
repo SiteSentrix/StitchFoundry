@@ -37,6 +37,7 @@ pub mod embroidery_laydown;
 pub mod embroidery_lettering;
 pub mod embroidery_library;
 pub mod embroidery_machines;
+pub mod embroidery_merge;
 pub mod embroidery_monogram;
 pub mod embroidery_motifs;
 pub mod embroidery_outline;
@@ -277,6 +278,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_jobs::specs());
         v.extend(embroidery_clipart::specs());
         v.extend(embroidery_queue::specs());
+        v.extend(embroidery_merge::specs());
         v.extend(embroidery_sheet_setup::specs());
         v.extend(embroidery_scatter::specs());
         v.extend(xform::specs());

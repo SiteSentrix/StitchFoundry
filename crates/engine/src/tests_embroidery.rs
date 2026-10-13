@@ -719,6 +719,34 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
 }
 
 #[test]
+fn near_colours_merge_into_one_thread_and_their_blocks_join() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // red, blue, a red a shade off, apart from each other: three colour blocks
+    for (k, color) in ["#d62828", "#1d3557", "#d72a29"].iter().enumerate() {
+        rect(&mut s, (10.0 + 30.0 * k as f64) * PT, 10.0 * PT, 20.0 * PT, 20.0 * PT);
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+        s.execute("embroidery.setThread", &json!({"color": color, "name": format!("thread {k}")})).unwrap();
+    }
+    let blocks = |s: &Session| s.embroidery_plan().unwrap().pattern().color_blocks().len();
+    assert_eq!(blocks(&s), 3);
+    // only the very same colour: nothing to merge
+    let r = s.execute("embroidery.colors.merge", &json!({"tolerance": 0})).unwrap();
+    assert_eq!(r["merged"], json!([]), "{r}");
+    let r = s.execute("embroidery.colors.merge", &json!({})).unwrap();
+    assert_eq!(r["merged"], json!([{"from": "#d72a29", "to": "#d62828"}]), "{r}");
+    assert_eq!((r["threads"].clone(), r["blocks"].clone()), (json!([3, 2]), json!([3, 2])), "{r}");
+    assert_eq!(blocks(&s), 2);
+    // the red sewn first kept its name
+    let names: Vec<String> = s.embroidery_plan().unwrap().pattern().threads.iter().map(|t| t.name.clone()).collect();
+    assert_eq!(names.iter().filter(|n| *n == "thread 0").count(), 1, "{names:?}");
+    // one undo step
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(blocks(&s), 3);
+    assert!(s.execute("embroidery.colors.merge", &json!({"tolerance": 99})).is_err());
+}
+
+#[test]
 fn the_threads_recolour_by_a_map_or_a_scheme_in_one_undo() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

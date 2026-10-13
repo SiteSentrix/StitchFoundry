@@ -157,6 +157,7 @@ fn embroidery_menu() -> Vec<Item> {
         Sep,
         c("Sort by Thread Color", "embroidery.sortByColor"),
         c("Match Threads to Chart", "embroidery.matchThreads"),
+        c("Merge Colours", "embroidery.colors.merge"),
         c("Auto Sequence", "embroidery.autoSequence"),
         c("Branch", "embroidery.branch"),
         c("Redwork", "embroidery.redwork"),
