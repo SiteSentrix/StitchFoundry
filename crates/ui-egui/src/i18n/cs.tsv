@@ -4744,6 +4744,13 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	Jeden poloměr rohů
+	Top Left:	Vlevo nahoře:
+	Top Right:	Vpravo nahoře:
+	Bottom Left:	Vlevo dole:
+	Bottom Right:	Vpravo dole:
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem

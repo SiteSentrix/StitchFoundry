@@ -4268,6 +4268,13 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	Einheitlicher Eckenradius
+	Top Left:	Oben links:
+	Top Right:	Oben rechts:
+	Bottom Left:	Unten links:
+	Bottom Right:	Unten rechts:
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
