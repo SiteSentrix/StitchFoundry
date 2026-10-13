@@ -4277,6 +4277,13 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	단일 모퉁이 반지름
+	Top Left:	왼쪽 위:
+	Top Right:	오른쪽 위:
+	Bottom Left:	왼쪽 아래:
+	Bottom Right:	오른쪽 아래:
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명

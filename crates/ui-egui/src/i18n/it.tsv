@@ -4313,6 +4313,13 @@ lighting	Light	Luce
 @msg	unknown parameter `{key}`; the command takes: {keys}	parametro sconosciuto `{key}`; il comando accetta: {keys}
 	Load EPS into Clipboard	Carica EPS negli appunti
 @msg	an image of {w} × {h} pixels is too large to draw	un'immagine di {w} × {h} pixel è troppo grande per essere disegnata
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	Raggio angolo unico
+	Top Left:	In alto a sinistra:
+	Top Right:	In alto a destra:
+	Bottom Left:	In basso a sinistra:
+	Bottom Right:	In basso a destra:
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto

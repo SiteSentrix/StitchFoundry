@@ -4295,6 +4295,13 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	Một bán kính góc
+	Top Left:	Trên cùng bên trái:
+	Top Right:	Trên cùng bên phải:
+	Bottom Left:	Dưới cùng bên trái:
+	Bottom Right:	Dưới cùng bên phải:
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng

@@ -4744,6 +4744,13 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	Rayon d’angle unique
+	Top Left:	En haut à gauche :
+	Top Right:	En haut à droite :
+	Bottom Left:	En bas à gauche :
+	Bottom Right:	En bas à droite :
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet

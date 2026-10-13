@@ -4711,6 +4711,13 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	Egységes sarokkerekítés
+	Top Left:	Bal felső:
+	Top Right:	Jobb felső:
+	Bottom Left:	Bal alsó:
+	Bottom Right:	Jobb alsó:
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött

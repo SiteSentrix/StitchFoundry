@@ -4307,6 +4307,13 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	角丸の半径を統一
+	Top Left:	左上:
+	Top Right:	右上:
+	Bottom Left:	左下:
+	Bottom Right:	右下:
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト

@@ -4293,6 +4293,13 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	Єдиний радіус кутів
+	Top Left:	Вгорі ліворуч:
+	Top Right:	Вгорі праворуч:
+	Bottom Left:	Внизу ліворуч:
+	Bottom Right:	Внизу праворуч:
 	Softness	М'якість
 	Ambient Light	Навколишнє світло
 	Light behind the object	Світло позаду об'єкта

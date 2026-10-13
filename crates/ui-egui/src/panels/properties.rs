@@ -676,6 +676,33 @@ mod tests {
         assert!(widths.iter().all(|w| (w - widths[0]).abs() < 1.0), "X, rotation, corner radius, opacity: {widths:?}");
     }
 
+    /// #1512: the link behind Corner Radius. On, one field sets every corner; off, a field per
+    /// corner shows each corner's own radius.
+    #[test]
+    fn the_corner_radius_link_shows_a_field_per_corner() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+        app.run("object.setLiveShape", json!({"radius": 7, "corners": [2]})).unwrap();
+        let ctx = egui::Context::default();
+        let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(app.session.prefs.single_corner_radius, "linked at first");
+        assert!(has(&texts, "Corner Radius:") && !has(&texts, "Top Left:") && !has(&texts, "7 pt"), "{texts:?}");
+        app.run("prefs.set", json!({"key": "singleCornerRadius", "value": false})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        for l in ["Corner Radius:", "Top Left:", "Top Right:", "Bottom Right:", "Bottom Left:"] {
+            assert!(has(&texts, l), "{l}: {texts:?}");
+        }
+        assert_eq!(texts.iter().filter(|(t, _)| t == "7 pt").count(), 1, "the bottom-right corner: {texts:?}");
+        // The fields sit in line, in the order top left, top right, bottom right, bottom left.
+        let at = |s: &str| texts.iter().find(|(t, _)| t == s).unwrap().1;
+        assert!(at("Top Left:").top() < at("Top Right:").top() && at("Top Right:").top() < at("Bottom Right:").top());
+        assert!((at("7 pt").top() - at("Bottom Right:").top()).abs() < 6.0, "{texts:?}");
+    }
+
     /// The Transform section's More Options holds Scale Corners and Scale Strokes & Effects, and
     /// stays open while they are toggled.
     #[test]

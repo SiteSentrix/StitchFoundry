@@ -3682,6 +3682,13 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
+
+# Corner Radius: a field per corner of a live rectangle.
+	Single Corner Radius	統一圓角半徑
+	Top Left:	左上：
+	Top Right:	右上：
+	Bottom Left:	左下：
+	Bottom Right:	右下：
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
