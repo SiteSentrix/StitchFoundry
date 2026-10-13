@@ -1096,6 +1096,32 @@ fn big_designs_split_into_hoopings_with_registration_marks() {
     assert!(r["files"].as_array().unwrap().is_empty());
     assert!(s.execute("embroidery.multiHoop", &json!({"width": 40, "height": 40, "overlap": 5})).is_err());
     assert!(s.execute("embroidery.multiHoop", &json!({"width": 130, "height": 180, "overlap": 80})).is_err());
+    // marks of one's own: three targets in each overlap, in blue
+    let first = |s: &mut Session| {
+        let _ = std::fs::remove_dir_all(&dir);
+        let r = s.execute("embroidery.multiHoop", &json!({"hoop": "Brother 130 × 180 (5×7)", "dir": dir.to_string_lossy()})).unwrap();
+        let bytes = std::fs::read(r["hoopings"][1]["file"].as_str().unwrap()).unwrap();
+        sf_formats::read_any(&bytes, Some("dst")).unwrap().1
+    };
+    let crosses = first(&mut s);
+    s.execute("embroidery.settings", &json!({"registration": {"shape": "target", "size": 4, "perOverlap": 3, "color": "#0055ff"}})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["settings"]["registration"]["shape"].as_str(), Some("target"), "{info}");
+    let targets = first(&mut s);
+    // the middle hooping shares two overlaps: 6 marks, each a ring and two lines
+    let jumps_before_colour = |p: &sf_core::Pattern| {
+        p.stitches.iter().take_while(|st| st.cmd != sf_core::Cmd::ColorChange).filter(|st| st.cmd == sf_core::Cmd::Jump).count()
+    };
+    assert!(jumps_before_colour(&targets) > jumps_before_colour(&crosses), "{} vs {}", jumps_before_colour(&targets), jumps_before_colour(&crosses));
+    for bad in [
+        json!({"registration": {"shape": "star"}}),
+        json!({"registration": {"size": 50}}),
+        json!({"registration": {"perOverlap": 0}}),
+        json!({"registration": {"color": "blue"}}),
+        json!({"registration": 3}),
+    ] {
+        assert!(s.execute("embroidery.settings", &bad).is_err(), "{bad}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

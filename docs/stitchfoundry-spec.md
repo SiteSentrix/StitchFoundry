@@ -264,7 +264,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BAS-13 | Travel tools: step through a design by stitch, object, colour, trim, function | Done | Stitch Sequence panel: Travel by (stitch, object, colour, trim, function) with back and next buttons; the object reached is selected | 1 |
 | BAS-14 | Colour-Object list (objects in sewing order, grouped by colour) | Done | Stitch Sequence panel: rows grouped by thread, drag to reorder, Shift/Ctrl multi-select, eye and lock per row, hidden objects listed to show again | 1 |
 | BAS-15 | Show repeats (preview tiled/repeated layouts) | Done | Repeat objects are sewn and shown copy by copy; the Embroidery panel's *Repeats across* and *Repeats down* (`ui.embroideryRepeats`) show the whole design repeated in a grid, a gap apart, without sewing it | – |
-| BAS-16 | Design information (stitches, size, colours, time, thread, cost) | Partial | Panel stats; add cost estimate (OUT-*) | 6 |
+| BAS-16 | Design information (stitches, size, colours, time, thread, cost) | Done | The Design section: size, stitches, colours, trims, time, thread and bobbin, and the cost a piece (OUT-05) | 0 |
 | BAS-17 | Print preview of designs | Partial | VectorCraft printing prints art; embroidery worksheets in RP-* | 6 |
 | BAS-18 | Thread palette, assign and edit thread colours | Done | Panel colour + chart picker | – |
 | BAS-19 | Create and edit thread charts (custom charts, import/export) | Partial | Built-in generic/PEC/JEF; add user charts (CSV import/export), more brand-neutral charts | 6 |
@@ -278,7 +278,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SYS-03 | Inserted-file thread handling (keep, match to chart) | Done | Machine files keep their colours; Match Threads to Chart (`embroidery.matchThreads`) maps them to a chart's closest threads | 1 |
 | SYS-04 | Object property apply options (apply to selection vs. new objects) | Done | The Embroidery panel edits the selection, or with nothing selected the properties new objects take (`embroidery.current.setParams`) | 1 |
 | SYS-05 | Custom hoop list, hoop options | Done | 36 standard hoops and frames; hoops of one's own kept by name (`embroidery.hoop.saveCustom`, `.deleteCustom`), listed with them | 0 |
-| SYS-06 | Registration-mark settings for multi-hooping | Missing | MH-* | 6 |
+| SYS-06 | Registration-mark settings for multi-hooping | Done | `embroidery.settings {registration}`: cross, circle or target marks, their size, how many in each overlap and their colour, kept with the design | 0 |
 | SYS-07 | Reshape options (show stitch angles, beads, guides) | Done | Start and stop and Inclination lines toggles in the panel: the selection's beads and stitch-angle lines with any tool | 1 |
 | SYS-08 | Warning options (long stitches, small objects, density too high) | Done | Check settings: density, long stitch, small lettering and tiny object limits saved with the design (`embroidery.settings {checks}`) | 1 |
 | HW-01 | Machine connection / design queue manager | Partial | Send to Machine reaches machines through the folders they read (OUT-03); a queue manager and vendor protocols (only if publicly documented) still to come | 6 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 187 done,
-25 partial, 32 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 189 done,
+24 partial, 31 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

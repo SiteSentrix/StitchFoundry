@@ -188,6 +188,90 @@ pub struct DesignSettings {
     /// Where the frame goes when the design is done (none: where its last stitch is).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end: Option<DesignPoint>,
+    /// The registration marks multi-hooping sews in the overlaps.
+    pub registration: RegistrationMarks,
+}
+
+/// What a registration mark looks like.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkShape {
+    /// Two short runs crossing.
+    #[default]
+    Cross,
+    /// A ring.
+    Circle,
+    /// A ring with a cross through it.
+    Target,
+}
+
+impl MarkShape {
+    pub fn id(self) -> &'static str {
+        match self {
+            MarkShape::Cross => "cross",
+            MarkShape::Circle => "circle",
+            MarkShape::Target => "target",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Some(match id {
+            "cross" => MarkShape::Cross,
+            "circle" => MarkShape::Circle,
+            "target" => MarkShape::Target,
+            _ => return None,
+        })
+    }
+}
+
+/// The registration marks multi-hooping sews first in each hooping, in the overlaps it shares
+/// with its neighbours, to line the fabric up by.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RegistrationMarks {
+    pub shape: MarkShape,
+    /// How far a mark reaches from its middle (mm).
+    pub size: f64,
+    /// Marks in each overlap with a neighbour (1–4).
+    pub per_overlap: u8,
+    /// Their thread (a colour of their own, sewn first).
+    pub color: Rgb,
+}
+
+impl Default for RegistrationMarks {
+    fn default() -> Self {
+        RegistrationMarks { shape: MarkShape::Cross, size: 3.0, per_overlap: 2, color: Rgb::new(0xc0, 0xc0, 0xc0) }
+    }
+}
+
+impl RegistrationMarks {
+    /// A mark at `at` as runs of running stitches about 1 mm long, each entered by a jump.
+    pub fn runs(&self, at: Point) -> Vec<Vec<Point>> {
+        let size = if self.size.is_finite() { self.size.clamp(1.0, 20.0) } else { 3.0 };
+        let steps = (2.0 * size).ceil().max(2.0) as usize;
+        let line = |dx: f64, dy: f64| -> Vec<Point> {
+            (0..=steps)
+                .map(|k| {
+                    let t = -1.0 + 2.0 * k as f64 / steps as f64;
+                    Point::new(at.x + dx * size * t, at.y + dy * size * t)
+                })
+                .collect()
+        };
+        let ring = || -> Vec<Point> {
+            let n = ((std::f64::consts::TAU * size).ceil() as usize).clamp(12, 120);
+            (0..=n)
+                .map(|k| {
+                    let a = std::f64::consts::TAU * k as f64 / n as f64;
+                    Point::new(at.x + size * a.cos(), at.y + size * a.sin())
+                })
+                .collect()
+        };
+        match self.shape {
+            MarkShape::Cross => vec![line(1.0, 0.0), line(0.0, 1.0)],
+            MarkShape::Circle => vec![ring()],
+            MarkShape::Target => vec![ring(), line(1.0, 0.0), line(0.0, 1.0)],
+        }
+    }
 }
 
 /// A point of the design's box: its centre, a corner or the middle of a side.
@@ -273,6 +357,7 @@ impl Default for DesignSettings {
             basting: None,
             start: None,
             end: None,
+            registration: RegistrationMarks::default(),
         }
     }
 }
