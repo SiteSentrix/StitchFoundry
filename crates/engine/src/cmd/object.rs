@@ -202,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Bounds",
             [],
             None,
-            "{x?, y?, width?, height?, reference?: 0..8 (9-point grid), proportional?, strokes?, corners?, copy?: bool, patterns?: bool (Transform Patterns), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move)} (Transform panel; width/height and the reference point follow the bounding box, rotated with rotated objects; x, y are page coordinates; with Use Preview Bounds the values measure the visual bounds; strokes/corners as object.scale)",
+            "{x?, y?, width?, height?, reference?: 0..8 (9-point grid), proportional?, strokes?, corners?, copy?: bool, patterns?: bool (Transform Patterns), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move)} (Transform panel; width/height and the reference point follow the bounding box, rotated with rotated objects; x, y are page coordinates; with Use Preview Bounds the values measure the visual bounds; strokes/corners as object.scale; with anchor points selected (Direct Selection) and no copy, the values are the box around those points, square to the page, and only they move or scale, as with object.move (#1824))",
             has_selection,
             set_bounds
         ),
@@ -1400,6 +1400,13 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
+    let st = s.doc()?;
+    if transforms_objects(p)
+        && !bool_or(p, "copy", false)
+        && let Some(b) = st.selection.anchor_bounds(&st.doc, s.prefs.use_preview_bounds)
+    {
+        return set_anchor_bounds(s, p, ids, b);
+    }
     let d = &s.doc()?.doc;
     // Sizes are measured square to the bounding box, which a rotation turns with the objects:
     // the math below runs in its frame.
@@ -1475,6 +1482,28 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let (scale, new_rp) = solved.map_or((scale, new_rp), |(sx, sy, at)| (about(rp, Affine::scale_non_uniform(sx, sy)), at));
     apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p, false)
+}
+
+/// `object.setBounds` with anchors selected with Direct Selection (#1824): the values are those of
+/// `b`, the box around the anchors (and the objects selected whole) square to the page, and only
+/// the anchors, their handles with them, and those objects move or scale.
+fn set_anchor_bounds(s: &mut Session, p: &Value, ids: Vec<NodeId>, b: Rect) -> Result<Value> {
+    let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
+    let rp = vectorcraft_geom::reference_point(b, refi);
+    let mut w = f64_or(p, "width", b.width());
+    let mut h = f64_or(p, "height", b.height());
+    if bool_or(p, "proportional", false) {
+        if p.get("width").is_some() && b.width() > 0.0 {
+            h = b.height() * w / b.width();
+        } else if p.get("height").is_some() && b.height() > 0.0 {
+            w = b.width() * h / b.height();
+        }
+    }
+    // A single anchor, or anchors in a line, have no size to scale on that side.
+    let ratio = |size: f64, now: f64| if now > 1e-9 { size / now } else { 1.0 };
+    let scale = about(rp, Affine::scale_non_uniform(ratio(w, b.width()), ratio(h, b.height())));
+    let to = Point::new(f64_or(p, "x", rp.x), f64_or(p, "y", rp.y));
+    apply_transform(s, "Transform", ids, Affine::translate(to - rp) * scale, p, true)
 }
 
 /// The visual box of `ids` square to `frame`, as [`Document::oriented_bounds`] measures it, with
