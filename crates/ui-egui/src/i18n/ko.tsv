@@ -1555,6 +1555,44 @@
 	Import PDF Presets	PDF 프리셋 가져오기
 	Import Perspective Grid Presets	원근 격자 프리셋 가져오기
 	Import Print Presets	인쇄 프리셋 가져오기
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	단축키 세트 가져오기
+	Import Shortcut Set…	단축키 세트 가져오기…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	파일의 각 항목은 VectorCraft의 도구, 명령 또는 패널에 대응됩니다. 대응을 확인하고 남은 항목을 정하세요.
+	Keys	키
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	파일은 키와 보조 키를 코드로 기록합니다. 제안된 의미를 확인하고 아직 알 수 없는 코드의 의미를 정하세요.
+	Click, then press the key this code stands for (Esc cancels)	클릭한 다음 이 코드에 해당하는 키를 누르세요(Esc로 취소)
+	Press a key…	키를 누르세요…
+	from your earlier imports	이전 가져오기에서
+	from the format's public description	형식의 공개 설명에서
+	not known yet	아직 알 수 없음
+	Shortcuts	단축키
+	Shortcut	단축키
+	In the File	파일에서
+	In VectorCraft	VectorCraft에서
+	Needs Attention Only	확인이 필요한 항목만
+	Ready	준비됨
+	Needs a choice	선택 필요
+	Needs a key	키 필요
+	No equivalent	대응 항목 없음
+	Tools take a single key (optionally with Shift)	도구에는 키 하나만 지정할 수 있습니다(Shift 포함 가능)
+	A later row takes this shortcut	뒤의 행이 이 단축키를 사용합니다
+	Same item as a later row	뒤의 행과 같은 항목
+	Start from VectorCraft Defaults	VectorCraft 기본값에서 시작
+	Add to the Current Shortcuts	현재 단축키에 추가
+	Remember My Choices	내 선택 기억
+	{ready} of {total} ready	준비됨 {ready}/{total}
+	The file is too large to read in full, so only its first part is listed.	파일이 너무 커서 전체를 읽을 수 없으므로 앞부분만 표시합니다.
+	Report copied	보고서를 복사했습니다
+	Line {line}	{line}행
+	Line {line}: {name}: {status}	{line}행: {name}: {status}
+	Imported. Press OK to keep the imported set.	가져왔습니다. 가져온 세트를 유지하려면 확인을 누르세요.
+	Read Shortcut Set File	단축키 세트 파일 읽기
+	Import Matches	가져오기 대응
+	Remember Import Matches	가져오기 대응 기억
+	Forget Import Matches	가져오기 대응 지우기
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치|기본 단축키 {n}개와 일치
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개|읽지 않은 파일 부분 {n}개
 	Import Transparency Flattener Presets	투명도 병합 프리셋 가져오기
 	Import…	가져오기…
 	In Tangent Handles	안쪽 접선 핸들
@@ -3993,6 +4031,8 @@ theme	Appearance	외관
 @msg	no file reader	파일 판독기가 없습니다
 @msg	no file writer	파일 기록기가 없습니다
 @msg	not a VectorCraft shortcut set (missing `overrides`)	VectorCraft 단축키 세트가 아닙니다(`overrides`가 없음)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	단축키 세트가 아닙니다: 텍스트가 슬래시 이름과 여는 중괄호로 시작하지 않습니다
+@msg	This shortcut file is in a form VectorCraft can't read.	이 단축키 파일은 VectorCraft가 읽을 수 없는 형식입니다.
 @msg	shortcut for `{k}` must be a string	`{k}`의 단축키는 문자열이어야 합니다
 @msg	tool shortcuts must be a single key (optionally with Shift)	도구 단축키는 키 하나여야 합니다(Shift 포함 가능)
 @msg	unknown preset (one of {_1})	알 수 없는 프리셋({_1} 중 하나)
