@@ -198,6 +198,12 @@ impl Server {
             }
             return Some(error(id.unwrap_or(Value::Null), INVALID_REQUEST, "missing `method`"));
         };
+        // JSON-RPC 2.0 is the only envelope this server speaks: a request or notification in any
+        // other envelope is never dispatched and never changes state (#1728).
+        if o.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
+            // A notification has no id to address a reply to; ignoring it is the only answer.
+            return id.map(|id| error(id, INVALID_REQUEST, "expected `\"jsonrpc\": \"2.0\"`"));
+        };
         let params = o.get("params").cloned().unwrap_or(Value::Null);
         let Some(id) = id else {
             self.notification(method, &params);

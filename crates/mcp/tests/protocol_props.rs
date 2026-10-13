@@ -216,6 +216,70 @@ fn framing_never_panics_on_malformed_messages() {
     rpc(&mut s, 7, "ping", json!({}));
 }
 
+/// One line of [`limits_and_envelopes_answer_each_line_once`]: `(the line, what must answer it)`.
+/// The limits are written out here (64 messages, 256 steps, 16 MiB): they are the protocol that
+/// `docs/mcp.md` promises, so changing one must fail a test.
+fn limit_line(kind: u8, n: usize, id: u64) -> (String, Value) {
+    let ping = |id: Value| json!({"jsonrpc": "2.0", "id": id, "method": "ping", "params": {}});
+    match kind {
+        0 => (ping(json!(id)).to_string(), json!("result")),
+        // No envelope, or another version: refused when it has an id, ignored when it has none.
+        1 => (json!({"id": id, "method": "ping"}).to_string(), json!(-32600)),
+        2 => (json!({"jsonrpc": "1.0", "id": id, "method": "tools/call", "params": {"name": "undo", "arguments": {}}}).to_string(), json!(-32600)),
+        3 => (json!({"method": "notifications/initialized"}).to_string(), Value::Null),
+        // A batch answers each message, or is refused whole past 64.
+        4 => {
+            let n = 1 + n % 80;
+            (Value::Array((0..n).map(|i| ping(json!(i))).collect()).to_string(), if n > 64 { json!(-32600) } else { json!(n) })
+        }
+        // command_batch refuses more than 256 steps before running any.
+        5 => {
+            let n = 250 + n % 12;
+            let steps: Vec<Value> = (0..n).map(|_| json!({"id": "select.all"})).collect();
+            let call =
+                json!({"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": {"name": "command_batch", "arguments": {"steps": steps}}});
+            (call.to_string(), json!(if n > 256 { "tool error" } else { "result" }))
+        }
+        // A line past 16 MiB is answered and skipped.
+        _ => ("x".repeat(16 * 1024 * 1024 + 1 + n), json!(-32600)),
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
+
+    /// The limits and the envelope check (#1727, #1728), from the outside: whatever mix of lines
+    /// arrives, each is answered once (never, for a notification), the server goes on serving
+    /// after every refusal, and no refused line edits the document or initializes the server.
+    #[test]
+    fn limits_and_envelopes_answer_each_line_once(kinds in prop::collection::vec((0u8..6, 0usize..400), 1..12), overlong_at in prop::option::of(0usize..12)) {
+        let mut lines: Vec<(String, Value)> = kinds.iter().enumerate().map(|(i, &(kind, n))| limit_line(kind, n, i as u64)).collect();
+        if let Some(at) = overlong_at {
+            lines.insert(at.min(lines.len()), limit_line(6, at, 0));
+        }
+        let mut s = server();
+        let before = doc_json(&document(&mut s));
+        let input: String = lines.iter().map(|(l, _)| format!("{l}\n")).collect();
+        let mut out = Vec::new();
+        s.serve(input.as_bytes(), &mut out).unwrap();
+        let replies: Vec<Value> = String::from_utf8(out).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        let expected: Vec<&Value> = lines.iter().map(|(_, want)| want).filter(|w| !w.is_null()).collect();
+        prop_assert_eq!(replies.len(), expected.len(), "one reply per answered line: {:?}", &expected);
+        for (reply, want) in replies.iter().zip(expected) {
+            match want {
+                Value::String(kind) => {
+                    prop_assert_eq!(reply["result"]["isError"].as_bool().unwrap_or(false), kind == "tool error", "{}", reply);
+                    prop_assert!(reply.get("error").is_none(), "{}", reply);
+                }
+                Value::Number(n) if n.as_i64() == Some(-32600) => prop_assert_eq!(&reply["error"]["code"], want, "{}", reply),
+                _ => prop_assert_eq!(reply.as_array().map(Vec::len), want.as_u64().map(|n| n as usize), "{}", reply),
+            }
+        }
+        prop_assert!(!s.is_initialized(), "a notification without the envelope initialized the server");
+        prop_assert_eq!(doc_json(&document(&mut s)), before, "a refused or read-only line changed the document");
+    }
+}
+
 #[test]
 fn resources_are_json() {
     let mut s = server();
