@@ -615,7 +615,10 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let sp = fit_freehand(&pts, tol, closed);
     let fill = if bool_or(p, "fill", false) { s.paint.fill.clone() } else { Paint::None };
-    let mut look = s.new_art_look(fill, stroke_paint(s), s.paint.stroke_width.max(0.1));
+    // A pencil path with a fill keeps a stroke of None (#1679); only one that would show nothing
+    // gets black. A brush is its stroke.
+    let stroke = if brush || fill.is_none() { stroke_paint(s) } else { s.paint.stroke.clone() };
+    let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1));
     if let Some(st) = look.appearance.stroke_mut() {
         st.pressure = pressure;
     }

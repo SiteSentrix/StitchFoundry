@@ -1235,3 +1235,21 @@ fn pen_with_alt_converts_the_anchors_of_a_path_in_a_selected_group() {
         assert_eq!(paths(&s).len(), 1, "{wrap}: no new path");
     }
 }
+
+/// #1679: a filled pencil path keeps a stroke of None; an unfilled one with no stroke gets black,
+/// or it would show nothing.
+#[test]
+fn a_filled_pencil_path_keeps_no_stroke() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let pts = json!([[10, 10], [60, 20], [90, 80], [20, 90]]);
+    let id = NodeId(s.execute("path.freehand", &json!({"points": pts, "fill": true})).unwrap()["id"].as_u64().unwrap());
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(n.appearance.stroke_paint().is_none(), "{:?}", n.appearance);
+    assert!(!n.appearance.fill_paint().is_none());
+    let id = NodeId(s.execute("path.freehand", &json!({"points": pts})).unwrap()["id"].as_u64().unwrap());
+    assert!(!s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint().is_none());
+}
