@@ -318,8 +318,10 @@ impl WarpStyle {
     }
 }
 
-/// The warp map on normalised coordinates: `b` = bend (-1..1), `dh`/`dv` = distortion (-1..1).
-pub fn warp_point(style: WarpStyle, b: f64, dh: f64, dv: f64, x: f64, y: f64) -> (f64, f64) {
+/// The warp map on normalised coordinates: `b` = bend (-1..1), `dh`/`dv` = distortion (-1..1);
+/// `aspect` is the box's half-height over its half-width along the warp (Arc bends in real
+/// proportions).
+pub fn warp_point(style: WarpStyle, b: f64, dh: f64, dv: f64, aspect: f64, x: f64, y: f64) -> (f64, f64) {
     use WarpStyle::*;
     let t = (y + 1.0) / 2.0; // 0 at top, 1 at bottom
     let par = 1.0 - x * x; // parabola: 1 at centre, 0 at sides
@@ -328,14 +330,18 @@ pub fn warp_point(style: WarpStyle, b: f64, dh: f64, dv: f64, x: f64, y: f64) ->
             if b.abs() < 1e-6 {
                 (x, y)
             } else {
-                // Bend the centre line into a circular arc of equal length (sweep = |b|·180°).
+                // Bend the centre line into a circular arc of equal length (sweep = |b|·180°), in
+                // the box's real proportions (lengths in half-widths, so y counts `aspect` each):
+                // the edges are concentric arcs, and one that would pass the centre stops there
+                // instead of folding over (#1578).
+                let k = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
                 let sweep = b.abs() * PI;
                 let r0 = 2.0 / sweep;
-                let yy = if b > 0.0 { y } else { -y };
+                let yy = if b > 0.0 { y } else { -y } * k;
                 let a = x / r0;
-                let r = r0 - yy;
+                let r = (r0 - yy).max(0.0);
                 let (s, c) = a.sin_cos();
-                let (nx, ny) = (r * s, r0 - r * c);
+                let (nx, ny) = (r * s, (r0 - r * c) / k);
                 (nx, if b > 0.0 { ny } else { -ny })
             }
         }
@@ -1122,9 +1128,9 @@ fn surface_of<'a>(kind: &'a EnvelopeKind, src: Rect, frame: Affine) -> Box<dyn F
             Box::new(move |u: f64, v: f64| {
                 let (x, y) = (2.0 * u - 1.0, 2.0 * v - 1.0);
                 let (x2, y2) = if horizontal {
-                    warp_point(st, b, dh, dv, x, y)
+                    warp_point(st, b, dh, dv, hh / hw.max(1e-9), x, y)
                 } else {
-                    let (a, b2) = warp_point(st, b, dh, dv, y, x);
+                    let (a, b2) = warp_point(st, b, dh, dv, hw / hh.max(1e-9), y, x);
                     (b2, a)
                 };
                 frame * Point::new(c.x + x2 * hw, c.y + y2 * hh)
@@ -1711,6 +1717,31 @@ pub(crate) fn max_outset(nodes: &[Arc<Node>]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1578: Arc bends in the box's real proportions. In half-width units (y scaled by the
+    /// aspect), the top and bottom edges are concentric circles about the bend's centre, at their
+    /// real distance from the centre line; an inner edge that would pass the centre stops there.
+    #[test]
+    fn arc_warp_is_round_in_real_proportions() {
+        for (aspect, b) in [(0.25, 0.1), (0.25, 0.5), (0.25, 1.0), (1.0, 0.5), (2.0, 0.3)] {
+            let r0 = 2.0 / (b * PI);
+            for (y, r) in [(-1.0, r0 + aspect), (1.0, (r0 - aspect).max(0.0))] {
+                for i in 0..=10 {
+                    let x = -1.0 + 0.2 * f64::from(i);
+                    let (nx, ny) = warp_point(WarpStyle::Arc, b, 0.0, 0.0, aspect, x, y);
+                    let d = nx.hypot(ny * aspect - r0);
+                    assert!((d - r).abs() < 1e-9, "aspect {aspect}, bend {b}, y {y}, x {x}: {d} vs {r}");
+                }
+            }
+        }
+        // At 100 % on a square the inner edge meets at the centre instead of folding over.
+        let (nx, _) = warp_point(WarpStyle::Arc, 1.0, 0.0, 0.0, 1.0, 0.8, 1.0);
+        assert!(nx.abs() < 1e-12);
+        // A square bent less than that is what it always was.
+        let (nx, ny) = warp_point(WarpStyle::Arc, 0.5, 0.0, 0.0, 1.0, 0.5, 0.25);
+        let (r0, a) = (4.0 / PI, 0.5 / (4.0 / PI));
+        assert!((nx - (r0 - 0.25) * a.sin()).abs() < 1e-12 && (ny - (r0 - (r0 - 0.25) * a.cos())).abs() < 1e-12);
+    }
     use vectorcraft_geom::shapes;
 
     fn rect_node(x: f64, y: f64, w: f64, h: f64, c: Color) -> Arc<Node> {
