@@ -30,6 +30,7 @@
 //! - `legacy_ai`: legacy `.ai` files of version 7 ([`export_legacy_ai`]), with their layers and groups.
 
 mod import;
+mod latin;
 mod legacy_ai;
 mod print;
 mod ps;
@@ -37,7 +38,7 @@ mod scene;
 mod tiff;
 
 pub use import::{Imported, ai_alone, family_style, import, import_with, is_loss, layered_ai};
-pub use legacy_ai::{LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
+pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
 pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;

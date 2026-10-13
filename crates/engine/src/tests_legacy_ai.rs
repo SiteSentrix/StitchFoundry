@@ -93,7 +93,7 @@ fn the_default_stays_pdf_compatible_and_other_versions_are_refused() {
 }
 
 #[test]
-fn transparency_type_and_appearances_are_written_as_plain_art() {
+fn transparency_and_appearances_are_written_as_plain_art_and_type_as_text() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
@@ -105,7 +105,7 @@ fn transparency_type_and_appearances_are_written_as_plain_art() {
     let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap();
     let w = warnings(&r);
     assert!(w.iter().any(|w| w.contains("written opaque")), "{w:?}");
-    assert!(w.iter().any(|w| w.contains("outlines")), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("type") && w.contains("outlines")), "{w:?}");
     let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
     let text = String::from_utf8(bytes.clone()).unwrap();
     // No transparency operators: version 7 has none.
@@ -116,6 +116,64 @@ fn transparency_type_and_appearances_are_written_as_plain_art() {
     let mut opaque = true;
     d.walk(|n| opaque &= n.opacity == 1.0);
     assert!(opaque);
+    assert_eq!(texts(d), ["Hi"]);
+}
+
+/// The plain text of every text object of `d`.
+fn texts(d: &vectorcraft_doc::Document) -> Vec<String> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            out.push(t.plain_text());
+        }
+    });
+    out
+}
+
+#[test]
+fn type_can_be_written_as_outlines() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("text.create", &json!({"x": 20, "y": 50, "text": "Café", "size": 24})).unwrap();
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "outlineText": true})).unwrap();
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(texts(d).is_empty());
+    let mut paths = 0;
+    d.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. } | vectorcraft_doc::NodeKind::Path { .. })));
+    assert!(paths > 0);
+    assert!(s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "outlineText": "yes"})).is_err());
+    let v = s.execute("file.formatOptions", &json!({"format": "ai"})).unwrap();
+    assert_eq!(v["options"]["outlineText"]["value"], false, "{v}");
+}
+
+#[test]
+fn hidden_objects_go_to_a_hidden_layer_or_are_left_out_or_shown() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 60, "y": 10, "width": 30, "height": 30})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    let saved = |s: &mut Session, hidden: Value| {
+        let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "hiddenObjects": hidden})).unwrap();
+        s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+        let d = s.doc().unwrap().doc.clone();
+        s.execute("file.close", &json!({})).unwrap();
+        (d, warnings(&r))
+    };
+    let (d, w) = saved(&mut s, Value::Null);
+    assert_eq!(layer_names(&d), ["Layer 1", "Layer 1 (hidden)"], "{w:?}");
+    assert!(d.layers[0].visible && !d.layers[1].visible);
+    assert!(w.iter().any(|w| w.contains("hidden layer")), "{w:?}");
+    let (d, _) = saved(&mut s, json!("omit"));
+    assert_eq!(layer_names(&d), ["Layer 1"]);
+    assert_eq!(d.layers[0].children().map(Vec::len), Some(1));
+    let (d, _) = saved(&mut s, json!("visible"));
+    assert_eq!(layer_names(&d), ["Layer 1"]);
+    assert_eq!(d.layers[0].children().map(|c| c.iter().filter(|n| n.visible).count()), Some(2));
+    assert!(s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "hiddenObjects": "behind"})).is_err());
+    let v = s.execute("file.formatOptions", &json!({"format": "ai"})).unwrap();
+    assert_eq!(v["options"]["hiddenObjects"]["value"], "layer", "{v}");
 }
 
 #[test]

@@ -289,6 +289,25 @@ impl FontFace {
     pub fn face_index(&self) -> u32 {
         self.index
     }
+    /// The face's PostScript name, as PostScript files name fonts (`SourceSans3-Bold`): name ID 6;
+    /// for a named instance of a variable font (whose name ID 6 is the default instance's), its
+    /// prefix and style (`SourceSans3-Semibold`). Without one, its family and style.
+    pub fn postscript_name(&self) -> String {
+        let squeeze = |s: &str| -> String { s.chars().filter(|c| c.is_ascii_graphic() && !"[](){}<>/%".contains(*c)).collect() };
+        let own = self.skrifa().and_then(|f| localized(&f, StringId::POSTSCRIPT_NAME).into_iter().map(|(_, s)| s).next()).map(|s| squeeze(&s));
+        match own.filter(|s| !s.is_empty()) {
+            Some(name) if self.variations.is_empty() => name,
+            own => {
+                let prefix = own.as_deref().and_then(|n| n.split('-').next()).map_or_else(|| squeeze(&self.family), str::to_string);
+                format!("{prefix}-{}", squeeze(&self.style))
+            }
+        }
+    }
+    /// Are the face's outlines TrueType (`glyf`), not PostScript (`CFF `)?
+    pub fn is_truetype(&self) -> bool {
+        use skrifa::raw::TableProvider;
+        self.skrifa().is_some_and(|f| f.glyf().is_ok())
+    }
 }
 
 /// One installed family found by the system font scan: its name and the file of each style.

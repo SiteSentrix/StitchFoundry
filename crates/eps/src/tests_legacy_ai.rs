@@ -73,7 +73,11 @@ fn sample() -> Document {
 }
 
 fn write(doc: &Document) -> LegacyAiOutput {
-    export_legacy_ai(doc, &LegacyAiOptions { title: "Sample".into(), created: Some(0) }).unwrap()
+    write_with(doc, LegacyAiOptions::default())
+}
+
+fn write_with(doc: &Document, o: LegacyAiOptions) -> LegacyAiOutput {
+    export_legacy_ai(doc, &LegacyAiOptions { title: "Sample".into(), created: Some(0), ..o }).unwrap()
 }
 
 fn children(n: &Node) -> &[Arc<Node>] {
@@ -236,7 +240,7 @@ fn losses_are_warned() {
     named.opacity = 0.5;
     doc.insert(Some(sub), usize::MAX, named).unwrap();
     let w = write(&doc).warnings;
-    for expected in [SUBLAYERS, HIDDEN, NAMES, TRANSPARENCY] {
+    for expected in [SUBLAYERS, HIDDEN_LAYER, NAMES, TRANSPARENCY] {
         assert!(w.iter().any(|x| x == expected), "{expected} not in {w:?}");
     }
     // The sublayer is a group in its layer.
@@ -284,4 +288,181 @@ fn needs_an_artboard() {
     let mut doc = Document::new(100.0, 100.0);
     doc.artboards.clear();
     assert!(export_legacy_ai(&doc, &LegacyAiOptions::default()).is_err());
+}
+
+/// Every text object of `doc`'s layers, in paint order.
+fn texts(doc: &Document) -> Vec<(Node, vectorcraft_doc::TextObject)> {
+    let mut out = vec![];
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            out.push((n.clone(), (**t).clone()));
+        }
+    });
+    out
+}
+
+fn style(size: f64, fill: Paint) -> vectorcraft_doc::CharStyle {
+    vectorcraft_doc::CharStyle { size, fill, ..vectorcraft_doc::CharStyle::default() }
+}
+
+/// A document of point type (two paragraphs, the second centred, accented letters and a euro
+/// sign), area type in a 100 × 50 frame and type on a path starting a quarter of the way along.
+fn typed() -> Document {
+    use vectorcraft_doc::{Justify, ParaStyle, TextKind, TextObject, TextRun};
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut point = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "Héllo €5\nWorld", style(18.0, red()));
+    point.runs.push(TextRun::new(" again", style(12.0, Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)))));
+    point.set_paragraph_styles(vec![ParaStyle::default(), ParaStyle { justify: Justify::Center, ..ParaStyle::default() }]);
+    let mut area = TextObject::point(vectorcraft_geom::Point::ZERO, "Area type flows in its frame", style(10.0, Paint::solid(Color::BLACK)));
+    area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)) };
+    area.xf = Affine::translate((20.0, 80.0));
+    let mut on_path = TextObject::point(vectorcraft_geom::Point::ZERO, "Along a path", style(12.0, Paint::solid(Color::gray(0.5))));
+    let mut line = PathData::new(vec![]);
+    line.subpaths.push(vectorcraft_geom::SubPath::polyline(&[(150.0, 150.0).into(), (250.0, 150.0).into(), (250.0, 190.0).into()], false));
+    on_path.kind = TextKind::OnPath { path: line, start: 0.25, end: None };
+    on_path.xf = Affine::IDENTITY;
+    for t in [point, area, on_path] {
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
+}
+
+#[test]
+fn type_is_written_as_text_objects() {
+    let out = write(&typed());
+    let text = String::from_utf8(out.bytes).unwrap();
+    for needle in [
+        "%%DocumentFonts: ",
+        "%%IncludeFont: ",
+        "\nTE\n",
+        "%AI3_BeginEncoding: _",
+        "0 To\n1 0 0 1 20 160 0 Tp\nTP\n",
+        "1 To\n",
+        "2 To\n",
+        " Tf\n",
+        "TO\n",
+    ] {
+        assert!(text.contains(needle), "missing {needle:?} in\n{text}");
+    }
+    // Windows-1252: é is 351 (octal), the euro sign 200, the paragraph ends with `\r`.
+    assert!(text.contains("(H\\351llo \\2005\\r) Tx\n"), "{text}");
+    // The second paragraph centred.
+    assert!(text.contains("1 Ta\n"), "{text}");
+    // The area's frame in art space, painted with nothing.
+    assert!(text.contains("20 120 m\n"), "{text}");
+    assert!(!out.warnings.iter().any(|w| w == TYPE), "{:?}", out.warnings);
+}
+
+#[test]
+fn type_reads_back_as_text() {
+    use vectorcraft_doc::{Justify, TextKind};
+    let imported = crate::import(&write(&typed()).bytes).unwrap();
+    let found = texts(&imported.document);
+    assert_eq!(found.len(), 3, "{:?}", imported.warnings);
+    let squeeze = |s: &str| s.replace(' ', "");
+    // Point type: the characters, paragraphs, sizes, colours and place.
+    let (_, point) = &found[0];
+    assert!(matches!(point.kind, TextKind::Point));
+    assert_eq!(point.plain_text(), "Héllo €5\nWorld again");
+    assert_eq!(point.runs.len(), 2, "{:?}", point.runs);
+    let first = &point.runs[0].style;
+    assert_eq!(squeeze(&first.font_family), "SourceSans3", "{first:?}");
+    assert!((first.size - 18.0).abs() < 1e-6 && first.leading.is_none(), "{first:?}");
+    assert_eq!(first.fill.color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(point.runs[1].style.fill.color(), Some(Color::cmyk(1.0, 0.0, 0.0, 0.0)));
+    assert!((point.runs[1].style.size - 12.0).abs() < 1e-6);
+    assert_eq!(point.para_at(0).justify, Justify::Left);
+    assert_eq!(point.para_at(1).justify, Justify::Center);
+    let origin = point.xf * vectorcraft_geom::Point::ZERO;
+    assert!((origin.x - 20.0).abs() < 1e-3 && (origin.y - 40.0).abs() < 1e-3, "{:?}", point.xf);
+    // Area type: its frame where it was.
+    let (_, area) = &found[1];
+    let TextKind::Area { frame } = &area.kind else { panic!("{:?}", area.kind) };
+    let b = frame.transformed(area.xf).to_bezpath().bounding_box();
+    assert!((b.x0 - 20.0).abs() < 1e-3 && (b.y0 - 80.0).abs() < 1e-3 && (b.x1 - 120.0).abs() < 1e-3 && (b.y1 - 130.0).abs() < 1e-3, "{b:?}");
+    assert_eq!(area.plain_text(), "Area type flows in its frame");
+    // Type on a path: its path and where along it the type starts.
+    let (_, along) = &found[2];
+    let TextKind::OnPath { path, start, .. } = &along.kind else { panic!("{:?}", along.kind) };
+    assert!((start - 0.25).abs() < 1e-2, "{start}");
+    let b = path.transformed(along.xf).to_bezpath().bounding_box();
+    assert!((b.x0 - 150.0).abs() < 1e-3 && (b.y1 - 190.0).abs() < 1e-3, "{b:?}");
+}
+
+#[test]
+fn type_8_bit_text_cant_hold_and_type_asked_for_as_outlines_are_outlines() {
+    use vectorcraft_doc::TextObject;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let t = TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), "Ωmega 日本", style(12.0, red()));
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == TYPE), "{:?}", out.warnings);
+    assert!(!String::from_utf8_lossy(&out.bytes).contains(" To\n"));
+    // Type that could be text, asked for as outlines.
+    let out = write_with(&typed(), LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() });
+    let text = String::from_utf8(out.bytes).unwrap();
+    assert!(!text.contains(" To\n") && !text.contains("%%DocumentFonts"), "{text}");
+    assert!(!out.warnings.iter().any(|w| w == TYPE), "{:?}", out.warnings);
+}
+
+/// A layer `Art` holding a group of a shown square and a hidden one; a hidden layer `Off` holding
+/// a hidden square.
+fn with_hidden() -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.layers.clear();
+    let art = doc.add_layer(Some("Art"));
+    let off = doc.add_layer(Some("Off"));
+    let shown = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), red(), Paint::None);
+    let mut hidden = shape(&mut doc, shapes::rectangle(Rect::new(50.0, 10.0, 80.0, 40.0)), red(), Paint::None);
+    hidden.visible = false;
+    hidden.locked = true;
+    let group = Node::group(doc.alloc_id(), vec![Arc::new(shown), Arc::new(hidden)]);
+    doc.insert(Some(art), usize::MAX, group).unwrap();
+    let mut also = shape(&mut doc, shapes::rectangle(Rect::new(100.0, 10.0, 140.0, 40.0)), red(), Paint::None);
+    also.visible = false;
+    doc.insert(Some(off), usize::MAX, also).unwrap();
+    if let Some(l) = doc.layers.get_mut(1) {
+        Arc::make_mut(l).visible = false;
+    }
+    doc
+}
+
+#[test]
+fn hidden_objects_go_to_a_hidden_layer_above_their_own() {
+    let out = write(&with_hidden());
+    assert!(out.warnings.iter().any(|w| w == HIDDEN_LAYER), "{:?}", out.warnings);
+    let doc = crate::import(&out.bytes).unwrap().document;
+    let names: Vec<_> = doc.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Art", "Art (hidden)", "Off"]);
+    assert!(doc.layers[0].visible && !doc.layers[1].visible && !doc.layers[2].visible);
+    // The group keeps the shown square; the hidden one, still locked, is in the hidden layer.
+    let group = &children(&doc.layers[0])[0];
+    assert_eq!(children(group).len(), 1);
+    let moved = children(&doc.layers[1]);
+    assert_eq!(moved.len(), 1);
+    assert!(moved[0].locked);
+    let b = moved[0].visual_bounds().unwrap();
+    assert!((b.x0 - 50.0).abs() < 0.01, "{b:?}");
+    // In a hidden layer, hidden objects stay where they are.
+    assert_eq!(children(&doc.layers[2]).len(), 1);
+}
+
+#[test]
+fn hidden_objects_can_be_left_out_or_shown() {
+    let out = write_with(&with_hidden(), LegacyAiOptions { hidden: HiddenObjects::Omit, ..LegacyAiOptions::default() });
+    assert!(out.warnings.iter().any(|w| w == HIDDEN), "{:?}", out.warnings);
+    let doc = crate::import(&out.bytes).unwrap().document;
+    assert_eq!(doc.layers.len(), 2);
+    assert_eq!(children(&children(&doc.layers[0])[0]).len(), 1);
+    let out = write_with(&with_hidden(), LegacyAiOptions { hidden: HiddenObjects::Visible, ..LegacyAiOptions::default() });
+    assert!(out.warnings.iter().any(|w| w == HIDDEN_SHOWN), "{:?}", out.warnings);
+    let doc = crate::import(&out.bytes).unwrap().document;
+    assert_eq!(doc.layers.len(), 2);
+    let pair = children(&children(&doc.layers[0])[0]);
+    assert_eq!(pair.len(), 2);
+    assert!(pair.iter().all(|n| n.visible));
 }

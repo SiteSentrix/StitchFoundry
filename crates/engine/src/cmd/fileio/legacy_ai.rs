@@ -16,6 +16,12 @@
 //! channel, §8.1). With `flatten` (the default) each becomes an opaque image of itself and the art
 //! under it, rendered from the document as it is, clipped to the area where it changes what shows;
 //! the art under it stays as it was. With `omit` they are left out.
+//!
+//! The format can't hide objects, only layers (`hiddenObjects`): with `layer` (the default) each
+//! layer's hidden objects go to a hidden layer of their own just above it, with `omit` they are
+//! left out, with `visible` they show where they are. Type is written as text the format's reader
+//! lays out again, in the fonts it names; `outlineText` writes its outlines instead (as type that
+//! 8-bit text can't hold always is).
 
 use std::sync::Arc;
 
@@ -45,6 +51,27 @@ enum SeeThrough {
     Omit,
 }
 
+/// Where a legacy `.ai`'s hidden objects go (`hiddenObjects`): the format hides only layers.
+fn hidden_objects(cmd: &str, p: &Value) -> Result<vectorcraft_eps::HiddenObjects> {
+    use vectorcraft_eps::HiddenObjects;
+    match p.get("hiddenObjects") {
+        None | Some(Value::Null) => Ok(HiddenObjects::Layer),
+        Some(Value::String(v)) if v.trim().is_empty() || v.trim().eq_ignore_ascii_case("layer") => Ok(HiddenObjects::Layer),
+        Some(Value::String(v)) if v.trim().eq_ignore_ascii_case("omit") => Ok(HiddenObjects::Omit),
+        Some(Value::String(v)) if v.trim().eq_ignore_ascii_case("visible") => Ok(HiddenObjects::Visible),
+        Some(v) => Err(bad(cmd, format!("hiddenObjects {v}: \"layer\" (the default), \"omit\" or \"visible\""))),
+    }
+}
+
+/// Type as outlines (`outlineText`), not text objects.
+fn outline_text(cmd: &str, p: &Value) -> Result<bool> {
+    match p.get("outlineText") {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(v) => Err(bad(cmd, format!("outlineText {v}: true or false"))),
+    }
+}
+
 fn see_through(cmd: &str, p: &Value) -> Result<SeeThrough> {
     match p.get("transparentImages") {
         None | Some(Value::Null) => Ok(SeeThrough::Flatten),
@@ -55,7 +82,7 @@ fn see_through(cmd: &str, p: &Value) -> Result<SeeThrough> {
 }
 
 /// What the format loses against a VectorCraft document, reported with every save.
-const FIDELITY: &str = "a legacy .ai (version 7) keeps layers, groups, compound paths, clipping groups, colours, gradients and images, not the rest: save as VectorCraft to keep everything editable";
+const FIDELITY: &str = "a legacy .ai (version 7) keeps layers, groups, compound paths, clipping groups, type, colours, gradients and images, not the rest: save as VectorCraft to keep everything editable";
 const FLATTENED: &str =
     "transparent images (see-through pixels, opacity or a blending mode) are flattened with the art under them into opaque images";
 const OMITTED: &str = "transparent images (see-through pixels, opacity or a blending mode) are left out";
@@ -69,6 +96,7 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
         return Err(bad(cmd, "the document has no artboard"));
     }
     let mode = see_through(cmd, p)?;
+    let (hidden, outline_text) = (hidden_objects(cmd, p)?, outline_text(cmd, p)?);
     let picked: ArtboardPick = super::encode::options(f, p)?;
     let boards = picked.resolve(n).map_err(|e| bad(cmd, e))?.unwrap_or_else(|| (0..n).collect());
     let mut enc = Encoded { warnings: vec![FIDELITY.to_string()], ..Encoded::default() };
@@ -81,7 +109,7 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
         let (full, placed) = crate::cmd::place::document::full_documents(&one);
         let mut d = full.into_owned();
         expand_appearances(&mut d);
-        let images = see_through_images(&d);
+        let images = see_through_images(&d, mode);
         if !images.is_empty() {
             note(&mut enc.warnings, if mode == SeeThrough::Flatten { FLATTENED } else { OMITTED });
             if mode == SeeThrough::Flatten {
@@ -92,7 +120,7 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
                 }
             }
         }
-        let o = vectorcraft_eps::LegacyAiOptions { title: doc.title.clone(), created };
+        let o = vectorcraft_eps::LegacyAiOptions { title: doc.title.clone(), created, hidden, outline_text };
         let out = vectorcraft_eps::export_legacy_ai(&d, &o).map_err(|e| bad(cmd, e))?;
         for w in placed.iter().chain(&out.warnings) {
             note(&mut enc.warnings, w);
@@ -113,8 +141,10 @@ fn expand_appearances(d: &mut Document) {
 }
 
 /// The images of `d` a legacy `.ai` can't hold, in paint order with their places in it (as
-/// [`Document::walk`] counts): visible ones with see-through pixels, opacity or a blending mode.
-fn see_through_images(d: &Document) -> Vec<(usize, NodeId)> {
+/// [`Document::walk`] counts): those with see-through pixels, opacity or a blending mode. Only
+/// visible ones flatten (a hidden one, which the hidden objects option may write, is written over
+/// white); all are left out with `omit`.
+fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
     let keys = super::super::flatten::see_through_images(d);
     let mut out = vec![];
     let mut at = 0;
@@ -126,7 +156,9 @@ fn see_through_images(d: &Document) -> Vec<(usize, NodeId)> {
         }
         at += 1;
     });
-    out.retain(|(_, id)| d.is_visible(*id));
+    if mode == SeeThrough::Flatten {
+        out.retain(|(_, id)| d.is_visible(*id));
+    }
     out
 }
 

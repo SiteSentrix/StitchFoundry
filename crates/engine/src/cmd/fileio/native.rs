@@ -103,13 +103,25 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         name: "aiVersion",
         ty: "string",
         default: "\"pdf\"",
-        description: "pdf (a PDF-compatible .ai carrying the VectorCraft document) or 7 (the legacy, PostScript-form .ai of version 7, which keeps layers, groups, compound paths and clipping groups in apps that read it; one file per artboard, transparent objects opaque, type as outlines; the other .ai options don't apply)",
+        description: "pdf (a PDF-compatible .ai carrying the VectorCraft document) or 7 (the legacy, PostScript-form .ai of version 7, which keeps layers, groups, compound paths and clipping groups in apps that read it; one file per artboard, transparent objects opaque; the other .ai options don't apply)",
     },
     FormatOption {
         name: "transparentImages",
         ty: "string",
         default: "\"flatten\"",
         description: "with aiVersion 7, the images version 7 can't hold (see-through pixels, opacity or a blending mode): flatten (the default: each becomes an opaque image of itself and the art under it, clipped to where it changes what shows; that art stays as it is) or omit (left out)",
+    },
+    FormatOption {
+        name: "hiddenObjects",
+        ty: "string",
+        default: "\"layer\"",
+        description: "with aiVersion 7, hidden objects, which version 7 can't hide (it hides only layers): layer (the default: each layer's hidden objects in a hidden layer of their own just above it, out of their groups), omit (left out) or visible (shown where they are)",
+    },
+    FormatOption {
+        name: "outlineText",
+        ty: "boolean",
+        default: "false",
+        description: "with aiVersion 7, type as its outlines instead of text (which apps reading the file set in the fonts it names: they need them installed); type 8-bit text can't hold (characters outside Windows Latin-1, vertical type, inline graphics, gradient or pattern fills) is always outlines",
     },
 ];
 

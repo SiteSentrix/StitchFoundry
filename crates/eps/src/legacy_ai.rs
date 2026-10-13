@@ -29,16 +29,27 @@
 //!   open) to stroke it too.
 //! - Images (§8): `%AI5_BeginRaster`, `[matrix] 0 0 w h w h 8 3 0 0 0 0 XI`, the RGB samples in
 //!   hex on comment lines, `%AI5_EndRaster`.
+//! - Type (§15): point type, area type and type on a path as text objects, `type To`, `a b c d tx
+//!   ty startPt Tp` (the text matrix; the frame or path in art space between it and `TP`), each
+//!   run's paint style, `Tr` (fill, stroke, both or neither), `/_font size ascent descent Tf`,
+//!   `Ts Tz Tt TA Tl Ta Ti` and its characters `(…) Tx` (`\r` ends a paragraph), `TO`. Only the
+//!   revisable form is written: readers lay the type out again (§15.1). Fonts are named by their
+//!   PostScript names in `%%DocumentFonts` and `%%IncludeFont` (§3.1) and re-encoded to
+//!   Windows-1252 (`TE`, then `%AI3_BeginEncoding: _name name`, `TZ`, §3.3), the 8-bit encoding
+//!   strings are in.
 //!
-//! The format has one artboard, no transparency, sublayers, object names, live effects, symbols
-//! or appearances with several fills and strokes. Callers write one file per artboard and expand
-//! appearances first; what is left is written as the format can hold it, each loss a warning:
-//! transparent objects are written opaque, sublayers become groups, type its outlines, live objects and symbols their
-//! art, strokes a plain line can't draw their outlines, pattern fills their tiles clipped to the
-//! shape, freeform gradients their average colour, elliptical radial gradients circular (the
-//! gradient matrix is relative to a canvas the specification doesn't size), transparent image
-//! pixels over white. Hidden
-//! objects are left out (hidden layers stay, hidden).
+//! The format has one artboard, no transparency, sublayers, object names, hidden objects (only
+//! layers hide), live effects, symbols or appearances with several fills and strokes. Callers write
+//! one file per artboard and expand appearances first; what is left is written as the format can
+//! hold it, each loss a warning: transparent objects are written opaque, sublayers become groups,
+//! live objects and symbols their art, strokes a plain line can't draw their outlines, pattern
+//! fills their tiles clipped to the shape, freeform gradients their average colour, elliptical
+//! radial gradients circular (the gradient matrix is relative to a canvas the specification
+//! doesn't size), transparent image pixels over white. Hidden objects go to a hidden layer of
+//! their own above their layer, are left out or show, as [`HiddenObjects`] says (in a hidden
+//! layer they stay where they are). Type that 8-bit text can't hold (characters outside
+//! Windows-1252, vertical type, inline graphics, gradient or pattern fills) is written as its
+//! outlines, and all type with [`LegacyAiOptions::outline_text`].
 //!
 //! No prolog is written: the file names none, so PostScript printers can't print it, as the `.ai`
 //! files other apps write in this format.
@@ -49,12 +60,13 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, Document, FillLayer, ImageObject, LAYER_COLORS, LayerColor, LineCap, LineJoin, Node, NodeKind, StrokeLayer, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageObject, Justify, LAYER_COLORS, LayerColor, LineCap, LineJoin,
+    Node, NodeKind, ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, AnchorKind, BezPath, FillRule, PathData, Point, Rect, Shape, SubPath, Vec2};
 
-use crate::ps;
+use crate::{latin, ps};
 
 /// How deep symbols and live objects may nest in one another (deeper art is left out).
 const MAX_NEST: u32 = 8;
@@ -66,8 +78,11 @@ const MAX_IMAGE_PIXELS: u64 = 1 << 26;
 const HEX_LINE: usize = 64;
 
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
-pub const TYPE: &str = "type is written as outlines (legacy .ai type isn't written yet)";
+pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, inline graphics, gradient or pattern fills) is written as outlines";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, character rotation, OpenType features, area type options, type on a path effects, space after paragraphs, tabs) are left out";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
+pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
+pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";
 pub const TRANSPARENCY: &str = "transparency (opacity, blending modes, opacity masks) is written opaque: legacy .ai files have none";
 pub const NAMES: &str = "object names are left out (legacy .ai files name only layers)";
 const PATTERNS: &str = "pattern fills are written as their tiles, clipped to the shape";
@@ -80,13 +95,30 @@ const UNREADABLE_IMAGE: &str = "an image that can't be decoded or is too large w
 const DEEP: &str = "art nested too deeply was left out";
 const ELLIPTICAL: &str = "elliptical radial gradients are written circular";
 
-/// What to write in the header.
+/// What to write in the header, and how to write what the format can't hold.
 #[derive(Clone, Debug, Default)]
 pub struct LegacyAiOptions {
     /// `%%Title`.
     pub title: String,
     /// `%%CreationDate`, Unix seconds.
     pub created: Option<i64>,
+    /// Where hidden objects go (the format hides only layers).
+    pub hidden: HiddenObjects,
+    /// Type as its glyphs' outlines, not text objects.
+    pub outline_text: bool,
+}
+
+/// What a legacy `.ai` does with hidden objects, which the format can't mark hidden (only layers).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HiddenObjects {
+    /// Each layer's hidden objects in a hidden layer of their own, just above it (they leave
+    /// their groups).
+    #[default]
+    Layer,
+    /// Left out.
+    Omit,
+    /// Written where they are, visible.
+    Visible,
 }
 
 /// The file and what it couldn't hold.
@@ -110,10 +142,13 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     let top = if (height - height.round()).abs() < 1e-6 { height.round() } else { height.ceil() };
     let below = top - height;
     let to_art = Affine::new([1.0, 0.0, 0.0, -1.0, -board.x0, board.y1 + below]);
-    let mut w = Writer::new(doc, to_art);
+    let mut w = Writer::new(doc, to_art, o);
     let mut layers = 0usize;
     for layer in &doc.layers {
         if w.layer(layer) {
+            layers += 1;
+        }
+        if w.hidden_layer(layer) {
             layers += 1;
         }
     }
@@ -149,6 +184,9 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
         ps::push_nums(&mut s, &cmyk.map(f64::from));
         let _ = writeln!(s, "{}", ps::string(name));
     }
+    for (i, (name, _)) in w.fonts.iter().enumerate() {
+        let _ = writeln!(s, "{} {name}", if i == 0 { "%%DocumentFonts:" } else { "%%+" });
+    }
     s.push_str("%AI5_FileFormat 3\n%AI3_ColorUsage: Color\n");
     // An empty template box at the artboard's centre sets the ruler origin (§2.2).
     let (cx, cy) = (ps::num(width / 2.0), ps::num(below + height / 2.0));
@@ -159,6 +197,7 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     s.push_str("%AI5_RulerUnits: 2\n");
     let _ = writeln!(s, "%AI5_NumLayers: {layers}");
     s.push_str("%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
+    fonts(&mut s, &w.fonts);
     if !w.gradients.is_empty() {
         let _ = writeln!(s, "{} Bn", w.gradients.len());
         for (name, g) in &w.gradients {
@@ -169,6 +208,30 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     s.push_str(&w.body);
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n");
     Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings })
+}
+
+/// The setup's fonts (§3.1, §3.3): `%%IncludeFont` for each, the encoding strings are in (`TE`),
+/// and each font re-encoded to it as `_name` (`TZ`; a TrueType font takes the encoding as its own,
+/// not the standard one, as the specification says of fonts that aren't Type 1).
+fn fonts(s: &mut String, fonts: &[(String, bool)]) {
+    if fonts.is_empty() {
+        return;
+    }
+    for (name, _) in fonts {
+        let _ = writeln!(s, "%%IncludeFont: {name}");
+    }
+    let te = latin::te();
+    s.push_str(&te);
+    // The encoding pairs, without `[` and `TE`.
+    let pairs = te.trim_start_matches('[').trim_end().trim_end_matches("TE").trim_end();
+    for (name, truetype) in fonts {
+        let _ = writeln!(s, "%AI3_BeginEncoding: _{name} {name}");
+        if *truetype {
+            let _ = writeln!(s, "[{pairs}\n/_{name}/{name} 0 0 0 TZ\n%AI3_EndEncoding TrueType");
+        } else {
+            let _ = writeln!(s, "[/_{name}/{name} 0 0 1 TZ\n%AI3_EndEncoding AdobeType");
+        }
+    }
 }
 
 /// The first line of a PostScript file (the DSC version comment).
@@ -252,10 +315,21 @@ struct Writer<'a> {
     nest: u32,
     /// Groups and layers open.
     depth: u32,
+    /// What to do with hidden objects.
+    hidden: HiddenObjects,
+    /// Type as outlines.
+    outline_text: bool,
+    /// The layer being written's hidden objects for its hidden layer, and whether each is locked.
+    hidden_art: Vec<(Node, bool)>,
+    /// Writing a layer that is hidden (or the hidden layer of one's hidden objects): hidden objects
+    /// are written where they are.
+    in_hidden: bool,
+    /// The fonts type is set in: PostScript name, and whether it's TrueType.
+    fonts: Vec<(String, bool)>,
 }
 
 impl<'a> Writer<'a> {
-    fn new(doc: &'a Document, to_art: Affine) -> Self {
+    fn new(doc: &'a Document, to_art: Affine, o: &LegacyAiOptions) -> Self {
         Self {
             doc,
             to_art,
@@ -267,6 +341,11 @@ impl<'a> Writer<'a> {
             locked: false,
             nest: 0,
             depth: 0,
+            hidden: o.hidden,
+            outline_text: o.outline_text,
+            hidden_art: vec![],
+            in_hidden: false,
+            fonts: vec![],
         }
     }
 
@@ -308,7 +387,45 @@ impl<'a> Writer<'a> {
         );
         self.locked = false;
         self.line("0 A");
+        self.in_hidden = !n.visible;
         self.contents(children, *clip, false);
+        self.in_hidden = false;
+        self.line("LB\n%AI5_EndLayer--");
+        true
+    }
+
+    /// The hidden layer of top-level layer `n`'s hidden objects, just above it (named after it,
+    /// with its colour, lock and printing). False when it has none.
+    fn hidden_layer(&mut self, n: &Node) -> bool {
+        if self.hidden_art.is_empty() {
+            return false;
+        }
+        let art = std::mem::take(&mut self.hidden_art);
+        let NodeKind::Layer { color, template, printable, .. } = &n.kind else { return false };
+        let [r, g, b] = match color {
+            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
+            LayerColor::Custom(rgb) => *rgb,
+        };
+        let index = match color {
+            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
+            _ => -1,
+        };
+        let name = format!("{} (hidden)", n.name.as_deref().unwrap_or("Layer"));
+        let _ = writeln!(
+            self.body,
+            "%AI5_BeginLayer\n0 1 {} {} {} 0 {index} {r} {g} {b} Lb\n{} Ln",
+            u8::from(!n.locked),
+            u8::from(*printable && !*template),
+            u8::from(*template),
+            ps::string(&name),
+        );
+        self.locked = false;
+        self.line("0 A");
+        self.in_hidden = true;
+        for (node, locked) in &art {
+            self.node(node, *locked);
+        }
+        self.in_hidden = false;
         self.line("LB\n%AI5_EndLayer--");
         true
     }
@@ -334,9 +451,19 @@ impl<'a> Writer<'a> {
 
     /// One object (inside a container locked when `locked`).
     fn node(&mut self, n: &Node, locked: bool) {
-        if !n.visible {
-            self.warn(HIDDEN);
-            return;
+        if !n.visible && !self.in_hidden {
+            match self.hidden {
+                HiddenObjects::Omit => {
+                    self.warn(HIDDEN);
+                    return;
+                }
+                HiddenObjects::Layer => {
+                    self.warn(HIDDEN_LAYER);
+                    self.hidden_art.push((n.clone(), locked || n.locked));
+                    return;
+                }
+                HiddenObjects::Visible => self.warn(HIDDEN_SHOWN),
+            }
         }
         if self.depth >= MAX_DEPTH {
             self.warn(DEEP);
@@ -826,13 +953,137 @@ impl<'a> Writer<'a> {
 
     // ---------- type ----------
 
-    /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill
-    /// and stroke.
+    /// Type: a text object when the format can hold it as text, else its outlines.
     fn text(&mut self, t: &TextObject) {
-        self.warn(TYPE);
         if !invertible(t.xf) {
             return;
         }
+        if !self.outline_text {
+            if writable(t) {
+                return self.text_object(t);
+            }
+            self.warn(TYPE);
+        }
+        self.outlines(t);
+    }
+
+    /// A text object (§15): `type To`, the text path (`a b c d tx ty startPt Tp`, an area's frame
+    /// or the path type runs along, `TP`), then each run's style and characters, `TO`. The matrix
+    /// takes text space (y up, the first baseline's start for point type) to art space; the frame
+    /// and path are in art space, as the specification's examples have them (§15.5).
+    fn text_object(&mut self, t: &TextObject) {
+        if lost_attributes(t) {
+            self.warn(TYPE_ATTRIBUTES);
+        }
+        let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
+        let (kind, path, start) = match &t.kind {
+            TextKind::Point => (0, None, 0.0),
+            TextKind::Area { frame } => (1, frame.subpaths.iter().find(|sp| !sp.anchors.is_empty()).cloned(), 0.0),
+            TextKind::OnPath { path, .. } => {
+                let sp = path.subpaths.iter().find(|sp| !sp.anchors.is_empty()).cloned();
+                let fraction = t.kind.path_span().map_or(0.0, |(s, _)| s);
+                let start = sp
+                    .as_ref()
+                    .map_or(0.0, |sp| segment_point(&PathData::new(vec![sp.clone()]).transformed(self.to_art * t.xf).to_bezpath(), fraction));
+                (2, sp, start)
+            }
+        };
+        let _ = writeln!(self.body, "{kind} To");
+        let [a, b, c, d, e, f] = m.as_coeffs();
+        ps::push_nums(&mut self.body, &[a, b, c, d, e, f, start]);
+        self.line("Tp");
+        if let Some(sp) = path {
+            let placed = SubPath::new(sp.anchors.iter().map(|a| a.transform(t.xf)).collect(), sp.closed);
+            self.subpath(&placed);
+            self.line(if sp.closed { "n" } else { "N" });
+        }
+        self.line("TP");
+        let mut para = 0usize;
+        let mut para_start = true;
+        for run in &t.runs {
+            let text = if run.style.all_caps { run.text.to_uppercase() } else { run.text.clone() };
+            let mut pieces = text.split('\n').peekable();
+            while let Some(piece) = pieces.next() {
+                let ends_paragraph = pieces.peek().is_some();
+                if piece.is_empty() && !ends_paragraph {
+                    continue;
+                }
+                if para_start {
+                    self.paragraph(t.para_at(para));
+                    para_start = false;
+                }
+                self.char_style(&run.style, t.para_at(para));
+                let mut bytes: Vec<u8> = piece.chars().filter_map(latin::encode).collect();
+                if ends_paragraph {
+                    bytes.push(b'\r');
+                    para += 1;
+                    para_start = true;
+                }
+                self.body.push_str(&ps::bytes(&bytes));
+                self.line(" Tx");
+            }
+        }
+        self.line("TO");
+    }
+
+    /// A paragraph's attributes: alignment `Ta` and indents `Ti` (first line's, left, right).
+    fn paragraph(&mut self, p: &ParaStyle) {
+        let align = match p.justify {
+            Justify::Auto if p.direction == Some(ParaDirection::RightToLeft) => 2,
+            Justify::Auto | Justify::Left => 0,
+            Justify::Center => 1,
+            Justify::Right => 2,
+            Justify::JustifyLeft | Justify::JustifyCenter | Justify::JustifyRight => 3,
+            Justify::JustifyAll => 4,
+        };
+        let _ = writeln!(self.body, "{align} Ta");
+        ps::push_nums(&mut self.body, &[p.first_line_indent, p.left_indent, p.right_indent]);
+        self.line("Ti");
+    }
+
+    /// A run's character attributes and paint style: `Tr`, its fill and stroke, `Tf`, `Ts`, `Tz`,
+    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`.
+    fn char_style(&mut self, st: &CharStyle, p: &ParaStyle) {
+        let fill = !st.fill.is_none();
+        let stroke = st.has_stroke();
+        let render = match (fill, stroke) {
+            (true, false) => 0,
+            (false, true) => 1,
+            (true, true) => 2,
+            (false, false) => 3,
+        };
+        let _ = writeln!(self.body, "{render} Tr");
+        if fill {
+            self.color(&st.fill, false);
+            self.line(if st.overprint_fill { "1 O" } else { "0 O" });
+        }
+        if stroke {
+            self.color(&st.stroke, true);
+            self.line(if st.overprint_stroke { "1 R" } else { "0 R" });
+            self.line_style(&st.stroke_layer());
+        }
+        let (name, truetype, ascent, descent) = font_of(st);
+        if !self.fonts.iter().any(|(n, _)| *n == name) {
+            self.fonts.push((name.clone(), truetype));
+        }
+        let size = finite(st.size, 12.0);
+        let _ = write!(self.body, "/_{name} ");
+        ps::push_nums(&mut self.body, &[size, ascent * size, descent * size]);
+        self.line("Tf");
+        ps::push_num(&mut self.body, finite(st.baseline_shift, 0.0));
+        self.line(" Ts");
+        ps::push_nums(&mut self.body, &[finite(st.h_scale, 100.0), finite(st.v_scale, 100.0)]);
+        self.line("Tz");
+        ps::push_num(&mut self.body, finite(st.tracking, 0.0));
+        self.line(" Tt");
+        self.line(if st.kerning.is_none() { "1 TA" } else { "0 TA" });
+        ps::push_nums(&mut self.body, &[finite(st.effective_leading(), size * 1.2), finite(p.space_before, 0.0)]);
+        self.line("Tl");
+    }
+
+    /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill
+    /// and stroke.
+    fn outlines(&mut self, t: &TextObject) {
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         let scale = t.xf.determinant().abs().sqrt();
         self.depth += 1;
@@ -923,6 +1174,80 @@ impl<'a> Writer<'a> {
         s.push_str(&hex);
         s.push_str("%AI5_EndRaster\n");
     }
+}
+
+/// Can type `t` be written as text: horizontal, its runs plain characters (no inline graphics)
+/// that 8-bit text can hold, filled and stroked with colours?
+fn writable(t: &TextObject) -> bool {
+    let solid = |p: &Paint| matches!(p, Paint::Solid { .. } | Paint::None);
+    !t.vertical
+        && t.runs.iter().any(|r| !r.text.is_empty())
+        && t.runs.iter().all(|r| {
+            r.inline.is_none()
+                && solid(&r.style.fill)
+                && solid(&r.style.stroke)
+                && (if r.style.all_caps { r.text.to_uppercase() } else { r.text.clone() }).chars().all(|c| latin::encode(c).is_some())
+        })
+}
+
+/// Has type `t` attributes a legacy `.ai` text object can't hold (lost when it's written as text)?
+fn lost_attributes(t: &TextObject) -> bool {
+    let run_lost = |s: &CharStyle| {
+        s.underline || s.strikethrough || s.small_caps.is_some() || s.position != CharPosition::Normal || s.rotation != 0.0 || !s.features.is_empty()
+    };
+    let para_lost = |p: &ParaStyle| p.space_after != 0.0 || !p.tabs.is_empty();
+    t.runs.iter().any(|r| run_lost(&r.style))
+        || t.paragraph_styles().iter().any(para_lost)
+        || (matches!(t.kind, TextKind::Area { .. }) && t.area != AreaOptions::default())
+        || (matches!(t.kind, TextKind::OnPath { .. }) && (t.path_effect != PathEffect::default() || t.path_spacing != 0.0))
+}
+
+/// The font type in style `st` is set in: its PostScript name, whether it's TrueType, and its
+/// ascent and descent (ems). A font that isn't installed is named after its family and style.
+fn font_of(st: &CharStyle) -> (String, bool, f64, f64) {
+    let db = vectorcraft_text::FontDb::global();
+    match db.face_version(&st.font_family, &st.font_style, st.font_version.as_deref()) {
+        Some(face) => {
+            let (ascent, descent) = face.vertical_metrics();
+            let em = face.units_per_em().max(1.0);
+            let name = face.postscript_name();
+            (name, face.is_truetype(), ascent / em, descent / em)
+        }
+        None => {
+            let squeeze = |s: &str| -> String { s.chars().filter(|c| c.is_ascii_alphanumeric()).collect() };
+            let style = squeeze(&st.font_style);
+            let name =
+                if style.is_empty() || style == "Regular" { squeeze(&st.font_family) } else { format!("{}-{style}", squeeze(&st.font_family)) };
+            (if name.is_empty() { "Helvetica".into() } else { name }, false, 0.75, 0.25)
+        }
+    }
+}
+
+/// `v`, or `default` when it isn't finite.
+fn finite(v: f64, default: f64) -> f64 {
+    if v.is_finite() { v } else { default }
+}
+
+/// Where a fraction of `path`'s length is, as the start of type on a path gives it (§15.5.2): the
+/// index of the segment it's on, plus how far along that segment (its curve parameter).
+fn segment_point(path: &BezPath, fraction: f64) -> f64 {
+    use kurbo::ParamCurveArclen;
+    const ACCURACY: f64 = 1e-3;
+    let segments: Vec<kurbo::PathSeg> = path.segments().collect();
+    let lengths: Vec<f64> = segments.iter().map(|s| s.arclen(ACCURACY)).collect();
+    let total: f64 = lengths.iter().sum();
+    if !(total.is_finite() && total > 0.0) {
+        return 0.0;
+    }
+    let mut left = fraction.clamp(0.0, 1.0) * total;
+    for (i, (seg, len)) in segments.iter().zip(&lengths).enumerate() {
+        if left <= *len || i + 1 == segments.len() {
+            let t = if *len > 0.0 { seg.inv_arclen(left.min(*len), ACCURACY) } else { 0.0 };
+            return i as f64 + t.clamp(0.0, 0.9999);
+        }
+        left -= len;
+    }
+    0.0
 }
 
 /// Can `p` paint a path object's fill directly (a colour or a linear or radial gradient)?

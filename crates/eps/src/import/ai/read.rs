@@ -30,9 +30,12 @@
 //!   `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`), the matrix
 //!   taking the pattern's space to art space (the other operands are what it is made of).
 //!
+//! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
+//!   [`legacy_text`].
+//!
 //! Sections the reader doesn't need (brushes, symbols, styles, swatches, filters) are skipped;
-//! type, symbols, fills with a pattern it can't read, placed files without a preview, legacy type
-//! and operators it doesn't know are errors.
+//! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
+//! it doesn't know are errors.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
@@ -53,6 +56,9 @@ use super::lex::{Lexer, Tok};
 use super::obj::{self, Obj, V};
 use super::paint::{self, GradientDef, Instance, Named};
 use crate::ps;
+
+#[path = "legacy_text.rs"]
+mod legacy_text;
 
 /// Deepest nesting of layers, groups and dictionaries.
 const MAX_DEPTH: usize = 256;
@@ -389,6 +395,9 @@ struct Reader<'a> {
     pattern: Option<PatternHead>,
     /// The tile's top left (y down) of each pattern read, by name.
     pattern_tiles: HashMap<String, Point>,
+    /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
+    text: Option<legacy_text::LegacyText>,
+    type_state: legacy_text::TypeState,
 }
 
 /// Operators that change nothing the reader keeps.
@@ -411,7 +420,8 @@ const IGNORED: &[&str] = &[
     "Np",
     // Flatness (`i`): how finely curves print.
     "i",
-    "TE",
+    // Path resolution (`Ar`, §12): how finely curves print.
+    "Ar",
     "TZ",
     "Xs",
     "Xt",
@@ -517,6 +527,8 @@ impl<'a> Reader<'a> {
             template_center: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
+            text: None,
+            type_state: legacy_text::TypeState::default(),
         }
     }
 
@@ -594,6 +606,9 @@ impl<'a> Reader<'a> {
             let section = self.section("EndArtStyles")?;
             self.styles = super::style::art_styles(section);
             return Ok(());
+        }
+        if m == "BeginEncoding" {
+            self.type_state.encoding_comment(line);
         }
         if let Some((_, end)) = SKIPPED.iter().find(|(b, _)| *b == m) {
             return self.skip_to(end);
@@ -1003,6 +1018,8 @@ impl<'a> Reader<'a> {
             // Ends a path that stays open.
             "H" => {}
             "W" => self.clip_next = true,
+            // A text object's frame or path.
+            "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" if self.in_text_path() => self.text_path(),
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" => self.paint(w, hidden, false)?,
             "*" => {
                 let op = vals.iter().rev().find_map(V::text).unwrap_or_else(|| "N".into());
@@ -1110,7 +1127,17 @@ impl<'a> Reader<'a> {
             }
             "~" if self.place.is_some() => self.end_place(hidden)?,
             // Type in the legacy format.
-            "To" | "TO" | "Tp" | "TP" | "Tx" | "TX" | "Tj" | "Tk" => self.unreadable("type in the legacy format"),
+            "To" => self.begin_text(&vals, hidden),
+            "Tp" => self.begin_text_path(&vals),
+            "TP" => self.end_text_path(),
+            "TO" => self.end_text(hidden)?,
+            "Tx" | "Tj" | "TX" => self.text_body(w, &vals),
+            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" => self.text_attr(w, &vals),
+            // Attributes the reader doesn't keep (kerning pairs, spacing, hanging punctuation,
+            // Far-Eastern type) and final-form positions (§15.3).
+            "Tk" | "TK" | "TC" | "TW" | "Tq" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg"
+            | "Tu" | "Xu" => {}
+            "TE" => self.te(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
                 if let Some(r) = self.raster.as_mut() {
