@@ -58,6 +58,11 @@ fn machine_file_items() -> Vec<Item> {
         f("Pfaff PCS (.pcs)…", "pcs"),
         f("Happy TAP (.tap)…", "tap"),
         f("Brother PEC (.pec)…", "pec"),
+        Sep,
+        f("Stitch List CSV (.csv)…", "csv"),
+        f("Stitch List JSON (.json)…", "json"),
+        f("G-code (.gcode)…", "gcode"),
+        c("Stitch Image PNG (.png)…", "file.export.stitchImage"),
     ]
 }
 
@@ -185,6 +190,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Export Machine File…",
         "",
         "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01 (dst), path?, name?, center?} write the stitch plan as a machine embroidery file (embroidery.export) to path, else a picked file (the web downloads it) → {path}",
+    ),
+    (
+        "file.export.stitchImage",
+        "Export Stitch Image…",
+        "",
+        "{path?, ppmm?, background?, margin?, view?} write the design's stitches as a PNG image (embroidery.exportImage) to path, else a picked file (the web downloads it) → {path}",
     ),
     (
         "ui.embroideryCheck",
@@ -1067,6 +1078,12 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if id == "file.export.embroidery" {
         let ext = p.get("format").and_then(Value::as_str).unwrap_or("dst").to_ascii_lowercase();
         return Some(io::save_command_output(app, "embroidery.export", &ext, p.clone()).map(|path| json!({ "path": path })));
+    }
+    if id == "file.export.stitchImage" {
+        return Some(
+            io::save_command_output(app, "embroidery.exportImage", "png", if p.is_object() { p.clone() } else { json!({}) })
+                .map(|path| json!({ "path": path })),
+        );
     }
     if id == "ui.embroideryCheck" {
         return Some(crate::embroidery::panel::run_check(app).map(|n| json!({ "count": n })));

@@ -542,6 +542,8 @@ fn structured_junk() {
         ("embroidery.visualize", json!({"product": 4, "color": "#zzzzzz", "placement": []})),
         ("export.history", json!({"limit": -1})),
         ("export.again", json!({"index": u64::MAX})),
+        ("embroidery.exportImage", json!({"ppmm": f64::NAN, "margin": f64::INFINITY, "background": 7, "path": "\u{0}"})),
+        ("embroidery.exportImage", json!({"ppmm": 40, "margin": 100})),
         ("embroidery.visualize", json!({"image": "\u{0}", "imageWidth": f64::NAN, "at": [f64::INFINITY, 1]})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "applique": 3})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "stitch": [], "small": 2})),
