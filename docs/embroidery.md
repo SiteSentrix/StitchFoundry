@@ -765,6 +765,15 @@ These follow the public descriptions of lettering sequencing and joins, for exam
 https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-15.htm
 and https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-16.htm.
 
+## Lettering stitches and small text
+
+*Letters sewn* (`stitch`) sews lettering as the font digitizes it, all **satin** (its filled
+parts sewn as satin across them) or all **fill** (each letter one tatami fill, the shape of what
+it sews: for large, wide letters). *Small text* (`small: auto|on|off`; auto: capitals under
+6 mm) sews small lettering cleanly: satin over a centre run only, half the pull compensation and
+short stitches round curves; fills with a light edge-run underlay and shorter stitches; runs in
+short stitches. Both stay with the lettering when it is set again.
+
 ## Appliqué lettering
 
 *Appliqué letters* in the lettering section (`applique: "#rrggbb"` on `embroidery.lettering` and

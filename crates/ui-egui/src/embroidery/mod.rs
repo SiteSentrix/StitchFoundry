@@ -188,6 +188,10 @@ pub struct EmbroideryUi {
     pub lettering_puff: bool,
     /// Appliqué letters in fabric of this colour.
     pub lettering_applique: Option<[u8; 3]>,
+    /// How the letters are stitched.
+    pub lettering_stitch: vectorcraft_embroidery::sf_core::attr::LetterStitch,
+    /// Small-text settings.
+    pub lettering_small: vectorcraft_embroidery::sf_core::attr::SmallText,
     /// The machine folder chosen to send to, and what the last send or check said.
     pub send_folder: usize,
     pub send_status: String,
@@ -283,6 +287,8 @@ impl Default for EmbroideryUi {
             letter_index: 0,
             lettering_puff: false,
             lettering_applique: None,
+            lettering_stitch: Default::default(),
+            lettering_small: Default::default(),
             send_folder: 0,
             send_status: String::new(),
             prompt: prompt::PromptState::default(),

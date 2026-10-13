@@ -3351,6 +3351,54 @@ fn puff_fills_and_puff_sewn_last() {
 }
 
 #[test]
+fn lettering_sews_as_the_font_has_it_all_satin_or_all_fill_and_small() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let r = s.execute("embroidery.lettering", &json!({"text": "AB", "font": "Test Script", "size": 10})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let stitches = |s: &Session| -> Vec<Vec<StitchType>> {
+        let st = s.doc().unwrap();
+        st.doc
+            .node(id)
+            .unwrap()
+            .children()
+            .unwrap()
+            .iter()
+            .map(|g| g.children().unwrap().iter().filter_map(|c| c.embroidery.as_deref()).map(|e| e.stitch.clone()).collect())
+            .collect()
+    };
+    // the font's own: A a satin column and a run, B a fill
+    let font = stitches(&s);
+    assert!(matches!(font[1][0], StitchType::Fill(_)), "{:?}", font[1]);
+    // all satin: B's fill sewn as satin
+    s.execute("embroidery.lettering.edit", &json!({"stitch": "satin"})).unwrap();
+    assert!(matches!(stitches(&s)[1][0], StitchType::Satin(_)));
+    // all fill: each letter one fill
+    s.execute("embroidery.lettering.edit", &json!({"stitch": "fill"})).unwrap();
+    let fills = stitches(&s);
+    assert!(fills.iter().all(|g| g.len() == 1 && matches!(g[0], StitchType::Fill(_))), "{fills:?}");
+    // back as the font has it
+    s.execute("embroidery.lettering.edit", &json!({"stitch": "font"})).unwrap();
+    assert_eq!(stitches(&s).len(), 2);
+    assert!(matches!(stitches(&s)[0][0], StitchType::Satin(_)));
+    // 10 mm: not small; 5 mm: a centre run under the satin, half the pull compensation
+    let StitchType::Satin(big) = &stitches(&s)[0][0] else { panic!("satin") };
+    assert!(big.underlay.auto || big.underlay.zigzag || big.underlay.edge_run);
+    s.execute("embroidery.lettering.edit", &json!({"size": 5})).unwrap();
+    let StitchType::Satin(small) = &stitches(&s)[0][0] else { panic!("satin") };
+    assert!(!small.underlay.auto && small.underlay.center_run && !small.underlay.zigzag && small.short_stitches, "{small:?}");
+    // off at 5 mm: the font's own again
+    s.execute("embroidery.lettering.edit", &json!({"small": "off"})).unwrap();
+    let StitchType::Satin(off) = &stitches(&s)[0][0] else { panic!("satin") };
+    assert_eq!(off.underlay, big.underlay);
+    assert!((small.pull_comp - off.pull_comp * 0.5).abs() < 1e-9, "{small:?} {off:?}");
+    for bad in [json!({"stitch": "zigzag"}), json!({"small": "yes"})] {
+        assert!(s.execute("embroidery.lettering.edit", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn applique_lettering_makes_each_letter_a_patch() {
     use sf_core::attr::StitchType;
     let mut s = session();
