@@ -174,7 +174,11 @@ fn read_bounded_line(reader: &mut impl BufRead, buf: &mut Vec<u8>, max: usize) -
     buf.clear();
     // `take` bounds the bytes buffered for one line: a peer can't make us allocate more than `max`.
     let limit = u64::try_from(max).unwrap_or(u64::MAX).saturating_add(1);
-    let n = reader.take(limit).read_until(b'\n', buf).map_err(|e| e.to_string())?;
+    let n = reader.take(limit).read_until(b'\n', buf).map_err(|e| match e.kind() {
+        // The line's deadline ran out (Windows reports it as TimedOut, Unix as WouldBlock).
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => "request line not completed in time; closing the connection".to_string(),
+        _ => e.to_string(),
+    })?;
     if n == 0 {
         return Ok(false);
     }
@@ -222,6 +226,9 @@ fn serve_lines_with<R: Read, W: Write>(
         }
         let reject = match read_bounded_line(&mut reader, &mut buf, MAX_LINE) {
             Ok(false) => return,
+            // Nothing of a line arrived (the idle wait ran out, or the peer is gone): close without
+            // a word. A line nobody asked for would be read as the reply to the client's next request.
+            Err(_) if buf.is_empty() => return,
             Err(e) => e,
             Ok(true) => match parse_line(&buf) {
                 Line::Blank => continue,
@@ -283,6 +290,31 @@ mod tests {
     #[test]
     fn idle_control_socket_releases_its_worker() {
         let (client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("no request expected"));
+        expect_socket_deadline(client, done, worker);
+    }
+
+    /// An idle connection is closed without a line: a client that sends its next request late
+    /// must not find an error waiting where its reply should be.
+    #[test]
+    fn idle_expiry_closes_without_writing_a_line() {
+        let (mut client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("no request expected"));
+        let mut got = Vec::new();
+        client.read_to_end(&mut got).unwrap();
+        assert_eq!(String::from_utf8_lossy(&got), "", "the app wrote to an idle connection");
+        expect_socket_deadline(client, done, worker);
+    }
+
+    /// A line that stalls is refused in words a client's author can act on, not the system's.
+    #[test]
+    fn stalled_control_line_is_refused_with_the_reason() {
+        let (mut client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("incomplete requests must not execute"));
+        client.write_all(b"{\"method\":").unwrap();
+        let mut line = String::new();
+        BufReader::new(client.try_clone().unwrap()).read_line(&mut line).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&line).unwrap(),
+            json!({"ok": false, "error": "request line not completed in time; closing the connection"})
+        );
         expect_socket_deadline(client, done, worker);
     }
 

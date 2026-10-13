@@ -22,7 +22,9 @@ its request line is rejected first. At most 16 connections are served at once; f
 line and are closed. Clients that get an error reply should reconnect. The port has no authentication,
 so only enable it while you use it. Idle clients have 5 minutes to start their next line; once the
 first byte arrives, the complete line must arrive within an absolute 30 seconds (trickled bytes do not
-renew it). A reply has 60 seconds to be written. Expiration closes the connection and returns its slot;
+renew it). A reply has 60 seconds to be written. Expiration closes the connection and returns its slot
+(an idle connection is closed without a line, so nothing waits where the next reply would be; a line
+that stalls gets the usual error line first);
 persistent clients can send further requests within these bounds, or reconnect after idle expiration.
 These transport budgets are separate from the existing 60-second command-processing wait.
 Transport: `apps/vectorcraft/src/control_server.rs`.
