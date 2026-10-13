@@ -1,9 +1,9 @@
 //! The style cascade for the `<text>` pre-pass: `<style>` rules, the `style` attribute and
 //! presentation attributes.
 //!
-//! Selectors: type, `*`, `#id`, any number of `.class`es and `[attr]` / `[attr=value]`, combined by
-//! descendant (space) and child (`>`) combinators. Rules with other selectors (pseudo-classes,
-//! sibling combinators, namespaces) never match, and at-rule blocks (`@media`, `@font-face`…) are
+//! Selectors: type, `*`, `#id`, any number of `.class`es, `[attr]` / `[attr=value]` and `:not()` of a
+//! list of those, combined by descendant (space) and child (`>`) combinators. Rules with other
+//! selectors (other pseudo-classes, sibling combinators, namespaces) never match, and at-rule blocks (`@media`, `@font-face`…) are
 //! skipped. Precedence: `!important`, then the `style` attribute, then specificity, then source
 //! order; a presentation attribute applies only when no rule sets the property.
 
@@ -57,6 +57,8 @@ struct Compound {
     id: Option<String>,
     classes: Vec<String>,
     attrs: Vec<(String, Option<String>)>,
+    /// The compounds of `:not()`s: the element must match none of them.
+    nots: Vec<Compound>,
 }
 
 impl Compound {
@@ -65,6 +67,7 @@ impl Compound {
             && self.id.as_deref().is_none_or(|id| n.attribute("id") == Some(id))
             && (self.classes.is_empty() || n.attribute("class").is_some_and(|c| self.classes.iter().all(|k| c.split_whitespace().any(|x| x == k))))
             && self.attrs.iter().all(|(a, v)| n.attribute(a.as_str()).is_some_and(|x| v.as_deref().is_none_or(|v| x == v)))
+            && !self.nots.iter().any(|c| c.matches(n))
     }
 }
 
@@ -81,9 +84,18 @@ fn is_ident(c: char) -> bool {
     c.is_alphanumeric() || c == '-' || c == '_'
 }
 
+/// How deep `:not()`s may nest (real style sheets nest one or two).
+const MAX_NOT_NESTING: usize = 8;
+
 impl Selector {
     /// `None` for selectors this cascade doesn't support (they never match).
     fn parse(s: &str) -> Option<Self> {
+        Self::parse_nested(s, 0)
+    }
+
+    /// [`Self::parse`] for a selector `nesting` `:not()`s deep: past [`MAX_NOT_NESTING`] it is not
+    /// supported, so a style sheet of `:not(:not(:not(…` can't exhaust the stack.
+    fn parse_nested(s: &str, nesting: usize) -> Option<Self> {
         fn ident(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<String> {
             let mut out = String::new();
             while let Some(&c) = chars.peek().filter(|c| is_ident(**c)) {
@@ -97,6 +109,8 @@ impl Selector {
         let mut links: Vec<bool> = vec![];
         let mut cur: Option<Compound> = None;
         let mut link: Option<bool> = None;
+        // What the `:not()`s add: the specificity of each one's most specific argument.
+        let mut not_specificity = (0, 0, 0);
         let mut chars = s.trim().chars().peekable();
         while let Some(&c) = chars.peek() {
             if c.is_whitespace() || c == '>' {
@@ -141,6 +155,37 @@ impl Selector {
                     }
                     comp.attrs.push((name.to_string(), value));
                 }
+                ':' => {
+                    chars.next();
+                    if nesting >= MAX_NOT_NESTING || !ident(&mut chars)?.eq_ignore_ascii_case("not") || chars.next() != Some('(') {
+                        return None;
+                    }
+                    let mut depth = 1;
+                    let mut arg = String::new();
+                    for c in chars.by_ref() {
+                        match c {
+                            '(' => depth += 1,
+                            ')' => depth -= 1,
+                            _ => {}
+                        }
+                        if depth == 0 {
+                            break;
+                        }
+                        arg.push(c);
+                    }
+                    if depth != 0 {
+                        return None;
+                    }
+                    // A list of compound selectors (each may hold a `:not()` of its own).
+                    let mut most = (0, 0, 0);
+                    for a in top_level_commas(&arg) {
+                        let s = Self::parse_nested(a, nesting + 1)?;
+                        let [(c, _)]: [(Compound, bool); 1] = s.parts.try_into().ok()?;
+                        most = most.max(s.specificity);
+                        comp.nots.push(c);
+                    }
+                    not_specificity = (not_specificity.0 + most.0, not_specificity.1 + most.1, not_specificity.2 + most.2);
+                }
                 c if is_ident(c) => comp.tag = Some(ident(&mut chars)?),
                 _ => return None,
             }
@@ -153,7 +198,7 @@ impl Selector {
         if comps.is_empty() {
             return None;
         }
-        let mut specificity = (0, 0, 0);
+        let mut specificity = not_specificity;
         for c in &comps {
             specificity.0 += c.id.is_some() as u32;
             specificity.1 += (c.classes.len() + c.attrs.len()) as u32;
@@ -162,6 +207,10 @@ impl Selector {
         // Rightmost first, each with its link to the compound on its left.
         let parts = comps.into_iter().enumerate().rev().map(|(i, c)| (c, i.checked_sub(1).and_then(|k| links.get(k)).is_some_and(|l| *l))).collect();
         Some(Self { parts, specificity })
+    }
+
+    fn has_not(&self) -> bool {
+        self.parts.iter().any(|(c, _)| !c.nots.is_empty())
     }
 
     fn matches(&self, n: XNode) -> bool {
@@ -233,6 +282,19 @@ impl Index {
     }
 }
 
+/// `list` split at the commas outside parentheses (those in a `:not()` stay).
+fn top_level_commas(list: &str) -> impl Iterator<Item = &str> {
+    let mut depth = 0usize;
+    list.split(move |c| {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        c == ',' && depth == 0
+    })
+}
+
 /// Rules from every `<style>` element, in source order.
 fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
     // Drop comments.
@@ -278,7 +340,7 @@ fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
         }
         let close = s[open..].find('}').map_or(s.len(), |i| open + i);
         let decls = Rc::new(parse_decls(&s[open + 1..close]));
-        for sel in head.split(',') {
+        for sel in top_level_commas(head) {
             if let Some(selector) = Selector::parse(sel) {
                 out.push(Rule { selector, decls: decls.clone() });
             }
@@ -338,6 +400,27 @@ impl Styles {
         let m: Rc<HashMap<String, String>> = Rc::new(best.into_iter().map(|(k, (_, v))| (k, v)).collect());
         self.cache.borrow_mut().insert(n.id(), m.clone());
         m
+    }
+
+    /// Are there rules with a `:not()` (which usvg's style sheets drop)?
+    pub(super) fn has_not_rules(&self) -> bool {
+        self.rules.iter().any(|r| r.selector.has_not())
+    }
+
+    /// The properties rules with a `:not()` set on `n`, each with its value after the cascade.
+    pub(super) fn set_by_not_rules(&self, n: XNode) -> Vec<(String, String)> {
+        let declared = self.declared(n);
+        let mut out: Vec<(String, String)> = Vec::new();
+        for r in self.rules.iter().filter(|r| r.selector.has_not() && r.selector.matches(n)) {
+            for (k, ..) in r.decls.iter() {
+                if !out.iter().any(|(o, _)| o == k)
+                    && let Some(v) = declared.get(k)
+                {
+                    out.push((k.clone(), v.clone()));
+                }
+            }
+        }
+        out
     }
 
     /// A property specified on this element (rules and `style` beat the presentation attribute).
@@ -591,12 +674,48 @@ mod tests {
 
     #[test]
     fn unsupported_selectors_are_dropped() {
-        for s in ["a + b", "a ~ b", "a:hover", "svg|text", "> a", "a >", ""] {
+        for s in ["a + b", "a ~ b", "a:hover", "svg|text", "> a", "a >", "", "a:not(b c)", "a:not(.x", "a:not(b > c)", "a:not(:hover)"] {
             assert!(Selector::parse(s).is_none(), "{s}");
         }
         let s = Selector::parse("g  >  text.x#y").unwrap();
         assert_eq!(s.specificity, (1, 1, 2));
         assert_eq!(s.parts.len(), 2);
         assert!(s.parts[0].1, "text must be a child of g");
+    }
+
+    /// #1557: `:not()` of a list of compound selectors; it counts as its most specific argument.
+    #[test]
+    fn not_selectors() {
+        assert_eq!(Selector::parse("rect:not(.keep)").unwrap().specificity, (0, 1, 1));
+        assert_eq!(Selector::parse("g :not(#a, .b.c, text)").unwrap().specificity, (1, 0, 1));
+        assert_eq!(Selector::parse(":not(rect):not([x])").unwrap().specificity, (0, 1, 1));
+        // Nesting is bounded: a hostile sheet can't recurse without end.
+        let nested = |n: usize| format!("{}.x{}", ":not(".repeat(n), ")".repeat(n));
+        assert!(Selector::parse(&nested(MAX_NOT_NESTING)).is_some());
+        assert!(Selector::parse(&nested(MAX_NOT_NESTING + 1)).is_none());
+        assert!(Selector::parse(&nested(200_000)).is_none());
+        with_doc(
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><style>
+            rect:not(.keep) { fill: green }
+            g > :not(rect, #t1) { stroke: blue }
+            :not(:not(.both)) { opacity: 0.5 }
+            .keep { fill: red }
+            </style>
+            <rect id="r0" fill="red"/><rect id="r1" class="keep"/>
+            <g><text id="t0">x</text><text id="t1">x</text><rect id="r2" class="both"/></g>
+            </svg>"#,
+            |doc, st| {
+                assert_eq!(st.own(by_id(doc, "r0"), "fill").as_deref(), Some("green"));
+                assert_eq!(st.own(by_id(doc, "r1"), "fill").as_deref(), Some("red"));
+                assert_eq!(st.own(by_id(doc, "t0"), "stroke").as_deref(), Some("blue"));
+                assert_eq!(st.own(by_id(doc, "t1"), "stroke"), None);
+                assert_eq!(st.own(by_id(doc, "r2"), "stroke"), None);
+                assert_eq!(st.own(by_id(doc, "r2"), "opacity").as_deref(), Some("0.5"));
+                assert_eq!(st.own(by_id(doc, "r0"), "opacity"), None);
+                assert!(st.has_not_rules());
+                assert_eq!(st.set_by_not_rules(by_id(doc, "r0")), [("fill".to_string(), "green".to_string())]);
+                assert!(st.set_by_not_rules(by_id(doc, "r1")).is_empty());
+            },
+        );
     }
 }

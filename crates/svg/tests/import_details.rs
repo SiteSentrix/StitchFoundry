@@ -203,6 +203,50 @@ fn css_transforms_move_objects() {
     assert!(near(b[2], -20.0, 0.0, 0.0, 50.0), "{:?}", b[2]);
 }
 
+/// #1557: style sheet rules with a `:not()` selector apply, with CSS precedence: against other
+/// rules, the `style` attribute, `!important`, and for a shape, a group (inherited) and a hidden
+/// object.
+#[test]
+fn not_selectors_apply() {
+    let d = import_with(
+        &svg(r##"<style>
+            rect:not(.keep) { fill: #00ff00 }
+            #b { fill: #0000ff }
+            g:not(.x) { fill: #00ffff }
+            .s:not(#z) { fill: #ff00ff }
+            .h:not(.shown) { display: none }
+            .t:not(.u) { transform: translate(100px, 0) }
+            .i:not(.u) { fill: #00ff00 !important }
+            </style>
+            <rect id="a" x="0" y="0" width="20" height="20" fill="#ff0000"/>
+            <rect id="b" x="20" y="0" width="20" height="20" fill="#ff0000"/>
+            <rect class="keep" x="40" y="0" width="20" height="20" fill="#ff0000"/>
+            <g><circle cx="70" cy="10" r="10"/></g>
+            <rect class="s" x="80" y="0" width="20" height="20" style="fill:#ff0000"/>
+            <rect class="i" x="100" y="0" width="20" height="20" style="fill:#ff0000"/>
+            <rect class="h" x="0" y="40" width="20" height="20" fill="#000000"/>
+            <rect class="t" x="0" y="80" width="20" height="20" fill="#000000"/>"##),
+        &ImportOptions::default(),
+    )
+    .unwrap()
+    .0;
+    let im = render_artboard(&d);
+    let rgb = |x: u32, y: u32| {
+        let p = im.pixel(x, y);
+        [p[0], p[1], p[2]]
+    };
+    assert_eq!(rgb(10, 10), [0, 255, 0], "rect:not(.keep) beats the fill attribute");
+    assert_eq!(rgb(30, 10), [0, 0, 255], "#b is more specific");
+    assert_eq!(rgb(50, 10), [255, 0, 0], ".keep is left alone");
+    assert_eq!(rgb(70, 10), [0, 255, 255], "inherited from the group");
+    assert_eq!(rgb(90, 10), [255, 0, 0], "the style attribute wins");
+    assert_eq!(rgb(110, 10), [0, 255, 0], "!important beats the style attribute");
+    assert_eq!(rgb(10, 90), [255, 255, 255], "moved by the CSS transform");
+    assert_eq!(rgb(110, 90), [0, 255, 0]);
+    let hidden: Vec<&Node> = art(&d).into_iter().filter(|n| !n.visible).collect();
+    assert_eq!(hidden.len(), 1, "display: none from a :not() rule comes in as a hidden object");
+}
+
 /// #1561: percentages in a `<symbol>` with a `viewBox` are of the `viewBox`, so the symbol draws as
 /// the same one written with numbers.
 #[test]

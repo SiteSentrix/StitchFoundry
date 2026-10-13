@@ -476,6 +476,9 @@ pub(super) struct Edits {
     list: Vec<(std::ops::Range<usize>, String)>,
     /// The ids made up so far, by element.
     ids: HashMap<roxmltree::NodeId, String>,
+    /// Declarations added to elements' `style`s, by element: (where they go, whether the element
+    /// has a `style` attribute, the declarations, XML-escaped).
+    styles: HashMap<roxmltree::NodeId, (usize, bool, String)>,
 }
 
 impl Edits {
@@ -505,9 +508,24 @@ impl Edits {
         }
     }
 
+    /// Add the declaration `decl` (XML-escaped already) to the `style` of element `n` (in `svg`),
+    /// after the ones already there (so it wins over them and over style sheet rules).
+    fn style(&mut self, svg: &str, n: XNode, decl: &str) {
+        let (_, _, decls) =
+            self.styles.entry(n.id()).or_insert_with(|| match n.attributes().find(|a| a.name() == "style" && a.namespace().is_none()) {
+                Some(a) => (a.range_value().end, true, String::new()),
+                None => (tag_name_end(svg, n), false, String::new()),
+            });
+        decls.push(';');
+        decls.push_str(decl);
+    }
+
     /// `svg` with the edits made; overlapping ones and ranges off character boundaries are
     /// skipped.
     fn apply(mut self, svg: &str) -> Cow<'_, str> {
+        for (at, has_style, decls) in std::mem::take(&mut self.styles).into_values() {
+            self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", decls.strip_prefix(';').unwrap_or(&decls)) });
+        }
         if self.list.is_empty() {
             return svg.into();
         }
@@ -534,12 +552,15 @@ impl Edits {
 ///   to come back hidden; one something links to (a `<use>` template) stays as it is;
 /// * shapes with a non-scaling stroke get an id when they have none, recorded ([`vector_effect`]);
 /// * linked files are read ([`files`]);
-/// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]).
+/// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
+/// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
 fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
     let css_transform = has_css_transform(svg);
+    let not = svg.contains(":not(");
     if !css_transform
+        && !not
         && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode"].iter().any(|t| svg.contains(t))
     {
         return (svg.into(), found);
@@ -570,8 +591,12 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
         }
     }
     let (display, non_scaling) = (svg.contains("display"), svg.contains(vector_effect::NON_SCALING));
-    if display || non_scaling {
+    if display || non_scaling || not {
         let css = css::Styles::new(&xml);
+        // First: an undisplayed object shown for usvg is shown after these.
+        if not && css.has_not_rules() {
+            not_rules(svg, &xml, &css, &mut edits);
+        }
         if display {
             hidden_objects(svg, &xml, &css, &mut edits, &mut found.hidden);
         }
@@ -592,6 +617,18 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
 /// Is there a `transform` CSS declaration in `svg` (`transform` followed by `:`)?
 fn has_css_transform(svg: &str) -> bool {
     svg.match_indices("transform").any(|(i, t)| svg.get(i + t.len()..).is_some_and(|s| s.trim_start().starts_with(':')))
+}
+
+/// usvg's style sheets drop rules with a `:not()` selector (#1557). The properties such rules set
+/// on an element go in its `style` attribute, with the value that wins the cascade there (which
+/// can be another rule's or the attribute's own), so usvg reads what CSS would.
+fn not_rules(svg: &str, xml: &roxmltree::Document, css: &css::Styles, edits: &mut Edits) {
+    for n in xml.descendants().filter(XNode::is_element) {
+        for (name, value) in css.set_by_not_rules(n) {
+            let value = if name == "transform" { css_transform::to_svg(&value).unwrap_or(value) } else { value };
+            edits.style(svg, n, &crate::xml_escape(&format!("{name}:{value}")));
+        }
+    }
 }
 
 /// The elements that are objects (what [`hidden_objects`] shows).
@@ -615,10 +652,7 @@ fn hidden_objects(svg: &str, xml: &roxmltree::Document, css: &css::Styles, edits
         }
         ids.insert(edits.id(svg, n));
         // A `style` declaration wins over the attribute and style sheet rules.
-        match n.attributes().find(|a| a.name() == "style" && a.namespace().is_none()) {
-            Some(a) => edits.insert(a.range_value().end, ";display:inline".to_string()),
-            None => edits.insert(tag_name_end(svg, n), " style=\"display:inline\"".to_string()),
-        }
+        edits.style(svg, n, "display:inline");
     }
 }
 
