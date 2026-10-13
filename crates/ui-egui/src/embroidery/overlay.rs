@@ -25,7 +25,8 @@ const MAX_REPEAT_VERTICES: usize = 6_000_000;
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Key {
     plan: usize,
-    view: [i64; 6],
+    /// Centre, zoom, rotation and the canvas rect: a window resize moves where the centre lands.
+    view: [i64; 8],
     mode: StitchView,
     upto: usize,
     points: bool,
@@ -154,7 +155,16 @@ impl MeshCache {
         let q = |v: f64| (v * 1000.0).round() as i64;
         let key = Key {
             plan: Arc::as_ptr(plan) as usize,
-            view: [q(xf.center.x), q(xf.center.y), q(xf.zoom), q(xf.rot), q(xf.rect.min.x as f64), q(xf.rect.min.y as f64)],
+            view: [
+                q(xf.center.x),
+                q(xf.center.y),
+                q(xf.zoom),
+                q(xf.rot),
+                q(xf.rect.min.x as f64),
+                q(xf.rect.min.y as f64),
+                q(xf.rect.max.x as f64),
+                q(xf.rect.max.y as f64),
+            ],
             mode,
             upto,
             points,
@@ -589,5 +599,28 @@ mod tests {
         assert!(last.iter().zip(&mesh.vertices).all(|(a, b)| a.pos == b.pos + egui::vec2(40.0, 15.0)));
         // more than ten each way is ten
         assert_eq!(tiled(mesh, [50, 1], step).vertices.len(), n * 10);
+    }
+
+    #[test]
+    fn the_mesh_follows_a_resized_canvas() {
+        // a window resize keeps the canvas's top left but moves its centre, where the view's
+        // centre is drawn: the cached stitches must move with it
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &serde_json::json!({"width": 200, "height": 200})).unwrap();
+        s.execute("shape.rectangle", &serde_json::json!({"x": 20, "y": 20, "width": 60, "height": 40})).unwrap();
+        s.execute("embroidery.set", &serde_json::json!({"type": "fill"})).unwrap();
+        let plan = s.embroidery_plan().unwrap();
+        let xf = |w: f32| Xf {
+            rect: egui::Rect::from_min_size(Pos2::new(0.0, 0.0), egui::vec2(w, 600.0)),
+            zoom: 1.0,
+            center: vectorcraft_geom::Point::new(100.0, 100.0),
+            rot: 0.0,
+        };
+        let mut cache = MeshCache::default();
+        cache.update(&plan, &xf(800.0), (StitchView::Lines, usize::MAX, false), ([1, 1], 0.0));
+        let before = cache.mesh.vertices.first().map(|v| v.pos).unwrap();
+        cache.update(&plan, &xf(1000.0), (StitchView::Lines, usize::MAX, false), ([1, 1], 0.0));
+        let after = cache.mesh.vertices.first().map(|v| v.pos).unwrap();
+        assert!((after.x - before.x - 100.0).abs() < 0.5, "{before:?} → {after:?}");
     }
 }
