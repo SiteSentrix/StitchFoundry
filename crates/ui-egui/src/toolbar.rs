@@ -5,6 +5,8 @@
 //! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode, Edit Toolbar (its
 //! All Tools drawer and the toolbar edits it makes: `edit_toolbar`).
 
+use std::sync::Arc;
+
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -608,9 +610,12 @@ fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating
 /// One row per tool: icon, name and shortcut, with a dot by the active tool. Returns the tool clicked.
 fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String]) -> Option<&'static str> {
     let mut chosen = None;
-    let w = 250.0;
-    for id in tools {
-        let Some(tool) = tool_info(id) else { continue };
+    let lang = crate::i18n::current();
+    let color = |tool: &ToolInfo| if active == tool.id { t.flyout_active } else { t.text_strong };
+    let rows: Vec<(&ToolInfo, RowText)> =
+        tools.iter().filter_map(|id| tool_info(id)).map(|tool| (tool, row_text(ui, lang, tool, color(tool)))).collect();
+    let w = rows_width(rows.iter().map(|(_, text)| text));
+    for (tool, (name, shortcut)) in rows {
         let is_active = active == tool.id;
         let (r, resp) = ui.allocate_exact_size(vec2(w, 30.0), Sense::click());
         if resp.hovered() {
@@ -621,22 +626,37 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String]) -> Option<
         }
         let ir = egui::Rect::from_min_size(r.min + vec2(24.0, 6.0), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, t.icon);
-        let color = if is_active { t.flyout_active } else { t.text_strong };
-        ui.painter().text(r.left_center() + vec2(52.0, 0.0), egui::Align2::LEFT_CENTER, tl!(tool.label), egui::FontId::proportional(13.0), color);
-        if let Some(sc) = crate::shortcut_editor::tool_shortcut(tool.id) {
-            ui.painter().text(
-                r.right_center() - vec2(18.0, 0.0),
-                egui::Align2::RIGHT_CENTER,
-                format!("({sc})"),
-                egui::FontId::proportional(13.0),
-                color,
-            );
+        let color = color(tool);
+        ui.painter().galley(pos2(r.left() + NAME_X, r.center().y - name.size().y / 2.0), name, color);
+        if let Some(sc) = shortcut {
+            ui.painter().galley(pos2(r.right() - ROW_END - sc.size().x, r.center().y - sc.size().y / 2.0), sc, color);
         }
         if resp.clicked() {
             chosen = Some(tool.id);
         }
     }
     chosen
+}
+
+/// A flyout row's name and its shortcut, laid out.
+type RowText = (Arc<egui::Galley>, Option<Arc<egui::Galley>>);
+
+/// Where a flyout row's name starts, the least gap between it and the shortcut, and the room right
+/// of the shortcut.
+const NAME_X: f32 = 52.0;
+const NAME_GAP: f32 = 14.0;
+const ROW_END: f32 = 18.0;
+
+/// The name of `tool` in `lang` and its shortcut in brackets, as a flyout row draws them.
+fn row_text(ui: &Ui, lang: crate::i18n::Lang, tool: &ToolInfo, color: Color32) -> RowText {
+    let lay = |s: String| ui.painter().layout_no_wrap(s, egui::FontId::proportional(13.0), color);
+    (lay(crate::i18n::tr(lang, tool.label).to_string()), crate::shortcut_editor::tool_shortcut(tool.id).map(|sc| lay(format!("({sc})"))))
+}
+
+/// The width of a flyout's rows: 250 pt, or what its longest name needs to stay clear of its
+/// shortcut (translated names are far longer than the English ones, #1616).
+fn rows_width<'a>(rows: impl Iterator<Item = &'a RowText>) -> f32 {
+    rows.map(|(name, sc)| NAME_X + name.size().x + sc.as_ref().map_or(0.0, |sc| NAME_GAP + sc.size().x) + ROW_END).fold(250.0, f32::max)
 }
 
 /// The grab bar of the group whose first tool is `key` (one id, flyout or floating, so a drag
@@ -1009,6 +1029,36 @@ pub(crate) mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
         assert_eq!((b.x0, b.y0), (35.0, 10.0));
+    }
+
+    /// #1616: in every language a flyout is wide enough that no tool's name runs into its shortcut
+    /// (the Spanish Live Paint names need more than the 250 pt the English ones fit in).
+    #[test]
+    fn a_flyout_is_as_wide_as_its_longest_translated_row() {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            for lang in crate::i18n::Lang::all() {
+                for group in TOOL_GROUPS {
+                    let rows: Vec<RowText> = group.iter().map(|tool| row_text(ui, lang, tool, Color32::WHITE)).collect();
+                    let w = rows_width(rows.iter());
+                    assert!(w >= 250.0, "{lang:?}");
+                    for (tool, (name, sc)) in group.iter().zip(&rows) {
+                        let name_end = NAME_X + name.size().x;
+                        let shortcut_start = w - ROW_END - sc.as_ref().map_or(0.0, |sc| sc.size().x);
+                        assert!(
+                            name_end <= shortcut_start + 0.01,
+                            "{lang:?} {}: the name ends at {name_end}, the shortcut starts at {shortcut_start}",
+                            tool.id
+                        );
+                    }
+                }
+            }
+            let es = crate::i18n::Lang::from_code("es").unwrap();
+            let live_paint = TOOL_GROUPS.iter().find(|g| g.iter().any(|t| t.id == "livePaintSelection")).expect("the Live Paint group");
+            let rows: Vec<RowText> = live_paint.iter().map(|tool| row_text(ui, es, tool, Color32::WHITE)).collect();
+            assert!(rows_width(rows.iter()) > 250.0, "the Spanish Live Paint flyout is wider than the English one");
+        });
+        out.textures_delta.clear();
     }
 
     #[test]
