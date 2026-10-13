@@ -4949,3 +4949,16 @@ machine	Stop	Arrêt
 	Click a motif to place it, digitized, in the middle of the page.	Cliquez sur un motif pour le placer, numérisé, au milieu de la page.
 	Embroidery Clipart	Clipart de broderie
 	Insert Clipart	Insérer un clipart
+	Send When Ready	Envoyer dès que prêt
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Mettre le motif en file pour ce dossier : écrit maintenant si le dossier est là, sinon dès qu'il y est
+	Waiting for the folder	En attente du dossier
+	Send queue	File d'envoi
+	waiting	en attente
+	sent	envoyé
+	failed	échec
+	Clear Sent	Retirer les envoyés
+	Send Queue	File d'envoi
+	Add to Send Queue	Ajouter à la file d'envoi
+	Send Waiting Designs	Envoyer les motifs en attente
+	Remove from Send Queue	Retirer de la file d'envoi
+@msg	the queued file is damaged	le fichier en file est endommagé

@@ -4516,3 +4516,15 @@ machine	Stop	停止
 	Click a motif to place it, digitized, in the middle of the page.	点击图案即可数字化放在页面中央。
 	Embroidery Clipart	刺绣剪贴画
 	Insert Clipart	插入剪贴画
+	Send When Ready	就绪时发送
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	将设计排队发往此文件夹：文件夹存在则立即写入，否则在出现时写入
+	Waiting for the folder	等待文件夹
+	Send queue	发送队列
+	waiting	等待中
+	sent	已发送
+	failed	失败
+	Clear Sent	清除已发送
+	Send Queue	发送队列
+	Add to Send Queue	加入发送队列
+	Send Waiting Designs	发送等待中的设计
+	Remove from Send Queue	从发送队列移除

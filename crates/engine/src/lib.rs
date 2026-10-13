@@ -675,6 +675,10 @@ pub struct Prefs {
     /// Job orders (`embroidery.job.create`). A local list, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embroidery_jobs: Vec<cmd::embroidery_jobs::Job>,
+    /// The send queue (`embroidery.queue.add`): designs waiting for their machine's folder, and
+    /// the ones sent. Kept across sessions; not a Preferences dialog field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub embroidery_queue: Vec<cmd::embroidery_queue::QueueItem>,
     /// The machine folders designs are sent to (`embroidery.send`): USB sticks, machine folders,
     /// network shares, the last used first. A local list, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -864,6 +868,7 @@ impl Default for Prefs {
             embroidery_thread_charts: vec![],
             embroidery_templates: vec![],
             embroidery_jobs: vec![],
+            embroidery_queue: vec![],
             embroidery_send_dirs: vec![],
             templates_folder: String::new(),
             append_converted: true,

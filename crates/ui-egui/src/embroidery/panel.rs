@@ -502,6 +502,7 @@ pub(crate) fn send_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.send_status.clear();
         }
     });
+    queue_rows(app, ui, &folder);
     if !app.embroidery.send_status.is_empty() {
         ui.label(app.embroidery.send_status.clone());
     }
@@ -819,6 +820,49 @@ pub(crate) fn output_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if !app.embroidery.output.status.is_empty() {
         ui.label(egui::RichText::new(app.embroidery.output.status.clone()).small());
+    }
+}
+
+/// The send queue: the design queued for the chosen folder, and what waits or was sent; waiting
+/// designs go by themselves once their folder is there (looked at every few seconds).
+fn queue_rows(app: &mut VectorcraftApp, ui: &mut Ui, folder: &str) {
+    if button(ui, tl!("Send When Ready"))
+        .on_hover_text(tl!("Queue the design for this folder: it is written now if the folder is there, else as soon as it is"))
+        .clicked()
+    {
+        app.embroidery.send_status = match app.run("embroidery.queue.add", json!({ "folder": folder })) {
+            Ok(r) => match r["path"].as_str() {
+                Some(p) => format!("{} {p}", tl!("Sent:")),
+                None => tl!("Waiting for the folder").to_string(),
+            },
+            Err(e) => e.to_string(),
+        };
+    }
+    let waiting = app.session.prefs.embroidery_queue.iter().filter(|i| i.state == "waiting").count();
+    if waiting > 0 {
+        let now = ui.ctx().input(|i| i.time);
+        if now - app.embroidery.queue_checked > 5.0 {
+            app.embroidery.queue_checked = now;
+            app.run("embroidery.queue.run", json!({})).ok();
+        }
+        ui.ctx().request_repaint_after(std::time::Duration::from_secs(5));
+    }
+    let items = app.session.prefs.embroidery_queue.iter().rev().take(8).cloned().collect::<Vec<_>>();
+    if items.is_empty() {
+        return;
+    }
+    ui.label(egui::RichText::new(tl!("Send queue")).strong());
+    for it in &items {
+        let state = match it.state.as_str() {
+            "waiting" => tl!("waiting"),
+            "sent" => tl!("sent"),
+            _ => tl!("failed"),
+        };
+        let tip = it.path.clone().or_else(|| it.error.clone()).unwrap_or_else(|| it.folder.clone());
+        ui.label(egui::RichText::new(format!("{}.{}  {state}", it.name, it.format)).small()).on_hover_text(tip);
+    }
+    if items.iter().any(|i| i.state != "waiting") && button(ui, tl!("Clear Sent")).clicked() {
+        app.run("embroidery.queue.remove", json!({ "done": true })).ok();
     }
 }
 

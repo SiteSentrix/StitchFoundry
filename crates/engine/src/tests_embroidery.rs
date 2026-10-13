@@ -793,6 +793,36 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn queued_designs_wait_for_their_folder_and_go_when_it_is_there() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let usb = std::env::temp_dir().join(format!("sf-queue-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&usb);
+    let folder = usb.to_string_lossy().to_string();
+    // the stick isn't in: the designs wait, in order
+    let a = s.execute("embroidery.queue.add", &json!({"folder": folder, "name": "Logo", "format": "dst"})).unwrap();
+    assert_eq!(a["status"].as_str(), Some("waiting"));
+    s.execute("embroidery.queue.add", &json!({"folder": folder, "name": "Logo", "format": "pes"})).unwrap();
+    let r = s.execute("embroidery.queue.run", &json!({})).unwrap();
+    assert_eq!((r["waiting"].as_u64(), r["sent"].as_array().unwrap().len()), (Some(2), 0));
+    // it's in: they go, and the next one goes at once
+    std::fs::create_dir_all(&usb).unwrap();
+    let r = s.execute("embroidery.queue.run", &json!({})).unwrap();
+    assert_eq!(r["sent"].as_array().unwrap().len(), 2, "{r}");
+    assert!(usb.join("Logo.dst").exists() && usb.join("Logo.pes").exists());
+    let c = s.execute("embroidery.queue.add", &json!({"folder": folder, "name": "Logo", "format": "dst"})).unwrap();
+    assert_eq!(c["status"].as_str(), Some("sent"));
+    assert!(c["path"].as_str().unwrap().ends_with("Logo-2.dst"), "{c}");
+    let list = s.execute("embroidery.queue", &json!({})).unwrap();
+    assert_eq!((list["items"].as_array().unwrap().len(), list["waiting"].as_u64()), (3, Some(0)));
+    assert_eq!(s.execute("embroidery.queue.remove", &json!({"done": true})).unwrap()["removed"].as_u64(), Some(3));
+    assert!(s.execute("embroidery.queue.remove", &json!({})).is_err());
+    let _ = std::fs::remove_dir_all(&usb);
+}
+
+#[test]
 fn clipart_motifs_place_digitized() {
     let mut s = session();
     let list = s.execute("embroidery.clipart", &json!({})).unwrap();

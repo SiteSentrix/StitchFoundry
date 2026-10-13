@@ -281,7 +281,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SYS-06 | Registration-mark settings for multi-hooping | Done | `embroidery.settings {registration}`: cross, circle or target marks, their size, how many in each overlap and their colour, kept with the design | 0 |
 | SYS-07 | Reshape options (show stitch angles, beads, guides) | Done | Start and stop and Inclination lines toggles in the panel: the selection's beads and stitch-angle lines with any tool | 1 |
 | SYS-08 | Warning options (long stitches, small objects, density too high) | Done | Check settings: density, long stitch, small lettering and tiny object limits saved with the design (`embroidery.settings {checks}`) | 1 |
-| HW-01 | Machine connection / design queue manager | Partial | Send to Machine reaches machines through the folders they read (OUT-03); a queue manager and vendor protocols (only if publicly documented) still to come | 6 |
+| HW-01 | Machine connection / design queue manager | Done | Send to Machine and the send queue (`embroidery.queue.*`): designs wait for their machine's folder and go in order when it is there, kept across sessions; vendor network protocols are not publicly documented (OUT-04) | 0 |
 | HW-02 | Runtime analyst (machine run statistics) | Out | Needs vendor machine telemetry | – |
 | HW-03 | Scanner input | Out | Use the OS scanner app, then place the image | – |
 | HW-04 | Digitizing tablet | Done | Pen pressure drives the pressure brush | – |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 196 done,
-18 partial, 30 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 197 done,
+17 partial, 30 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

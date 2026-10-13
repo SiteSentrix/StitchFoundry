@@ -4895,3 +4895,16 @@ machine	Stop	Stopp
 	Click a motif to place it, digitized, in the middle of the page.	Ein Motiv anklicken, um es digitalisiert in die Seitenmitte zu setzen.
 	Embroidery Clipart	Stick-Clipart
 	Insert Clipart	Clipart einfügen
+	Send When Ready	Senden, sobald bereit
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Das Design für diesen Ordner einreihen: jetzt geschrieben, wenn der Ordner da ist, sonst sobald er da ist
+	Waiting for the folder	Wartet auf den Ordner
+	Send queue	Sendewarteschlange
+	waiting	wartet
+	sent	gesendet
+	failed	fehlgeschlagen
+	Clear Sent	Gesendete entfernen
+	Send Queue	Sendewarteschlange
+	Add to Send Queue	Zur Sendewarteschlange
+	Send Waiting Designs	Wartende Designs senden
+	Remove from Send Queue	Aus der Sendewarteschlange entfernen
+@msg	the queued file is damaged	die eingereihte Datei ist beschädigt

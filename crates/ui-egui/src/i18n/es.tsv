@@ -4939,3 +4939,16 @@ machine	Stop	Parada
 	Click a motif to place it, digitized, in the middle of the page.	Haga clic en un motivo para colocarlo, digitalizado, en el centro de la página.
 	Embroidery Clipart	Clipart de bordado
 	Insert Clipart	Insertar clipart
+	Send When Ready	Enviar cuando esté listo
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Poner el diseño en cola para esta carpeta: se escribe ahora si la carpeta está, si no en cuanto esté
+	Waiting for the folder	Esperando la carpeta
+	Send queue	Cola de envío
+	waiting	en espera
+	sent	enviado
+	failed	falló
+	Clear Sent	Quitar enviados
+	Send Queue	Cola de envío
+	Add to Send Queue	Añadir a la cola de envío
+	Send Waiting Designs	Enviar diseños en espera
+	Remove from Send Queue	Quitar de la cola de envío
+@msg	the queued file is damaged	el archivo en cola está dañado

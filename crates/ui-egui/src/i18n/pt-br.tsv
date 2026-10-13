@@ -4207,3 +4207,15 @@ machine	Trim	Corte de linha
 	Click a motif to place it, digitized, in the middle of the page.	Clique num motivo para colocá-lo, digitalizado, no meio da página.
 	Embroidery Clipart	Clipart de bordado
 	Insert Clipart	Inserir clipart
+	Send When Ready	Enviar quando pronto
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Pôr o desenho na fila desta pasta: gravado agora se a pasta estiver lá, senão assim que estiver
+	Waiting for the folder	Aguardando a pasta
+	Send queue	Fila de envio
+	waiting	aguardando
+	sent	enviado
+	failed	falhou
+	Clear Sent	Limpar enviados
+	Send Queue	Fila de envio
+	Add to Send Queue	Adicionar à fila de envio
+	Send Waiting Designs	Enviar desenhos em espera
+	Remove from Send Queue	Remover da fila de envio

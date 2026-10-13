@@ -174,6 +174,8 @@ pub struct EmbroideryUi {
     pub template_name: String,
     /// A new job order as typed: customer, quantity and due date.
     pub job_draft: (String, u32, String),
+    /// When the send queue was last tried (UI time, seconds).
+    pub queue_checked: f64,
     /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
     /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
     pub monogram_letters: String,
@@ -295,6 +297,7 @@ impl Default for EmbroideryUi {
             recolor_tone: [0x1d, 0x35, 0x57],
             template_name: String::new(),
             job_draft: (String::new(), 1, String::new()),
+            queue_checked: 0.0,
             monogram_letters: String::new(),
             monogram_style: 0,
             monogram_border: 1,

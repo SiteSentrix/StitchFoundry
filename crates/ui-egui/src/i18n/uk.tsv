@@ -4921,3 +4921,16 @@ machine	Stop	Зупинка
 	Click a motif to place it, digitized, in the middle of the page.	Клацніть мотив, щоб розмістити його оцифрованим у центрі сторінки.
 	Embroidery Clipart	Вишивальний кліпарт
 	Insert Clipart	Вставити кліпарт
+	Send When Ready	Надіслати, коли готово
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Поставити дизайн у чергу для цієї теки: записати зараз, якщо тека є, інакше щойно з'явиться
+	Waiting for the folder	Очікування теки
+	Send queue	Черга надсилання
+	waiting	очікує
+	sent	надіслано
+	failed	помилка
+	Clear Sent	Прибрати надіслані
+	Send Queue	Черга надсилання
+	Add to Send Queue	Додати до черги надсилання
+	Send Waiting Designs	Надіслати дизайни в очікуванні
+	Remove from Send Queue	Прибрати з черги надсилання
+@msg	the queued file is damaged	файл у черзі пошкоджено

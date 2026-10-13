@@ -4301,3 +4301,15 @@ machine	Stop	停止
 	Click a motif to place it, digitized, in the middle of the page.	點選圖案即可數位化放在頁面中央。
 	Embroidery Clipart	刺繡美工圖案
 	Insert Clipart	插入美工圖案
+	Send When Ready	就緒時傳送
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	將設計排入此資料夾的佇列：資料夾存在則立即寫入，否則在出現時寫入
+	Waiting for the folder	等待資料夾
+	Send queue	傳送佇列
+	waiting	等待中
+	sent	已傳送
+	failed	失敗
+	Clear Sent	清除已傳送
+	Send Queue	傳送佇列
+	Add to Send Queue	加入傳送佇列
+	Send Waiting Designs	傳送等待中的設計
+	Remove from Send Queue	從傳送佇列移除
