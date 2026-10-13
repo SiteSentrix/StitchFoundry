@@ -102,10 +102,20 @@ const POLO_LINES: &[&str] = &[
     "M 36 230 L 146 310",
 ];
 
-// crown, then the brim in front of it: separate shapes, so their overlap is filled
-const CAP_CROWN: &str = "M 40 140 C 40 20 260 20 260 140 C 200 156 100 156 40 140 Z";
-const CAP_BRIM: &str = "M 20 140 C 60 200 240 200 280 140 C 240 148 60 148 20 140 Z";
-const CAP_LINES: &[&str] = &["M 150 52 L 150 146"];
+// A structured ball cap from the front: the crown's six panels up to the button, the bill curved
+// down at its sides in front of it (separate shapes, so their overlap is filled), the side seams,
+// eyelets and the rows of stitching along the bill.
+const CAP_CROWN: &str = "M 50 152 C 46 98 58 52 104 36 C 126 28 174 28 196 36 C 242 52 254 98 250 152 Z";
+const CAP_BRIM: &str = "M 48 146 C 95 136 205 136 252 146 C 259 156 259 168 253 177 C 218 160 82 160 47 177 C 41 168 41 156 48 146 Z";
+const CAP_BUTTON: &str = "M 143 31 A 7 4 0 1 0 157 31 A 7 4 0 1 0 143 31 Z";
+const CAP_LINES: &[&str] = &[
+    "M 150 31 C 120 40 92 78 85 141",
+    "M 150 31 C 180 40 208 78 215 141",
+    "M 93 70 A 3 3 0 1 0 99 70 A 3 3 0 1 0 93 70 Z",
+    "M 201 70 A 3 3 0 1 0 207 70 A 3 3 0 1 0 201 70 Z",
+    "M 54 168 C 92 154 208 154 246 168",
+    "M 60 163 C 96 150 204 150 240 163",
+];
 const CAP_PLACES: &[(&str, Anchor, f64)] = &[("cap-front", Anchor::Bottom(150.0, 124.0), 130.0)];
 
 const TOTE: &str = "M 20 160 L 400 160 L 400 550 L 20 550 Z";
@@ -137,9 +147,14 @@ fn product(name: &str, back: bool) -> Option<Product> {
             default: "full-front",
             neck: Some(162.5),
         },
-        "cap" => {
-            Product { size: (300.0, 200.0), body: &[CAP_CROWN, CAP_BRIM], lines: CAP_LINES, placements: CAP_PLACES, default: "cap-front", neck: None }
-        }
+        "cap" => Product {
+            size: (300.0, 200.0),
+            body: &[CAP_CROWN, CAP_BRIM, CAP_BUTTON],
+            lines: CAP_LINES,
+            placements: CAP_PLACES,
+            default: "cap-front",
+            neck: None,
+        },
         "tote" => Product { size: (420.0, 570.0), body: &[TOTE], lines: TOTE_LINES, placements: TOTE_PLACES, default: "full-front", neck: None },
         "towel" => Product { size: (540.0, 940.0), body: &[TOWEL], lines: TOWEL_LINES, placements: TOWEL_PLACES, default: "full-front", neck: None },
         _ => return None,
