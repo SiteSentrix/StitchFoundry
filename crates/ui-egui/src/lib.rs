@@ -759,7 +759,10 @@ impl VectorcraftApp {
 
     fn drain_control(&mut self, ctx: &egui::Context) {
         let Some(rx) = self.control_rx.take() else { return };
-        while let Ok(req) = rx.try_recv() {
+        let mut handled = 0;
+        while handled < control::MAX_CONTROL_REQUESTS_PER_FRAME {
+            let Ok(req) = rx.try_recv() else { break };
+            handled += 1;
             let reply = req.reply.clone();
             // Guarded per request: a panic must not drop the channel (taken out of `self` above).
             let roots = self.automation_roots.clone();
@@ -782,6 +785,10 @@ impl VectorcraftApp {
                     self.pending_screenshots.push(PendingScreenshot { token, path, data, reply, deadline: now_ms() + settle + 8000.0 });
                 }
             }
+        }
+        if handled == control::MAX_CONTROL_REQUESTS_PER_FRAME {
+            // Leave later requests on the channel and schedule another frame to serve them.
+            ctx.request_repaint();
         }
         self.control_rx = Some(rx);
     }
