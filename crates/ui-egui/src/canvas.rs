@@ -361,7 +361,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let b = xf.to_screen(old.to_doc(rect.max));
                 painter.image(tex.id(), egui::Rect::from_min_max(a, b), egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
             }
-            None => {}
+            // The view turned after the last frame was rendered, and the worker renders the frame at
+            // the new angle. Until it arrives, the last frame is drawn turned into this view: each
+            // corner goes where this view puts the document point that the corner showed.
+            None => {
+                let old = Xf { rect, zoom: k.zoom, center: Point::new(k.cx, k.cy), rot: k.rot.to_radians() };
+                let q = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()].map(|c| xf.to_screen(old.to_doc(c)));
+                let mut mesh = egui::Mesh::with_texture(tex.id());
+                for (pos, uv) in q.into_iter().zip([pos2(0.0, 0.0), pos2(1.0, 0.0), pos2(1.0, 1.0), pos2(0.0, 1.0)]) {
+                    mesh.vertices.push(egui::epaint::Vertex { pos, uv, color: Color32::WHITE });
+                }
+                mesh.add_triangle(0, 1, 2);
+                mesh.add_triangle(0, 2, 3);
+                painter.add(Shape::mesh(mesh));
+            }
         }
     }
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
@@ -3148,6 +3161,74 @@ mod tests {
         assert!(app.canvas.key.as_ref().is_some_and(|k| !k.interacting), "rendered again");
         assert_eq!(app.canvas.renderer.stats.moved, 0);
         assert!(!app.canvas.moved);
+    }
+
+    /// When the view turns while the worker renders the frame at the new angle (Reset Rotate View on
+    /// a heavy document), the canvas draws the last frame turned until that frame arrives: each
+    /// corner goes where the new view puts the document point that the corner showed. The new frame
+    /// is then drawn unturned. In Pixel Preview the last frame's pixels stay over the document rect
+    /// they cover.
+    #[test]
+    fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        let ctx = egui::Context::default();
+        shapes(&mut app, &ctx); // the first frame fits the view to the artboard
+        app.view_mut().unwrap().rotation = 30.0;
+        shapes(&mut app, &ctx);
+        let rect = app.canvas_rect.unwrap();
+        let old = Xf::new(rect, app.view().unwrap());
+        // `art` runs one frame and finds the mesh that draws the art's texture.
+        let art = |app: &mut VectorcraftApp| {
+            let s = shapes(app, &ctx);
+            let tex = app.canvas.texture.as_ref().unwrap().id();
+            s.into_iter().find_map(|s| match s {
+                Shape::Mesh(m) if m.texture_id == tex => Some(m),
+                _ => None,
+            })
+        };
+        // With a worker and a last frame that took 50 ms, the next frame renders on the worker.
+        app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+        app.canvas.last_ms = 50.0;
+        app.run("view.rotateReset", json!({})).unwrap();
+        let mesh = art(&mut app).expect("the last frame, turned");
+        assert!(app.canvas.worker.as_ref().and_then(|w| w.pending.as_ref()).is_some_and(|k| k.rot == 0.0), "sent to the worker");
+        let new = Xf::new(rect, app.view().unwrap());
+        let corners = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()];
+        assert_eq!(mesh.vertices.len(), 4);
+        for ((v, corner), uv) in mesh.vertices.iter().zip(corners).zip([pos2(0.0, 0.0), pos2(1.0, 0.0), pos2(1.0, 1.0), pos2(0.0, 1.0)]) {
+            let at = new.to_screen(old.to_doc(corner));
+            assert!((v.pos - at).length() < 0.01 && v.uv == uv, "{v:?}: texture corner {uv:?} at {at:?}");
+        }
+        // The point where the last frame drew the rectangle's top-left corner lands where the new view puts that corner.
+        let p = Point::new(100.0, 50.0);
+        let uv = (old.to_screen(p) - rect.min) / rect.size();
+        let [a, b, _, d] = [0, 1, 2, 3].map(|i| mesh.vertices[i].pos);
+        assert!((a + (b - a) * uv.x + (d - a) * uv.y - new.to_screen(p)).length() < 0.01, "the rectangle's corner");
+        // The worker's frame at 0° then covers the canvas unturned.
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while app.canvas.key.as_ref().is_some_and(|k| k.rot != 0.0) && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            shapes(&mut app, &ctx);
+        }
+        assert!(app.canvas.key.as_ref().is_some_and(|k| k.rot == 0.0), "the worker's frame arrives");
+        let b = art(&mut app).expect("the worker's frame").calc_bounds();
+        assert!((b.min - rect.min).length() < 0.01 && (b.max - rect.max).length() < 0.01, "{b:?} over {rect:?}");
+        // In Pixel Preview the last frame's pixels are drawn over the document rect they cover.
+        app.canvas.worker = None;
+        app.ui.view.pixel_preview = true;
+        app.view_mut().unwrap().zoom = 8.0;
+        shapes(&mut app, &ctx);
+        let [x0, y0, ..] = app.canvas.key.as_ref().and_then(|k| k.pixel).expect("the pixels rendered");
+        app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+        app.canvas.last_ms = 50.0;
+        app.view_mut().unwrap().rotation = 30.0;
+        let mesh = art(&mut app).expect("the last frame's pixels");
+        let at = Xf::new(rect, app.view().unwrap()).to_screen(Point::new(x0 as f64, y0 as f64));
+        assert!((mesh.vertices[0].pos - at).length() < 0.01, "{:?} at {at:?}", mesh.vertices[0].pos);
+        app.canvas.worker = None;
     }
 
     /// File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview (#394): off, Pixel
