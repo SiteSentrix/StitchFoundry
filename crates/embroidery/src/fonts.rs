@@ -14,6 +14,8 @@ use vectorcraft_doc::{Document, Node};
 /// Most glyphs one font keeps, characters one piece of lettering sets, and characters a glyph
 /// name has (ligatures such as "fi").
 pub const MAX_GLYPHS: usize = 5_000;
+/// How deep inside other layers glyph layers are looked for.
+const MAX_LAYER_DEPTH: usize = 4;
 pub const MAX_TEXT: usize = 2_000;
 const MAX_NAME: usize = 8;
 
@@ -107,12 +109,19 @@ impl EmbFont {
             if !(baseline.is_finite() && unit.is_finite() && unit > 0.0) {
                 continue;
             }
-            for l in &doc.layers {
-                let Some(name) = l.name.as_deref().and_then(|n| n.strip_prefix("GlyphLayer-")) else { continue };
-                if name.is_empty() || name.chars().count() > MAX_NAME || glyphs.len() >= MAX_GLYPHS {
-                    continue;
+            // the glyph layers wherever they are: at the top, or inside other layers
+            let mut stack: Vec<(&Arc<Node>, usize)> = doc.layers.iter().map(|l| (l, 0)).collect();
+            while let Some((l, depth)) = stack.pop() {
+                match l.name.as_deref().and_then(|n| n.strip_prefix("GlyphLayer-")) {
+                    Some(name) => {
+                        if name.is_empty() || name.chars().count() > MAX_NAME || glyphs.len() >= MAX_GLYPHS {
+                            continue;
+                        }
+                        glyphs.entry(name.to_string()).or_insert_with(|| Glyph { art: l.clone(), baseline, unit });
+                    }
+                    None if depth < MAX_LAYER_DEPTH => stack.extend(l.children().into_iter().flatten().map(|c| (c, depth + 1))),
+                    None => {}
                 }
-                glyphs.entry(name.to_string()).or_insert_with(|| Glyph { art: l.clone(), baseline, unit });
             }
         }
         if glyphs.is_empty() {

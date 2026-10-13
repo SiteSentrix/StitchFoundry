@@ -24,7 +24,7 @@ const EDIT: &str = "embroidery.lettering.edit";
 const LETTER: &str = "embroidery.lettering.letter";
 /// Biggest font.json and glyph art read (bytes), most art files one font has, and most fonts
 /// loaded at once.
-const MAX_JSON: usize = 2 << 20;
+const MAX_JSON: usize = 16 << 20;
 const MAX_SVG: usize = 40 << 20;
 const MAX_FILES: usize = 64;
 const MAX_FONTS: usize = 64;

@@ -3592,6 +3592,24 @@ fn applique_lettering_makes_each_letter_a_patch() {
 }
 
 #[test]
+fn fonts_with_glyph_layers_inside_other_layers_load() {
+    // the glyph layers grouped inside a layer of their own, as some fonts keep them
+    let nested = TEST_FONT_SVG
+        .replacen(
+            r#"<g inkscape:groupmode="layer" inkscape:label="GlyphLayer-A""#,
+            r#"<g inkscape:groupmode="layer" inkscape:label="Glyphs" id="all"><g inkscape:groupmode="layer" inkscape:label="GlyphLayer-A""#,
+            1,
+        )
+        .replacen("</svg>", "</g></svg>", 1);
+    assert_ne!(nested, TEST_FONT_SVG);
+    let mut s = session();
+    let r = s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": nested})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(3), "{r}");
+    let r = s.execute("embroidery.lettering", &json!({"text": "AB", "font": "Test Script"})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(2));
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
