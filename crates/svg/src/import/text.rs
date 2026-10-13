@@ -594,6 +594,11 @@ impl Ctx {
         obj.xf = parse_transform(r.attribute("transform")) * origin;
         let servers = vec![(None, None); obj.runs.len()];
         let b = obj.xf.transform_rect_bbox(frame);
+        // A size, place or transform past what numbers hold (`width="1e999"`) has no frame to set type in.
+        if ![b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()) {
+            warnings.push(format!("{label}: flowed text (flowRoot) with a region too large to place was left out"));
+            return None;
+        }
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
         let name = t.attribute("id").unwrap_or("").to_string();
         Some((PendingText { name, obj, servers, paints: 0, non_scaling: false, under: None, marker }, Vec::new()))
