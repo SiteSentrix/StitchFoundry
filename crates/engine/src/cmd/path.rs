@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind, Scaling};
-use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
 use super::pathops::Beside;
@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Join",
             ["Object", "Path"],
             Some("Cmd+J"),
-            "{ids?: [path, path] (default: the selected paths), ends?: [\"first\"|\"last\", \"first\"|\"last\"] (which end of each path to join, as the Pen joins them; default: the nearest pair)} join two open paths into one (the first keeps its id, selected), or close a single open path",
+            "{ids?: [path, path] (default: the selected paths), ends?: [\"first\"|\"last\", \"first\"|\"last\"] (which end of each path to join, as the Pen joins them; default: the nearest pair)} join two open paths into one (the first keeps its id, selected), or close a single open path; without ids, direct-selected anchors lying on one another along a path merge into one anchor instead",
             has_selection,
             join
         ),
@@ -300,6 +300,37 @@ fn end_points(sp: &SubPath) -> Option<(Point, Point)> {
     Some((sp.anchors.first()?.p, sp.anchors.last()?.p))
 }
 
+/// Merge each run of `picked` neighbours of `sp` that lie on one another into one anchor, which
+/// keeps the first one's incoming handle and the last one's outgoing handle. Returns how many
+/// anchors went.
+fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool) -> usize {
+    let same = |a: &Anchor, b: &Anchor| a.p.distance(b.p) < 1e-6;
+    let before = sp.anchors.len();
+    // The closing pair of a closed path first: taking the last anchor moves no other index.
+    if sp.closed
+        && before > 2
+        && picked(0)
+        && picked(before - 1)
+        && let [first, .., last] = sp.anchors.as_mut_slice()
+        && same(first, last)
+    {
+        first.h_in = last.h_in;
+        sp.anchors.pop();
+    }
+    // Back to front, so the indices `picked` knows stay true for the anchors still to visit.
+    for i in (1..sp.anchors.len()).rev() {
+        if picked(i - 1)
+            && picked(i)
+            && let Some([a, b]) = sp.anchors.get_mut(i - 1..=i)
+            && same(a, b)
+        {
+            a.h_out = b.h_out;
+            sp.anchors.remove(i);
+        }
+    }
+    before - sp.anchors.len()
+}
+
 fn join(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.join";
     let ids = match ids_param(p, "ids") {
@@ -312,6 +343,31 @@ fn join(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => selected_paths(s)?,
     };
+    // Direct-selected anchors lying on one another along a path (two corners brought together by
+    // Average) become one anchor; the paths themselves are joined only when there are none.
+    if p.get("ids").is_none() {
+        let st = s.doc()?;
+        let mut merged = vec![];
+        for (id, picked) in &st.selection.anchors {
+            let Some(mut path) = st.doc.node(*id).and_then(|n| n.path_data()).cloned() else { continue };
+            let n: usize = path.subpaths.iter_mut().enumerate().map(|(si, sp)| merge_coincident(sp, |ai| picked.contains(&(si, ai)))).sum();
+            if n > 0 {
+                merged.push((*id, path));
+            }
+        }
+        if !merged.is_empty() {
+            let objects = st.selection.objects.clone();
+            s.edit("Join", |d, sel| {
+                for (id, path) in merged {
+                    *path_mut(d, id)? = path;
+                }
+                // The anchor indices changed: the paths stay selected, whole.
+                sel.set(objects);
+                Ok(())
+            })?;
+            return ok();
+        }
+    }
     // The ends to join, as (reverse the first path, reverse the second): the first path's end
     // must come last, the second's first.
     let ends = match p.get("ends") {
