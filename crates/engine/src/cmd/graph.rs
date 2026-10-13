@@ -890,13 +890,14 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 }
             } else {
                 // Scatter: a horizontal value axis too.
-                let (xl, xh, xs) = nice_axis(if xlo == f64::MAX { 0.0 } else { xlo.min(0.0) }, if xhi == f64::MIN { 1.0 } else { xhi }, g.ticks);
-                let mut x = xl;
-                while x <= xh + xs * 1e-6 {
+                // Like the value axis: finite, and a counted (capped) list of ticks, so data near f64::MAX can't loop forever.
+                let x_lo = if xlo == f64::MAX { 0.0 } else { xlo.min(0.0) };
+                let x_hi = if xhi == f64::MIN { 1.0 } else { xhi };
+                let (xl, xh, xs) = value_axis(g.ticks, None, None, x_lo, x_hi);
+                for x in tick_values(xl, xh, xs) {
                     let q = r.x0 + (x - xl) / (xh - xl) * r.width();
                     axes.push(b.line(Point::new(q, r.y1), Point::new(q, r.y1 + 4.0)));
                     axes.push(b.text(Role::Value, Point::new(q, r.y1 + 4.0 + vs * 1.1), &fmt_value(x), Justify::Center));
-                    x += xs;
                 }
                 for (si, s) in (0..nser).step_by(2).enumerate() {
                     let pts: Vec<Option<Point>> = (0..ncat)
@@ -2041,6 +2042,23 @@ mod tests {
         // One bound only keeps the calculated (nice) axis around it.
         s.execute("graph.setType", &json!({"axisMax": null})).unwrap();
         assert!((tallest(&s) - 74.0 * 10488.0 / 12000.0).abs() > 1.0);
+    }
+
+    #[test]
+    fn a_scatter_x_axis_that_overflows_does_not_hang() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        // Finite x values whose rounded axis end is infinite: this used to add ticks forever. Now the
+        // command returns: points that far off the plot can't be drawn, which is an error.
+        let csv = ",y1,x1\nP,1,1.7e308\nQ,2,1.5e308";
+        let refused = |r: crate::Result<serde_json::Value>| assert!(r.unwrap_err().to_string().contains("exceed the canvas"));
+        refused(s.execute("graph.create", &json!({"type": "scatter", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})));
+        // The same data through Graph Data, on an ordinary scatter graph: it stays as it was.
+        let axes = |s: &Session, id: NodeId| group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").children().unwrap().len();
+        let id = make(&mut s, "scatter", ",y1,x1\nP,1,10\nQ,2,20");
+        let before = axes(&s, id);
+        refused(s.execute("graph.setData", &json!({"id": id.0, "csv": csv})));
+        assert_eq!(axes(&s, id), before);
     }
 
     #[test]
