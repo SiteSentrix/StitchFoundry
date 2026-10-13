@@ -2,7 +2,8 @@
 //! made where it is released over the canvas: with the Artboard tool, an artboard guide of the
 //! active artboard. For the selection tools ([`GuideEdit`]), a press on a guide selects it (Shift
 //! adds it to the selected guides or, released without a drag, takes it out); dragging moves the
-//! selected guides (Alt copies them). A dragged guide snaps ([`GuideSnap`]): with Shift to the
+//! selected guides (Alt copies them), and a marquee selects the guides it crosses along with the
+//! art ([`marquee_select`]). A dragged guide snaps ([`GuideSnap`]): with Shift to the
 //! ruler's ticks, else to whole pixels, the grid, with Smart Guides the art's and the artboards'
 //! edges, centres and anchors, or with Snap to Point the anchors. Dropped off the canvas onto its
 //! ruler, a moved guide is deleted. Hidden or locked guides (View › Guides), and guides on a hidden
@@ -32,8 +33,16 @@ pub fn guide_at(cx: &ToolContext, p: Point) -> Option<usize> {
         .map(|(i, _)| i)
 }
 
+/// What a selection tool's marquee `r` does to the ruler guides, after its action selecting the
+/// art: the guides it crosses join the selection (with a Shift marquee, the selected ones leave
+/// it, as with a Shift-click on a guide).
+pub fn marquee_select(cx: &ToolContext, r: Rect) -> Option<Action> {
+    let guides = guides_in_rect(cx, r);
+    (!guides.is_empty()).then(|| Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })))
+}
+
 /// The editable ruler guides intersecting marquee rectangle `r`.
-pub fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
+fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
     if !cx.guides {
         return vec![];
     }

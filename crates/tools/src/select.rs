@@ -459,22 +459,8 @@ impl Tool for SelectionTool {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
                 let ids: Vec<NodeId> = marquee(cx.doc, r, cx.isolation, false);
-                let guides = crate::rulerguide::guides_in_rect(cx, r);
-                let mut out = vec![];
-                if toggle {
-                    if !ids.is_empty() {
-                        out.push(Action::Exec("select.toggle".into(), json!({ "ids": json_ids(&ids) })));
-                    }
-                    if !guides.is_empty() {
-                        out.push(Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })));
-                    }
-                } else {
-                    out.push(Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) })));
-                    if !guides.is_empty() {
-                        out.push(Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })));
-                    }
-                }
-                out
+                let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));
+                std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r)).collect()
             }
             _ => vec![],
         }

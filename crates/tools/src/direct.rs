@@ -730,22 +730,8 @@ impl Tool for DirectSelectionTool {
                 }
                 sel.retain(|(id, _)| cx.doc.is_editable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
-                let guides = crate::rulerguide::guides_in_rect(cx, r);
-                let mut out = vec![];
-                if toggle {
-                    if !items.is_empty() {
-                        out.push(Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "toggle"})));
-                    }
-                    if !guides.is_empty() {
-                        out.push(Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })));
-                    }
-                } else {
-                    out.push(Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"})));
-                    if !guides.is_empty() {
-                        out.push(Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })));
-                    }
-                }
-                out
+                let art = Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}));
+                std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r)).collect()
             }
             _ => vec![],
         }
