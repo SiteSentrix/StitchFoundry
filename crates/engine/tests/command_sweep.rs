@@ -556,6 +556,7 @@ fn structured_junk() {
         ("embroidery.chart.export", json!({"name": [], "path": 3})),
         ("embroidery.template.new", json!({"name": "\u{0}"})),
         ("embroidery.template.save", json!({"name": ""})),
+        ("embroidery.printView", json!({"scale": 1, "page": [], "view": null})),
         ("embroidery.visualize", json!({"image": "\u{0}", "imageWidth": f64::NAN, "at": [f64::INFINITY, 1]})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "applique": 3})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "stitch": [], "small": 2})),

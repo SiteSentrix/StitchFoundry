@@ -793,6 +793,39 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn the_stitch_view_prints_life_size_or_fitted() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.printView", &json!({})).unwrap();
+    assert_eq!((r["pages"].as_u64(), r["scale"].as_f64()), (Some(1), Some(1.0)), "{r}");
+    // the stitches as a picture, life size: 40 mm and 2 mm round it
+    let d = &s.doc().unwrap().doc;
+    let mut images = Vec::new();
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_)) {
+            images.push(n.bounds_in(kurbo::Affine::IDENTITY, false).unwrap());
+        }
+    });
+    assert_eq!(images.len(), 1);
+    assert!((images[0].width() / PT - 44.0).abs() < 2.0, "{:?}", images[0]);
+    // a big design: over several pages life size, on one page fitted
+    s.set_active(0);
+    rect(&mut s, 0.0, 0.0, 400.0 * PT, 300.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.printView", &json!({"page": "letter"})).unwrap();
+    assert!(r["pages"].as_u64().unwrap() >= 4, "{r}");
+    s.set_active(0);
+    let r = s.execute("embroidery.printView", &json!({"scale": "fit", "view": "flat"})).unwrap();
+    assert!(r["pages"].as_u64() == Some(1) && r["scale"].as_f64().unwrap() < 0.6, "{r}");
+    s.set_active(0);
+    for bad in [json!({"scale": "half"}), json!({"page": "a3"}), json!({"view": "3d"})] {
+        assert!(s.execute("embroidery.printView", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn the_design_exports_as_an_image_of_its_stitches() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

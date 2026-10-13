@@ -4,6 +4,9 @@
 
 use serde_json::{Value, json};
 
+use vectorcraft_doc::Document;
+use vectorcraft_embroidery::PT_PER_MM;
+
 use super::*;
 
 /// Thread thickness of 40 wt polyester lying on fabric (mm), as the display draws it.
@@ -13,15 +16,26 @@ const MAX_SIDE: u32 = 16_000;
 const MAX_PIXELS: u64 = 120_000_000;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
-        "embroidery.exportImage",
-        "Export Stitch Image",
-        [],
-        None,
-        "{path?: a .png file to write (without it: the bytes), ppmm?: pixels a millimetre (10; 1–40), background?: \"#rrggbb\"|transparent (white), margin?: mm round the design (3; 0–100), view?: trueview|flat (trueview: lit thread as the TrueView display shows it)} the design's stitches as a PNG image → {path, format, bytes, width, height} (no path: {dataBase64, format, bytes, width, height})",
-        has_doc,
-        export_image
-    )]
+    vec![
+        cmd!(
+            "embroidery.exportImage",
+            "Export Stitch Image",
+            [],
+            None,
+            "{path?: a .png file to write (without it: the bytes), ppmm?: pixels a millimetre (10; 1–40), background?: \"#rrggbb\"|transparent (white), margin?: mm round the design (3; 0–100), view?: trueview|flat (trueview: lit thread as the TrueView display shows it)} the design's stitches as a PNG image → {path, format, bytes, width, height} (no path: {dataBase64, format, bytes, width, height})",
+            has_doc,
+            export_image
+        ),
+        cmd!(
+            "embroidery.printView",
+            "Print Stitch View",
+            ["Embroidery"],
+            None,
+            "{scale?: life|fit (life: the stitches at their real size, over as many pages as it takes; fit: on one page), page?: a4|letter (a4), view?: trueview|flat} the stitch view as a document of pages to print (File › Print) or export, the stitches drawn as embroidery.exportImage draws them, 12 pixels a mm → {pages, scale}",
+            has_doc,
+            print_view
+        ),
+    ]
 }
 
 /// Light from the top left, a little towards the viewer (as the display's).
@@ -185,4 +199,70 @@ fn export_image(s: &mut Session, p: &Value) -> Result<Value> {
             "height": height,
         })),
     }
+}
+
+/// The stitch view as pages to print: the design's stitches as an image, life size (tiled over
+/// as many pages as it takes) or fitted to one page.
+fn print_view(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.printView";
+    let (pw, ph) = match str_param(p, "page").unwrap_or("a4") {
+        "a4" | "A4" => (595.0, 842.0),
+        "letter" | "Letter" => (612.0, 792.0),
+        _ => return Err(bad(CMD, "`page` is a4 or letter")),
+    };
+    let fit = match str_param(p, "scale").unwrap_or("life") {
+        "life" => false,
+        "fit" => true,
+        _ => return Err(bad(CMD, "`scale` is life or fit")),
+    };
+    let view = str_param(p, "view").unwrap_or("trueview");
+    let margin = 36.0;
+    let img = s.execute("embroidery.exportImage", &json!({ "ppmm": 12, "margin": 2, "view": view }))?;
+    let (iw, ih) = (img["width"].as_f64().unwrap_or(0.0), img["height"].as_f64().unwrap_or(0.0));
+    if iw <= 0.0 || ih <= 0.0 {
+        return Err(bad(CMD, "nothing to print"));
+    }
+    // the image's size on paper (pt): 12 pixels a mm
+    let (aw, ah) = (pw - 2.0 * margin, ph - 2.0 * margin);
+    let life = (iw / 12.0 * PT_PER_MM, ih / 12.0 * PT_PER_MM);
+    let (w, h) = if fit || (life.0 <= aw && life.1 <= ah) {
+        let k = (aw / life.0).min(ah / life.1).min(if fit { f64::INFINITY } else { 1.0 });
+        (life.0 * k, life.1 * k)
+    } else {
+        life
+    };
+    let (cols, rows) = ((w / aw).ceil().max(1.0) as usize, (h / ah).ceil().max(1.0) as usize);
+    if cols * rows > 64 {
+        return Err(bad(CMD, "more than 64 pages: use scale fit"));
+    }
+    let title = super::fileio::file_stem(&s.doc()?.doc.title);
+    let mut doc = Document::new(pw, ph);
+    doc.title = format!("{title} print");
+    // the pages in a grid, touching, so the image runs across them
+    for r in 0..rows {
+        for c in 0..cols {
+            if r == 0 && c == 0 {
+                continue;
+            }
+            let id = doc.next_artboard_id();
+            let (x, y) = (c as f64 * aw, r as f64 * ah);
+            doc.artboards.push(vectorcraft_doc::Artboard {
+                id,
+                name: format!("Page {}", r * cols + c + 1),
+                rect: vectorcraft_geom::Rect::new(x - margin, y - margin, x - margin + pw, y - margin + ph),
+                show_center_mark: false,
+                show_cross_hairs: false,
+            });
+        }
+    }
+    if let Some(a) = doc.artboards.first_mut() {
+        a.rect = vectorcraft_geom::Rect::new(-margin, -margin, pw - margin, ph - margin);
+    }
+    let pages = doc.artboards.len();
+    s.add_document(doc, None);
+    // the image centred on a single page, else from the first page's corner
+    let (x, y) = if pages == 1 { ((aw - w) / 2.0, (ah - h) / 2.0) } else { (0.0, 0.0) };
+    s.execute("file.place", &json!({ "name": format!("{title}.png"), "dataBase64": img["dataBase64"], "rect": [x, y, w, h] }))?;
+    s.execute("select.none", &json!({}))?;
+    Ok(json!({ "pages": pages, "scale": if (w - life.0).abs() < 0.5 { 1.0 } else { (w / life.0 * 1000.0).round() / 1000.0 } }))
 }
