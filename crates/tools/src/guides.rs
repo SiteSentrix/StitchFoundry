@@ -440,6 +440,9 @@ impl Targets {
         if let Some((q, k)) = self.nearest_point(p, tol) {
             return (q, self.label(q, k.label()).into_iter().collect());
         }
+        if let Some(q) = self.crossing(p, tol) {
+            return (q, self.label(q, "intersect").into_iter().collect());
+        }
         if let Some(q) = self.on_segment(p, tol) {
             return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
         }
@@ -543,6 +546,43 @@ impl Targets {
             .filter(|(_, n)| n.distance_sq <= tol * tol)
             .min_by(|a, b| a.1.distance_sq.total_cmp(&b.1.distance_sq))
             .map(|(c, n)| c.eval(n.t))
+    }
+
+    /// Where two target paths, a path and a ruler guide, or two ruler guides cross, the crossing
+    /// nearest `p` within `tol` ("intersect", #1602).
+    fn crossing(&self, p: Point, tol: f64) -> Option<Point> {
+        // A ruler guide running past, as a short line through the reach of `p`.
+        let ruler = |r: &Ruler| {
+            let (pos, ..) = r.line_at(p, tol)?;
+            let (across, along) = if r.vertical { (p.x, p.y) } else { (p.y, p.x) };
+            let (a, b) = (along - tol, along + tol);
+            ((pos - across).abs() <= tol)
+                .then(|| PathSeg::Line(if r.vertical { Line::new((pos, a), (pos, b)) } else { Line::new((a, pos), (b, pos)) }))
+        };
+        let near: Vec<PathSeg> = self
+            .segments
+            .iter()
+            .filter(|(b, c)| b.inflate(tol, tol).contains(p) && c.nearest(p, 1e-6).distance_sq <= tol * tol)
+            .map(|(_, c)| *c)
+            .chain(self.rulers.iter().filter_map(ruler))
+            // shortcut: the first 32 lines in reach are paired, raise it if busier crossings matter
+            .take(32)
+            .collect();
+        let mut best: Option<Point> = None;
+        for (i, a) in near.iter().enumerate() {
+            for b in near.iter().skip(i + 1) {
+                let hits: Vec<Point> = match (a, b) {
+                    (PathSeg::Line(l), c) | (c, PathSeg::Line(l)) => c.intersect_line(*l).iter().map(|x| l.eval(x.line_t)).collect(),
+                    _ => meeting(a, b, p).into_iter().collect(),
+                };
+                for q in hits {
+                    if q.distance(p) <= tol && best.is_none_or(|b| q.distance(p) < b.distance(p)) {
+                        best = Some(q);
+                    }
+                }
+            }
+        }
+        best
     }
 
     /// Snap a ruler guide at `v` (the x of a vertical one, the y of a horizontal one) into line
@@ -826,6 +866,20 @@ impl Targets {
         }
         (out, ov)
     }
+}
+
+/// Where curves `a` and `b` cross near `p`: a point projected from one onto the other and back
+/// settles where they meet (none when they don't nearby).
+fn meeting(a: &PathSeg, b: &PathSeg, p: Point) -> Option<Point> {
+    let mut q = p;
+    for _ in 0..32 {
+        let on_a = a.eval(a.nearest(q, 1e-9).t);
+        q = b.eval(b.nearest(on_a, 1e-9).t);
+        if on_a.distance(q) <= 1e-6 {
+            return Some(q);
+        }
+    }
+    None
 }
 
 /// Snap `p` for a drawing tool when smart guides (or grid snapping) are on.
@@ -1378,6 +1432,43 @@ mod tests {
         // A box's corner keeps to a diagonal with Shift, the farther axis giving its size.
         let (q, _) = t.snap_from(Point::new(340.0, 310.0), Some(&Leave::diagonal(Point::new(300.0, 300.0), true)), 4.0);
         assert_eq!(q, Point::new(340.0, 340.0));
+    }
+
+    /// #1602: a drawn point lands where two paths cross, where a path crosses a ruler guide and
+    /// where two ruler guides cross, labelled "intersect"; an anchor nearby still wins.
+    #[test]
+    fn drawn_points_land_on_intersections() {
+        use vectorcraft_doc::{Appearance, Node};
+        use vectorcraft_geom::shapes;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        // A slanted line through the rect's top side (y = 100) at x = 150, and a circle across its
+        // right side (x = 200).
+        for path in [shapes::line(Point::new(145.0, 90.0), Point::new(165.0, 130.0)), shapes::ellipse(Rect::new(175.0, 130.0, 215.0, 170.0))] {
+            let id = d.alloc_id();
+            d.insert(Some(l), 1, Node::path(id, path, Appearance::default_art())).unwrap();
+        }
+        d.guides.push(vectorcraft_doc::Guide::new(true, 400.0));
+        d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
+        d.guides.push(vectorcraft_doc::Guide::new(false, 150.0));
+        let (s, p) = (Selection::default(), paint());
+        let c = ToolContext { guides: true, ..cx(&d, &s, &p) };
+        let t = Targets::for_drawing(&d, &[], None).styled(&c).with_rulers(&c);
+        let (q, ov) = t.snap_from(Point::new(152.0, 101.5), None, 4.0);
+        assert!((q - Point::new(150.0, 100.0)).hypot() < 1e-9, "{q:?}");
+        assert_eq!(labels(&ov), ["intersect"]);
+        // The circle (curves, centre (195, 150), radius 20) crosses the rect's right side.
+        let (q, ov) = t.snap_from(Point::new(201.5, 131.5), None, 4.0);
+        assert!((q - Point::new(200.0, 150.0 - 375f64.sqrt())).hypot() < 0.02, "{q:?}");
+        assert_eq!(labels(&ov), ["intersect"]);
+        // A ruler guide across a path, and two ruler guides.
+        let (q, ov) = t.snap_from(Point::new(101.0, 151.0), None, 4.0);
+        assert_eq!((q, labels(&ov)), (Point::new(100.0, 150.0), vec!["intersect"]));
+        let (q, ov) = t.snap_from(Point::new(402.0, 298.0), None, 4.0);
+        assert_eq!((q, labels(&ov)), (Point::new(400.0, 300.0), vec!["intersect"]));
+        // An anchor in reach wins, and a path alone is still "path".
+        assert_eq!(labels(&t.snap_from(Point::new(146.0, 91.0), None, 4.0).1), ["anchor"]);
+        assert_eq!(labels(&t.snap_from(Point::new(170.0, 201.0), None, 4.0).1), ["path"]);
     }
 
     /// The angle sets of Preferences › Smart Guides › Construction Guides.
