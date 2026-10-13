@@ -15,13 +15,16 @@ pub enum Class {
     Poly,
     /// Thin lines, 0.5 to 5 units wide.
     Lines,
+    /// Straight-edged shapes and lines a degree or two off level and upright, as a scan or a
+    /// screenshot taken a little askew has them.
+    Askew,
     /// Flat art in several colours, with regions that touch.
     Flat,
     /// Continuous tone: a gradient and a photo-like image.
     Tone,
 }
 
-pub const CLASSES: [Class; 5] = [Class::Shape, Class::Poly, Class::Lines, Class::Flat, Class::Tone];
+pub const CLASSES: [Class; 6] = [Class::Shape, Class::Poly, Class::Lines, Class::Askew, Class::Flat, Class::Tone];
 
 impl Class {
     pub fn name(self) -> &'static str {
@@ -29,6 +32,7 @@ impl Class {
             Class::Shape => "curved shapes",
             Class::Poly => "polygons",
             Class::Lines => "thin lines",
+            Class::Askew => "askew shapes",
             Class::Flat => "flat colour art",
             Class::Tone => "gradient, photo",
         }
@@ -215,6 +219,27 @@ pub fn inputs() -> Vec<Input> {
         lines.extend(strip);
     }
 
+    // A rectangle 1.5° off level, a plus sign 1° off the other way, and two lines 1° and 2° off.
+    let turned = |p: BezPath, deg: f64, about: (f64, f64)| Affine::rotate_about(deg.to_radians(), Point::new(about.0, about.1)) * p;
+    let plus = [
+        (150.0, 150.0),
+        (170.0, 150.0),
+        (170.0, 180.0),
+        (200.0, 180.0),
+        (200.0, 200.0),
+        (170.0, 200.0),
+        (170.0, 230.0),
+        (150.0, 230.0),
+        (150.0, 200.0),
+        (120.0, 200.0),
+        (120.0, 180.0),
+        (150.0, 180.0),
+    ];
+    let mut askew = turned(poly(&[(40.3, 30.6), (200.7, 30.6), (200.7, 110.4), (40.3, 110.4)]), 1.5, (120.0, 70.0));
+    askew.extend(turned(poly(&plus), -1.0, (160.0, 190.0)));
+    askew.extend(turned(poly(&[(20.0, 150.3), (100.0, 150.3), (100.0, 153.3), (20.0, 153.3)]), 1.0, (60.0, 152.0)));
+    askew.extend(turned(poly(&[(60.4, 170.0), (62.4, 170.0), (62.4, 240.0), (60.4, 240.0)]), 2.0, (61.0, 205.0)));
+
     let centre = Point::new(128.4, 128.3);
     let touching = vec![(half_disc(centre, 90.0, true), [200, 40, 50]), (half_disc(centre, 90.0, false), [30, 90, 200])];
     let bar = [(60.3, 180.4), (196.6, 180.4), (196.6, 206.7), (60.3, 206.7)];
@@ -234,6 +259,7 @@ pub fn inputs() -> Vec<Input> {
         art("star", Class::Poly, ink(poly(&star)), 10, points(&star)),
         art("letter A", Class::Poly, ink(with_holes(poly(&a_outer), &[poly(&a_counter)])), 10, points(&[&a_outer[..], &a_counter].concat())),
         art("lines", Class::Lines, ink(lines), 20, vec![]),
+        art("askew shapes and lines", Class::Askew, ink(askew), 24, vec![]),
         art("two touching halves", Class::Flat, touching, 6, vec![(centre.x, centre.y - 90.0).into(), (centre.x, centre.y + 90.0).into()]),
         art("four-colour badge", Class::Flat, multicolor, 20, points(&bar)),
         tone("gradient", gradient),

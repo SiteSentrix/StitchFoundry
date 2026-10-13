@@ -329,8 +329,8 @@ impl TraceParams {
     }
     /// How outlines are fitted: Paths sets how closely the curves follow the edge (0.08 px at 100,
     /// 0.33 px at 50, 0.78 px at 0), Corners the turn that makes a corner (35° at 100, 90° at 0).
-    /// Straight edges are always lines; Snap Curves To Lines also straightens slightly curved ones
-    /// and makes parts of circles true arcs.
+    /// Straight edges are always lines; Snap Curves To Lines also straightens slightly curved ones,
+    /// makes parts of circles true arcs, and makes lines within 2.5° of level or upright exactly so.
     fn outline_style(&self) -> logo::Style {
         // Parameters come from users and agents: a NaN or infinity must not reach the geometry.
         let unit = |v: f64, default: f64| if v.is_finite() { (v / 100.0).clamp(0.0, 1.0) } else { default };
@@ -345,6 +345,7 @@ impl TraceParams {
             circle_tol: if snap { 0.3 } else { 0.15 },
             restore: Some(logo::RestoreParams::default()),
             check_step: 0.15,
+            upright: snap,
             ..logo::Style::default()
         }
     }

@@ -1093,3 +1093,36 @@ fn ignore_color_leaves_out_the_colour_picked() {
     assert_eq!(old.ignore_color, None);
     assert_eq!(serde_json::to_value(&params).unwrap()["ignoreColor"], serde_json::Value::Null);
 }
+
+#[test]
+fn snap_curves_to_lines_levels_a_rectangle_a_degree_askew() {
+    // 120 × 60, turned 1.5° about its centre.
+    let (c, t) = (Point::new(100.3, 60.6), 1.5f64.to_radians());
+    let img = soft(200, 120, |x, y| {
+        let (dx, dy) = (x - c.x, y - c.y);
+        (dx * t.cos() + dy * t.sin()).abs() <= 60.0 && (dy * t.cos() - dx * t.sin()).abs() <= 30.0
+    });
+    let sides = |snap: bool| {
+        let res = trace(&img, &TraceParams { snap_curves_to_lines: snap, ..bw() });
+        let sp = res.paths[0].path.subpaths[0].clone();
+        assert_eq!(sp.anchors.len(), 4, "{sp:?}");
+        (0..4).map(|i| sp.segment(i)).map(|s| ((s.p3.x - s.p0.x).abs(), (s.p3.y - s.p0.y).abs())).collect::<Vec<_>>()
+    };
+    // Snapped, every side is exactly level or upright; left alone, it keeps its 1.5°.
+    assert!(sides(true).iter().all(|(dx, dy)| *dx == 0.0 || *dy == 0.0), "{:?}", sides(true));
+    assert!(sides(false).iter().all(|(dx, dy)| dx.min(*dy) > 0.5), "{:?}", sides(false));
+    // And it is still the rectangle: 120 by 60 about the same centre.
+    let b = trace(&img, &TraceParams { snap_curves_to_lines: true, ..bw() }).paths[0].path.bounds().unwrap();
+    assert!((b.width() - 120.0).abs() < 1.0 && (b.height() - 60.0).abs() < 1.0 && (b.center().x - c.x).abs() < 0.3, "{b:?}");
+    // A side 5° off is no slip of the scanner: it stays.
+    let t = 5f64.to_radians();
+    let img = soft(200, 120, |x, y| {
+        let (dx, dy) = (x - c.x, y - c.y);
+        (dx * t.cos() + dy * t.sin()).abs() <= 60.0 && (dy * t.cos() - dx * t.sin()).abs() <= 30.0
+    });
+    let sp = trace(&img, &TraceParams { snap_curves_to_lines: true, ..bw() }).paths[0].path.subpaths[0].clone();
+    assert!(
+        (0..sp.segment_count())
+            .all(|i| (sp.segment(i).p3.y - sp.segment(i).p0.y).abs() > 1.0 && (sp.segment(i).p3.x - sp.segment(i).p0.x).abs() > 1.0)
+    );
+}
