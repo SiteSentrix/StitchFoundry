@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Product Visualizer",
             ["Embroidery"],
             None,
-            "{product?: tshirt|polo|hoodie|cap|tote|towel (tshirt), color?: \"#rrggbb\" (the product's colour; white), placement?: left-chest|right-chest|full-front|full-back|yoke|sleeve|pocket (garments), cap-front (caps), full-front (totes, towels) (the product's usual), image?: a photo of the customer's own product instead (PNG, JPEG…), imageWidth?: mm the photo shows across (500; 50–3000), at?: [x, y] mm from the photo's top left where the design's middle goes (its middle)} the design's stitches life size on the product drawn in its colour (front, or back for full-back and yoke) at the usual place for it, or on the photo; a size larger than usual there is warned of; opens a new document → {product, placement, view, widthMm, heightMm, warnings}",
+            "{product?: tshirt|polo|hoodie|cap|tote|towel (tshirt), color?: \"#rrggbb\" (the product's colour; white), placement?: left-chest|right-chest|full-front|full-back|yoke|sleeve|pocket (garments), cap-front (caps), full-front (totes, towels) (the product's usual), image?: a photo of the customer's own product instead (PNG, JPEG…), imageWidth?: mm the photo shows across (500; 50–3000), at?: [x, y] mm from the photo's top left where the design's middle goes (its middle), areas?: bool (false) the usual work areas of the side shown drawn dashed and named} the design's stitches life size on the product drawn in its colour (front, or back for full-back and yoke) at the usual place for it, or on the photo; a size larger than usual there is warned of; on shirts and hoodies, how far below the neckline the design starts; opens a new document → {product, placement, view, widthMm, heightMm, belowNeckMm?, areas, warnings}",
             has_doc,
             visualize
         ),
@@ -54,6 +54,8 @@ struct Product {
     lines: &'static [&'static str],
     placements: &'static [(&'static str, Anchor, f64)],
     default: &'static str,
+    /// The neckline's lowest point at the middle (mm from the top), on shirts and hoodies.
+    neck: Option<f64>,
 }
 
 // The T-shirt's front: neckline, shoulders, short sleeves, straight body; 820 × 740 mm box.
@@ -115,21 +117,52 @@ const TOWEL_LINES: &[&str] = &["M 20 760 L 520 760", "M 20 820 L 520 820", "M 20
 const TOWEL_PLACES: &[(&str, Anchor, f64)] = &[("full-front", Anchor::Bottom(270.0, 740.0), 400.0)];
 
 fn product(name: &str, back: bool) -> Option<Product> {
-    let garment = |body, lines| Product { size: (820.0, 740.0), body, lines, placements: GARMENT_PLACES, default: "left-chest" };
+    // the necklines' lowest points: the curves' middles (front 80 mm, back 39, the polo's 50)
+    let garment =
+        |body, lines, neck| Product { size: (820.0, 740.0), body, lines, placements: GARMENT_PLACES, default: "left-chest", neck: Some(neck) };
     Some(match name {
-        "tshirt" if back => garment(&[TEE_BACK], &TEE_LINES[1..]),
-        "tshirt" => garment(&[TEE], TEE_LINES),
-        "polo" if back => garment(&[TEE_BACK], &POLO_LINES[3..]),
+        "tshirt" if back => garment(&[TEE_BACK], &TEE_LINES[1..], 38.75),
+        "tshirt" => garment(&[TEE], TEE_LINES, 80.0),
+        "polo" if back => garment(&[TEE_BACK], &POLO_LINES[3..], 38.75),
         "polo" => garment(
             &["M 320 20 C 350 60 470 60 500 20 L 640 50 L 800 250 L 690 330 L 660 300 L 660 730 L 160 730 L 160 300 L 130 330 L 20 250 L 180 50 Z"],
             POLO_LINES,
+            50.0,
         ),
-        "hoodie" => Product { size: (820.0, 860.0), body: &[HOOD, HOODIE], lines: HOODIE_LINES, placements: HOODIE_PLACES, default: "full-front" },
-        "cap" => Product { size: (300.0, 200.0), body: &[CAP_CROWN, CAP_BRIM], lines: CAP_LINES, placements: CAP_PLACES, default: "cap-front" },
-        "tote" => Product { size: (420.0, 570.0), body: &[TOTE], lines: TOTE_LINES, placements: TOTE_PLACES, default: "full-front" },
-        "towel" => Product { size: (540.0, 940.0), body: &[TOWEL], lines: TOWEL_LINES, placements: TOWEL_PLACES, default: "full-front" },
+        "hoodie" => Product {
+            size: (820.0, 860.0),
+            body: &[HOOD, HOODIE],
+            lines: HOODIE_LINES,
+            placements: HOODIE_PLACES,
+            default: "full-front",
+            neck: Some(162.5),
+        },
+        "cap" => {
+            Product { size: (300.0, 200.0), body: &[CAP_CROWN, CAP_BRIM], lines: CAP_LINES, placements: CAP_PLACES, default: "cap-front", neck: None }
+        }
+        "tote" => Product { size: (420.0, 570.0), body: &[TOTE], lines: TOTE_LINES, placements: TOTE_PLACES, default: "full-front", neck: None },
+        "towel" => Product { size: (540.0, 940.0), body: &[TOWEL], lines: TOWEL_LINES, placements: TOWEL_PLACES, default: "full-front", neck: None },
         _ => return None,
     })
+}
+
+/// The top left (mm) of a `w` × `h` box at `anchor`.
+fn anchored(anchor: Anchor, w: f64, h: f64) -> (f64, f64) {
+    match anchor {
+        Anchor::Centre(x, y) => (x - w / 2.0, y - h / 2.0),
+        Anchor::Top(x, y) => (x - w / 2.0, y),
+        Anchor::Bottom(x, y) => (x - w / 2.0, y - h),
+    }
+}
+
+/// How tall a placement's usual work area is (mm), given how wide.
+fn area_height(product: &str, placement: &str, widest: f64) -> f64 {
+    match (product, placement) {
+        (_, "yoke") => 60.0,
+        (_, "cap-front") => 55.0,
+        ("towel", _) => 120.0,
+        _ => widest,
+    }
 }
 
 /// What a product and a placement are called on the caption.
@@ -186,6 +219,7 @@ fn visualize(s: &mut Session, p: &Value) -> Result<Value> {
         Some(c) => sf_core::Rgb::from_hex(c).ok_or_else(|| bad(CMD, "`color` is \"#rrggbb\""))?,
     };
     let mut warnings = Vec::new();
+    let (mut areas, mut below_neck) = (0, None);
     // where the design's top left goes (mm), the page's size (mm) and what is drawn under it
     let (doc, page, origin, placement, view) = if let Some(path) = &image {
         let width = match p.get("imageWidth") {
@@ -241,12 +275,39 @@ fn visualize(s: &mut Session, p: &Value) -> Result<Value> {
             let path = svg_path("M 440 165 L 560 165 L 560 305 C 520 320 480 320 440 305 Z", MARGIN, MARGIN)?;
             add_path(&mut doc, path, Appearance::basic(Paint::solid(fill), Paint::solid(ink), 0.8 * PT_PER_MM))?;
         }
-        let (ax, ay) = match *anchor {
-            Anchor::Centre(x, y) => (x - w / 2.0, y - h / 2.0),
-            Anchor::Top(x, y) => (x - w / 2.0, y),
-            Anchor::Bottom(x, y) => (x - w / 2.0, y - h),
-        };
-        let caption = format!("{title} on a {}, {}: {w:.0} × {h:.0} mm, life size", spoken(name), spoken(placement));
+        let (ax, ay) = anchored(*anchor, w, h);
+        // the usual work areas of the side shown, dashed and named (a pocket shows only when chosen)
+        if bool_or(p, "areas", false) {
+            let blue = Color::rgb8(0x2a, 0x6f, 0xdb);
+            for (id, at, widest) in prod.placements {
+                if matches!(*id, "full-back" | "yoke") != back || *id == "pocket" {
+                    continue;
+                }
+                let ah = area_height(name, id, *widest);
+                let (x, y) = anchored(*at, *widest, ah);
+                let (x, y) = (x + MARGIN, y + MARGIN);
+                let rect = format!("M {x} {y} L {} {y} L {} {} L {x} {} Z", x + widest, x + widest, y + ah, y + ah);
+                let mut look = Appearance::basic(Paint::None, Paint::solid(blue), 0.6 * PT_PER_MM);
+                if let Some(st) = look.stroke_mut() {
+                    st.dash = Some(vectorcraft_doc::appearance::Dash {
+                        pattern: vec![4.0 * PT_PER_MM, 3.0 * PT_PER_MM],
+                        offset: 0.0,
+                        align_corners: false,
+                    });
+                }
+                add_path(&mut doc, svg_path(&rect, 0.0, 0.0)?, look)?;
+                let label = format!("{} {widest:.0} × {ah:.0} mm", spoken(id));
+                sheet_text(&mut doc, (x + 2.0) * PT_PER_MM, (y + 6.0) * PT_PER_MM, &label, 11.0, blue)?;
+                areas += 1;
+            }
+        }
+        let mut caption = format!("{title} on a {}, {}: {w:.0} × {h:.0} mm, life size", spoken(name), spoken(placement));
+        // how far below the neckline it starts, as placements are measured on shirts
+        if let Some(neck) = prod.neck {
+            let below = ((ay - neck) * 10.0).round() / 10.0;
+            caption.push_str(&format!(", {below:.0} mm below the neckline"));
+            below_neck = Some(below);
+        }
         sheet_text(&mut doc, MARGIN * PT_PER_MM, (ph - 14.0) * PT_PER_MM, &caption, 24.0, Color::rgb8(0x44, 0x44, 0x44))?;
         (doc, (pw, ph), (ax + MARGIN, ay + MARGIN), placement.to_string(), if back { "back" } else { "front" })
     };
@@ -283,6 +344,8 @@ fn visualize(s: &mut Session, p: &Value) -> Result<Value> {
         "view": view,
         "widthMm": (w * 10.0).round() / 10.0,
         "heightMm": (h * 10.0).round() / 10.0,
+        "belowNeckMm": below_neck,
+        "areas": areas,
         "warnings": warnings,
     }))
 }

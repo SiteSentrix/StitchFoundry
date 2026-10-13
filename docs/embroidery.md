@@ -484,6 +484,13 @@ on a photo of the customer's own product instead: `imageWidth` says how many mm 
 across, `at` where the design's middle goes. The mock-up opens as a new document, to show the
 customer, print or export (PNG, PDF).
 
+As placement aids, `areas: true` draws the usual work areas of the side shown on the product,
+dashed and named with their sizes (left and right chest, full front, sleeve; full back and yoke
+from the back; a cap's front, a bag's middle, a towel's band above its border). On shirts and
+hoodies the caption, and `belowNeckMm`, say how far below the neckline the design starts, the
+way placements are measured on a garment. Printed life-size placement templates come from the
+worksheet (`kind: template`), and a basting run round the design from the design settings.
+
 ## Thread charts of your own
 
 Besides the built-in charts, the Design section keeps charts of your own: **Import Chart…** reads
