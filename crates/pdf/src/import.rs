@@ -1340,10 +1340,15 @@ impl<'p> Builder<'p> {
         {
             return Some(Paint::Pattern { pattern: name.clone(), xf });
         }
+        // A swatch is shared with uses outside an alpha mask, and pattern paints keep their
+        // colours there: its images are read as they are.
+        let white = std::mem::take(&mut self.white_images);
         let art = self.nested(Rect::ZERO, |b| {
             // A cell whose content can't be decoded is empty.
             let _ = t.interpret(b, Affine::IDENTITY, stroke);
-        })?;
+        });
+        self.white_images = white;
+        let art = art?;
         let sig = paints(&art);
         let entry = self.pattern_keys.entry(key).or_default();
         entry.0 += 1;
