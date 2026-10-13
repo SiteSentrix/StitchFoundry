@@ -12,14 +12,23 @@
 //!    merged into one point) become polylines through the pixel centres; rings without ends
 //!    become closed ones. Short spurs that thinning leaves at junctions are pruned and the runs
 //!    on either side of a junction left with two of them are joined.
-//! 5. **Curves**: each polyline is fitted like an outline ([`fit::fit_polyline`]); the stroke
-//!    width is the line's mean width (its pixel count over its length).
+//! 5. **Ink**: the skeleton is right to a pixel only, so each of its points is moved to the middle
+//!    of the line's ink, read from the image: across the line (along the pixel column or row most
+//!    nearly square to it) each pixel is as much ink as its colour is the line's rather than the
+//!    paper's, and the ink's centroid is the line's middle there and its sum the line's width (an
+//!    anti-aliased or blurred line says both to a fraction of a pixel). The stroke width is the
+//!    median of those widths, and each end is put where the ink ends, less the half width a round
+//!    cap adds.
+//! 6. **Curves**: each polyline is fitted as outlines are ([`fit::fit_piece`]): a straight line
+//!    is two anchors, corners stay corners, the rest is as few curves as Paths allows.
 
 use std::collections::HashSet;
 
 use vectorcraft_geom::{PathData, Point};
 
-use crate::fit::{self, FitOptions};
+use crate::Raster;
+use crate::fit;
+use crate::logo::Style;
 
 /// One line of a colour layer: its centre lines and the width to stroke them with.
 pub(crate) struct Line {
@@ -31,7 +40,19 @@ pub(crate) struct Line {
 
 /// The lines of colour `label` in `labels` (`w` × `h`, row-major) no wider than `max_width`
 /// pixels, and which pixels they cover (to leave out of the filled areas).
-pub(crate) fn lines(labels: &[u16], label: u16, w: usize, h: usize, max_width: f64, o: &FitOptions) -> (Vec<bool>, Vec<Line>) {
+/// `ink` is the colour of the layer's ink in `img` (its palette colour; in Black and White the
+/// image's own black), which the lines' middles and widths are read against.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn lines(
+    labels: &[u16],
+    label: u16,
+    w: usize,
+    h: usize,
+    max_width: f64,
+    img: &Raster,
+    ink: [f64; 3],
+    style: &Style,
+) -> (Vec<bool>, Vec<Line>) {
     let mut thin = vec![false; labels.len()];
     let mut out = vec![];
     if w == 0 || h == 0 || labels.len() != w * h {
@@ -61,7 +82,7 @@ pub(crate) fn lines(labels: &[u16], label: u16, w: usize, h: usize, max_width: f
         if widest > max_width {
             continue;
         }
-        let Some(line) = trace_line(&comp, w, max_width, o) else { continue };
+        let Some(line) = trace_line(&comp, w, max_width, img, ink, style) else { continue };
         for &i in &comp {
             thin[i] = true;
         }
@@ -221,7 +242,7 @@ impl Run {
 }
 
 /// The centre lines of one line component (pixel indices of the `w`-wide image).
-fn trace_line(comp: &[usize], w: usize, max_width: f64, o: &FitOptions) -> Option<Line> {
+fn trace_line(comp: &[usize], w: usize, max_width: f64, img: &Raster, ink: [f64; 3], style: &Style) -> Option<Line> {
     let xs = comp.iter().map(|&i| i % w);
     let ys = comp.iter().map(|&i| i / w);
     let (x0, x1, y0, y1) = (xs.clone().min()?, xs.max()?, ys.clone().min()?, ys.max()?);
@@ -312,12 +333,166 @@ fn trace_line(comp: &[usize], w: usize, max_width: f64, o: &FitOptions) -> Optio
     };
     let spur = width(&runs);
     let runs = join(prune(runs, centres.len(), spur), centres.len());
-    let width = width(&runs);
-    let subs: Vec<_> = runs.iter().filter_map(|r| fit::fit_polyline(&r.pts, r.closed, o)).collect();
+    let mut runs = runs;
+    let coarse = width(&runs);
+    let ink = Ink { img, color: ink, reach: (max_width / 2.0).ceil().clamp(1.0, 64.0) as i64 + 2 };
+    // How many runs end at each node: one is an end of the line.
+    let mut meet = vec![0usize; centres.len()];
+    for e in runs.iter().flat_map(|r| r.ends.iter().flatten()) {
+        meet[*e] += 1;
+    }
+    let (mut widths, mut soft, mut read) = (vec![], 0usize, 0usize);
+    for r in &mut runs {
+        let n = r.pts.len();
+        let old = r.pts.clone();
+        for i in 0..n {
+            // A junction stays where its pixels put it.
+            let end = if i == 0 {
+                r.ends[0]
+            } else if i + 1 == n {
+                r.ends[1]
+            } else {
+                None
+            };
+            if end.is_some_and(|e| meet[e] > 1) {
+                continue;
+            }
+            let (a, b) = if r.closed { (old[(i + n - 2 % n) % n], old[(i + 2) % n]) } else { (old[i.saturating_sub(2)], old[(i + 2).min(n - 1)]) };
+            let d = b - a;
+            if d.hypot() < 1e-9 {
+                continue;
+            }
+            let upright = d.x.abs() >= d.y.abs();
+            let Some(across) = ink.across(old[i], upright) else { continue };
+            r.pts[i] = old[i] + if upright { kurbo::Vec2::new(0.0, across.middle) } else { kurbo::Vec2::new(across.middle, 0.0) };
+            widths.push(across.width * if upright { d.x.abs() } else { d.y.abs() } / d.hypot());
+            read += 1;
+            soft += usize::from(across.soft);
+        }
+    }
+    // The stroke is as wide as the ink at the line's middle point (where no ink could be read, as
+    // wide as its pixels make it).
+    widths.sort_by(f64::total_cmp);
+    let width = widths.get(widths.len() / 2).copied().unwrap_or(coarse).clamp(0.25, max_width.max(1.0));
+    // Each end goes where the ink ends, less the half width its round cap adds.
+    for r in runs.iter_mut().filter(|r| !r.closed && r.pts.len() >= 2) {
+        for k in 0..2 {
+            if r.ends[k].is_some_and(|e| meet[e] > 1) {
+                continue;
+            }
+            let n = r.pts.len();
+            let (tip, inner) = if k == 0 { (r.pts[0], r.pts[3.min(n - 1)]) } else { (r.pts[n - 1], r.pts[n - 1 - 3.min(n - 1)]) };
+            let d = tip - inner;
+            if d.hypot() < 1e-9 {
+                continue;
+            }
+            let more = ink.beyond(tip, d / d.hypot()) - width / 2.0;
+            if more.abs() > 0.05 && more > -1.0 {
+                let to = tip + d / d.hypot() * more;
+                if k == 0 { r.pts[0] = to } else { r.pts[n - 1] = to }
+            }
+        }
+    }
+    let mut style = *style;
+    if read > 0 && soft * 4 < read {
+        // Hard pixels: the middle is only known to about half a pixel (as for outlines).
+        style.tol *= 2.5;
+        style.line_tol *= 2.5;
+        style.sigma = 1.5;
+    }
+    let subs: Vec<_> = runs
+        .iter()
+        .filter_map(|r| {
+            if r.closed { fit::subpath(&fit::fit_closed(&r.pts, &style)?, true) } else { fit::subpath(&fit::fit_piece(&r.pts, &style, false), false) }
+        })
+        .collect();
     if subs.is_empty() {
         return None;
     }
     Some(Line { path: PathData::new(subs), width, pixels: comp.len() })
+}
+
+/// What the image says of a line's ink.
+struct Ink<'a> {
+    img: &'a Raster,
+    /// The line's colour.
+    color: [f64; 3],
+    /// How far (pixels) from the skeleton the ink is looked for.
+    reach: i64,
+}
+
+/// The ink across a line at one point: where its middle lies from the point, how wide it is, and
+/// whether its edges are soft (some pixel is part ink, part paper).
+struct Across {
+    middle: f64,
+    width: f64,
+    soft: bool,
+}
+
+impl Ink<'_> {
+    /// How far the colour of pixel `(x, y)` is from the line's (`None` off the image).
+    fn far(&self, x: i64, y: i64) -> Option<f64> {
+        let (w, h) = (i64::from(self.img.width), i64::from(self.img.height));
+        if x < 0 || y < 0 || x >= w || y >= h {
+            return None;
+        }
+        let at = (y * w + x) as usize * 4;
+        let p = self.img.rgba.get(at..at + 3)?;
+        Some((0..3).map(|k| (f64::from(p[k]) - self.color[k]).powi(2)).sum::<f64>().sqrt())
+    }
+    /// How far the paper's colour is from the line's around pixel `(x, y)`: the farthest colour
+    /// within reach, along its row and its column.
+    fn paper(&self, x: i64, y: i64) -> f64 {
+        (-self.reach..=self.reach).flat_map(|k| [self.far(x + k, y), self.far(x, y + k)]).flatten().fold(0.0, f64::max)
+    }
+    /// The ink across the line through the pixel `p` lies in: along its column (`upright`) or row.
+    fn across(&self, p: Point, upright: bool) -> Option<Across> {
+        let (x, y) = (p.x.floor() as i64, p.y.floor() as i64);
+        let paper = self.paper(x, y);
+        // Paper too like the ink says nothing.
+        if paper < 24.0 {
+            return None;
+        }
+        let tone = |k: i64| (if upright { self.far(x, y + k) } else { self.far(x + k, y) }).map_or(0.0, |d| (1.0 - d / paper).clamp(0.0, 1.0));
+        // From the pixel with most ink near the skeleton's (thinning leaves it up to a pixel or two
+        // off the line's darkest row) out to where the ink ends, or rises again (another line).
+        let peak = [0, -1, 1, -2, 2].into_iter().fold(0, |best, k| if tone(k) > tone(best) + 1e-9 { k } else { best });
+        let here = tone(peak);
+        let (mut sum, mut moment, mut soft) = (here, here * peak as f64, here > 0.1 && here < 0.9);
+        for side in [-1, 1] {
+            let mut last = here;
+            for k in 1..=self.reach {
+                let t = tone(peak + side * k);
+                if t < 0.04 || t > last + 0.1 {
+                    break;
+                }
+                sum += t;
+                moment += t * (peak + side * k) as f64;
+                soft |= t > 0.1 && t < 0.9;
+                last = t;
+            }
+        }
+        // The pixel's centre is at `p`'s own half-pixel; the middle is measured from `p`.
+        let centre = if upright { y as f64 + 0.5 - p.y } else { x as f64 + 0.5 - p.x };
+        (sum > 0.0).then(|| Across { middle: centre + moment / sum, width: sum, soft })
+    }
+    /// How much ink (pixels) lies beyond `tip`, going `dir` (a unit vector).
+    fn beyond(&self, tip: Point, dir: kurbo::Vec2) -> f64 {
+        let paper = self.paper(tip.x.floor() as i64, tip.y.floor() as i64);
+        if paper < 24.0 {
+            return 0.0;
+        }
+        let mut sum = 0.0;
+        for step in 1..=4 * (self.reach + 2) {
+            let q = tip + dir * (step as f64 * 0.25);
+            let t = self.far(q.x.floor() as i64, q.y.floor() as i64).map_or(0.0, |d| (1.0 - d / paper).clamp(0.0, 1.0));
+            if t < 0.04 {
+                break;
+            }
+            sum += 0.25 * t;
+        }
+        sum
+    }
 }
 
 /// The runs without the spurs thinning leaves: runs shorter than the line's `width` from a line end

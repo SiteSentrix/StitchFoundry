@@ -1,19 +1,10 @@
-//! Loop → Bézier curves, and centre line → Bézier curves.
+//! Loop → Bézier curves, and the pieces of that which centre lines use too.
 
-use vectorcraft_geom::{Anchor, AnchorKind, CubicBez, ParamCurve, PathData, Point, SubPath};
-use vectorcraft_pathops::{SimplifyOptions, simplify_with};
+use vectorcraft_geom::{Anchor, AnchorKind, Point, SubPath};
 
 use crate::contour::Loop;
 use crate::logo::{Cubic, Stats, Style, all_within, fit_open, fit_outline, resample_closed, resample_open, sample_cubics};
 use crate::subpixel::{self, Crack};
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct FitOptions {
-    pub polygon_tol: f64,
-    pub fit_tol: f64,
-    pub corner_angle: f64,
-    pub snap_lines: bool,
-}
 
 fn seg_dist(p: Point, a: Point, b: Point) -> f64 {
     let ab = b - a;
@@ -66,14 +57,14 @@ const NEARLY_UPRIGHT: f64 = 0.0437;
 /// Snap Curves To Lines: the straight pieces of `segs` (a chain; `closed` when its end joins its
 /// start) that are within 2.5° of level or upright and at least 2 px long are made exactly level
 /// or upright, by moving their ends across them: both to their mean, or, in an open chain, the
-/// free end to the end that is fixed (a chain's own ends are junctions other regions share, and
-/// stay where they are). The pieces next to a moved end follow it.
-fn snap_upright(segs: &mut [Cubic], closed: bool) {
+/// free end to the end that is fixed (with `fixed_ends`, a chain's own ends stay where they are:
+/// they are junctions other regions share). The pieces next to a moved end follow it.
+fn snap_upright(segs: &mut [Cubic], closed: bool, fixed_ends: bool) {
     let n = segs.len();
     let straight = |c: &Cubic| seg_dist(c[1], c[0], c[3]) < 1e-6 && seg_dist(c[2], c[0], c[3]) < 1e-6;
     let lines: Vec<bool> = segs.iter().map(straight).collect();
     // Anchor `i` starts piece `i`; an open chain has one more, at its end.
-    let fixed = |i: usize| !closed && (i == 0 || i == n);
+    let fixed = |i: usize| !closed && fixed_ends && (i == 0 || i == n);
     let at = |segs: &[Cubic], i: usize| if i < n { segs[i][0] } else { segs[n - 1][3] };
     let put = |segs: &mut [Cubic], i: usize, p: Point| {
         let i = if closed { i % n } else { i };
@@ -122,7 +113,7 @@ fn snap_upright(segs: &mut [Cubic], closed: bool) {
 /// A whole loop fitted. The same loop gives the same curves whichever way it runs and wherever it
 /// starts (it is fitted clockwise from its leftmost point): the outline of a shape and the hole it
 /// leaves in the shape around it are one curve.
-fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
+pub(crate) fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
     let n = pts.len();
     let area2: f64 = (0..n).map(|i| pts[i].x * pts[(i + 1) % n].y - pts[(i + 1) % n].x * pts[i].y).sum();
     let flip = area2 < 0.0;
@@ -140,15 +131,16 @@ fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
         segs = polygon(&pts, style.tol);
     }
     if style.upright {
-        snap_upright(&mut segs, true);
+        snap_upright(&mut segs, true, false);
     }
     Some(if flip { reversed(segs) } else { segs })
 }
 
 /// A piece of a loop between two junctions fitted, from its first point to its last. The same
 /// piece gives the same curve whichever way it runs (it is fitted from its end further left): the
-/// edge two regions share is one curve.
-fn fit_piece(pts: &[Point], style: &Style) -> Vec<Cubic> {
+/// edge two regions share is one curve. `fixed_ends`: its ends are junctions and stay put (a centre
+/// line's ends are its own).
+pub(crate) fn fit_piece(pts: &[Point], style: &Style, fixed_ends: bool) -> Vec<Cubic> {
     let n = pts.len();
     let (Some(&first), Some(&last)) = (pts.first(), pts.last()) else { return vec![] };
     let flip = match before(first, last) {
@@ -170,7 +162,7 @@ fn fit_piece(pts: &[Point], style: &Style) -> Vec<Cubic> {
         segs = kept.windows(2).filter(|p| p[0] != p[1]).map(|p| [p[0], p[0], p[1], p[1]]).collect();
     }
     if style.upright {
-        snap_upright(&mut segs, false);
+        snap_upright(&mut segs, false, fixed_ends);
     }
     if flip { reversed(segs) } else { segs }
 }
@@ -202,22 +194,30 @@ pub(crate) fn fit_loop(
         if piece.closed {
             segs = fit_closed(&piece.pts, &style)?;
         } else {
-            segs.extend(fit_piece(&piece.pts, &style));
+            segs.extend(fit_piece(&piece.pts, &style, true));
         }
     }
+    subpath(&segs, true)
+}
+
+/// A chain of cubics as a subpath: closed (its end joins its start) or open. A straight piece has
+/// no handles; an anchor whose two handles line up is smooth.
+pub(crate) fn subpath(segs: &[Cubic], closed: bool) -> Option<SubPath> {
     let n = segs.len();
-    // A straight piece has no handles.
     let straight = |c: &Cubic| seg_dist(c[1], c[0], c[3]) < 1e-6 && seg_dist(c[2], c[0], c[3]) < 1e-6;
-    let mut anchors = Vec::with_capacity(n);
-    for (i, cur) in segs.iter().enumerate() {
-        let before = segs.get((i + n - 1) % n)?;
-        let p = cur[0];
-        let (h_in, h_out) = (if straight(before) { p } else { before[2] }, if straight(cur) { p } else { cur[1] });
+    let mut anchors = Vec::with_capacity(n + 1);
+    for i in 0..if closed { n } else { n + 1 } {
+        // The piece that arrives at this anchor and the one that leaves it.
+        let before = if i > 0 { segs.get(i - 1) } else { closed.then(|| segs.last()).flatten() };
+        let after = segs.get(i);
+        let p = after.map(|c| c[0]).or(before.map(|c| c[3]))?;
+        let h_in = before.filter(|c| !straight(c)).map_or(p, |c| c[2]);
+        let h_out = after.filter(|c| !straight(c)).map_or(p, |c| c[1]);
         let (vi, vo) = (p - h_in, h_out - p);
         let smooth = vi.hypot() > 1e-9 && vo.hypot() > 1e-9 && vi.cross(vo).abs() < 0.07 * vi.hypot() * vo.hypot() && vi.dot(vo) > 0.0;
         anchors.push(Anchor { p, h_in, h_out, kind: if smooth { AnchorKind::Smooth } else { AnchorKind::Corner } });
     }
-    (n >= 2).then(|| SubPath::new(anchors, true))
+    (n >= if closed { 2 } else { 1 }).then(|| SubPath::new(anchors, closed))
 }
 
 /// The closed outline `pts` as straight pieces within `tol` of it (Douglas–Peucker).
@@ -234,69 +234,4 @@ fn polygon(pts: &[Point], tol: f64) -> Vec<Cubic> {
     rdp(&ext, far, n, tol, &mut keep);
     let kept: Vec<Point> = (0..n).filter(|&i| keep[i]).map(|i| pts[i]).collect();
     (0..kept.len()).map(|i| [kept[i], kept[i], kept[(i + 1) % kept.len()], kept[(i + 1) % kept.len()]]).collect()
-}
-
-/// Fit a centre line through `pts` (pixel-centre points in order) into a Bézier subpath: the
-/// points within `polygon_tol` of it are dropped (Douglas–Peucker), then curves are fitted. A
-/// `closed` line runs back to its first point.
-pub(crate) fn fit_polyline(pts: &[Point], closed: bool, o: &FitOptions) -> Option<SubPath> {
-    let n = pts.len();
-    let first = *pts.first()?;
-    if n < 2 {
-        return None;
-    }
-    let mut ext = pts.to_vec();
-    let mut keep = vec![false; n + 1];
-    keep[0] = true;
-    if closed {
-        // Split the ring at its first point and the point farthest from it.
-        ext.push(first);
-        let far = (1..n).max_by(|&i, &j| pts[i].distance_squared(first).total_cmp(&pts[j].distance_squared(first))).unwrap_or(n / 2);
-        keep[far] = true;
-        rdp(&ext, 0, far, o.polygon_tol, &mut keep);
-        rdp(&ext, far, n, o.polygon_tol, &mut keep);
-    } else {
-        keep[n - 1] = true;
-        rdp(&ext, 0, n - 1, o.polygon_tol, &mut keep);
-    }
-    let mut poly: Vec<Point> = (0..n).filter(|&i| keep[i]).map(|i| pts[i]).collect();
-    if closed && poly.len() < 3 {
-        poly = pts.to_vec();
-    }
-    if poly.len() < if closed { 3 } else { 2 } {
-        return None;
-    }
-    let sp = SubPath::polyline(&poly, closed);
-    let fitted =
-        simplify_with(&PathData::single(sp), &SimplifyOptions { tolerance: o.fit_tol, corner_angle_deg: o.corner_angle, straight_lines: false });
-    let mut sp = fitted.subpaths.into_iter().next()?;
-    if sp.anchors.len() < 2 {
-        return None;
-    }
-    if o.snap_lines {
-        snap_to_lines(&mut sp, (o.fit_tol * 2.0).max(1.5));
-    }
-    Some(sp)
-}
-
-/// Retract the handles of curves that stay within `tol` of their chord.
-fn snap_to_lines(sp: &mut SubPath, tol: f64) {
-    let n = sp.anchors.len();
-    for i in 0..sp.segment_count() {
-        let j = (i + 1) % n;
-        let (a, b) = (sp.anchors[i], sp.anchors[j]);
-        if !a.has_out() && !b.has_in() {
-            continue;
-        }
-        let c = CubicBez::new(a.p, a.h_out, b.h_in, b.p);
-        if (1..8).all(|k| seg_dist(c.eval(k as f64 / 8.0), a.p, b.p) <= tol) {
-            sp.anchors[i].h_out = a.p;
-            sp.anchors[j].h_in = b.p;
-        }
-    }
-    for a in &mut sp.anchors {
-        if !a.has_in() || !a.has_out() {
-            a.kind = AnchorKind::Corner;
-        }
-    }
 }
