@@ -959,6 +959,9 @@ pub struct Session {
     pub embroidery_fonts: Vec<Arc<vectorcraft_embroidery::fonts::EmbFont>>,
     /// Whether the font folders remembered from earlier sessions have been loaded.
     pub embroidery_fonts_ready: bool,
+    /// What the design library read from each machine file, by path, kept while the file's size
+    /// and date stay the same (`embroidery.library.scan`).
+    pub design_library: std::collections::HashMap<String, cmd::embroidery_library::Entry>,
 }
 
 impl Default for Session {
@@ -1018,6 +1021,7 @@ impl Session {
             link_scan: None,
             embroidery_fonts: Vec::new(),
             embroidery_fonts_ready: false,
+            design_library: Default::default(),
         }
     }
 

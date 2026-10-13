@@ -505,6 +505,60 @@ fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
 }
 
 #[test]
+fn the_design_library_lists_machine_files_with_their_figures() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    let pattern = s.embroidery_plan().unwrap().pattern().clone();
+    let dir = std::env::temp_dir().join(format!("sf-library-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("caps")).unwrap();
+    let write = |name: &std::path::Path, f: sf_formats::Format| {
+        std::fs::write(name, sf_formats::write(f, &pattern, &sf_formats::WriteOptions::default()).unwrap()).unwrap();
+    };
+    write(&dir.join("Rose.dst"), sf_formats::Format::Dst);
+    write(&dir.join("caps").join("Logo.pes"), sf_formats::Format::Pes);
+    std::fs::write(dir.join("broken.jef"), b"not a design").unwrap();
+    std::fs::write(dir.join("notes.txt"), b"ignored").unwrap();
+    let folder = dir.to_string_lossy().to_string();
+    let r = s.execute("embroidery.library.scan", &json!({"folder": folder})).unwrap();
+    let names: Vec<&str> = r["designs"].as_array().unwrap().iter().filter_map(|d| d["name"].as_str()).collect();
+    assert_eq!(names, ["Logo", "Rose"], "{r}");
+    assert_eq!(r["failed"].as_array().unwrap().len(), 1, "the broken file said: {r}");
+    let rose = &r["designs"][1];
+    assert_eq!((rose["format"].as_str(), rose["colors"].as_u64()), (Some("dst"), Some(1)));
+    assert!((rose["widthMm"].as_f64().unwrap() - 40.0).abs() < 1.5 && rose["stitches"].as_u64().unwrap() > 100, "{rose}");
+    assert!(!rose["preview"][0]["runs"].as_array().unwrap().is_empty());
+    // searched, not into subfolders, sorted by stitches
+    let r = s.execute("embroidery.library.scan", &json!({"folder": folder, "query": "ROSE"})).unwrap();
+    assert_eq!(r["count"].as_u64(), Some(1));
+    let r = s.execute("embroidery.library.scan", &json!({"folder": folder, "recursive": false})).unwrap();
+    assert_eq!(r["count"].as_u64(), Some(1));
+    assert!(s.execute("embroidery.library.scan", &json!({"folder": folder, "sort": "colour"})).is_err());
+    // kept while the file is the same
+    assert!(s.design_library.len() >= 2);
+    // a catalogue of them: one page here
+    let r = s.execute("embroidery.library.catalogue", &json!({"folder": folder, "columns": 3})).unwrap();
+    assert_eq!((r["designs"].as_u64(), r["pages"].as_u64()), (Some(2), Some(1)));
+    let st = s.doc().unwrap();
+    assert!(st.doc.title.ends_with("catalogue"));
+    let mut texts = Vec::new();
+    st.doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(texts.iter().any(|t| t == "Rose") && texts.iter().any(|t| t.contains("DST")), "{texts:?}");
+    assert!(s.execute("embroidery.library.scan", &json!({})).is_err());
+    let empty = dir.join("caps").join("none");
+    std::fs::create_dir_all(&empty).unwrap();
+    assert!(s.execute("embroidery.library.catalogue", &json!({"folder": empty.to_string_lossy()})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn colorways_rethread_the_design_everywhere() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

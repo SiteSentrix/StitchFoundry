@@ -368,6 +368,17 @@ triangular grid (`even`), up to `count` (20), each turned at random with `turn`.
 motif's stitching and land in a group above the shape, which stays (delete it, or give it a
 fill to sew behind them).
 
+## Design library
+
+`embroidery.library.scan {folder, query?, recursive?, sort?}` lists the machine embroidery files
+in a folder and its subfolders (DST, EXP, JEF, PES, PEC, VP3, XXX, U01, PCS, TAP): each with its
+size, stitches, colours, threads, date and an outline of its stitches for a thumbnail; `query`
+finds names and folders, and `sort` orders them by name, date, stitches or size. What a file says
+is kept while it is unchanged, so looking again is quick; a file that can't be read is listed
+with why. `embroidery.library.catalogue {folder, query?, columns?, page?}` prints them: a
+catalogue sheet of thumbnails in their colours, each with its name, size, stitches, colours and
+format, as many pages as it takes.
+
 ## Worksheets
 
 **Embroidery › Worksheet** (`embroidery.worksheet {kind?, customer?, notes?}`) makes a worksheet

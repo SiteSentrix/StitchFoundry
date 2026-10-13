@@ -2141,7 +2141,7 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 }
 
 /// The stitches of `pattern` as runs per colour block (millimetres), broken at jumps, trims and stops.
-fn stitch_runs(pattern: &sf_core::Pattern) -> Vec<Vec<Vec<sf_core::Point>>> {
+pub(super) fn stitch_runs(pattern: &sf_core::Pattern) -> Vec<Vec<Vec<sf_core::Point>>> {
     let mut blocks: Vec<Vec<Vec<sf_core::Point>>> = vec![Vec::new()];
     let (mut run, mut at) = (Vec::<sf_core::Point>::new(), sf_core::Point::ZERO);
     let flush = |run: &mut Vec<sf_core::Point>, blocks: &mut Vec<Vec<Vec<sf_core::Point>>>| {
