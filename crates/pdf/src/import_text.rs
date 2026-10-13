@@ -350,6 +350,20 @@ impl TextLine {
             t.runs = tracked_each(std::mem::take(&mut t.runs), own, self.at.size);
         }
         if let Some(path) = path {
+            // Evenly spaced type keeps its length along the path: the path runs through the
+            // glyphs' origins, one curve each, to the end of the last glyph, and tracking makes up
+            // the difference from the advances.
+            if own.is_none() {
+                let length: f64 = path.segments().take(self.baseline.len()).map(|seg| kurbo::ParamCurveArclen::arclen(&seg, 1e-3)).sum();
+                let laid = vectorcraft_text::layout(db, &t);
+                let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
+                let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
+                let size = self.at.size;
+                if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
+                    let (tracking, spaces) = spacing(&laid, &[], length - natural, chars, size);
+                    t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
+                }
+            }
             t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
             t.xf = Affine::IDENTITY;
             t.cached_bounds = Some(vectorcraft_text::layout(db, &t).bounds);
