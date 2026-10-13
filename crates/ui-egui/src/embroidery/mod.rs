@@ -192,6 +192,8 @@ pub struct EmbroideryUi {
     pub lettering_stitch: vectorcraft_embroidery::sf_core::attr::LetterStitch,
     /// Small-text settings.
     pub lettering_small: vectorcraft_embroidery::sf_core::attr::SmallText,
+    /// Letters one under another.
+    pub lettering_vertical: bool,
     /// The machine folder chosen to send to, and what the last send or check said.
     pub send_folder: usize,
     pub send_status: String,
@@ -289,6 +291,7 @@ impl Default for EmbroideryUi {
             lettering_applique: None,
             lettering_stitch: Default::default(),
             lettering_small: Default::default(),
+            lettering_vertical: false,
             send_folder: 0,
             send_status: String::new(),
             prompt: prompt::PromptState::default(),

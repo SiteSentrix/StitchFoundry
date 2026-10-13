@@ -3351,6 +3351,36 @@ fn puff_fills_and_puff_sewn_last() {
 }
 
 #[test]
+fn lettering_stacks_vertically_and_follows_drawn_lines() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let boxes = |s: &Session, id: NodeId| -> Vec<vectorcraft_geom::Rect> {
+        let st = s.doc().unwrap();
+        st.doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect()
+    };
+    // vertical: one under another, centred on one line
+    let r = s.execute("embroidery.lettering", &json!({"text": "AAA", "font": "Test Script", "at": [300, 100], "vertical": true})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let b = boxes(&s, id);
+    assert!(b[0].y1 < b[1].y0 && b[1].y1 < b[2].y0, "{b:?}");
+    assert!(b.iter().all(|r| (r.center().x - b[0].center().x).abs() < 0.5), "{b:?}");
+    s.execute("embroidery.lettering.edit", &json!({"vertical": false})).unwrap();
+    let b = boxes(&s, id);
+    assert!(b[0].x1 <= b[1].x0 + 1e-6, "level again: {b:?}");
+    // along a drawn shape: a long box, the text along its top edge from its first corner
+    let line = rect(&mut s, 100.0, 590.0, 600.0, 20.0);
+    let r = s.execute("embroidery.lettering", &json!({"text": "AAAA", "font": "Test Script", "path": line.0})).unwrap();
+    let along = NodeId(r["id"].as_u64().unwrap());
+    let b = boxes(&s, along);
+    assert!(b.windows(2).all(|w| w[0].center().x < w[1].center().x), "along the line: {b:?}");
+    assert!(b.iter().all(|r| r.y1 <= 596.0 && r.y1 >= 560.0), "on it: {b:?}");
+    // straight again
+    s.execute("embroidery.lettering.edit", &json!({"path": null})).unwrap();
+    assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "path": 999_999})).is_err());
+    assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "path": "x"})).is_err());
+}
+
+#[test]
 fn lettering_sews_as_the_font_has_it_all_satin_or_all_fill_and_small() {
     use sf_core::attr::StitchType;
     let mut s = session();

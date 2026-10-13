@@ -211,6 +211,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.lettering_puff = l.puff.is_some();
             app.embroidery.lettering_applique = l.applique.map(|c| [c.r, c.g, c.b]);
             app.embroidery.lettering_stitch = l.stitch;
+            app.embroidery.lettering_vertical = l.vertical;
             app.embroidery.lettering_small = l.small;
         }
         None => app.embroidery.lettering_for = None,
@@ -281,17 +282,20 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // the baseline: straight, or round a circle, arched over its top or along its bottom
     let arc = app.embroidery.lettering_arc;
-    let kinds = [tl!("Straight"), tl!("Arch"), tl!("Valley")];
+    let kinds = [tl!("Straight"), tl!("Arch"), tl!("Valley"), tl!("Vertical")];
     let cur = if arc > 0.0 {
         1
     } else if arc < 0.0 {
         2
+    } else if app.embroidery.lettering_vertical {
+        3
     } else {
         0
     };
     if let Some(i) = pick(ui, tl!("Baseline"), "let-arc", cur, &kinds) {
         let r = if arc != 0.0 { arc.abs() } else { 60.0 };
-        app.embroidery.lettering_arc = [0.0, r, -r].get(i).copied().unwrap_or(0.0);
+        app.embroidery.lettering_arc = [0.0, r, -r, 0.0].get(i).copied().unwrap_or(0.0);
+        app.embroidery.lettering_vertical = i == 3;
     }
     if app.embroidery.lettering_arc != 0.0
         && let Some(v) = num(ui, tl!("Radius"), "let-radius", app.embroidery.lettering_arc.abs(), " mm", 0)
@@ -372,6 +376,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         "order": sew["order"], "lines": if sew["up"].as_bool() == Some(true) { "up" } else { "down" },
         "join": sew["join"], "trim": sew["trim"], "puff": app.embroidery.lettering_puff, "applique": applique,
         "stitch": serde_json::to_value(app.embroidery.lettering_stitch).unwrap_or_default(),
+        "vertical": app.embroidery.lettering_vertical,
         "small": serde_json::to_value(app.embroidery.lettering_small).unwrap_or_default() });
     let (label, cmd) = match &selected {
         Some((id, _)) => {
@@ -384,6 +389,19 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             (tl!("Place Lettering"), "embroidery.lettering")
         }
     };
+    if selected.is_none()
+        && !text.trim().is_empty()
+        && button(ui, tl!("Place Along Selected Line")).on_hover_text(tl!("The text along the selected line or shape, from its start")).clicked()
+    {
+        let mut along = params.clone();
+        along["path"] = json!(true);
+        if let Some(o) = along.as_object_mut() {
+            o.remove("align");
+        }
+        if let Err(e) = app.run("embroidery.lettering", along) {
+            app.status(&e.to_string());
+        }
+    }
     if button(ui, label).clicked() && !text.trim().is_empty() {
         match app.run(cmd, params) {
             Ok(r) => {
