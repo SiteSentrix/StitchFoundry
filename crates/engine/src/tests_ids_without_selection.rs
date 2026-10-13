@@ -44,10 +44,40 @@ fn the_selection_is_put_back_and_the_check_still_applies() {
 }
 
 #[test]
-fn only_an_ids_word_counts() {
+fn only_an_ids_key_counts() {
     let p = json!({"ids": [3]});
     assert_eq!(given_ids("{ids?: [id]}", &p), Some(vec![NodeId(3)]));
-    assert_eq!(given_ids(r#"{"ids":[id]}"#, &p), Some(vec![NodeId(3)]));
+    assert_eq!(given_ids("{id?|ids?, name}", &p), Some(vec![NodeId(3)]));
     assert_eq!(given_ids("{grids: n, guides: bool}", &p), None);
+    // A word in what the description says about another key isn't the key.
+    assert_eq!(given_ids("{name: of the swatch the ids of the selection take}", &p), None);
     assert_eq!(given_ids("{ids?: [id]}", &json!({"ids": []})), None);
+}
+
+/// Every command that names `ids` and is refused with nothing selected: given the object as `ids`
+/// it does what it does with the object selected (the same result or the same error, and the same
+/// document), so no command is let through to run on an empty selection.
+#[test]
+fn ids_do_what_the_selection_does_in_every_command_that_takes_them() {
+    let mut checked = vec![];
+    for spec in command_specs() {
+        let (mut given, id) = doc_with_rect();
+        if !cmd::params::takes_key(spec.params, "ids") || (spec.enabled)(&given).is_ok() {
+            continue;
+        }
+        let (mut selected, _) = doc_with_rect();
+        selected.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let (a, b) = (given.execute(spec.id, &json!({"ids": [id]})), selected.execute(spec.id, &json!({})));
+        match (&a, &b) {
+            (Ok(_), Ok(_)) => {}
+            (Err(x), Err(y)) => assert_eq!(x.to_string(), y.to_string(), "{}", spec.id),
+            _ => panic!("{}: with ids {a:?}, with the selection {b:?}", spec.id),
+        }
+        match (given.doc(), selected.doc()) {
+            (Ok(g), Ok(s)) => assert!(g.doc == s.doc, "{}: the documents differ", spec.id),
+            (g, s) => assert_eq!(g.is_ok(), s.is_ok(), "{}", spec.id),
+        }
+        checked.push((spec.id, a.is_ok()));
+    }
+    assert!(checked.iter().filter(|c| c.1).count() >= 20, "{checked:?}");
 }

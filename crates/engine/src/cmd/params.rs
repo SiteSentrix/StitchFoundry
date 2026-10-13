@@ -150,6 +150,12 @@ fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
     Some(keys)
 }
 
+/// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
+/// its `…` entries name)?
+pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {
+    doc_keys(doc).is_ok_and(|parsed| parsed.keys.contains(&key)) || accepted(doc, 0).is_some_and(|keys| keys.contains(&key))
+}
+
 /// The edits (insert, delete, replace, swap of neighbours) that turn `a` into `b`, ignoring case.
 fn distance(a: &str, b: &str) -> usize {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().map(|c| c.to_ascii_lowercase()).collect(), b.chars().map(|c| c.to_ascii_lowercase()).collect());

@@ -1977,13 +1977,9 @@ mod tests_widthtool;
 #[cfg(test)]
 mod tests_xform;
 
-/// The non-empty `ids` given to a command whose params description takes them (an `ids` word in it).
-fn given_ids(description: &str, params: &Value) -> Option<Vec<NodeId>> {
-    let takes = description.match_indices("ids").any(|(i, _)| {
-        let before = description.get(..i).and_then(|s| s.chars().next_back());
-        let after = description.get(i + 3..).and_then(|s| s.chars().next());
-        !before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_') && !after.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
-    });
-    let ids: Vec<NodeId> = params.get("ids")?.as_array()?.iter().filter_map(Value::as_u64).map(NodeId).collect();
-    (takes && !ids.is_empty()).then_some(ids)
+/// The non-empty `ids` given to a command whose params description names `ids` as a key (the
+/// key callers outside the app may pass it, [`cmd::params::takes_key`]).
+fn given_ids(description: &'static str, params: &Value) -> Option<Vec<NodeId>> {
+    let ids = cmd::ids_param(params, "ids").filter(|ids| !ids.is_empty())?;
+    cmd::params::takes_key(description, "ids").then_some(ids)
 }
