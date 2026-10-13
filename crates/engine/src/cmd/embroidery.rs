@@ -246,7 +246,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Multi-Hooping",
             [],
             None,
-            "{dir?: the folder to write to (without it: the plan only), hoop?: a standard hoop's name (default: the design's), width?, height?: mm (a hoop of this field instead), overlap?: mm the hoopings share (10; 0–100), format?: as Export Machine File, prefix?: what the file names start with, marks?: bool (true)} multi-hooping: a design larger than the hoop split into hoopings on a grid that overlap by `overlap`, each object sewn whole in the first hooping that holds it, each hooping a machine file of its own (centred on the hoop, `name-1`, `name-2`…) that first sews registration crosses in the overlaps it shares with its neighbours, as a colour of its own, to line the fabric up by → {hoopings: [{index, column, row, objects, stitches, file?}], columns, rows, files}",
+            "{dir?: the folder to write to (without it: the plan only), hoop?: a standard hoop's name (default: the design's), width?, height?: mm (a hoop of this field instead), overlap?: mm the hoopings share (10; 0–100), format?: as Export Machine File, prefix?: what the file names start with, marks?: bool (true), sheets?: bool (false: true opens a document of a page per hooping, to print: its stitches in its hoop, life size when they fit, its place in the grid and its file)} multi-hooping: a design larger than the hoop split into hoopings on a grid that overlap by `overlap`, each object sewn whole in the first hooping that holds it, each hooping a machine file of its own (centred on the hoop, `name-1`, `name-2`…) that first sews registration crosses in the overlaps it shares with its neighbours, as a colour of its own, to line the fabric up by → {hoopings: [{index, column, row, objects, stitches, file?}], columns, rows, files}",
             has_doc,
             multi_hoop
         ),
@@ -1294,6 +1294,8 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = Vec::new();
     let mut files = Vec::new();
     let mut index = 0;
+    let sheets = bool_or(p, "sheets", false);
+    let mut printed: Vec<(usize, usize, usize, sf_core::Pattern, String)> = Vec::new();
     for (i, (cell, objs)) in cells.iter().zip(&assigned).enumerate() {
         if objs.is_empty() {
             continue;
@@ -1362,9 +1364,103 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
             entry["file"] = json!(path);
             files.push(path);
         }
+        if sheets {
+            let file = entry["file"].as_str().map(super::fileio::file_name).unwrap_or_default();
+            printed.push((index, col, row, hp, file));
+        }
         out.push(entry);
     }
-    Ok(json!({ "hoopings": out, "columns": cols, "rows": rows, "files": files }))
+    let mut r = json!({ "hoopings": out, "columns": cols, "rows": rows, "files": files });
+    if sheets {
+        let title = super::fileio::file_stem(&s.doc()?.doc.title);
+        let doc = hooping_sheets(&title, &printed, cols, rows, field)?;
+        s.add_document(doc, None);
+        r["sheets"] = json!(printed.len());
+    }
+    Ok(r)
+}
+
+/// A page per hooping to print beside the machine: the hooping's stitches in their colours inside
+/// the hoop's field (life size when it fits the page), where it is in the grid, its file and how to
+/// line it up.
+fn hooping_sheets(
+    title: &str,
+    hoopings: &[(usize, usize, usize, sf_core::Pattern, String)],
+    cols: usize,
+    rows: usize,
+    field: (f64, f64),
+) -> Result<Document> {
+    let (pw, ph) = SHEET;
+    let black = Color::rgb8(0x1a, 0x1a, 0x1a);
+    let grey = Color::rgb8(0x66, 0x66, 0x66);
+    let accent = Color::rgb8(0x1d, 0x35, 0x57);
+    let mut doc = Document::new(pw, ph);
+    doc.title = format!("{title} hoopings");
+    let total = hoopings.len();
+    for (page, (index, col, row, pattern, file)) in hoopings.iter().enumerate() {
+        let ox = page as f64 * (pw + 40.0);
+        if page > 0 {
+            let id = doc.next_artboard_id();
+            doc.artboards.push(vectorcraft_doc::Artboard {
+                id,
+                name: format!("Hooping {index}"),
+                rect: vectorcraft_geom::Rect::new(ox, 0.0, ox + pw, ph),
+                show_center_mark: false,
+                show_cross_hairs: false,
+            });
+        }
+        sheet_text(&mut doc, ox + 40.0, 56.0, &format!("Hooping {index} of {total}"), 20.0, black)?;
+        let mut sub = format!("{title}   column {}, row {}   hoop field {:.0} × {:.0} mm", col + 1, row + 1, field.0, field.1);
+        if !file.is_empty() {
+            sub = format!("{sub}   file {file}");
+        }
+        sheet_text(&mut doc, ox + 40.0, 76.0, &sub, 9.0, grey)?;
+        // the grid, this hooping filled
+        let cell = 14.0;
+        let (gx, gy) = (ox + pw - 40.0 - cols as f64 * cell, 40.0);
+        let mut boxes = Vec::new();
+        for r in 0..rows {
+            for c in 0..cols {
+                let (x, y) = (gx + c as f64 * cell, gy + r as f64 * cell);
+                boxes.push(vec![(x, y), (x + cell, y), (x + cell, y + cell), (x, y + cell), (x, y)]);
+            }
+        }
+        sheet_lines(&mut doc, &boxes, grey, 0.6)?;
+        let (x, y) = (gx + *col as f64 * cell, gy + *row as f64 * cell);
+        let fill: Vec<Vec<(f64, f64)>> = (1..7).map(|k| vec![(x + 1.0, y + 2.0 * f64::from(k)), (x + cell - 1.0, y + 2.0 * f64::from(k))]).collect();
+        sheet_lines(&mut doc, &fill, accent, 1.6)?;
+        // the hoop's field and the stitches in it, life size when it fits
+        let (bx, by, bw, bh) = (ox + 40.0, 100.0, pw - 80.0, ph - 100.0 - 110.0);
+        let k = (bw / (field.0 * PT_PER_MM)).min(bh / (field.1 * PT_PER_MM)).min(1.0) * PT_PER_MM;
+        let (cx, cy) = (bx + bw / 2.0, by + bh / 2.0);
+        let (hw, hh) = (field.0 * k / 2.0, field.1 * k / 2.0);
+        sheet_lines(
+            &mut doc,
+            &[vec![(cx - hw, cy - hh), (cx + hw, cy - hh), (cx + hw, cy + hh), (cx - hw, cy + hh), (cx - hw, cy - hh)]],
+            grey,
+            0.8,
+        )?;
+        sheet_lines(&mut doc, &[vec![(cx - 6.0, cy), (cx + 6.0, cy)], vec![(cx, cy - 6.0), (cx, cy + 6.0)]], grey, 0.4)?;
+        for (i, runs) in stitch_runs(pattern).iter().enumerate() {
+            let lines: Vec<Vec<(f64, f64)>> = runs.iter().map(|r| r.iter().map(|q| (cx + q.x * k, cy + q.y * k)).collect()).collect();
+            if lines.is_empty() {
+                continue;
+            }
+            let t = pattern.thread(i).color;
+            sheet_lines(&mut doc, &lines, Color::rgb8(t.r, t.g, t.b), 0.35 * k.max(0.5))?;
+        }
+        let scale = if k >= PT_PER_MM - 1e-9 { "Life size".to_string() } else { format!("Scale {:.0}%", k / PT_PER_MM * 100.0) };
+        sheet_text(&mut doc, ox + 40.0, ph - 96.0, &scale, 9.0, grey)?;
+        let how = if total > 1 {
+            "Sew the registration marks first (their own colour). For the next hooping, hoop the fabric again so its marks land on the ones sewn here, then sew on."
+        } else {
+            "One hooping: sew it as it is."
+        };
+        for (n, line) in wrap_text(how, 95).iter().enumerate() {
+            sheet_text(&mut doc, ox + 40.0, ph - 78.0 + n as f64 * 13.0, line, 9.0, black)?;
+        }
+    }
+    Ok(doc)
 }
 
 /// The ways click-to-stitch can stitch a region.
