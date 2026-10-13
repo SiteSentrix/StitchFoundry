@@ -320,6 +320,10 @@ type Catalog = HashMap<String, CatalogFamily>;
 /// The installed faces' (family, style) by normalized PostScript name ([`norm`]).
 type PostScriptNames = HashMap<String, (String, String)>;
 
+/// Maps the family and style [`FontDb::canonical`] was asked for to its answer, for names that
+/// are neither a loaded nor an installed family.
+type CanonicalNames = HashMap<(String, String), (String, String)>;
+
 /// Process-wide font database.
 pub struct FontDb {
     faces: RwLock<Vec<Arc<FontFace>>>,
@@ -332,6 +336,9 @@ pub struct FontDb {
     font_paths: FontPaths,
     /// The installed fonts' other names (localized, legacy, full, PostScript) by normalized name.
     aliases: RwLock<HashMap<String, Vec<Alias>>>,
+    /// Keeps [`FontDb::canonical`]'s answers for names other than the loaded and installed
+    /// families until fonts are added or rescanned.
+    canonical_cache: Mutex<CanonicalNames>,
     /// Set once the font folders have been scanned. Lookups by family name wait for the first
     /// scan, so what they find never depends on what ran before them.
     #[cfg(not(target_arch = "wasm32"))]
@@ -455,6 +462,9 @@ const SYSTEM_FALLBACKS: &[&str] = &[
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 const OUTLINE_CACHE_MAX: usize = 50_000;
+/// How many answers [`FontDb::canonical`] keeps at most. When it has kept that many, it clears
+/// them before it keeps the next one.
+const CANONICAL_CACHE_MAX: usize = 4_096;
 
 fn name(font: &skrifa::FontRef<'_>, ids: &[StringId]) -> Option<String> {
     ids.iter().find_map(|id| font.localized_strings(*id).english_or_first().map(|s| s.to_string()).filter(|s| !s.is_empty()))
@@ -717,6 +727,8 @@ struct Alias {
 impl Alias {
     /// The aliases of a face `family` / `style` with `keys`, by normalized name.
     fn of(family: &str, style: &str, keys: &FaceKeys) -> Vec<(String, Alias)> {
+        #[cfg(test)]
+        ALIAS_LISTS.with(|c| c.set(c.get() + 1));
         let mut v: Vec<(String, Alias)> =
             keys.families.iter().map(|k| (k.clone(), Alias { family: family.to_string(), style: None, paired: None })).collect();
         v.extend(
@@ -732,6 +744,18 @@ impl Alias {
         );
         v
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: counts the faces whose aliases ([`Alias::of`]) were listed on this thread.
+    static ALIAS_LISTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: returns how many faces' aliases were listed on this thread.
+#[cfg(test)]
+pub(crate) fn alias_lists() -> u64 {
+    ALIAS_LISTS.with(std::cell::Cell::get)
 }
 
 /// How a requested family and style resolved ([`FontDb::resolve`]).
@@ -1467,6 +1491,7 @@ impl FontDb {
             postscript: RwLock::new(PostScriptNames::new()),
             font_paths,
             aliases: RwLock::new(HashMap::new()),
+            canonical_cache: Mutex::new(CanonicalNames::new()),
             #[cfg(not(target_arch = "wasm32"))]
             cataloged: std::sync::OnceLock::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -1509,9 +1534,11 @@ impl FontDb {
         self.catalog.read().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Fonts were added or the catalog changed: cached family lists are stale.
+    /// Fonts were added or the catalog changed: cached family lists and [`FontDb::canonical`]'s
+    /// answers are stale.
     fn changed(&self) {
         *self.family_cache.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.canonical_cache.lock().unwrap_or_else(|e| e.into_inner()).clear();
         self.generation.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -1764,6 +1791,24 @@ impl FontDb {
         if self.is_loaded(family) || self.read_catalog().contains_key(&family.to_ascii_lowercase()) {
             return (family.to_string(), style.to_string());
         }
+        // The lock is held until the answer is kept, and [`FontDb::changed`] waits for it: an
+        // answer found from the fonts before a change is cleared by that change.
+        let mut cache = self.canonical_cache.lock().unwrap_or_else(|e| e.into_inner());
+        let key = (family.to_string(), style.to_string());
+        if let Some(answer) = cache.get(&key) {
+            return answer.clone();
+        }
+        let answer = self.canonical_alias(family, style);
+        if cache.len() >= CANONICAL_CACHE_MAX {
+            cache.clear();
+        }
+        cache.insert(key, answer.clone());
+        answer
+    }
+
+    /// Finds [`FontDb::canonical`]'s answer for a name that is neither a loaded nor an installed
+    /// family among the loaded faces' and the installed fonts' other names.
+    fn canonical_alias(&self, family: &str, style: &str) -> (String, String) {
         let key = norm(family);
         let mut found: Vec<Alias> =
             self.read_faces().iter().flat_map(|f| Alias::of(&f.family, &f.style, &f.keys)).filter(|(k, _)| *k == key).map(|(_, a)| a).collect();
@@ -2229,6 +2274,19 @@ mod alias_tests {
         assert_eq!(semi.style, "Semibold");
         assert!(db.find_postscript("NoSuchFont-Regular").is_none());
         assert!(db.has_family("SourceSans3-Regular"));
+    }
+
+    /// The database keeps at most [`CANONICAL_CACHE_MAX`] answers, and names asked for past that
+    /// many still get the same answers.
+    #[test]
+    fn the_answers_kept_for_names_are_capped() {
+        let db = FontDb::with_font_dirs(vec![]);
+        for i in 0..=CANONICAL_CACHE_MAX {
+            let name = format!("No Such Family {i}");
+            assert_eq!(db.canonical(&name, "Regular"), (name.clone(), "Regular".into()));
+        }
+        assert!(db.canonical_cache.lock().unwrap().len() <= CANONICAL_CACHE_MAX);
+        assert_eq!(db.canonical("SourceSans3-Semibold", "Regular"), ("Source Sans 3".into(), "Semibold".into()));
     }
 }
 
