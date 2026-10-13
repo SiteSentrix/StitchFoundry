@@ -144,7 +144,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             let params = p.get("params").cloned().unwrap_or(json!({}));
             let params = if params.is_null() { json!({}) } else { params };
             // A key the command's description doesn't name is an error, not a default (#1442).
-            if let Err(e) = crate::menus::check_params(id, &params) {
+            if let Err(e) = crate::menus::check_params(&app.session, id, &params) {
                 return err(e);
             }
             wrap(app.run(id, params))

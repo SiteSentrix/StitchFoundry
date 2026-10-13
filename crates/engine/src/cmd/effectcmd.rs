@@ -280,6 +280,20 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": item.flatten() }))
 }
 
+/// The ids of the effects `effect.setParams` with `p` edits, for the check of their parameters
+/// (none when `p` doesn't say which: running it reports why).
+pub(crate) fn set_params_effects(s: &Session, p: &Value) -> Vec<String> {
+    const C: &str = "effect.setParams";
+    let (Ok(index), Ok(item), Ok(ids), Ok(st)) = (index_param(p, "index", C), item_target(s, p, C), appearance_targets(s, p), s.doc()) else {
+        return vec![];
+    };
+    let effect = |id: &NodeId| {
+        let ap = &st.doc.node(*id)?.appearance;
+        Some(ap.effects_at(item.effects_item(ap, C).ok()?)?.get(index)?.id.clone())
+    };
+    ids.iter().filter_map(effect).collect()
+}
+
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
@@ -566,7 +580,7 @@ mod tests {
             for other in ["threeD.revolve", "threeD.extrude", "threeD.rotate"] {
                 assert!(s.execute("effect.apply", &json!({"effect": other, "ids": [id.0], "item": null})).is_err(), "{effect} + {other}");
             }
-            s.execute("effect.setParams", &json!({"index": 0, "params": {"rotationY": 50, "depth": 120}, "ids": [id.0], "item": null})).unwrap();
+            s.execute("effect.setParams", &json!({"index": 0, "params": {"rotationY": 50, "rotationX": 10}, "ids": [id.0], "item": null})).unwrap();
             assert_ne!(effects::solid_art(&node(&s, id)).unwrap(), art, "{effect}: options change the art");
             assert!(s.execute("effect.setParams", &json!({"index": 0, "params": {"bevel": "nope"}, "ids": [id.0], "item": null})).is_err());
             let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();

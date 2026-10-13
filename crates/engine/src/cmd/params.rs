@@ -10,8 +10,10 @@
 //!
 //! Callers outside the app (the control channel, MCP, the CLI) are answered with a parameter error
 //! for a key the description doesn't name ([`check_params`]): a misspelt `widht` no longer runs the
-//! command with its default. [`Session::execute`] itself takes what it is given, so the journal of
-//! an older version still replays.
+//! command with its default. So are the `params` of an effect (#1592): `effect.apply` and
+//! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
+//! default, with a parameter error ([`check_effect_params`]). [`Session::execute`] itself takes
+//! what it is given, so the journal of an older version still replays.
 
 use serde_json::Value;
 
@@ -189,15 +191,56 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
         return Ok(());
     }
     let Some(keys) = accepted(doc, 0) else { return Ok(()) };
-    let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) else { return Ok(()) };
-    Err(bad(
+    match given.keys().find(|k| !keys.contains(&k.as_str())) {
+        Some(key) => Err(unknown(id, key, &keys)),
+        None => Ok(()),
+    }
+}
+
+/// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
+/// them, or all of them.
+fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
+    bad(
         id,
-        match nearest(key, &keys) {
+        match nearest(key, keys) {
             Some(near) => format!("unknown parameter `{key}`; did you mean `{near}`?"),
             None if keys.is_empty() => format!("unknown parameter `{key}`; the command takes no parameters"),
             None => format!("unknown parameter `{key}`; the command takes: {}", keys.join(", ")),
         },
-    ))
+    )
+}
+
+/// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
+/// effect takes (those of its dialog defaults and of its params description), each of its
+/// default's type. Numbers out of range pass: the effect clamps them when it draws. An effect
+/// plug-in resolves its own against its manifest, and an unknown effect is the command's to report.
+pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()> {
+    let Value::Object(given) = params else { return Ok(()) };
+    if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
+        return Ok(());
+    }
+    let Some(info) = vectorcraft_render::effects::effect_info(effect) else { return Ok(()) };
+    let defaults = info.defaults.as_object();
+    let mut keys: Vec<&str> = defaults.into_iter().flat_map(|d| d.keys().map(String::as_str)).collect();
+    // A description that doesn't parse names no more keys (the tests rule that out).
+    for key in doc_keys(info.params).map(|d| d.keys).unwrap_or_default() {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    for (key, v) in given {
+        if !keys.contains(&key.as_str()) {
+            return Err(unknown(id, key, &keys));
+        }
+        match defaults.and_then(|d| d.get(key)) {
+            Some(Value::Number(_)) if !v.is_number() => return Err(bad(id, format!("`{key}` must be a number"))),
+            Some(Value::Bool(_)) if !v.is_boolean() => return Err(bad(id, format!("`{key}` must be true or false"))),
+            // (A colour is also taken as `[r, g, b]` or as a colour object.)
+            Some(Value::String(_)) if v.is_number() || v.is_boolean() => return Err(bad(id, format!("`{key}` must be a string"))),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Commands whose params aren't checked yet (#1442): they read keys in ways the audit of the
@@ -333,10 +376,16 @@ pub const UNCHECKED: &[&str] = &[
     "webExport.settings",
 ];
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` included. A command the
-/// engine doesn't have passes: running it reports that.
+/// [`check_keys`] for an engine command, the steps of a `command.batch` included, and
+/// [`check_effect_params`] for the effect `effect.apply` adds. A command the engine doesn't have
+/// passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
     let Some(spec) = find_command(id) else { return Ok(()) };
+    if let ("effect.apply" | "appearance.addEffect", Some(effect), Some(given)) =
+        (id, params.get("effect").or_else(|| params.get("id")).and_then(Value::as_str), params.get("params"))
+    {
+        check_effect_params(id, effect, given)?;
+    }
     if UNCHECKED.contains(&id) {
         return Ok(());
     }
@@ -349,4 +398,19 @@ pub fn check_params(id: &str, params: &Value) -> Result<()> {
         }
     }
     Ok(())
+}
+
+impl crate::Session {
+    /// [`check_params`], and [`check_effect_params`] for the effects `effect.setParams` edits in
+    /// this session's document (not as a step of a `command.batch`: what it edits is only there
+    /// once the steps before it ran).
+    pub fn check_params(&self, id: &str, params: &Value) -> Result<()> {
+        check_params(id, params)?;
+        if let ("effect.setParams", Some(given)) = (id, params.get("params")) {
+            for effect in super::effectcmd::set_params_effects(self, params) {
+                check_effect_params(id, &effect, given)?;
+            }
+        }
+        Ok(())
+    }
 }

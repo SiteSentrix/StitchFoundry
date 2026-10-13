@@ -106,10 +106,19 @@ fn listed_applied_edited_and_undone() {
             assert_eq!((&e["raster"], &e["menu"]), (&json!(true), &json!(["Effect", menu])), "{id}");
         }
     }
-    // Junk parameters are stored as given and read clamped; the canvas still draws.
+    // Numbers far out of range are stored as given and read clamped; the canvas still draws.
     for (id, _) in EFFECTS {
-        s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": {"amount": 1e308, "radius": -1e308, "threshold": "x", "quality": 7}}))
-            .unwrap();
+        let defaults = vectorcraft_render::effects::default_params(id).unwrap();
+        let junk: serde_json::Map<String, Value> = defaults
+            .as_object()
+            .unwrap()
+            .iter()
+            .filter(|(_, v)| v.is_number())
+            .enumerate()
+            .map(|(i, (k, _))| (k.clone(), json!(if i % 2 == 0 { 1e308 } else { -1e308 })))
+            .collect();
+        assert!(!junk.is_empty(), "{id}");
+        s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": junk})).unwrap();
     }
     let _ = render(&s);
     let n = s.doc().unwrap().doc.node(NodeId(g)).unwrap().clone();

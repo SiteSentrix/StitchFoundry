@@ -675,8 +675,20 @@ is refused before the command runs:
 → invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?
 ```
 
-Only the top level is checked: the keys of an object inside a value (`artboardLayout: {…}`, an effect's `params`) are
-the command's to read. A description with a `…` entry takes more keys than it lists: those of the command it names
+Only the top level is checked: the keys of an object inside a value (`artboardLayout: {…}`) are the command's to
+read. The one exception is an effect's `params`: `effect.apply` (and `appearance.addEffect`) and `effect.setParams`
+check them against the effect's own entry in `effect.list`, its `defaults` and the keys its `params` text names. A key
+the effect doesn't take, or a value of another type than its default (a string for a number, a number for a switch),
+is refused the same way:
+
+```json
+{"id": "effect.apply", "params": {"effect": "blur.gaussian", "params": {"blurr": 3}}}
+→ invalid parameters for `effect.apply`: unknown parameter `blurr`; the command takes: radius
+```
+
+A number outside the range the effect documents is still stored as given and clamped when the effect draws. A
+plug-in effect's parameters are resolved against its manifest instead, and `effect.setParams` as a step of
+`command.batch` isn't checked (the effect it edits may only exist once the steps before it ran). A description with a `…` entry takes more keys than it lists: those of the command it names
 (`…settings as file.new`), or any key when it names none, as `document.export` and `document.save` do for the options
 of the format they write (one object can carry several formats' options). A command that takes its own reply back
 (`document.setup`, `text.areaOptions`) says so the same way. The app's own journal isn't checked: an action or
