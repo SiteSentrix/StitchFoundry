@@ -41,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             catalogue
         ),
+        cmd!(
+            "embroidery.library.convert",
+            "Batch Convert",
+            [],
+            None,
+            "{format: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap, folder?: the designs in it, as embroidery.library.scan finds them (query?, recursive?), files?: [path…] (these designs instead), dir?: the folder to write to (each design's own), replace?: bool (false: a number is added when the name is taken)} batch convert: each design read and written again in `format`, named as it was; designs already in that format are skipped and the files read are left as they are → {format, converted: [{from, to, stitches, colors}], skipped: [path], failed: [{path, error}], truncated}",
+            always,
+            convert
+        ),
     ]
 }
 
@@ -83,17 +92,26 @@ fn machine_files(folder: &str, recursive: bool) -> Result<(Vec<String>, bool)> {
     Ok((out, truncated))
 }
 
-/// A design's figures and thumbnail, read from its file.
-fn read_design(path: &str, bytes: u64, modified: Option<u64>) -> std::result::Result<Value, String> {
+/// A design's stitches, read from its file in the format its name says: a file that isn't one
+/// fails rather than being guessed at.
+fn read_pattern(path: &str, bytes: u64) -> std::result::Result<sf_core::Pattern, String> {
     if bytes > MAX_BYTES {
         return Err(format!("larger than {} MB", MAX_BYTES >> 20));
     }
-    let data = super::fileio::read_file(path).map_err(|e| e.to_string())?;
     let p = std::path::Path::new(path);
-    // the format its name says: a file that isn't one is listed as failed, not guessed at
     let ext = p.extension().map(|x| x.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    let format = sf_formats::Format::from_extension(&ext).ok_or_else(|| format!("not a machine file: .{ext}"))?;
-    let pattern = sf_formats::read(format, &data).map_err(|e| e.to_string())?;
+    let format = sf_formats::Format::from_extension(&ext)
+        .filter(|_| MACHINE_EXTS.contains(&ext.as_str()))
+        .ok_or_else(|| format!("not a machine file: .{ext}"))?;
+    let data = super::fileio::read_file(path).map_err(|e| e.to_string())?;
+    sf_formats::read(format, &data).map_err(|e| e.to_string())
+}
+
+/// A design's figures and thumbnail, read from its file.
+fn read_design(path: &str, bytes: u64, modified: Option<u64>) -> std::result::Result<Value, String> {
+    let pattern = read_pattern(path, bytes)?;
+    let p = std::path::Path::new(path);
+    let format = p.extension().and_then(|x| sf_formats::Format::from_extension(&x.to_string_lossy().to_ascii_lowercase()));
     let stats = sf_core::stats::pattern_stats(&pattern, &sf_core::model::DesignSettings::default());
     let b = pattern.bounds();
     // the stitches as runs per colour, thinned to a thumbnail's worth of points
@@ -128,7 +146,7 @@ fn read_design(path: &str, bytes: u64, modified: Option<u64>) -> std::result::Re
         "path": path,
         "name": p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
         "folder": p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default(),
-        "format": format.extension(),
+        "format": format.map(sf_formats::Format::extension),
         "bytes": bytes,
         "modified": modified,
         "widthMm": r(stats.width_mm),
@@ -186,6 +204,76 @@ fn designs(s: &mut Session, p: &Value, cmd: &str) -> Result<(String, Vec<Value>,
         _ => found.sort_by_key(|v| v["name"].as_str().unwrap_or_default().to_lowercase()),
     }
     Ok((super::fileio::absolute_path(&folder), found, failed, truncated))
+}
+
+fn convert(_: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.library.convert";
+    let ext = str_param(p, "format").map(|f| f.trim().trim_start_matches('.').to_ascii_lowercase()).unwrap_or_default();
+    let format = sf_formats::Format::from_extension(&ext)
+        .filter(|_| MACHINE_EXTS.contains(&ext.as_str()))
+        .ok_or_else(|| bad(CMD, format!("`format` is one of {}", MACHINE_EXTS.join(", "))))?;
+    let dir = str_param(p, "dir").map(str::trim).filter(|d| !d.is_empty()).map(str::to_string);
+    if let Some(d) = &dir
+        && !super::embroidery::folder_ready(d)
+    {
+        return Err(bad(CMD, format!("{d} isn't there")));
+    }
+    let (files, truncated) = match p.get("files") {
+        None | Some(Value::Null) => {
+            let folder = str_param(p, "folder").map(str::trim).filter(|f| !f.is_empty()).ok_or_else(|| bad(CMD, "missing `folder` or `files`"))?;
+            let query = str_param(p, "query").map(|q| q.trim().to_lowercase()).filter(|q| !q.is_empty());
+            let (files, truncated) = machine_files(folder, bool_or(p, "recursive", true))?;
+            let files = files.into_iter().filter(|f| query.as_ref().is_none_or(|q| f.to_lowercase().contains(q.as_str()))).collect();
+            (files, truncated)
+        }
+        Some(Value::Array(list)) => {
+            let files: Vec<String> = list.iter().take(MAX_DESIGNS).filter_map(Value::as_str).map(str::to_string).collect();
+            if files.is_empty() {
+                return Err(bad(CMD, "`files` lists no designs"));
+            }
+            (files, list.len() > MAX_DESIGNS)
+        }
+        Some(_) => return Err(bad(CMD, "`files` is a list of paths")),
+    };
+    let replace = bool_or(p, "replace", false);
+    let (mut converted, mut skipped, mut failed) = (Vec::new(), Vec::new(), Vec::new());
+    for path in files {
+        let src = std::path::Path::new(&path);
+        let own = src.extension().map(|x| x.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        if own == ext {
+            skipped.push(json!(path));
+            continue;
+        }
+        let bytes = super::fileio::file_stamp(&path).map_or(0, |(b, _)| b);
+        let read = read_pattern(&path, bytes).and_then(|pattern| {
+            let stem = src.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+            let opts = sf_formats::WriteOptions { name: stem.clone(), center: true, ..sf_formats::WriteOptions::default() };
+            let data = sf_formats::write(format, &pattern, &opts).map_err(|e| e.to_string())?;
+            Ok((pattern, stem, data))
+        });
+        let (pattern, stem, data) = match read {
+            Ok(r) => r,
+            Err(error) => {
+                failed.push(json!({ "path": path, "error": error }));
+                continue;
+            }
+        };
+        let base = dir.as_deref().map(std::path::Path::new).or_else(|| src.parent()).unwrap_or(std::path::Path::new("."));
+        let mut to = base.join(format!("{stem}.{ext}"));
+        if !replace {
+            let mut k = 2;
+            while super::embroidery::file_there(&to) && k < 1000 {
+                to = base.join(format!("{stem}-{k}.{ext}"));
+                k += 1;
+            }
+        }
+        let to = to.to_string_lossy().to_string();
+        match super::fileio::write_file(&to, &data) {
+            Ok(()) => converted.push(json!({ "from": path, "to": to, "stitches": pattern.stitch_count(), "colors": pattern.color_blocks().len() })),
+            Err(e) => failed.push(json!({ "path": path, "error": e.to_string() })),
+        }
+    }
+    Ok(json!({ "format": ext, "converted": converted, "skipped": skipped, "failed": failed, "truncated": truncated }))
 }
 
 fn scan(s: &mut Session, p: &Value) -> Result<Value> {

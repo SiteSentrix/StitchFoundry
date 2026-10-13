@@ -383,6 +383,14 @@ with why. `embroidery.library.catalogue {folder, query?, columns?, page?}` print
 catalogue sheet of thumbnails in their colours, each with its name, size, stitches, colours and
 format, as many pages as it takes.
 
+**Batch convert** (`embroidery.library.convert {format, folder?, files?, dir?, replace?}`) writes
+a folder's designs (found as the library finds them, `query` and `recursive` too) or the ones
+listed in `files` in another machine format: each beside the file it came from or into `dir`,
+named as it was (a number added when the name is taken, unless `replace`). Designs already in
+that format are skipped, the files read are left as they are, and a file that can't be read is
+listed with why. A format without colours (DST, EXP, TAP, U01) gives the converted design
+standard threads.
+
 ## Worksheets
 
 **Embroidery › Worksheet** (`embroidery.worksheet {kind?, customer?, notes?}`) makes a worksheet
