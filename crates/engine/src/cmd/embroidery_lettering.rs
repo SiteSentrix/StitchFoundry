@@ -1100,6 +1100,8 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         applique,
         stitch: LetterStitch::Font,
         small: SmallText::Auto,
+        vertical: false,
+        path: Vec::new(),
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
     spiral_needs_arc(&spec, SET)?;
