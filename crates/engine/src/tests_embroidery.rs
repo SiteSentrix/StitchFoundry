@@ -793,6 +793,30 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn clipart_motifs_place_digitized() {
+    let mut s = session();
+    let list = s.execute("embroidery.clipart", &json!({})).unwrap();
+    let names: Vec<String> = list["clipart"].as_array().unwrap().iter().map(|c| c["name"].as_str().unwrap().to_string()).collect();
+    assert!(names.len() >= 15, "{names:?}");
+    // every motif places and sews
+    for name in &names {
+        let r = s.execute("embroidery.clipart.insert", &json!({"name": name, "size": 30})).unwrap();
+        assert!(r["objects"].as_u64().unwrap() >= 1, "{name}: {r}");
+    }
+    assert!(s.embroidery_plan().unwrap().pattern().stitch_count() > 1000);
+    // one colour asked for, about the size asked for
+    let mut s = session();
+    s.execute("embroidery.clipart.insert", &json!({"name": "flower", "size": 50, "color": "#123456"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["colors"].as_array().unwrap().len(), 1, "{info}");
+    let w = info["widthMm"].as_f64().unwrap().max(info["heightMm"].as_f64().unwrap());
+    assert!((w - 50.0).abs() < 6.0, "{w}");
+    for bad in [json!({"name": "Dragon"}), json!({}), json!({"name": "Star", "size": 1}), json!({"name": "Star", "color": "gold"})] {
+        assert!(s.execute("embroidery.clipart.insert", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn job_orders_keep_the_order_and_print_its_worksheet() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

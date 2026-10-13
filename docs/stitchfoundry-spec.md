@@ -513,7 +513,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NET-01 | Machine networking (device setup, queues, device settings) | Out | Vendor ecosystems | – |
 | DM-01 | Design library: browse folders, thumbnails, search, design info | Done | The Design Library section (`embroidery.library.scan`): a folder's machine files as stitch thumbnails with size, stitches, colours and date, searched and sorted, cached, opened with a click | 0 |
 | DM-02 | Job orders, batch convert, output selected designs | Done | Job orders (`embroidery.job.*`: customer, design, quantity, due, garment, placement, notes, status; worksheet with the job's barcode and cost; files in one step); batch convert of a folder or chosen designs | 0 |
-| DM-03 | Embroidery clipart (insert library designs) | Missing | Our own small clipart set + user libraries | 6 |
+| DM-03 | Embroidery clipart (insert library designs) | Done | 16 motifs drawn in code, placed digitized in the chart's threads (`embroidery.clipart.insert`); one's own designs from the Design Library | 0 |
 | CH-01 | Chenille machines (chain and moss stitches) | Missing | Chenille object types + formats with chenille codes | 7 |
 | CH-02 | Schiffli machines | Out | Separate industry; low demand |  – |
 | CH-03 | Cross-stitch designer (pattern-based X stitch designs) | Missing | Grid editor mode | 7 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 195 done,
-18 partial, 31 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 196 done,
+18 partial, 30 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
