@@ -1784,7 +1784,7 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
         };
         changed = true;
     }
-    for (key, slot) in [("start", &mut cfg.settings.start), ("end", &mut cfg.settings.end)] {
+    for (key, slot) in [("start", &mut st.start), ("end", &mut st.end)] {
         if let Some(v) = p.get(key) {
             *slot = match v {
                 Value::Null => None,
