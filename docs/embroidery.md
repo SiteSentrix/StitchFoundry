@@ -486,7 +486,10 @@ time and thread used, and whether the design fits the hoop. Its settings:
 
 - **Hoop**: the sewing field, drawn on the canvas centred on the design (machine files are
   centred too); dashed red when the design doesn't fit.
-- **Fabric**: presets that set density, pull compensation and underlay. **Fabric settings**
+- **Fabric**: presets that set density, pull compensation and underlay, and say what to hoop
+  under it: a **Stabiliser** (tear-away for stable wovens, caps and towels; cut-away or a no-show
+  mesh for knits, which stretch; wash-away for sheer work) and a water-soluble topping for pile
+  fabrics, printed on worksheets too. **Fabric settings**
   below it shows the chosen fabric's values; **Save as New Fabric** makes a copy you can change
   (the design keeps its own fabrics, and changes apply to the design at once), and **Delete
   Fabric** removes one.

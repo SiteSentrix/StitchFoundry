@@ -353,6 +353,37 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn fabrics_recommend_a_stabiliser() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 30.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.settings", &json!({"fabric": "Fleece / sweatshirt"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    let f = info["fabricDetails"].as_array().unwrap().iter().find(|f| f["name"] == "Fleece / sweatshirt").unwrap().clone();
+    assert_eq!((f["stabilizer"].as_str(), f["advice"].as_str()), (Some("cut-away"), Some("Cut-away, with a water-soluble topping")));
+    // every built-in fabric says one
+    assert!(info["fabricDetails"].as_array().unwrap().iter().all(|f| f["stabilizer"].is_string()));
+    // on the worksheet
+    s.execute("embroidery.worksheet", &json!({"barcode": "none"})).unwrap();
+    let mut texts = Vec::new();
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(texts.iter().any(|t| t == "Stabiliser: Cut-away, with a water-soluble topping"), "{texts:?}");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    // a fabric of the design's own: its stabiliser set
+    s.execute("embroidery.fabric.save", &json!({"name": "Chiffon", "from": "Silk / lightweight", "stabilizer": "wash-away", "topping": false}))
+        .unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    let f = info["fabricDetails"].as_array().unwrap().iter().find(|f| f["name"] == "Chiffon").unwrap().clone();
+    assert_eq!(f["advice"].as_str(), Some("Wash-away"));
+    assert!(s.execute("embroidery.fabric.save", &json!({"name": "Chiffon", "stabilizer": "glue"})).is_err());
+}
+
+#[test]
 fn designs_start_and_end_where_asked() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
