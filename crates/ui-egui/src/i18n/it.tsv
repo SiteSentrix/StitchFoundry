@@ -4313,7 +4313,10 @@ lighting	Light	Luce
 @msg	unknown parameter `{key}`; the command takes: {keys}	parametro sconosciuto `{key}`; il comando accetta: {keys}
 	Load EPS into Clipboard	Carica EPS negli appunti
 @msg	an image of {w} × {h} pixels is too large to draw	un'immagine di {w} × {h} pixel è troppo grande per essere disegnata
-
+@msg	give a fraction `t` from 0 to 1	specifica un valore `t` da 0 a 1
+@msg	give the path `id`	specifica l'`id` del tracciato
+@msg	invalid stroke widths	larghezze della traccia non valide
+@msg	object has no weighted stroke	l'oggetto non ha una traccia con spessore positivo valido
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Raggio angolo unico
 	Top Left:	In alto a sinistra:

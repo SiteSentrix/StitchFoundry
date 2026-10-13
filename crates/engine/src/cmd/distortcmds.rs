@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Width Point",
             [],
             None,
-            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to edit or move, adjustAdjoining?: bool (with index: the nearest points either side change their widths in proportion)} → {index}. Without index a point already at t is replaced; a point moved onto another one's t joins it as a discontinuous point (on the side it came from), so the width steps there. Creates a uniform profile first if needed",
+            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to edit or move, adjustAdjoining?: bool (the nearest points either side change their widths in proportion, using the sampled widths for a new point)} → {index}. Without index a point already at t is replaced; a point moved onto another one's t joins it as a discontinuous point (on the side it came from), so the width steps there. Creates a uniform profile first if needed",
             has_doc,
             width_point_set
         ),
@@ -311,8 +311,13 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             None => {
+                let old = adjust.then(|| prof.at(t));
                 prof.points.retain(|q| (q.0 - t).abs() > SAME_T);
-                place(&mut prof.points, pt, true)
+                let i = place(&mut prof.points, pt, true);
+                if let Some((left, right)) = old {
+                    adjust_adjoining(&mut prof.points, i, (t, left, right), pt);
+                }
+                i
             }
         };
         st.profile = Some(prof);

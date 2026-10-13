@@ -4268,7 +4268,10 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
-
+@msg	give a fraction `t` from 0 to 1	geben Sie einen Wert `t` von 0 bis 1 an
+@msg	give the path `id`	geben Sie die `id` des Pfads an
+@msg	invalid stroke widths	ungültige Konturbreiten
+@msg	object has no weighted stroke	das Objekt hat keine Kontur mit einer gültigen positiven Stärke
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Einheitlicher Eckenradius
 	Top Left:	Oben links:

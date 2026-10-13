@@ -4277,7 +4277,10 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
-
+@msg	give a fraction `t` from 0 to 1	0에서 1 사이의 값 `t`를 지정하세요
+@msg	give the path `id`	패스 `id`를 지정하세요
+@msg	invalid stroke widths	선 너비가 유효하지 않습니다
+@msg	object has no weighted stroke	개체에 유효한 양의 두께를 가진 선이 없습니다
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	단일 모퉁이 반지름
 	Top Left:	왼쪽 위:

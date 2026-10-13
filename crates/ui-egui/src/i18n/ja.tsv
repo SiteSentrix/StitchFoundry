@@ -4307,7 +4307,10 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
-
+@msg	give a fraction `t` from 0 to 1	0 から 1 までの値 `t` を指定してください
+@msg	give the path `id`	パスの `id` を指定してください
+@msg	invalid stroke widths	線幅が無効です
+@msg	object has no weighted stroke	オブジェクトに有効な正の線幅を持つ線がありません
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	角丸の半径を統一
 	Top Left:	左上:
