@@ -203,6 +203,13 @@ pub struct Lettering {
     /// Small-text settings: shorter stitches, lighter pull compensation, a light underlay.
     #[serde(default, skip_serializing_if = "SmallText::is_auto")]
     pub small: SmallText,
+    /// Letters one under another, each centred; lines side by side (straight lettering only).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub vertical: bool,
+    /// A baseline drawn as a line (points, the lettering's own space: from its origin): the
+    /// letters along it, upright to it. Empty: straight or round `arc`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub path: Vec<crate::geom::Point>,
     /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
     /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
     /// and slants; a scale goes into `size`.
@@ -465,6 +472,9 @@ impl Lettering {
         self.size *= k;
         self.arc *= k;
         self.spiral *= k;
+        for q in &mut self.path {
+            (q.x, q.y) = (q.x * k, q.y * k);
+        }
         for l in &mut self.letters {
             l.dx *= k;
             l.dy *= k;
@@ -1025,11 +1035,15 @@ mod tests {
             applique: None,
             stitch: LetterStitch::Font,
             small: SmallText::Auto,
+            vertical: false,
+            path: vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)],
             frame: at,
         };
         // turned a quarter about the origin, then doubled
         l.transform(&Affine::rotate(std::f64::consts::FRAC_PI_2).then(&Affine::scale(2.0, 2.0)));
         assert!((l.size - 20.0).abs() < 1e-9 && (l.arc - 60.0).abs() < 1e-9 && (l.spiral - 10.0).abs() < 1e-9, "{l:?}");
+        // a drawn baseline: as far again
+        assert!((l.path[1].x - 20.0).abs() < 1e-9, "{l:?}");
         // a letter moved: as far again
         assert!((l.letters[0].dy - 4.0).abs() < 1e-9, "{l:?}");
         let o = l.frame.apply(Point::new(0.0, 0.0));

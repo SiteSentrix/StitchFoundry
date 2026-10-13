@@ -736,7 +736,11 @@ set its size (the sizes the font sews well at are shown, marked ▲ as a warning
 middle of the artboard. With a lettering selected, the section shows what it says, in what font and
 how big: change any of them and *Update Lettering* sets it again where it is. *Baseline* bends the
 lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its bottom, glyphs
-upright to it (`arc`: the radius in mm, negative along the bottom). *Spiral* winds it in round
+upright to it (`arc`: the radius in mm, negative along the bottom). **Vertical** sets the letters
+one under another, each centred, extra lines side by side (`vertical`). *Place Along Selected
+Line* sets the text along any line or shape you have drawn, from its start, each letter upright to
+it (`path`: its id, or true for the selected one); the line is kept with the lettering, which
+can then be moved or scaled as a whole, and `path: null` sets it straight again. *Spiral* winds it in round
 the circle, the radius shrinking that many mm a turn (negative: winding out; `spiral`), for text
 that runs on round and round; lettering placed from the panel
 is centred on the artboard (`align`: left, centre or right on `at`).
