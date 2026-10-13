@@ -43,8 +43,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G1 Interaction fidelity
 
-- **Done:** double-click a stroked segment to create a width point through Width Point Edit. Opening, Cancel and deleting the prospective point preserve the document and history; OK creates the point and optionally adjusts adjoining widths in one undo step. Regression and visual evidence: [Width-point creation](target-app-parity.md#evidence-what-ships-today-by-area).
+- **Added:** Alt swaps the orientation of a new guide dragged from either ruler. Preview and final placement use the current axis; cancelling preserves the document and Redo, and a completed drag is one undo step. Tool and egui event regressions cover these interactions; the broader G1 pass and estimate remain unchanged.
 
+- **Done:** double-click a stroked segment to create a width point through Width Point Edit. Opening, Cancel and deleting the prospective point preserve the document and history; OK creates the point and optionally adjusts adjoining widths in one undo step. Regression and visual evidence: [Width-point creation](target-app-parity.md#evidence-what-ships-today-by-area).
 - **Done:** Shift-double-click opens Width Point Edit with adjoining adjustment enabled. Plain double-click retains the default; dispatch, neighboring widths, Undo/Redo and Cancel have regression coverage.
 - **Done (#1227):** object clicks with the Artboard tool create a fitted artboard, preserving art and selection; handles, modified clicks and drags retain their meaning. Covered by tool-event regression tests and undo/cancellation checks.
 - **Done:** Document Setup → Edit Artboards applies valid settings, closes the dialog and activates the Artboard tool. Pointer-click tests cover successful handoff, invalid settings, OK, Cancel and Undo in `dialogs/document_setup.rs`.
