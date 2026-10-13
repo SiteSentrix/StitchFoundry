@@ -101,6 +101,8 @@ fn embroidery_menu() -> Vec<Item> {
                 ty("Rhinestones", "stone"),
                 ty("Cord", "cord"),
                 ty("Boring", "boring"),
+                ty("Print", "print"),
+                ty("Foil", "foil"),
                 Sep,
                 ty("No Stitches", "none"),
             ],

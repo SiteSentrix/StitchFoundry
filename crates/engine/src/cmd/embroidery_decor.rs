@@ -54,7 +54,7 @@ fn count(s: &mut Session, _: &Value) -> Result<Value> {
                     }
                 }
             }
-            DecorKind::Boring => {}
+            DecorKind::Boring | DecorKind::Print | DecorKind::Foil => {}
             k => {
                 for it in &d.items {
                     *counts.entry((k.id().to_string(), format!("{:.1}", it.size), color.clone())).or_default() += 1;

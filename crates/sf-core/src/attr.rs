@@ -106,6 +106,8 @@ impl StitchType {
             }
             "cord" | "couching" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Cord)),
             "boring" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Boring)),
+            "print" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Print)),
+            "foil" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Foil)),
             _ => return None,
         })
     }

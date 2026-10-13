@@ -229,6 +229,10 @@ pub(crate) fn convert(node: &Node, e: &Embroidery) -> Vec<ObjectKind> {
             match params.kind {
                 DecorKind::Cord => obj.lines = lines().into_iter().map(|l| (l.pts, l.closed)).collect(),
                 DecorKind::Boring => obj.lines = crate::regions_mm(node).into_iter().map(|r| (r.outer, true)).collect(),
+                // the whole area, holes too (filled even-odd)
+                DecorKind::Print | DecorKind::Foil => {
+                    obj.lines = crate::regions_mm(node).into_iter().flat_map(|r| std::iter::once(r.outer).chain(r.holes)).map(|r| (r, true)).collect()
+                }
                 _ => match params.layout {
                     DecorLayout::Run => {
                         for l in lines() {

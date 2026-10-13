@@ -5169,3 +5169,31 @@ fn applique_pieces_combine_and_are_prepared() {
     let union: f64 = sf_core::geom::poly::union(&polys).iter().map(|p| p.area().abs()).sum();
     assert!((sum - union).abs() < 1.0, "{sum} {union}");
 }
+
+#[test]
+fn print_and_foil_are_shown_and_never_sewn() {
+    use sf_core::decor::DecorKind;
+    use sf_core::model::ObjectKind;
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 10.0 * PT, 10.0 * PT, 30.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let sewn = stitches(&s);
+    for (kind, name) in [(DecorKind::Print, "print"), (DecorKind::Foil, "foil")] {
+        rect(&mut s, 50.0 * PT, 10.0 * PT, 30.0 * PT, 20.0 * PT);
+        s.execute("embroidery.set", &json!({"type": name})).unwrap();
+        let plan = s.embroidery_plan().unwrap();
+        let d = plan
+            .design
+            .objects
+            .iter()
+            .find_map(|o| match &o.kind {
+                ObjectKind::Decor(d) if d.params.kind == kind => Some(d.clone()),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(d.lines.len(), 1, "{name}: the shape's outline");
+        assert_eq!(stitches(&s), sewn, "{name} isn't sewn");
+        assert!(!plan.pattern().stitches.iter().any(|st| st.cmd == sf_core::Cmd::Stop), "{name}: no stop");
+    }
+}

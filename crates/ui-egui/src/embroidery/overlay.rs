@@ -467,6 +467,19 @@ fn decorations(plan: &StitchPlan, painter: &Painter, xf: &Xf, top: bool) {
                     painter.add(Shape::line(pts, Stroke::new(w * 0.45, base)));
                 }
             }
+            DecorKind::Print => {
+                let rings: Vec<Vec<_>> = d.lines.iter().map(|(l, _)| l.clone()).collect();
+                fill_rings(painter, xf, &rings, None, &|_, _| base);
+            }
+            DecorKind::Foil => {
+                // a metallic sheen: light bands running diagonally across the foil
+                let rings: Vec<Vec<_>> = d.lines.iter().map(|(l, _)| l.clone()).collect();
+                let shine = |u: f64, v: f64| {
+                    let t = ((u + v) * 0.35).sin() * 0.5 + ((u - 0.6 * v) * 0.9).sin() * 0.15;
+                    if t >= 0.0 { toward_white(base, (t as f32 * 0.8).min(0.7)) } else { lerp(base, dark, (-t as f32 * 1.2).min(0.8)) }
+                };
+                fill_rings(painter, xf, &rings, Some(2.0), &shine);
+            }
             DecorKind::Boring => {
                 let rings: Vec<Vec<_>> = d.lines.iter().map(|(l, _)| l.clone()).collect();
                 fill_rings(painter, xf, &rings, None, &|_, _| Color32::from_gray(38));
