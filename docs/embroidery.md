@@ -438,6 +438,18 @@ worksheet?, design?, dir?}`, listed by `embroidery.output.profiles` and forgotte
 `embroidery.output.deleteProfile`. `embroidery.output {profile}` uses one, its folder too; what
 the request says wins over it.
 
+## Product visualizer
+
+**Embroidery › Product Visualizer** (`embroidery.visualize {product?, color?, placement?}`) shows
+the design, life size and in its thread colours, on a product drawn in the product's colour: a
+T-shirt, polo, hoodie, cap, tote bag or towel. It goes where such designs usually go
+(`placement`: left or right chest, full front, full back, back yoke, sleeve or pocket on
+garments; the front of a cap; the middle of a bag; above a towel's border), seen from the back
+for the full back and yoke. A design wider than usual there is warned of. With `image` it goes
+on a photo of the customer's own product instead: `imageWidth` says how many mm the photo shows
+across, `at` where the design's middle goes. The mock-up opens as a new document, to show the
+customer, print or export (PNG, PDF).
+
 ## Multi-hooping
 
 A design larger than the hoop is sewn in several hoopings: `embroidery.multiHoop {hoop?, width?,

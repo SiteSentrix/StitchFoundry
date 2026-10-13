@@ -4827,3 +4827,5 @@ machine	Stop	Stopp
 	Each design found written again in this format beside it	Jedes gefundene Design in diesem Format daneben neu geschrieben
 	Converted:	Konvertiert:
 	couldn't be read:	nicht lesbar:
+	Product Visualizer	Produktvorschau
+@msg	product outline: {e}	Produktumriss: {e}

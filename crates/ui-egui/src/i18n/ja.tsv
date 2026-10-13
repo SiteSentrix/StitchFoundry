@@ -4867,3 +4867,5 @@ machine	Stop	停止
 	Each design found written again in this format beside it	見つかった各デザインをこの形式で隣に書き出します
 	Converted:	変換済み:
 	couldn't be read:	読み込めません:
+	Product Visualizer	製品プレビュー
+@msg	product outline: {e}	製品の輪郭: {e}

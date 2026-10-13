@@ -4869,3 +4869,5 @@ machine	Stop	Остановка
 	Each design found written again in this format beside it	Каждый найденный дизайн записывается в этом формате рядом с ним
 	Converted:	Преобразовано:
 	couldn't be read:	не читаются:
+	Product Visualizer	Просмотр на изделии
+@msg	product outline: {e}	контур изделия: {e}

@@ -4853,3 +4853,5 @@ machine	Stop	Зупинка
 	Each design found written again in this format beside it	Кожен знайдений дизайн записується в цьому форматі поруч із ним
 	Converted:	Перетворено:
 	couldn't be read:	не читаються:
+	Product Visualizer	Перегляд на виробі
+@msg	product outline: {e}	контур виробу: {e}

@@ -4881,3 +4881,5 @@ machine	Stop	Arrêt
 	Each design found written again in this format beside it	Chaque motif trouvé réécrit dans ce format à côté de lui
 	Converted:	Convertis :
 	couldn't be read:	illisibles :
+	Product Visualizer	Aperçu sur produit
+@msg	product outline: {e}	contour du produit : {e}

@@ -4873,3 +4873,5 @@ machine	Stop	Arresto
 	Each design found written again in this format beside it	Ogni disegno trovato riscritto in questo formato accanto a sé
 	Converted:	Convertiti:
 	couldn't be read:	illeggibili:
+	Product Visualizer	Anteprima sul prodotto
+@msg	product outline: {e}	contorno del prodotto: {e}
