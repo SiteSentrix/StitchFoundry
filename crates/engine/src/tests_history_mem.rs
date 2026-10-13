@@ -153,3 +153,29 @@ fn undo_and_redo_reuse_the_estimates() {
     let delete = st.history.undo.last().unwrap();
     assert_eq!(delete.bytes, fresh(delete, &st.doc));
 }
+
+/// #1719: Redo while a drag is in progress keeps the drag as a step (which ends the steps to redo,
+/// as any new edit does) instead of swapping the document under it: before, the next preview or a
+/// cancel went back to the document from before the redo while the history said it was redone.
+#[test]
+fn redo_during_an_interaction_keeps_the_history_and_the_document_in_step() {
+    let mut s = session_with_rects(1);
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    let moved = first_x(&s);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let start = first_x(&s);
+    // A drag that changed nothing yet is no step: Redo redoes, and a cancel has nothing to undo.
+    s.begin_interaction("Move").unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(first_x(&s), moved, "the redone move stays");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A drag that moved the art is the newest step: nothing is left to redo, and nothing is lost.
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    assert!(s.execute("edit.redo", &json!({})).is_err(), "the drag ended the steps to redo");
+    assert!(!s.in_interaction());
+    assert_eq!(first_x(&s), start + 3.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first_x(&s), start);
+}
