@@ -4744,7 +4744,10 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
-
+@msg	give a fraction `t` from 0 to 1	indiquez une valeur `t` comprise entre 0 et 1
+@msg	give the path `id`	indiquez l’`id` du tracé
+@msg	invalid stroke widths	largeurs de contour non valides
+@msg	object has no weighted stroke	l’objet n’a pas de contour d’épaisseur positive valide
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Rayon d’angle unique
 	Top Left:	En haut à gauche :

@@ -4586,7 +4586,10 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
-
+@msg	give a fraction `t` from 0 to 1	podaj wartość `t` od 0 do 1
+@msg	give the path `id`	podaj `id` ścieżki
+@msg	invalid stroke widths	nieprawidłowe szerokości obrysu
+@msg	object has no weighted stroke	obiekt nie ma obrysu o prawidłowej dodatniej grubości
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Jeden promień narożników
 	Top Left:	Lewy górny:

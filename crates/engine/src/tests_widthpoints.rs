@@ -175,3 +175,58 @@ fn flipping_along_swaps_the_sides_of_a_discontinuous_point() {
     s.execute("stroke.setAdvanced", &json!({"flipProfile": "along"})).unwrap();
     assert_eq!(points(&s, id), vec![(0.0, 2.0, 2.0), (0.75, 2.0, 2.0), (0.75, 1.0, 1.0), (1.0, 1.0, 1.0)]);
 }
+
+fn new_point_adjoining(adjust: bool) {
+    let (mut s, id) = line_session();
+    s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": [[0, 1, 1], [1, 1, 1]]})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let i = set(&mut s, json!({"id": id.0, "index": null, "t": 0.5, "left": 10, "right": 10, "adjustAdjoining": adjust}));
+    assert_eq!(i, 1);
+    let end = if adjust { 2.0 } else { 1.0 };
+    assert_eq!(points(&s, id), vec![(0.0, end, end), (0.5, 2.0, 2.0), (1.0, end, end)], "new-point adjoining choice must affect neighbours");
+    let after = s.doc().unwrap().doc.clone();
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection, selection);
+    assert_eq!((st.history.undo.len(), st.history.redo.len(), st.is_dirty()), (undo + 1, 0, true));
+    assert_eq!(st.history.undo.last().unwrap().label, "Width Point");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc, before);
+    assert_eq!(st.selection, selection);
+    assert_eq!((st.history.undo.len(), st.history.redo.len(), st.is_dirty()), (undo, 1, false));
+    s.execute("edit.redo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc, after);
+    assert_eq!(st.selection, selection);
+    assert_eq!((st.history.undo.len(), st.history.redo.len(), st.is_dirty()), (undo + 1, 0, true));
+}
+
+#[test]
+fn new_width_point_adjust_adjoining_scales_neighbours() {
+    new_point_adjoining(true);
+}
+
+#[test]
+fn new_width_point_without_adjoining_preserves_neighbours() {
+    new_point_adjoining(false);
+}
+
+#[test]
+fn new_width_point_adjust_adjoining_uses_sampled_widths() {
+    for indexed in [false, true] {
+        let (mut s, id) = line_session();
+        s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": [[0, 9, 9], [0.25, 1, 0], [0.75, 3, 0], [1, 7, 7]]})).unwrap();
+        // At t=0.5 the old sides are 10pt and 0pt. Indexed editing of that sampled
+        // point is the existing convention: scale the nonzero side, add from zero.
+        let index = if indexed { Some(set(&mut s, json!({"id": id.0, "t": 0.5, "left": 10, "right": 0}))) } else { None };
+        set(&mut s, json!({"id": id.0, "index": index, "t": 0.5, "left": 20, "right": 5, "adjustAdjoining": true}));
+        assert_eq!(
+            points(&s, id),
+            vec![(0.0, 9.0, 9.0), (0.25, 2.0, 1.0), (0.5, 4.0, 1.0), (0.75, 6.0, 1.0), (1.0, 7.0, 7.0)],
+            "only nearest neighbours change, using the sampled sides; indexed={indexed}"
+        );
+    }
+}

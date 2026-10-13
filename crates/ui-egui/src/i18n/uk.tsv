@@ -4293,7 +4293,10 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
-
+@msg	give a fraction `t` from 0 to 1	вкажіть значення `t` від 0 до 1
+@msg	give the path `id`	вкажіть `id` контуру
+@msg	invalid stroke widths	неприпустимі значення ширини обведення
+@msg	object has no weighted stroke	об’єкт не має обведення з допустимою додатною товщиною
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Єдиний радіус кутів
 	Top Left:	Вгорі ліворуч:

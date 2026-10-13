@@ -4295,7 +4295,10 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
-
+@msg	give a fraction `t` from 0 to 1	hãy cung cấp giá trị `t` từ 0 đến 1
+@msg	give the path `id`	hãy cung cấp `id` đường dẫn
+@msg	invalid stroke widths	chiều rộng nét không hợp lệ
+@msg	object has no weighted stroke	đối tượng không có nét với độ dày dương hợp lệ
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Một bán kính góc
 	Top Left:	Trên cùng bên trái:
