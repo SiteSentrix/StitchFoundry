@@ -671,6 +671,37 @@ type: satin for narrow parts, tatami at its best angle for the rest. The design 
 colour, nearest shape first. It is scaled to fit the hoop if one is set (or to 100 mm if it is
 larger than 200 mm). The image stays underneath as a reference. One undo step undoes it all.
 
+### Preparing an image
+
+**Embroidery › Prepare Image** (`embroidery.image.prepare {colors?, smooth?, clean?, replace?}`)
+makes a photo or a scanned logo ready to digitize: a median filter smooths it while keeping its
+edges (`smooth`, a radius in pixels), its colours are reduced to the main ones (`colors`, 8 by
+default; 0 keeps them all), and specks and ragged edges take their neighbours' colour (`clean`,
+how many passes). The prepared copy goes over the original and is selected, ready for
+Auto-Digitize or Click to Stitch; `replace` swaps the original for it.
+
+**Image Colours** (`embroidery.image.colors {colors?, chart?}`) lists an image's main colours,
+the most used first, each with how much of the image it covers and the nearest thread in the
+design's chart (or the one named).
+
+## Photo stitch
+
+Select a placed photo and choose **Embroidery › Photo Stitch** (`embroidery.photoStitch {mode}`)
+to sew it over the image as ordinary objects you can edit:
+
+- **Lines** (`mode: lines`): parallel lines `spacing` mm apart (1.6) at `angle`, each zigzagging
+  across itself as wide as the photo is dark there, so dark parts sew dense and light parts
+  straight: one line of needle points in one thread (`color`, black).
+- **Coral** (`mode: coral`): points scattered as densely as the photo is dark (`density`, points
+  a mm² where it is darkest), sewn as one meandering run from each point to the nearest one not
+  yet sewn; a gap over 5 mm starts a new run.
+- **Colour** (`mode: color`): the photo's main colours (`colors`, 6), matched to the chart's
+  threads, on a grid of `cell` mm; each colour's region becomes a short-stitch tatami fill, the
+  lightest sewn first, its angle turned colour to colour.
+
+`invert` sews the light parts instead (a light thread on a dark fabric) and `contrast` sharpens
+(above 1) or softens the tones. Prepare Image first to cut noise in a busy photo.
+
 ## Design from Prompt
 
 Describe a design in words and Claude, Anthropic's AI model, draws artwork for it, which

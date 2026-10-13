@@ -131,6 +131,117 @@ fn convert_thread_beads_settings_info_and_sorting() {
     assert!(s.execute("embroidery.settings", &json!({"hoop": "nope"})).is_err());
 }
 
+/// A placed image 100 × 60 mm: a black block on the left, a red one on the right, a grey ramp
+/// between them, on white.
+fn placed_photo(s: &mut Session) -> u64 {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let r = vectorcraft_trace::Raster::from_fn(200, 120, |x, y| {
+        if (10..60).contains(&x) && (10..110).contains(&y) {
+            [0, 0, 0, 255]
+        } else if (140..190).contains(&x) && (10..110).contains(&y) {
+            [210, 20, 20, 255]
+        } else if (70..130).contains(&x) && (40..80).contains(&y) {
+            let v = (255 - (x - 70) * 4) as u8;
+            [v, v, v, 255]
+        } else {
+            [255, 255, 255, 255]
+        }
+    });
+    let png = r.encode_png();
+    let r = s
+        .execute(
+            "file.place",
+            &json!({"name": "photo.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": [0, 0, 100.0 * PT, 60.0 * PT]}),
+        )
+        .unwrap();
+    let id = r["id"].as_u64().or_else(|| r["ids"][0].as_u64()).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    id
+}
+
+#[test]
+fn an_images_colours_match_threads_and_it_is_prepared_to_digitize() {
+    let mut s = session();
+    let img = placed_photo(&mut s);
+    let r = s.execute("embroidery.image.colors", &json!({"colors": 3})).unwrap();
+    let colors = r["colors"].as_array().unwrap();
+    assert_eq!(colors.len(), 3, "{r}");
+    // white covers most of it; black and red are there, each with a thread from the chart
+    let white = sf_core::Rgb::new(255, 255, 255);
+    assert!(sf_core::Rgb::from_hex(colors[0]["color"].as_str().unwrap()).unwrap().delta_e(white) < 12.0, "{r}");
+    let near = |hex: &str| {
+        colors.iter().any(|c| sf_core::Rgb::from_hex(c["color"].as_str().unwrap()).unwrap().delta_e(sf_core::Rgb::from_hex(hex).unwrap()) < 12.0)
+    };
+    assert!(near("#000000") && near("#d21414"), "{r}");
+    assert!(colors.iter().all(|c| c["thread"]["color"].is_string()), "{r}");
+    // prepared: a copy over it, three colours, selected
+    let r = s.execute("embroidery.image.prepare", &json!({"colors": 3})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    assert_ne!(id, img);
+    assert_eq!(r["colors"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(s.doc().unwrap().selection.objects.iter().map(|i| i.0).collect::<Vec<_>>(), vec![id]);
+    let r = s.execute("embroidery.image.colors", &json!({"colors": 6})).unwrap();
+    assert!(r["colors"].as_array().unwrap().len() <= 3, "the prepared copy has three colours: {r}");
+    // replacing the original
+    s.execute("select.set", &json!({"ids": [img]})).unwrap();
+    s.execute("embroidery.image.prepare", &json!({"colors": 0, "smooth": 2, "replace": true})).unwrap();
+    assert!(s.doc().unwrap().doc.node(NodeId(img)).is_none());
+    assert!(s.execute("embroidery.image.prepare", &json!({"colors": 1})).is_err());
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("embroidery.image.colors", &json!({})).is_err(), "no image");
+}
+
+#[test]
+fn a_photo_is_stitched_as_lines_coral_or_colours() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let img = placed_photo(&mut s);
+    // lines: one line of needle points, zigzagging wide over the black, straight over the white
+    let r = s.execute("embroidery.photoStitch", &json!({"mode": "lines", "spacing": 2})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 1, "{r}");
+    let points_in = |s: &Session, x0: f64, x1: f64| {
+        let mut n = 0;
+        let plan = s.embroidery_plan().unwrap();
+        for st in &plan.pattern().stitches {
+            if st.cmd == sf_core::Cmd::Stitch && st.x >= x0 && st.x < x1 {
+                n += 1;
+            }
+        }
+        n
+    };
+    // the black block (5–30 mm) holds far more needle points than as much white (30–35 mm)
+    let (black, white) = (points_in(&s, 10.0, 25.0), points_in(&s, 30.5, 34.5) * 15 / 4);
+    assert!(black > 2 * white.max(1), "{black} {white}");
+    assert!(s.embroidery_plan().unwrap().pattern().threads.iter().any(|t| t.color.to_hex() == "#000000"));
+    // coral: points crowd in the dark
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [img]})).unwrap();
+    let r = s.execute("embroidery.photoStitch", &json!({"mode": "coral", "density": 2, "color": "#1d3557"})).unwrap();
+    assert!(r["points"].as_u64().unwrap() > 1000, "{r}");
+    let (black, white) = (points_in(&s, 10.0, 25.0), points_in(&s, 30.5, 34.5) * 15 / 4);
+    assert!(black > 5 * white.max(1), "{black} {white}");
+    // colour: fills of the main colours, the lightest first, in the chart's threads
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [img]})).unwrap();
+    let r = s.execute("embroidery.photoStitch", &json!({"mode": "color", "colors": 3, "cell": 1.5})).unwrap();
+    let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert!(ids.len() >= 2, "{r}");
+    let d = &s.doc().unwrap().doc;
+    let lightness = |id: u64| {
+        let n = d.node(NodeId(id)).unwrap();
+        let t = n.embroidery.as_ref().unwrap().thread.clone().unwrap();
+        assert!(matches!(n.embroidery.as_ref().unwrap().stitch, sf_core::attr::StitchType::Fill(_)));
+        t.color.to_lab()[0]
+    };
+    assert!(lightness(ids[0]) >= lightness(*ids.last().unwrap()), "lightest first");
+    let _ = PT;
+    // bad requests
+    s.execute("select.set", &json!({"ids": [img]})).unwrap();
+    for bad in [json!({"mode": "mosaic"}), json!({"spacing": 0.1}), json!({"mode": "color", "cell": 0.01}), json!({"color": "black"})] {
+        assert!(s.execute("embroidery.photoStitch", &bad).is_err(), "{bad}");
+    }
+}
+
 #[test]
 fn a_click_on_an_image_stitches_its_region() {
     use sf_core::attr::StitchType;
