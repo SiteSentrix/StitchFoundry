@@ -21,6 +21,7 @@ use text::TextSlots;
 pub(crate) use fx::BLEND;
 
 mod css;
+mod css_transform;
 mod files;
 mod fx;
 mod spread;
@@ -468,7 +469,10 @@ impl Edits {
 fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
-    if !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode"].iter().any(|t| svg.contains(t)) {
+    let css_transform = has_css_transform(svg);
+    if !css_transform
+        && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode"].iter().any(|t| svg.contains(t))
+    {
         return (svg.into(), found);
     }
     let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
@@ -507,7 +511,15 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
         }
     }
     found.files = files::Files::read(svg, &xml, opts, &mut edits, &mut found.warnings);
+    if css_transform {
+        edits.list.extend(css_transform::rewrites(svg, &xml));
+    }
     (edits.apply(svg), found)
+}
+
+/// Is there a `transform` CSS declaration in `svg` (`transform` followed by `:`)?
+fn has_css_transform(svg: &str) -> bool {
+    svg.match_indices("transform").any(|(i, t)| svg.get(i + t.len()..).is_some_and(|s| s.trim_start().starts_with(':')))
 }
 
 /// The elements that are objects (what [`hidden_objects`] shows).
