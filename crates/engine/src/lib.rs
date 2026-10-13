@@ -1462,7 +1462,11 @@ impl Session {
         let before = st.doc.clone();
         let before_sel = st.selection.clone();
         let doc = Arc::make_mut(&mut st.doc);
-        let result = match f(doc, &mut st.selection) {
+        // Dimensions follow the art they measure.
+        let result = match f(doc, &mut st.selection).and_then(|v| {
+            cmd::dimension::refresh(&before, doc)?;
+            Ok(v)
+        }) {
             Ok(v) => match cmd::shaper::refresh(&before, Arc::make_mut(&mut st.doc)) {
                 Err(e) => Err(e),
                 Ok(()) => {

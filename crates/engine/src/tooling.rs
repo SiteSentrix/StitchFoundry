@@ -453,6 +453,17 @@ impl Session {
         if let Some(k) = p.get("key").and_then(Value::as_str) {
             values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
         }
+        if tool.unwrap_or(self.tool_id()) == "dimension" {
+            if let Some(style) = values.get("style") {
+                let options: vectorcraft_doc::dimension::DimensionOptions = serde_json::from_value(style.clone()).map_err(|e| e.to_string())?;
+                options.validate()?;
+            }
+            if let Some(mode) = values.get("mode")
+                && !mode.as_str().is_some_and(|m| ["linear", "angular", "radius", "diameter"].contains(&m))
+            {
+                return Err("Unknown dimension mode".into());
+            }
+        }
         Ok(self.set_tool_options(tool, &values))
     }
 

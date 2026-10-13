@@ -58,6 +58,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["width", "warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"],
             &["rotate", "reflect", "scale", "shear", "reshape", "freeTransform", "puppetWarp"],
             &["shapeBuilder", "livePaintBucket", "livePaintSelection", "blend"],
+            &["dimension"],
         ],
     ),
     ("Type", &[&["areaType", "typeOnPath", "verticalAreaType", "verticalTypeOnPath"], &["type", "verticalType", "touchType"]]),
@@ -129,6 +130,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Before the flyout: one torn off this frame floats from the next (its bar mustn't be in two
     // layers in one frame).
     floating(app, ui.ctx());
+    crate::dialogs::dimension::floating(app, ui.ctx());
     flyout(app, ui.ctx());
     crate::edit_toolbar::drawer(app, ui.ctx());
 }
@@ -324,6 +326,7 @@ fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<Flyo
 /// Options.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
+        "dimension" => crate::dialogs::dimension::open(app),
         "hand" => app.run("view.fitArtboard", json!({})),
         "zoom" => app.run("view.actualSize", json!({})),
         "rotate" | "scale" | "reflect" | "shear" | "selection" | "directSelection" | "groupSelection" => {
@@ -372,6 +375,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 /// Warp's mesh and pins, the Artboard tool's Move and Scale Artwork with Artboard (set through
 /// `tool.setOption`).
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if app.session.tool_id() == "dimension" {
+        return crate::dialogs::dimension::controls(app, ui);
+    }
     /// (value, label) of each choice.
     type Choices = &'static [(&'static str, &'static str)];
     const MIRROR: [(&str, &str, Choices); 2] = [

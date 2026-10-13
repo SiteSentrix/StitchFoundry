@@ -2396,6 +2396,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Fit to Selected Art", "artboard.fitToSelection"),
                     ],
                 ),
+                sub("Dimensions", vec![c("Dimension Selected Paths", "dimension.selection")]),
                 sub(
                     "Graph",
                     vec![

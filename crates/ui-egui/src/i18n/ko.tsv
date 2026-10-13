@@ -4345,5 +4345,45 @@ lighting	Light	광원
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	 a highlighted edge, then click to place its dimension | 	 강조 표시된 가장자리를 클릭한 다음 다시 클릭하여 치수 배치 | 
+	 cancels | Double-click the tool for options	 취소 | 도구를 두 번 클릭하면 옵션
+	All selected edges	선택한 모든 가장자리
+	Create Dimension	치수 만들기
+	Dimension Selected Paths	선택한 패스에 치수 기입
+	Dimension Tool	치수 도구
+	Dimension Tool Options	치수 도구 옵션
+	Display	표시
+	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	도면 : 실제 크기 — 1:10은 페이지의 1cm가 실제 10cm임을 뜻합니다.
+	Font Family:	글꼴 패밀리:
+	Font Style:	글꼴 스타일:
+	Precision:	정밀도:
+	Preview (1 cm on page)	미리 보기(페이지의 1cm)
+	Update Dimensions	치수 업데이트
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	각도에는 직선 세그먼트 두 개가 필요합니다
+@msg	Choose a circular path	원형 패스를 선택하십시오
+@msg	Choose a length unit and precision from 0 to 6	길이 단위와 0~6 사이의 정밀도를 선택하십시오
+@msg	Choose two different points	서로 다른 두 점을 선택하십시오
+@msg	Choose two non-parallel straight segments	평행하지 않은 직선 세그먼트 두 개를 선택하십시오
+@msg	Choose two nonzero angle arms	길이가 0이 아닌 각도 변 두 개를 선택하십시오
+@msg	Dimension point is outside the canvas	치수 점이 캔버스 밖에 있습니다
+@msg	Dimension size is outside its supported range	치수 크기가 지원 범위를 벗어났습니다
+@msg	First measured segment no longer exists	첫 번째 측정 세그먼트가 더 이상 없습니다
+@msg	Invalid dimension distance	잘못된 치수 거리
+@msg	Invalid dimension font name	잘못된 치수 글꼴 이름
+@msg	Invalid drawing scale	잘못된 도면 축척
+@msg	Invalid real scale	잘못된 실제 축척
+@msg	Measured anchor no longer exists	측정한 고정점이 더 이상 없습니다
+@msg	Measured path no longer exists	측정한 패스가 더 이상 없습니다
+@msg	Measured segment no longer exists	측정한 세그먼트가 더 이상 없습니다
+@msg	Non-finite dimension	유한하지 않은 치수
+@msg	Scale must be drawing:real, for example 1:10	축척은 도면:실제 형식이어야 합니다(예: 1:10)
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	축척 비율은 1:1000000에서 1000000:1 사이여야 합니다
+@msg	Second measured segment no longer exists	두 번째 측정 세그먼트가 더 이상 없습니다
+@msg	Unknown dimension mode	알 수 없는 치수 모드
+@msg	Unknown dimension style	알 수 없는 치수 스타일
+@msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면이 열린 상태로 유지됩니다.

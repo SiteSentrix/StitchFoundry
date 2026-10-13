@@ -4336,5 +4336,45 @@ theme	Appearance	Erscheinungsbild
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	 a highlighted edge, then click to place its dimension | 	 auf eine hervorgehobene Kante, dann klicken, um ihre Bemaßung zu platzieren | 
+	 cancels | Double-click the tool for options	 bricht ab | Doppelklick auf das Werkzeug für Optionen
+	All selected edges	Alle ausgewählten Kanten
+	Create Dimension	Bemaßung erstellen
+	Dimension Selected Paths	Ausgewählte Pfade bemaßen
+	Dimension Tool	Bemaßungswerkzeug
+	Dimension Tool Options	Optionen für Bemaßungswerkzeug
+	Display	Anzeige
+	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Zeichnung : Realgröße — 1:10 bedeutet, 1 cm auf der Seite entspricht 10 cm.
+	Font Family:	Schriftfamilie:
+	Font Style:	Schriftschnitt:
+	Precision:	Genauigkeit:
+	Preview (1 cm on page)	Vorschau (1 cm auf der Seite)
+	Update Dimensions	Bemaßungen aktualisieren
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	Winkel erfordern zwei gerade Segmente
+@msg	Choose a circular path	Wählen Sie einen kreisförmigen Pfad
+@msg	Choose a length unit and precision from 0 to 6	Wählen Sie eine Längeneinheit und eine Genauigkeit von 0 bis 6
+@msg	Choose two different points	Wählen Sie zwei verschiedene Punkte
+@msg	Choose two non-parallel straight segments	Wählen Sie zwei nicht parallele gerade Segmente
+@msg	Choose two nonzero angle arms	Wählen Sie zwei Winkelschenkel mit einer Länge ungleich null
+@msg	Dimension point is outside the canvas	Der Bemaßungspunkt liegt außerhalb der Arbeitsfläche
+@msg	Dimension size is outside its supported range	Die Bemaßungsgröße liegt außerhalb des unterstützten Bereichs
+@msg	First measured segment no longer exists	Das erste gemessene Segment existiert nicht mehr
+@msg	Invalid dimension distance	Ungültiger Bemaßungsabstand
+@msg	Invalid dimension font name	Ungültiger Schriftname für die Bemaßung
+@msg	Invalid drawing scale	Ungültiger Zeichnungsmaßstab
+@msg	Invalid real scale	Ungültiger realer Maßstab
+@msg	Measured anchor no longer exists	Der gemessene Ankerpunkt existiert nicht mehr
+@msg	Measured path no longer exists	Der gemessene Pfad existiert nicht mehr
+@msg	Measured segment no longer exists	Das gemessene Segment existiert nicht mehr
+@msg	Non-finite dimension	Die Bemaßung ist keine endliche Zahl
+@msg	Scale must be drawing:real, for example 1:10	Der Maßstab muss Zeichnung:Realität sein, zum Beispiel 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Das Maßstabsverhältnis muss zwischen 1:1000000 und 1000000:1 liegen
+@msg	Second measured segment no longer exists	Das zweite gemessene Segment existiert nicht mehr
+@msg	Unknown dimension mode	Unbekannter Bemaßungsmodus
+@msg	Unknown dimension style	Unbekannter Bemaßungsstil
+@msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung bleiben die Schnittseiten offen.

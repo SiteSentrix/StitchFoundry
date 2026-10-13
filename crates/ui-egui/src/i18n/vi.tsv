@@ -4362,6 +4362,43 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
-
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	 a highlighted edge, then click to place its dimension | 	 một cạnh được tô sáng, rồi nhấp để đặt kích thước của nó | 
+	 cancels | Double-click the tool for options	 để hủy | Nhấp đúp vào công cụ để mở tùy chọn
+	All selected edges	Tất cả các cạnh đã chọn
+	Create Dimension	Tạo kích thước
+	Dimension Selected Paths	Ghi kích thước cho các đường đã chọn
+	Dimension Tool	Công cụ Kích thước
+	Dimension Tool Options	Tùy chọn công cụ Kích thước
+	Display	Hiển thị
+	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Bản vẽ : kích thước thực — 1:10 nghĩa là 1 cm trên trang tương ứng với 10 cm.
+	Font Family:	Họ phông chữ:
+	Font Style:	Kiểu phông chữ:
+	Precision:	Độ chính xác:
+	Preview (1 cm on page)	Xem trước (1 cm trên trang)
+	Update Dimensions	Cập nhật kích thước
+@msg	Angles require two straight segments	Góc cần hai đoạn thẳng
+@msg	Choose a circular path	Hãy chọn một đường tròn
+@msg	Choose a length unit and precision from 0 to 6	Hãy chọn đơn vị độ dài và độ chính xác từ 0 đến 6
+@msg	Choose two different points	Hãy chọn hai điểm khác nhau
+@msg	Choose two non-parallel straight segments	Hãy chọn hai đoạn thẳng không song song
+@msg	Choose two nonzero angle arms	Hãy chọn hai cạnh góc có độ dài khác 0
+@msg	Dimension point is outside the canvas	Điểm kích thước nằm ngoài vùng vẽ
+@msg	Dimension size is outside its supported range	Kích thước nằm ngoài phạm vi được hỗ trợ
+@msg	First measured segment no longer exists	Đoạn được đo thứ nhất không còn tồn tại
+@msg	Invalid dimension distance	Khoảng cách kích thước không hợp lệ
+@msg	Invalid dimension font name	Tên phông chữ của kích thước không hợp lệ
+@msg	Invalid drawing scale	Tỷ lệ bản vẽ không hợp lệ
+@msg	Invalid real scale	Tỷ lệ thực không hợp lệ
+@msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
+@msg	Measured path no longer exists	Đường được đo không còn tồn tại
+@msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
+@msg	Non-finite dimension	Kích thước không phải là số hữu hạn
+@msg	Scale must be drawing:real, for example 1:10	Tỷ lệ phải có dạng bản vẽ:thực tế, ví dụ 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Tỷ lệ phải nằm trong khoảng 1:1000000 đến 1000000:1
+@msg	Second measured segment no longer exists	Đoạn được đo thứ hai không còn tồn tại
+@msg	Unknown dimension mode	Chế độ kích thước không xác định
+@msg	Unknown dimension style	Kiểu kích thước không xác định
+@msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên vẫn mở.

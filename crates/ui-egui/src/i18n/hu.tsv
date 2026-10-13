@@ -4776,5 +4776,43 @@ imageTrace	Outline	Körvonal
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	 a highlighted edge, then click to place its dimension | 	 egy kiemelt élre, majd kattintson a méretvonal elhelyezéséhez | 
+	 cancels | Double-click the tool for options	 – mégse | Kattintson duplán az eszközre a beállításokért
+	All selected edges	Minden kijelölt él
+	Create Dimension	Méretvonal létrehozása
+	Dimension Selected Paths	Kijelölt útvonalak méretezése
+	Dimension Tool	Méretezés eszköz
+	Dimension Tool Options	Méretezés eszköz beállításai
+	Display	Megjelenítés
+	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Rajz : valós méret — 1:10 azt jelenti, hogy az oldalon 1 cm 10 cm-nek felel meg.
+	Font Family:	Betűcsalád:
+	Font Style:	Betűstílus:
+	Precision:	Pontosság:
+	Preview (1 cm on page)	Előnézet (1 cm az oldalon)
+	Update Dimensions	Méretek frissítése
+@msg	Angles require two straight segments	A szöghöz két egyenes szakasz kell
+@msg	Choose a circular path	Válassz kör alakú útvonalat
+@msg	Choose a length unit and precision from 0 to 6	Válassz hosszegységet és 0–6 közötti pontosságot
+@msg	Choose two different points	Válassz két különböző pontot
+@msg	Choose two non-parallel straight segments	Válassz két nem párhuzamos egyenes szakaszt
+@msg	Choose two nonzero angle arms	Válassz két nem nulla hosszúságú szögszárat
+@msg	Dimension point is outside the canvas	A méretvonal pontja a vásznon kívül esik
+@msg	Dimension size is outside its supported range	A méret a támogatott tartományon kívül esik
+@msg	First measured segment no longer exists	Az első mért szakasz már nem létezik
+@msg	Invalid dimension distance	Érvénytelen méretezési távolság
+@msg	Invalid dimension font name	Érvénytelen méretezési betűtípusnév
+@msg	Invalid drawing scale	Érvénytelen rajzlépték
+@msg	Invalid real scale	Érvénytelen valós lépték
+@msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Measured path no longer exists	A mért útvonal már nem létezik
+@msg	Measured segment no longer exists	A mért szakasz már nem létezik
+@msg	Non-finite dimension	Nem véges méret
+@msg	Scale must be drawing:real, for example 1:10	A léptéknek rajz:valós alakúnak kell lennie, például 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	A lépték aránya 1:1000000 és 1000000:1 között lehet
+@msg	Second measured segment no longer exists	A második mért szakasz már nem létezik
+@msg	Unknown dimension mode	Ismeretlen méretezési mód
+@msg	Unknown dimension style	Ismeretlen méretezési stílus
+@msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.

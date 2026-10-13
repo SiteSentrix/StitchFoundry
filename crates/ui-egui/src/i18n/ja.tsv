@@ -4374,6 +4374,47 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+# Dimension tool (linked dimension annotations)
+	 a highlighted edge, then click to place its dimension | 	：ハイライトされたエッジをクリックし、もう一度クリックして寸法を配置 | 
+	 cancels | Double-click the tool for options	：キャンセル | ツールをダブルクリックでオプション
+	All selected edges	選択したすべてのエッジ
+	Create Dimension	寸法を作成
+	Dimension Selected Paths	選択したパスに寸法を記入
+	Dimension Tool	寸法ツール
+	Dimension Tool Options	寸法ツールオプション
+	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	図面 : 実寸 — 1:10 は、ページ上の 1 cm が実際の 10 cm を表します。
+	Font Family:	フォントファミリー:
+	Font Style:	フォントスタイル:
+	Precision:	精度:
+	Preview (1 cm on page)	プレビュー (ページ上の 1 cm)
+	Update Dimensions	寸法を更新
+	Display	表示
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	角度には直線セグメントが 2 つ必要です
+@msg	Choose a circular path	円形のパスを選択してください
+@msg	Choose a length unit and precision from 0 to 6	長さの単位と 0〜6 の精度を選択してください
+@msg	Choose two different points	異なる 2 点を選択してください
+@msg	Choose two non-parallel straight segments	平行でない直線セグメントを 2 つ選択してください
+@msg	Choose two nonzero angle arms	長さが 0 でない角度の辺を 2 つ選択してください
+@msg	Dimension point is outside the canvas	寸法の点がカンバスの外にあります
+@msg	Dimension size is outside its supported range	寸法のサイズがサポート範囲外です
+@msg	First measured segment no longer exists	最初の測定セグメントはもう存在しません
+@msg	Invalid dimension distance	寸法の距離が無効です
+@msg	Invalid dimension font name	寸法のフォント名が無効です
+@msg	Invalid drawing scale	図面の縮尺が無効です
+@msg	Invalid real scale	実寸の縮尺が無効です
+@msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
+@msg	Measured path no longer exists	測定したパスはもう存在しません
+@msg	Measured segment no longer exists	測定したセグメントはもう存在しません
+@msg	Non-finite dimension	寸法が有限ではありません
+@msg	Scale must be drawing:real, for example 1:10	縮尺は 図面:実寸 の形式にしてください (例: 1:10)
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	縮尺の比率は 1:1000000 から 1000000:1 の間にしてください
+@msg	Second measured segment no longer exists	2 番目の測定セグメントはもう存在しません
+@msg	Unknown dimension mode	寸法のモードが不明です
+@msg	Unknown dimension style	寸法のスタイルが不明です
+@msg	Unknown unit	単位が不明です
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面は開いたままです。

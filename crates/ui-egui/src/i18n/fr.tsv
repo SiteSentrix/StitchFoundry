@@ -4809,5 +4809,43 @@ theme	Appearance	Apparence
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	 a highlighted edge, then click to place its dimension | 	 sur un bord en surbrillance, puis cliquez pour placer sa cote | 
+	 cancels | Double-click the tool for options	 pour annuler | Double-cliquez sur l’outil pour ses options
+	All selected edges	Tous les bords sélectionnés
+	Create Dimension	Créer une cote
+	Dimension Selected Paths	Coter les tracés sélectionnés
+	Dimension Tool	Outil Cotation
+	Dimension Tool Options	Options de l’outil Cotation
+	Display	Affichage
+	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Dessin : taille réelle — 1:10 signifie que 1 cm sur la page représente 10 cm.
+	Font Family:	Famille de polices :
+	Font Style:	Style de police :
+	Precision:	Précision :
+	Preview (1 cm on page)	Aperçu (1 cm sur la page)
+	Update Dimensions	Mettre à jour les cotes
+@msg	Angles require two straight segments	Les angles nécessitent deux segments droits
+@msg	Choose a circular path	Choisissez un tracé circulaire
+@msg	Choose a length unit and precision from 0 to 6	Choisissez une unité de longueur et une précision de 0 à 6
+@msg	Choose two different points	Choisissez deux points différents
+@msg	Choose two non-parallel straight segments	Choisissez deux segments droits non parallèles
+@msg	Choose two nonzero angle arms	Choisissez deux côtés d’angle de longueur non nulle
+@msg	Dimension point is outside the canvas	Le point de cote est en dehors de la zone de travail
+@msg	Dimension size is outside its supported range	La taille de la cote est hors de la plage prise en charge
+@msg	First measured segment no longer exists	Le premier segment mesuré n’existe plus
+@msg	Invalid dimension distance	Distance de cote non valide
+@msg	Invalid dimension font name	Nom de police de cote non valide
+@msg	Invalid drawing scale	Échelle du dessin non valide
+@msg	Invalid real scale	Échelle réelle non valide
+@msg	Measured anchor no longer exists	Le point d’ancrage mesuré n’existe plus
+@msg	Measured path no longer exists	Le tracé mesuré n’existe plus
+@msg	Measured segment no longer exists	Le segment mesuré n’existe plus
+@msg	Non-finite dimension	Cote non finie
+@msg	Scale must be drawing:real, for example 1:10	L’échelle doit être dessin:réel, par exemple 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Le rapport d’échelle doit être compris entre 1:1000000 et 1000000:1
+@msg	Second measured segment no longer exists	Le second segment mesuré n’existe plus
+@msg	Unknown dimension mode	Mode de cote inconnu
+@msg	Unknown dimension style	Style de cote inconnu
+@msg	Unknown unit	Unité inconnue
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Ferme les extrémités circulaires des profils ouverts. Les rotations partielles conservent leurs faces de coupe ouvertes.

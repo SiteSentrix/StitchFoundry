@@ -17,6 +17,7 @@ mod color_picker;
 mod command;
 pub mod confirm;
 pub mod corners;
+pub mod dimension;
 mod document_setup;
 pub mod dxf_import;
 pub mod dxf_options;
@@ -212,6 +213,7 @@ macro_rules! registry {
 }
 
 registry! {
+    DimensionOptions: [dimension::KIND] => dimension::SPEC,
     NewDocument: [new_document::KIND] => new_document::SPEC,
     Shape: ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment", "rectangularGrid", "polarGrid"] => shapes::SPEC,
     Transform: ["move", "rotate", "scale", "reflect", "shear"] => transform::SPEC,
