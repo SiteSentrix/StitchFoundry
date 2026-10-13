@@ -1,5 +1,7 @@
 //! Hit testing over the document tree.
 
+use std::collections::HashSet;
+
 use vectorcraft_geom::hit::{fill_contains, stroke_contains};
 use vectorcraft_geom::{Point, Rect};
 
@@ -83,6 +85,77 @@ pub fn hit_test_visible(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit
 /// first: what clicks there select, one below the other (Cmd/Ctrl-click selects behind).
 pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
     let opt = HitOptions { scope: scope.or(opt.scope), ..opt };
+    // Normally one hit test per *object* suffices: layers and sublayers aren't selectable,
+    // while a group (including a clipping group) is selected as one object. Repeatedly
+    // searching the full tree for each hit made a stack of n overlapping paths O(n^2).
+    // Isolation and Edit Contents change where selection groups begin; keep the original
+    // traversal for those cases rather than change their Select Behind semantics.
+    if opt.scope.is_some() {
+        return objects_at_repeated(doc, p, opt, scope);
+    }
+    let mut tops = Vec::new();
+    let mut seen = HashSet::new();
+    for layer in doc.layers.iter().rev() {
+        // Malformed files may contain non-layer roots; let the general traversal handle them.
+        if !layer.is_layer() {
+            return objects_at_repeated(doc, p, opt, scope);
+        }
+        if !layer.visible || layer.locked || layer.is_template() || doc.pattern_edit.as_ref().is_some_and(|e| e.layer != layer.id) {
+            continue;
+        }
+        if !objects_at_layer(layer, p, opt, &mut tops, &mut seen) {
+            // An envelope in Edit Contents may expose objects *within* a top-level group.
+            // The repeated traversal handles that mixed hierarchy precisely.
+            return objects_at_repeated(doc, p, opt, scope);
+        }
+    }
+    tops
+}
+
+/// One traversal through a layer and its sublayers. Each selectable object's subtree is
+/// inspected once (only until its first hit). `false` asks the caller to use the general
+/// algorithm for an envelope whose contents are currently being edited.
+fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, tops: &mut Vec<NodeId>, seen: &mut HashSet<NodeId>) -> bool {
+    let Some(children) = layer.children() else { return true };
+    if layer.clips() && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
+        return true;
+    }
+    let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
+    for (i, c) in children.iter().enumerate().rev() {
+        if !may_hit(layer, i, c, p, opt, true) || seen.contains(&c.id) {
+            continue;
+        }
+        if c.is_layer() {
+            if !objects_at_layer(c, p, opt, tops, seen) {
+                return false;
+            }
+            continue;
+        }
+        // Editing an envelope selects its contents rather than the containing object. Even
+        // when nested in a group, the old traversal may select both a member and the group.
+        if c.is_container() {
+            let mut editing = false;
+            c.walk(&mut |n| editing |= edits_contents(n));
+            if editing {
+                return false;
+            }
+        }
+        let skip = |id| seen.contains(&id);
+        let mut chain = Vec::new();
+        let hit = match &c.kind {
+            NodeKind::Group { .. } => hit_children(c, p, opt, &skip, &mut chain, true).is_some(),
+            NodeKind::Blend { .. } => hit_children(c, p, opt, &skip, &mut chain, true).is_some() || hit_leaf(c, p, opt).is_some(),
+            _ => hit_leaf(c, p, opt).is_some(),
+        };
+        if hit && seen.insert(c.id) {
+            tops.push(c.id);
+        }
+    }
+    true
+}
+
+/// The general selection order also handles isolation and nested Edit Contents.
+fn objects_at_repeated(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
     let mut tops: Vec<NodeId> = vec![];
     // Each round leaves out the objects found so far (and everything inside them).
     while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id), true).map(|h| h.top_object(scope)) {
@@ -150,6 +223,22 @@ fn clip_contains(clip: &Node, p: Point) -> bool {
     clip.clip_shapes(Some(&frame)).iter().any(|(bp, rule)| fill_contains(bp, *rule, p))
 }
 
+/// Can a click at `p` hit `c`, the child `i` of `parent`, or something inside it? Not when it is
+/// hidden, when it can't be edited (`editable_only`), when it is the part of a Shaper group that
+/// isn't shown, or when `p` is outside its reach.
+fn may_hit(parent: &Node, i: usize, c: &Node, p: Point, opt: HitOptions, editable_only: bool) -> bool {
+    let source_isolated = |n: &Node| n.children().and_then(|children| children.first()).is_some_and(|source| Some(source.id) == opt.scope);
+    if parent.extras().shaper.is_some() && (i == 0) != source_isolated(parent) {
+        return false;
+    }
+    // Read-only samples can read locked/template art; hidden art never participates.
+    if !c.visible || editable_only && (c.locked || c.is_template()) {
+        return false;
+    }
+    // (An envelope's content sits where it was, not where the envelope draws it.)
+    edits_contents(c) || c.extras().shaper.is_some() && source_isolated(c) || c.reach_bounds().is_none_or(|b| b.inflate(opt.tol, opt.tol).contains(p))
+}
+
 fn hit_children(
     parent: &Node,
     p: Point,
@@ -167,22 +256,7 @@ fn hit_children(
         return None;
     }
     for (i, c) in children.iter().enumerate().rev() {
-        if parent.extras().shaper.is_some() {
-            let construction = children.first().is_some_and(|source| Some(source.id) == opt.scope);
-            if (i == 0) != construction {
-                continue;
-            }
-        }
-        // Read-only samples can read locked/template art; hidden art never participates.
-        if !c.visible || editable_only && (c.locked || c.is_template()) || skip(c.id) {
-            continue;
-        }
-        // (An envelope's content sits where it was, not where the envelope draws it.)
-        if !(edits_contents(c)
-            || c.extras().shaper.is_some() && c.children().and_then(|children| children.first()).is_some_and(|source| Some(source.id) == opt.scope))
-            && let Some(b) = c.reach_bounds()
-            && !b.inflate(opt.tol, opt.tol).contains(p)
-        {
+        if !may_hit(parent, i, c, p, opt, editable_only) || skip(c.id) {
             continue;
         }
         chain.push(c.id);
@@ -617,6 +691,146 @@ world",
         assert!(hit_test(&d, Point::new(5.0, 25.0), HitOptions { scope: Some(g), ..HitOptions::default() }).is_none());
         assert_eq!(at(5.0, None), vec![a_id]);
         assert!(at(90.0, None).is_empty());
+    }
+
+    /// Many overlapping paths: Select Behind must list each exactly once, front to back.
+    /// This is quadratic with repeated full-document hit tests, but linear in tree size with
+    /// the per-object walk.
+    #[test]
+    fn objects_at_large_overlapping_stack() {
+        let mut d = Document::new(100.0, 100.0);
+        let layer = d.layers[0].id;
+        let mut ids = Vec::new();
+        for _ in 0..256 {
+            let id = d.alloc_id();
+            d.insert(Some(layer), usize::MAX, Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default_art())).unwrap();
+            ids.push(id);
+        }
+        ids.reverse();
+        assert_eq!(objects_at(&d, Point::new(25.0, 25.0), HitOptions::default(), None), ids);
+    }
+
+    /// Match the original skip-and-retest algorithm for normal groups, sublayers, clipping,
+    /// invisibility, and path/outline-only settings.
+    #[test]
+    fn objects_at_one_pass_matches_repeated_hits() {
+        let mut d = Document::new(200.0, 200.0);
+        let layer = d.layers[0].id;
+        let add = |d: &mut Document, parent, bounds| {
+            let id = d.alloc_id();
+            d.insert(Some(parent), usize::MAX, Node::path(id, shapes::rectangle(bounds), Appearance::default_art())).unwrap();
+            id
+        };
+        add(&mut d, layer, Rect::new(0.0, 0.0, 60.0, 60.0));
+        let sub = d.alloc_id();
+        d.insert(Some(layer), usize::MAX, Node::layer(sub, "Sublayer", crate::LayerColor::Preset(2))).unwrap();
+        add(&mut d, sub, Rect::new(0.0, 0.0, 60.0, 60.0));
+        let group = d.alloc_id();
+        d.insert(Some(layer), usize::MAX, Node::group(group, Vec::new())).unwrap();
+        add(&mut d, group, Rect::new(0.0, 0.0, 60.0, 60.0));
+        add(&mut d, group, Rect::new(5.0, 5.0, 60.0, 60.0));
+        let clip = d.alloc_id();
+        let mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(5.0, 5.0, 45.0, 45.0)), Appearance::default_art());
+        let content = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 80.0, 80.0)), Appearance::default_art());
+        let mut clipping = Node::group(clip, vec![Arc::new(mask), Arc::new(content)]);
+        clipping.set_clips(true);
+        d.insert(Some(layer), usize::MAX, clipping).unwrap();
+        for (point, opt) in [
+            (Point::new(25.0, 25.0), HitOptions::default()),
+            (Point::new(3.0, 25.0), HitOptions::default()),
+            (Point::new(25.0, 25.0), HitOptions { outline: true, ..Default::default() }),
+            (Point::new(6.0, 25.0), HitOptions { path_only: true, ..Default::default() }),
+            (Point::new(100.0, 100.0), HitOptions::default()),
+        ] {
+            assert_eq!(objects_at(&d, point, opt, None), objects_at_repeated(&d, point, opt, None), "point={point:?}, opt={opt:?}");
+        }
+        if let NodeKind::Layer { preview, .. } = &mut d.node_mut(sub).unwrap().kind {
+            *preview = false;
+        }
+        let p = Point::new(25.0, 25.0);
+        let opt = HitOptions::default();
+        assert_eq!(objects_at(&d, p, opt, None), objects_at_repeated(&d, p, opt, None));
+        d.node_mut(group).unwrap().locked = true;
+        assert_eq!(objects_at(&d, p, opt, None), objects_at_repeated(&d, p, opt, None));
+    }
+
+    /// Documents built at random (nested groups, sublayers, clipping groups, compound paths, blends
+    /// of nothing, hidden and locked objects, outline layers): Select Behind lists the same objects
+    /// in the same order as the hit test repeated over what is left.
+    #[test]
+    fn objects_at_matches_repeated_hits_on_random_documents() {
+        let mut seed = 0x9e37_79b9_u32;
+        let mut next = move |n: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed % n
+        };
+        fn fill(d: &mut Document, parent: NodeId, depth: u32, next: &mut impl FnMut(u32) -> u32) {
+            for _ in 0..2 + next(4) {
+                let id = d.alloc_id();
+                let (x, y) = (f64::from(next(60)), f64::from(next(60)));
+                let rect = Rect::new(x, y, x + 10.0 + f64::from(next(50)), y + 10.0 + f64::from(next(50)));
+                let appearance = if next(4) == 0 { Appearance::default() } else { Appearance::default_art() };
+                let mut n = match next(if depth < 3 { 8 } else { 4 }) {
+                    4 | 5 => Node::group(id, Vec::new()),
+                    6 => Node::layer(id, "Sublayer", crate::LayerColor::Preset(2)),
+                    7 => {
+                        let mut g = Node::group(id, Vec::new());
+                        g.set_clips(true);
+                        g
+                    }
+                    _ => Node::path(id, shapes::rectangle(rect), appearance),
+                };
+                n.visible = next(8) != 0;
+                n.locked = next(8) == 0;
+                if let NodeKind::Layer { preview, .. } = &mut n.kind {
+                    *preview = next(3) != 0;
+                }
+                let container = n.is_container();
+                // A sublayer belongs in a layer; in a group it is a group like another to the hit test.
+                d.insert(Some(parent), usize::MAX, n).unwrap();
+                if container {
+                    fill(d, id, depth + 1, next);
+                }
+            }
+        }
+        for round in 0..200 {
+            let mut d = Document::new(120.0, 120.0);
+            let layer = d.layers[0].id;
+            fill(&mut d, layer, 0, &mut next);
+            for _ in 0..12 {
+                let p = Point::new(f64::from(next(120)), f64::from(next(120)));
+                let opt = HitOptions { outline: next(5) == 0, path_only: next(5) == 0, ..Default::default() };
+                assert_eq!(objects_at(&d, p, opt, None), objects_at_repeated(&d, p, opt, None), "round {round}, {p:?}, {opt:?}");
+            }
+        }
+    }
+
+    /// Edit Contents can expose descendants of a top-level group: preserve the original
+    /// selection order by falling back to the general hit traversal.
+    #[test]
+    fn objects_at_edit_contents_uses_general_order() {
+        let mut d = Document::new(100.0, 100.0);
+        let layer = d.layers[0].id;
+        let inner = |id| Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default_art()));
+        let (a, b) = (d.alloc_id(), d.alloc_id());
+        let e = Node::new(
+            d.alloc_id(),
+            NodeKind::Envelope {
+                content: vec![inner(a), inner(b)],
+                kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true }),
+                fidelity: 100.0,
+                editing: true,
+                options: Default::default(),
+                frame: Box::new(vectorcraft_geom::Affine::IDENTITY),
+            },
+        );
+        d.insert(Some(layer), usize::MAX, e).unwrap();
+        let p = Point::new(25.0, 25.0);
+        let opt = HitOptions::default();
+        assert_eq!(objects_at(&d, p, opt, None), objects_at_repeated(&d, p, opt, None));
+        assert_eq!(objects_at(&d, p, opt, None), vec![b, a]);
     }
 
     #[test]
