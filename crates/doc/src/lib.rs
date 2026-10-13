@@ -1465,6 +1465,14 @@ impl Document {
     pub fn new_graphic_style_name(&self) -> String {
         (self.graphic_styles.len() + 1..).map(|i| format!("Graphic Style {i}")).find(|n| self.graphic_style(n).is_none()).unwrap_or_default()
     }
+    /// `base`, or the first free "`base` N" (N from 2) when a symbol already has that name.
+    pub fn unique_symbol_name(&self, base: &str) -> String {
+        let taken = |n: &str| self.symbols.iter().any(|s| s.name == n);
+        if !taken(base) {
+            return base.to_string();
+        }
+        (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
+    }
 }
 
 fn default_graphic_styles() -> Vec<GraphicStyle> {

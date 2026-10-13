@@ -155,7 +155,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
         if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0).clicked() {
-            app.run("symbol.new", json!({})).ok();
+            app.run("ui.symbolOptions", json!({})).ok();
         }
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Symbol"), false, sel.is_some(), 24.0).clicked()
             && let Some(n) = &sel
@@ -171,7 +171,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
     let items: [(&str, bool, &str, Value); 9] = [
-        (tl!("New Symbol…"), has_sel, "symbol.new", json!({})),
+        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({})),
         (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone()),
         (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
         (tl!("Delete Symbol"), sel.is_some(), "symbol.delete", name.clone()),
@@ -244,5 +244,38 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
         assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol(names[0].clone())));
+    }
+
+    /// One headless frame of the panel menu; returns its painted labels.
+    fn menu_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, Rect)> {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+        out.textures_delta.clear();
+        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn new_symbol_asks_for_symbol_options_before_making_the_symbol() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let labels = menu_frame(&ctx, &mut app, vec![]);
+        let item = labels.iter().find(|(t, _)| t.trim() == "New Symbol…").map(|(_, r)| r.center()).expect("New Symbol… in the menu");
+        menu_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(item), button(item, true)]);
+        menu_frame(&ctx, &mut app, vec![button(item, false)]);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("symbolOptions"));
+        assert!(symbols(&mut app).is_empty(), "no symbol before OK");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "New Symbol");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        // The next one is offered a name no symbol has, and OK keeps the name typed.
+        app.run("shape.rectangle", json!({"x": 60, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.run("ui.symbolOptions", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "New Symbol 2");
+        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Badge"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), ["New Symbol", "Badge"]);
     }
 }
