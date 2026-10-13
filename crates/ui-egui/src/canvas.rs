@@ -2558,6 +2558,130 @@ mod tests {
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the tool drew nothing");
     }
 
+    #[test]
+    fn new_ruler_guides_follow_alt_through_preview_release_and_undo() {
+        use egui::{Event, Modifiers};
+        for source_vertical in [false, true] {
+            for initially_alt in [false, true] {
+                let mut app = VectorcraftApp::new(Session::new(), Default::default());
+                app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+                app.session.execute("document.setRulerOrigin", &json!({"x": 17, "y": 23})).unwrap();
+                app.ui.view.rulers = true;
+                app.ui.view.smart_guides = false;
+                app.ui.view.snap_to_point = false;
+                app.select_tool("rectangle");
+                let ctx = egui::Context::default();
+                frame(&mut app, &ctx, vec![]);
+                let rect = app.canvas_rect.unwrap();
+                let xf = Xf::new(rect, app.view().unwrap());
+                let from =
+                    if source_vertical { pos2(rect.left() - RULER / 2.0, rect.center().y) } else { pos2(rect.center().x, rect.top() - RULER / 2.0) };
+                let at = xf.to_screen(Point::new(80.0, 120.0));
+                assert!(rect.contains(at));
+                let held = |alt| if alt { Modifiers::ALT } else { Modifiers::NONE };
+                let button = |pos, pressed, alt| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: held(alt) };
+                let before = app.session.active().unwrap().doc.clone();
+                let undo = app.session.active().unwrap().history.undo.len();
+                frame(&mut app, &ctx, vec![Event::ModifiersChanged(held(initially_alt)), Event::PointerMoved(from)]);
+                frame(&mut app, &ctx, vec![button(from, true, initially_alt)]);
+                frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+                let assert_guide = |app: &VectorcraftApp, alt: bool, pos: Point| {
+                    let guides = &app.session.active().unwrap().doc.guides;
+                    assert_eq!(guides.len(), 1);
+                    assert_eq!(guides[0].vertical, source_vertical != alt);
+                    let expected = if source_vertical != alt { pos.x } else { pos.y };
+                    assert!((guides[0].pos - expected).abs() < 1e-4, "{:?}, expected {expected}", guides[0]);
+                    assert_eq!(guides[0].artboard, None);
+                };
+                assert_guide(&app, initially_alt, Point::new(80.0, 120.0));
+                // Modifier changes with no pointer movement refresh the existing preview.
+                for alt in [!initially_alt, initially_alt] {
+                    frame(&mut app, &ctx, vec![Event::ModifiersChanged(held(alt))]);
+                    assert_guide(&app, alt, Point::new(80.0, 120.0));
+                    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+                }
+                // Equal coordinates must not hide an orientation change in the preview.
+                let equal = xf.to_screen(Point::new(120.0, 120.0));
+                frame(&mut app, &ctx, vec![Event::PointerMoved(equal)]);
+                frame(&mut app, &ctx, vec![Event::ModifiersChanged(held(!initially_alt))]);
+                assert_guide(&app, !initially_alt, Point::new(120.0, 120.0));
+                let release = Point::new(147.0, 183.0);
+                let to = xf.to_screen(release);
+                frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::ALT), Event::PointerMoved(to), button(to, false, true)]);
+                assert_guide(&app, true, release);
+                let st = app.session.active().unwrap();
+                assert_eq!(st.history.undo.len(), undo + 1);
+                assert_eq!(st.history.undo.last().unwrap().label, "New Guide");
+                assert_eq!(st.doc.ruler_origin, before.ruler_origin);
+                assert_eq!(st.doc.art_bounds(), before.art_bounds(), "the rectangle tool never drew");
+                let committed = st.doc.clone();
+                // Canvas guides still span the viewport after changing orientation.
+                let painted = shapes(&mut app, &ctx);
+                let window = app.canvas_rect.unwrap();
+                let position = Xf::new(window, app.view().unwrap()).to_screen(release);
+                let ends = if source_vertical {
+                    [pos2(window.left(), position.y), pos2(window.right(), position.y)]
+                } else {
+                    [pos2(position.x, window.top()), pos2(position.x, window.bottom())]
+                };
+                assert!(painted.iter().any(|s| matches!(s, Shape::LineSegment { points, .. }
+                    if (points[0] - ends[0]).length() < 0.01 && (points[1] - ends[1]).length() < 0.01)));
+                app.session.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(&*app.session.active().unwrap().doc, &*before);
+                app.session.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(&*app.session.active().unwrap().doc, &*committed);
+            }
+        }
+    }
+
+    #[test]
+    fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
+        use egui::{Event, Modifiers};
+        for source_vertical in [false, true] {
+            for tool in ["rectangle", "artboard"] {
+                let mut app = VectorcraftApp::new(Session::new(), Default::default());
+                app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+                app.session.execute("document.setRulerOrigin", &json!({"x": 17, "y": 23})).unwrap();
+                app.session.execute("shape.rectangle", &json!({"x": 40, "y": 50, "width": 20, "height": 30})).unwrap();
+                app.session.execute("edit.undo", &json!({})).unwrap();
+                app.ui.view.rulers = true;
+                app.ui.view.smart_guides = false;
+                app.ui.view.snap_to_point = false;
+                app.select_tool(tool);
+                let ctx = egui::Context::default();
+                frame(&mut app, &ctx, vec![]);
+                let rect = app.canvas_rect.unwrap();
+                let xf = Xf::new(rect, app.view().unwrap());
+                let from =
+                    if source_vertical { pos2(rect.left() - RULER / 2.0, rect.center().y) } else { pos2(rect.center().x, rect.top() - RULER / 2.0) };
+                let at = xf.to_screen(Point::new(80.0, 120.0));
+                let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::ALT };
+                let before = app.session.active().unwrap().doc.clone();
+                let history = |app: &VectorcraftApp| {
+                    let st = app.session.active().unwrap();
+                    (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+                };
+                let before_history = history(&app);
+                assert_eq!(before_history.1, 1);
+                frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::ALT), Event::PointerMoved(from)]);
+                frame(&mut app, &ctx, vec![button(from, true)]);
+                frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+                let guides = &app.session.active().unwrap().doc.guides;
+                assert_eq!(guides.len(), 1);
+                assert_eq!(guides[0].vertical, !source_vertical);
+                let artboard = (tool == "artboard").then_some(before.artboards[0].id);
+                assert_eq!(guides[0].artboard, artboard);
+                // Returning to the source ruler cancels the preview and keeps the existing Redo.
+                frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, false)]);
+                assert_eq!(&*app.session.active().unwrap().doc, &*before);
+                assert_eq!(history(&app), before_history);
+                app.session.execute("edit.redo", &json!({})).unwrap();
+                assert!(app.session.active().unwrap().doc.art_bounds().is_some());
+                assert!(app.session.active().unwrap().doc.guides.is_empty());
+            }
+        }
+    }
+
     /// #451: a guide dragged out of a ruler lands on the art's side midpoints (halving an
     /// artboard-sized rectangle) and on the artboard's edges; an artboard guide is drawn across
     /// its artboard only.

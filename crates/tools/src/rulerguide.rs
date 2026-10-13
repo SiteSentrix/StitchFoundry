@@ -110,13 +110,15 @@ impl GuideSnap {
 /// A guide dragged out of a ruler (a vertical one out of the left ruler), with any tool: it shows
 /// where the pointer is, snapped as a moved guide is, and is made where the button is released
 /// over the canvas (`guide.add`, previewed as it goes); taken off the canvas, it goes again.
+/// Alt swaps its orientation while the guide is dragged out of the ruler.
 pub struct NewGuide {
+    /// The source ruler's orientation, before Alt swaps it.
     vertical: bool,
     /// The artboard (index) it belongs to: an artboard guide.
     artboard: Option<usize>,
     snap: GuideSnap,
-    /// Where it shows (none off the canvas), and the pointer.
-    at: Option<f64>,
+    /// The preview's orientation and position (none off the canvas), and the pointer.
+    at: Option<(bool, f64)>,
     pointer: Point,
 }
 
@@ -133,18 +135,19 @@ impl NewGuide {
         let mut out = vec![];
         self.pointer = ev.pos;
         if on_canvas {
-            let at = self.snap.snap(cx, self.vertical, if self.vertical { ev.pos.x } else { ev.pos.y }, ev.mods.shift);
+            let vertical = self.vertical != ev.mods.alt;
+            let at = self.snap.snap(cx, vertical, if vertical { ev.pos.x } else { ev.pos.y }, ev.mods.shift);
             if self.at.is_none() {
                 out.push(Action::Begin("New Guide".into()));
             }
-            if self.at != Some(at) {
-                let mut p = json!({ "vertical": self.vertical, "pos": at });
+            if self.at != Some((vertical, at)) {
+                let mut p = json!({ "vertical": vertical, "pos": at });
                 if let Some(ab) = self.artboard {
                     p["artboard"] = json!(ab);
                 }
                 out.push(Action::Preview("guide.add".into(), p));
             }
-            self.at = Some(at);
+            self.at = Some((vertical, at));
         } else if self.at.take().is_some() {
             self.snap.snapped.clear();
             out.push(Action::Cancel);
@@ -157,7 +160,7 @@ impl NewGuide {
 
     /// While the guide shows: the target it snapped to and its position by the pointer.
     pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        self.at.map(|at| self.snap.overlays(cx, self.vertical, at, self.pointer)).unwrap_or_default()
+        self.at.map(|(vertical, at)| self.snap.overlays(cx, vertical, at, self.pointer)).unwrap_or_default()
     }
 }
 
@@ -425,6 +428,75 @@ mod tests {
         let mut g = NewGuide::new(&c, true, None);
         g.pointer(&c, &ev(PointerKind::Drag, 30.0, 40.0, m), true);
         assert_eq!(g.pointer(&c, &ev(PointerKind::Up, -5.0, 40.0, m), false), vec![Action::Cancel]);
+    }
+
+    #[test]
+    fn new_ruler_guide_alt_switches_axis_and_uses_the_release_position() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+        for source_vertical in [false, true] {
+            let mut g = NewGuide::new(&c, source_vertical, Some(0));
+            for (i, alt) in [false, true, false, true].into_iter().enumerate() {
+                let vertical = source_vertical != alt;
+                let at = if vertical { 80.0 } else { 120.0 };
+                let mut expected = vec![];
+                if i == 0 {
+                    expected.push(Action::Begin("New Guide".into()));
+                }
+                expected.push(Action::Preview("guide.add".into(), json!({"vertical": vertical, "pos": at, "artboard": 0})));
+                assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 80.0, 120.0, Mods { alt, ..Default::default() }), true), expected);
+                let label = format!("{}: {at:.2} pt", if vertical { "X" } else { "Y" });
+                assert!(matches!(g.overlays(&c).last(), Some(Overlay::Measure { text, .. }) if text == &label));
+            }
+            // Releasing at a new position with Alt released uses both final coordinates and modifiers.
+            let at = if source_vertical { 190.0 } else { 240.0 };
+            assert_eq!(
+                g.pointer(&c, &ev(PointerKind::Up, 190.0, 240.0, Mods::default()), true),
+                vec![Action::Preview("guide.add".into(), json!({"vertical": source_vertical, "pos": at, "artboard": 0})), Action::Commit]
+            );
+            assert!(g.overlays(&c).is_empty());
+        }
+    }
+
+    #[test]
+    fn new_ruler_guide_alt_switches_even_when_coordinates_are_equal() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+        for source_vertical in [false, true] {
+            let mut g = NewGuide::new(&c, source_vertical, None);
+            g.pointer(&c, &ev(PointerKind::Drag, 80.0, 80.0, Mods::default()), true);
+            for alt in [true, false] {
+                assert_eq!(
+                    g.pointer(&c, &ev(PointerKind::Drag, 80.0, 80.0, Mods { alt, ..Default::default() }), true),
+                    vec![Action::Preview("guide.add".into(), json!({"vertical": source_vertical != alt, "pos": 80.0}))]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn new_ruler_guide_alt_snaps_on_the_effective_axis() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let off = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+        let grid = ToolContext { snap_to_grid: true, ..off };
+        let pixel = ToolContext { snap_to_pixel: true, ..off };
+        let smart = cx(&d, &s, &p);
+        for (c, shift, x, y, expected_x, expected_y) in [
+            (&off, true, 223.0, 237.0, 225.0, 235.0),
+            (&grid, false, 226.0, 237.0, 225.0, 234.0),
+            (&pixel, false, 226.4, 237.6, 226.0, 238.0),
+            (&smart, false, 203.0, 102.0, 200.0, 100.0),
+        ] {
+            for source_vertical in [false, true] {
+                let mut g = NewGuide::new(c, source_vertical, None);
+                let actions = g.pointer(c, &ev(PointerKind::Drag, x, y, Mods { alt: true, shift, ..Default::default() }), true);
+                let expected = if source_vertical { expected_y } else { expected_x };
+                assert_eq!(actions.last(), Some(&Action::Preview("guide.add".into(), json!({"vertical": !source_vertical, "pos": expected}))));
+            }
+        }
     }
 
     /// With Smart Guides off, Snap to Point pulls a dragged guide onto the anchors (within its
