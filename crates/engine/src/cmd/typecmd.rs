@@ -392,7 +392,7 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
 
-fn justify_param(v: &str) -> Option<Justify> {
+pub(crate) fn justify_param(v: &str) -> Option<Justify> {
     Some(match v.to_ascii_lowercase().as_str() {
         "auto" => Justify::Auto,
         "left" => Justify::Left,
@@ -715,6 +715,51 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 mod area_tests {
     use super::*;
+
+    /// #1748: `text.create` takes `justify`; point type then lines up on its point (centred on
+    /// it, or ending there), and `text.setStyle` moves it the same way afterwards.
+    #[test]
+    fn text_create_justify_anchors_point_type_on_its_point() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+        let bounds = |s: &Session, id: &Value| {
+            let id = NodeId(id.as_u64().unwrap());
+            let st = s.doc().unwrap();
+            st.doc.bounds_of(&[id], false).unwrap()
+        };
+        let make = |s: &mut Session, extra: Value| {
+            let mut p = json!({"x": 300, "y": 100, "text": "Centred title", "size": 24});
+            for (k, v) in extra.as_object().unwrap() {
+                p[k] = v.clone();
+            }
+            s.execute("text.create", &p).unwrap()["id"].clone()
+        };
+        let id = make(&mut s, json!({}));
+        let left = bounds(&s, &id);
+        assert!(left.width() > 10.0, "{left:?}");
+        assert!((left.x0 - 300.0).abs() < 1.0, "left (the default) starts at x: {left:?}");
+        let id = make(&mut s, json!({"justify": "center"}));
+        let centre = bounds(&s, &id);
+        assert!((centre.center().x - 300.0).abs() < 0.5, "centred on x: {centre:?}");
+        assert!((centre.width() - left.width()).abs() < 0.5);
+        let right = make(&mut s, json!({"justify": "right"}));
+        let r = bounds(&s, &right);
+        assert!((r.x1 - 300.0).abs() < 1.0, "ends at x: {r:?}");
+        let got = |s: &Session, id: &Value| match &s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+            NodeKind::Text(t) => t.para.justify,
+            _ => panic!("not text"),
+        };
+        assert_eq!(got(&s, &right), Justify::Right);
+        // Changed afterwards, it moves to the same place as made centred.
+        s.execute("text.setStyle", &json!({"id": right, "justify": "center"})).unwrap();
+        let moved = bounds(&s, &right);
+        assert!((moved.center().x - 300.0).abs() < 0.5, "{moved:?}");
+        assert!(s.execute("text.create", &json!({"x": 0, "y": 0, "text": "a", "justify": "middle"})).is_err());
+        // Type in or on a path takes it too.
+        let path = s.execute("path.create", &json!({"d": "M50 300 L550 300"})).unwrap()["id"].clone();
+        let on = s.execute("text.createInPath", &json!({"path": path, "mode": "onPath", "text": "On a path", "justify": "center"})).unwrap();
+        assert_eq!(got(&s, &on["id"]), Justify::Center);
+    }
 
     #[test]
     fn kinsoku_set_is_set_per_paragraph_and_saved_only_when_not_hard() {

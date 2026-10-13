@@ -328,6 +328,27 @@ fn add_text_on_or_in_a_path_takes_its_color() {
     }
 }
 
+/// #1748: add_text's `justify` centres point type on (x, y) or ends it there.
+#[test]
+fn add_text_justify_anchors_point_type_on_x() {
+    let mut s = server();
+    let mut ids = Vec::new();
+    for (n, justify) in [(2, "left"), (3, "center"), (4, "right")] {
+        let r = call(&mut s, n, "add_text", json!({"text": "Title", "x": 300, "y": 100, "size": 24, "justify": justify}));
+        assert_eq!(r["isError"], false, "{r}");
+        ids.push(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].clone());
+    }
+    let doc: Value = serde_json::from_str(&text_of(&call(&mut s, 5, "inspect_document", json!({})))).unwrap();
+    let b = |id: &Value| {
+        let t = doc["layers"][0]["children"].as_array().unwrap().iter().find(|c| &c["id"] == id).unwrap();
+        (t["bounds"]["x"].as_f64().unwrap(), t["bounds"]["width"].as_f64().unwrap())
+    };
+    let ((l, lw), (c, cw), (r, rw)) = (b(&ids[0]), b(&ids[1]), b(&ids[2]));
+    assert!(lw > 10.0 && (l - 300.0).abs() < 1.0, "{l} {lw}");
+    assert!((c + cw / 2.0 - 300.0).abs() < 0.5, "{c} {cw}");
+    assert!((r + rw - 300.0).abs() < 1.0, "{r} {rw}");
+}
+
 /// save_file says it saves in the document's own format or the one the path's extension picks.
 #[test]
 fn save_file_describes_the_formats_it_writes() {
