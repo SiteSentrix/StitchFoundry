@@ -4939,3 +4939,11 @@ machine	Stop	Stopp
 	Prepare Image	Bild vorbereiten
 	Photo Stitch	Fotostich
 	Convert Stitches to Objects	Stiche in Objekte umwandeln
+	Colour Preview	Farbvorschau
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Eine geglättete Kopie des Bildes in diesen Farben, ohne Sprenkel, zum Digitalisieren oder Klicksticken
+	Colours	Farben
+	Coral	Koralle
+	background, not sewn	Hintergrund, nicht gestickt
+	thread changes	Garnwechsel
+	threads sewn	Garne gestickt
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Das Foto über sich selbst sticken: Zickzacklinien, ein mäandernder Stich oder seine Farben

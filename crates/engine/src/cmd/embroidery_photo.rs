@@ -29,16 +29,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Image Colours",
             [],
             None,
-            "{id?: an image (the selected one), colors?: 2–24 (8), chart?: a thread chart (the design's)} the image's main colours, most used first, each with how much of the image it covers and the nearest thread in the chart → {colors: [{color, share, thread: {color, name, code}}], chart}",
+            "{id?: an image (the selected one), colors?: 2–48 (8), chart?: a thread chart (the design's)} the image's main colours, most used first, each with how much of the image it covers and the nearest thread in the chart → {colors: [{color, share, thread: {color, name, code}}], chart}",
             has_doc,
             image_colors
+        ),
+        cmd!(
+            query "embroidery.image.preview",
+            "Colour Preview",
+            [],
+            None,
+            "{id?: an image (the selected one), colors?: 2–32 (6), removeBackground?: bool (true), size?: px 64–512 (240), chart?: (the design's)} the image reduced to that many thread colours as Auto-Digitize sees them (the same colour reduction and speck removal), small, to compare counts before digitizing: the background (white, or the colour round its edges) left out when removed → {dataBase64: PNG, width, height, colors: [{color, share, background, thread: {color, name, code}}], sewn, threadChanges}",
+            has_doc,
+            preview
         ),
         cmd!(
             "embroidery.image.prepare",
             "Prepare Image",
             ["Embroidery"],
             None,
-            "{id?: an image (the selected one), colors?: 0 or 2–32 (8; 0: keep them all), smooth?: px 0–5 (1: a median filter that keeps edges), clean?: passes 0–5 (1: specks and ragged edges given their neighbours' colour), replace?: bool (false: the prepared copy goes over the original, which stays)} an image made ready to digitize: smoothed, its colours reduced, its edges cleaned; the prepared copy is selected → {id, colors: [\"#rrggbb\"], width, height}",
+            "{id?: an image (the selected one), colors?: 0 or 2–48 (8; 0: keep them all), smooth?: px 0–5 (1: a median filter that keeps edges), clean?: passes 0–5 (1: specks and ragged edges given their neighbours' colour), replace?: bool (false: the prepared copy goes over the original, which stays)} an image made ready to digitize: smoothed, its colours reduced, its edges cleaned; the prepared copy is selected → {id, colors: [\"#rrggbb\"], width, height}",
             has_doc,
             prepare
         ),
@@ -47,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Photo Stitch",
             ["Embroidery"],
             None,
-            "{id?: an image (the selected one), mode?: lines|coral|color (lines), color?: \"#rrggbb\" the thread (lines, coral; black), invert?: bool (light thread on a dark fabric: the light parts sewn), contrast?: 0.3–3 (1), spacing?: mm between lines 0.6–5 (1.6; lines), angle?: degrees (0; lines), density?: 0.5–8 points a mm² where darkest (3; coral), colors?: 2–12 (6; color), chart?: (the design's; color), cell?: mm 0.5–5 (1; color), background?: bool (false: the colour covering most of the image's edges is left unsewn; color)} the image sewn as photo stitch over it: lines across it whose zigzag widens where it is darker (lines), one run meandering through points that crowd where it is darker (coral), or its main colours as short-stitch fills, the lightest first, matched to the chart's threads, its background left out (color) → {ids, mode, points?, colors?}",
+            "{id?: an image (the selected one), mode?: lines|coral|color (lines), color?: \"#rrggbb\" the thread (lines, coral; black), invert?: bool (light thread on a dark fabric: the light parts sewn), contrast?: 0.3–3 (1), spacing?: mm between lines 0.6–5 (1.6; lines), angle?: degrees (0; lines), density?: 0.5–8 points a mm² where darkest (3; coral), colors?: 2–32 (6; color), chart?: (the design's; color), cell?: mm 0.5–5 (1; color), background?: bool (false: the colour covering most of the image's edges is left unsewn; color)} the image sewn as photo stitch over it: lines across it whose zigzag widens where it is darker (lines), one run meandering through points that crowd where it is darker (coral), or its main colours as short-stitch fills, the lightest first, matched to the chart's threads, its background left out (color) → {ids, mode, points?, colors?}",
             has_doc,
             photo_stitch
         ),
@@ -212,7 +221,7 @@ fn number(p: &Value, key: &str, lo: f64, hi: f64, default: f64, cmd: &str) -> Re
 
 fn image_colors(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.image.colors";
-    let n = whole(p, "colors", 2, 24, 8, CMD)? as usize;
+    let n = whole(p, "colors", 2, 48, 8, CMD)? as usize;
     let pic = Picture::get(s, p, CMD)?;
     let chart = chart(s, p, CMD)?;
     let px = sample(&pic.raster, 40_000);
@@ -232,6 +241,85 @@ fn image_colors(s: &mut Session, p: &Value) -> Result<Value> {
         })
         .collect();
     Ok(json!({ "colors": colors, "chart": chart.name }))
+}
+
+fn preview(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.image.preview";
+    let n = whole(p, "colors", 2, 32, 6, CMD)? as u32;
+    let size = whole(p, "size", 64, 512, 240, CMD)? as u32;
+    let remove_bg = bool_or(p, "removeBackground", true);
+    let pic = Picture::get(s, p, CMD)?;
+    let chart = chart(s, p, CMD)?;
+    // the image at most `size` pixels across (each pixel the one under its middle)
+    let (rw, rh) = (pic.raster.width, pic.raster.height);
+    let k = (f64::from(size) / f64::from(rw.max(rh))).min(1.0);
+    let (w, h) = (((f64::from(rw) * k).round() as u32).max(1), ((f64::from(rh) * k).round() as u32).max(1));
+    let small = Raster::from_fn(w, h, |x, y| {
+        let sx = ((f64::from(x) + 0.5) / k) as u32;
+        let sy = ((f64::from(y) + 0.5) / k) as u32;
+        pic.raster.pixel(sx.min(rw - 1), sy.min(rh - 1))
+    });
+    // as Auto-Digitize traces it: its colour reduction, then specks merged (its noise, scaled)
+    let params = vectorcraft_trace::TraceParams {
+        mode: vectorcraft_trace::Mode::Color,
+        palette: vectorcraft_trace::Palette::Limited,
+        colors: n,
+        ignore_white: remove_bg,
+        ..Default::default()
+    };
+    let mut q = vectorcraft_trace::quantize(&small, &params);
+    let noise = ((16.0 * k * k).round() as usize).max(1);
+    vectorcraft_trace::denoise(&mut q.labels, w as usize, h as usize, noise);
+    let total = q.labels.iter().filter(|l| **l != vectorcraft_trace::TRANSPARENT).count().max(1);
+    let mut counts = vec![0usize; q.palette.len()];
+    let mut edge = vec![0usize; q.palette.len()];
+    let mut border = 0usize;
+    for (i, l) in q.labels.iter().enumerate() {
+        let (x, y) = (i % w as usize, i / w as usize);
+        let on_edge = x == 0 || y == 0 || x + 1 == w as usize || y + 1 == h as usize;
+        border += usize::from(on_edge);
+        if let Some(c) = counts.get_mut(*l as usize) {
+            *c += 1;
+            if on_edge && let Some(e) = edge.get_mut(*l as usize) {
+                *e += 1;
+            }
+        }
+    }
+    // left out as background: white, and the colour round most of the edges
+    let backdrop = edge.iter().enumerate().max_by_key(|(_, e)| **e).filter(|(_, e)| remove_bg && **e * 10 > border * 6).map(|(i, _)| i);
+    let is_bg = |i: usize| remove_bg && (backdrop == Some(i) || q.palette.get(i).is_some_and(|c| c.iter().all(|v| *v >= 245)));
+    let out = Raster::from_fn(w, h, |x, y| {
+        let l = q.labels.get((y * w + x) as usize).copied().unwrap_or(vectorcraft_trace::TRANSPARENT) as usize;
+        match q.palette.get(l) {
+            Some(c) if !is_bg(l) => [c[0], c[1], c[2], 255],
+            // left out: a light checker shows through
+            _ => {
+                let v = if (x / 6 + y / 6) % 2 == 0 { 236 } else { 250 };
+                [v, v, v, 255]
+            }
+        }
+    });
+    let mut order: Vec<usize> = (0..q.palette.len()).filter(|i| counts.get(*i).is_some_and(|c| *c > 0)).collect();
+    order.sort_by_key(|i| std::cmp::Reverse(counts.get(*i).copied().unwrap_or(0)));
+    let colors: Vec<Value> = order
+        .iter()
+        .filter_map(|i| {
+            let c = q.palette.get(*i)?;
+            let rgb = Rgb::new(c[0], c[1], c[2]);
+            let t = chart.threads.get(chart.nearest(rgb));
+            Some(json!({
+                "color": rgb.to_hex(),
+                "share": ((counts.get(*i).copied().unwrap_or(0) as f64 / total as f64) * 1000.0).round() / 1000.0,
+                "background": is_bg(*i),
+                "thread": t.map(|t| json!({ "color": t.color.to_hex(), "name": t.name, "code": t.code })),
+            }))
+        })
+        .collect();
+    let sewn = order.iter().filter(|i| !is_bg(**i)).count();
+    Ok(json!({
+        "dataBase64": vectorcraft_format::base64_encode(&out.encode_png()),
+        "width": w, "height": h, "colors": colors, "sewn": sewn, "threadChanges": sewn.saturating_sub(1),
+    }))
 }
 
 /// `r` with each channel the median of its `radius` neighbourhood (edges kept, noise gone).
@@ -326,9 +414,9 @@ fn majority(cells: &mut [Option<usize>], w: usize, h: usize, passes: u32) {
 
 fn prepare(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.image.prepare";
-    let n = whole(p, "colors", 0, 32, 8, CMD)? as usize;
+    let n = whole(p, "colors", 0, 48, 8, CMD)? as usize;
     if n == 1 {
-        return Err(bad(CMD, "`colors` is 0 (keep them all) or 2 to 32"));
+        return Err(bad(CMD, "`colors` is 0 (keep them all) or 2 to 48"));
     }
     let smooth = whole(p, "smooth", 0, 5, 1, CMD)? as u32;
     let passes = whole(p, "clean", 0, 5, 1, CMD)? as u32;
@@ -681,7 +769,7 @@ fn photo_stitch(s: &mut Session, p: &Value) -> Result<Value> {
             (manual(l, thread, "Photo Coral").into_iter().collect(), Some(n), None)
         }
         _ => {
-            let n = whole(p, "colors", 2, 12, 6, CMD)? as usize;
+            let n = whole(p, "colors", 2, 32, 6, CMD)? as usize;
             let cell = number(p, "cell", 0.5, 5.0, 1.0, CMD)?;
             let chart = chart(s, p, CMD)?;
             let fills = colour_fills(s, &pic, n, cell, &chart, bool_or(p, "background", false))?;

@@ -618,3 +618,40 @@ mod design_from_prompt {
         }
     }
 }
+
+#[test]
+fn the_colour_count_is_previewed_with_its_threads_before_digitizing() {
+    let mut app = app();
+    // a photo-like ramp from red to blue on white
+    let img = image::RgbaImage::from_fn(120, 80, |x, y| {
+        if (10..110).contains(&x) && (10..70).contains(&y) {
+            let t = (x - 10) as f32 / 100.0;
+            image::Rgba([(220.0 * (1.0 - t)) as u8, 40, (220.0 * t) as u8, 255])
+        } else {
+            image::Rgba([255, 255, 255, 255])
+        }
+    });
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let placed = app.run("file.place", json!({"name": "ramp.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    let id = placed["ids"][0].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let frame = |app: &mut VectorcraftApp| {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::embroidery::panel::auto_digitize_rows(app, ui));
+        out.textures_delta.clear();
+    };
+    frame(&mut app);
+    let few = app.embroidery.colour_preview.as_ref().map(|p| (p.key, p.info["sewn"].as_u64().unwrap())).unwrap();
+    assert_eq!(few.0, (id, 6, true));
+    // more colours: the preview is made again, with more threads to sew
+    app.embroidery.digitize_colors = 20;
+    frame(&mut app);
+    let many = app.embroidery.colour_preview.as_ref().map(|p| (p.key, p.info["sewn"].as_u64().unwrap())).unwrap();
+    assert_eq!(many.0, (id, 20, true));
+    assert!(many.1 > few.1, "{many:?} {few:?}");
+    let p = app.embroidery.colour_preview.as_ref().unwrap();
+    assert_eq!(p.info["threadChanges"].as_u64(), Some(many.1 - 1));
+    // the white round it is the background, shown but not sewn
+    assert!(p.info["colors"].as_array().unwrap().iter().any(|c| c["background"] == true));
+}

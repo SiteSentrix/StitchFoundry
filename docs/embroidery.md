@@ -665,7 +665,13 @@ for satin becomes tatami.
 ## Auto-Digitize
 
 Select a placed image and choose **Embroidery › Auto-Digitize Image** (or use the Embroidery panel
-when an image is selected). The image is traced into flat colour shapes with the given number of
+when an image is selected). The panel's **Thread colors** slider (2 to 32) shows at once what that
+many colours look like: a small preview of the image reduced the way Auto-Digitize reduces it
+(the background it leaves out shown as a light checker), the thread each colour becomes (hover a
+swatch for its name, code and how much of the image it covers) and how many thread changes that
+means, so you can compare counts before digitizing (`embroidery.image.preview {colors,
+removeBackground}`). The same count is used by Prepare Image and colour Photo Stitch, both a
+button away. The image is traced into flat colour shapes with the given number of
 thread colours, the background and specks under 1 mm² are dropped, and each shape gets a stitch
 type: satin for narrow parts, tatami at its best angle for the rest. The design is sewn colour by
 colour, nearest shape first. It is scaled to fit the hoop if one is set (or to 100 mm if it is

@@ -4983,3 +4983,11 @@ machine	Stop	Parada
 	Prepare Image	Preparar imagen
 	Photo Stitch	Bordado fotográfico
 	Convert Stitches to Objects	Convertir puntadas en objetos
+	Colour Preview	Vista previa de colores
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Una copia suavizada de la imagen en estos colores, sin motas, para digitalizar o bordar con un clic
+	Colours	Colores
+	Coral	Coral
+	background, not sewn	fondo, no se borda
+	thread changes	cambios de hilo
+	threads sewn	hilos bordados
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Borda la foto sobre sí misma: líneas en zigzag, un pespunte serpenteante o sus colores

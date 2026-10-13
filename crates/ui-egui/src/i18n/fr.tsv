@@ -4993,3 +4993,11 @@ machine	Stop	Arrêt
 	Prepare Image	Préparer l’image
 	Photo Stitch	Broderie photo
 	Convert Stitches to Objects	Convertir les points en objets
+	Colour Preview	Aperçu des couleurs
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Une copie lissée de l’image dans ces couleurs, sans taches, à numériser ou à broder d’un clic
+	Colours	Couleurs
+	Coral	Corail
+	background, not sewn	fond, non brodé
+	thread changes	changements de fil
+	threads sewn	fils brodés
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Brode la photo par-dessus elle-même : lignes en zigzag, un point courant sinueux ou ses couleurs

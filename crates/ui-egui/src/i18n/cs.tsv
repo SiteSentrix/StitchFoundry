@@ -5010,3 +5010,11 @@ machine	Stop	Zastavení
 	Prepare Image	Připravit obrázek
 	Photo Stitch	Fotovýšivka
 	Convert Stitches to Objects	Převést stehy na objekty
+	Colour Preview	Náhled barev
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Vyhlazená kopie obrázku v těchto barvách, bez teček, k digitalizaci nebo ke kliknutí a vyšití
+	Colours	Barvy
+	Coral	Korál
+	background, not sewn	pozadí, nevyšívá se
+	thread changes	výměn nití
+	threads sewn	nití se vyšije
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Vyšije fotografii přes ni samotnou: klikaté čáry, jeden meandrující steh nebo její barvy

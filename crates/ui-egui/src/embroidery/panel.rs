@@ -12,7 +12,7 @@ use vectorcraft_embroidery::sf_core::model::{
 };
 use vectorcraft_embroidery::sf_core::threads::Rgb;
 
-use super::{ArtView, StitchView};
+use super::{ArtView, ColourPreview, StitchView};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{dropdown, flat_button, label_row, plain_field, section_header};
@@ -1520,28 +1520,126 @@ fn selected_image(app: &VectorcraftApp) -> bool {
     })
 }
 
-/// Auto-Digitize for a selected image: how many thread colours, then trace and stitch.
-fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The selected image's id.
+fn selected_image_id(app: &VectorcraftApp) -> Option<u64> {
+    let st = app.session.active()?;
+    st.selection
+        .objects
+        .iter()
+        .find(|id| st.doc.node(**id).is_some_and(|n| matches!(n.kind, vectorcraft_engine::doc::NodeKind::Image(_))))
+        .map(|id| id.0)
+}
+
+/// The image reduced to the chosen number of thread colours, made again when the image, the count
+/// or the background choice changes.
+fn colour_preview(app: &mut VectorcraftApp, ui: &Ui) {
+    let Some(id) = selected_image_id(app) else { return };
+    let key = (id, app.embroidery.digitize_colors, app.embroidery.digitize_background);
+    if app.embroidery.colour_preview.as_ref().is_some_and(|p| p.key == key) {
+        return;
+    }
+    let params = json!({ "id": id, "colors": key.1, "removeBackground": key.2, "size": 240 });
+    let Ok(info) = app.session.execute("embroidery.image.preview", &params) else {
+        app.embroidery.colour_preview = None;
+        return;
+    };
+    let bytes = info["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode).unwrap_or_default();
+    let Ok(img) = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png) else { return };
+    let img = img.to_rgba8();
+    let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
+    let texture = ui.ctx().load_texture(format!("emb-colour-preview-{id}"), color, egui::TextureOptions::NEAREST);
+    let mut info = info;
+    if let Some(o) = info.as_object_mut() {
+        o.remove("dataBase64");
+    }
+    app.embroidery.colour_preview = Some(ColourPreview { key, texture, info });
+}
+
+/// Auto-Digitize for a selected image: how many thread colours (seen at once in a preview with
+/// the threads they become), then trace and stitch, prepare it, or sew it as a photo.
+pub(crate) fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.label(tl!("Turn the image into stitches: narrow parts become satin, the rest tatami fill."));
     ui.add_space(4.0);
-    let colors = app.embroidery.digitize_colors;
-    if let Some(v) = num(ui, tl!("Thread colors"), "digitize-colors", f64::from(colors), "", 0) {
-        app.embroidery.digitize_colors = v.round().clamp(2.0, 16.0) as u32;
-    }
+    ui.horizontal(|ui| {
+        ui.label(tl!("Thread colors"));
+        let mut n = app.embroidery.digitize_colors.clamp(2, 32);
+        if ui.add(egui::Slider::new(&mut n, 2..=32)).changed() {
+            app.embroidery.digitize_colors = n;
+        }
+    });
     if let Some(v) = check(ui, tl!("Remove background"), app.embroidery.digitize_background) {
         app.embroidery.digitize_background = v;
     }
+    // what that many colours look like, and the threads they become
+    colour_preview(app, ui);
+    if let Some(p) = &app.embroidery.colour_preview {
+        let size = p.texture.size_vec2();
+        let k = (ui.available_width().min(260.0) / size.x.max(1.0)).min(2.0);
+        ui.image((p.texture.id(), size * k));
+        let t = Tokens::get(ui.ctx());
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
+            for c in p.info["colors"].as_array().into_iter().flatten() {
+                let hex = c["thread"]["color"].as_str().or_else(|| c["color"].as_str()).unwrap_or("#000000");
+                let rgb = Rgb::from_hex(hex).unwrap_or(Rgb::new(0, 0, 0));
+                let (rect, r) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+                let fill = Color32::from_rgb(rgb.r, rgb.g, rgb.b);
+                let background = c["background"] == true;
+                ui.painter().rect_filled(rect, egui::CornerRadius::same(2), if background { fill.gamma_multiply(0.25) } else { fill });
+                ui.painter().rect_stroke(rect, egui::CornerRadius::same(2), egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+                let name = c["thread"]["name"].as_str().unwrap_or_default();
+                let code = c["thread"]["code"].as_str().unwrap_or_default();
+                let share = c["share"].as_f64().unwrap_or(0.0) * 100.0;
+                let mut tip = format!("{name} {code}  {share:.1} %");
+                if background {
+                    tip = format!("{tip}  ({})", tl!("background, not sewn"));
+                }
+                r.on_hover_text(tip);
+            }
+        });
+        let sewn = p.info["sewn"].as_u64().unwrap_or(0);
+        let changes = p.info["threadChanges"].as_u64().unwrap_or(0);
+        ui.label(egui::RichText::new(format!("{sewn} {}, {changes} {}", tl!("threads sewn"), tl!("thread changes"))).small());
+    }
     ui.add_space(4.0);
+    let colors = app.embroidery.digitize_colors;
     if button(ui, tl!("Auto-Digitize Image")).clicked() {
-        let params = json!({ "colors": app.embroidery.digitize_colors, "removeBackground": app.embroidery.digitize_background });
+        let params = json!({ "colors": colors, "removeBackground": app.embroidery.digitize_background });
         app.run("embroidery.autoDigitize", params).ok();
+    }
+    ui.horizontal(|ui| {
+        if button(ui, tl!("Prepare Image"))
+            .on_hover_text(tl!("A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch"))
+            .clicked()
+            && let Err(e) = app.run("embroidery.image.prepare", json!({ "colors": colors }))
+        {
+            app.status(e);
+        }
+    });
+    // photo stitch: lines, coral or these colours
+    let modes = ["lines", "coral", "color"];
+    let names = [tl!("Lines"), tl!("Coral"), tl!("Colours")];
+    let cur = app.embroidery.photo_mode.min(modes.len() - 1);
+    if let Some(i) = pick(ui, tl!("Photo Stitch"), "photo-mode", cur, &names) {
+        app.embroidery.photo_mode = i;
+    }
+    if button(ui, tl!("Photo Stitch")).on_hover_text(tl!("Sew the photo over itself as zigzag lines, one meandering run, or its colours")).clicked() {
+        let mode = modes.get(app.embroidery.photo_mode).copied().unwrap_or("lines");
+        let mut params = json!({ "mode": mode });
+        if mode == "color" {
+            params["colors"] = json!(colors);
+            params["background"] = json!(!app.embroidery.digitize_background);
+        }
+        if let Err(e) = app.run("embroidery.photoStitch", params) {
+            app.status(e);
+        }
     }
     if crate::embroidery::prompt::available(app)
         && button(ui, tl!("Redraw with Claude…"))
             .on_hover_text(tl!("Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it"))
             .clicked()
     {
-        app.run("ui.redrawImage", json!({ "colors": app.embroidery.digitize_colors })).ok();
+        app.run("ui.redrawImage", json!({ "colors": colors })).ok();
     }
 }
 
