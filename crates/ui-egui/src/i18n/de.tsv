@@ -4803,3 +4803,5 @@ machine	Stop	Stopp
 	colours	Farben
 	Print Catalogue	Katalog drucken
 	A sheet of the designs found, to print or save as PDF	Ein Blatt der gefundenen Designs, zum Drucken oder als PDF
+@msg	larger than {_1} MB	größer als {_1} MB
+@msg	not a machine file: .{ext}	keine Maschinenstickdatei: .{ext}

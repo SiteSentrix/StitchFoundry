@@ -4857,3 +4857,5 @@ machine	Stop	Arrêt
 	colours	couleurs
 	Print Catalogue	Imprimer le catalogue
 	A sheet of the designs found, to print or save as PDF	Une feuille des motifs trouvés, à imprimer ou enregistrer en PDF
+@msg	larger than {_1} MB	plus de {_1} Mo
+@msg	not a machine file: .{ext}	pas un fichier de machine à broder : .{ext}

@@ -90,8 +90,10 @@ fn read_design(path: &str, bytes: u64, modified: Option<u64>) -> std::result::Re
     }
     let data = super::fileio::read_file(path).map_err(|e| e.to_string())?;
     let p = std::path::Path::new(path);
-    let ext = p.extension().map(|x| x.to_string_lossy().to_ascii_lowercase());
-    let (format, pattern) = sf_formats::read_any(&data, ext.as_deref()).map_err(|e| e.to_string())?;
+    // the format its name says: a file that isn't one is listed as failed, not guessed at
+    let ext = p.extension().map(|x| x.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let format = sf_formats::Format::from_extension(&ext).ok_or_else(|| format!("not a machine file: .{ext}"))?;
+    let pattern = sf_formats::read(format, &data).map_err(|e| e.to_string())?;
     let stats = sf_core::stats::pattern_stats(&pattern, &sf_core::model::DesignSettings::default());
     let b = pattern.bounds();
     // the stitches as runs per colour, thinned to a thumbnail's worth of points

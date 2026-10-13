@@ -4845,3 +4845,5 @@ machine	Stop	Остановка
 	colours	цветов
 	Print Catalogue	Печать каталога
 	A sheet of the designs found, to print or save as PDF	Лист найденных дизайнов для печати или сохранения в PDF
+@msg	larger than {_1} MB	больше {_1} МБ
+@msg	not a machine file: .{ext}	не файл для вышивальной машины: .{ext}

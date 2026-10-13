@@ -4829,3 +4829,5 @@ machine	Stop	Зупинка
 	colours	кольорів
 	Print Catalogue	Друк каталогу
 	A sheet of the designs found, to print or save as PDF	Аркуш знайдених дизайнів для друку чи збереження в PDF
+@msg	larger than {_1} MB	більше {_1} МБ
+@msg	not a machine file: .{ext}	не файл для вишивальної машини: .{ext}
