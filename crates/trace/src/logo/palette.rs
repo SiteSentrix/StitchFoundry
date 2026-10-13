@@ -166,6 +166,61 @@ pub(crate) fn auto_palette(pix: &[Px], w: usize, h: usize, max_colors: usize) ->
     groups.iter().map(|(c, _)| c.map(|v| v.round().clamp(0.0, 255.0) as u8)).collect()
 }
 
+/// How far apart (in RGB) two tones of one colour may be: a scan's paper is a tenth darker in one
+/// corner than in another.
+const TONES_APART: f64 = 60.0;
+
+/// `palette` with the tones of one colour made one colour. Two flat colours leave nothing between
+/// them but the pixels of their shared edges; where a scan's paper is unevenly lit, or a wash
+/// shades off, the pixels between two of its tones are as many as those at either: such a pair is
+/// one colour (their mean, by pixels), however many tones of it were found.
+pub(crate) fn fold_tones(pix: &[Px], mut palette: Vec<[u8; 3]>) -> Vec<[u8; 3]> {
+    let apart = |a: [u8; 3], b: [u8; 3]| dist2(a.map(f64::from), b.map(f64::from)).sqrt();
+    loop {
+        let close: Vec<(usize, usize)> = (0..palette.len())
+            .flat_map(|i| (i + 1..palette.len()).map(move |j| (i, j)))
+            .filter(|&(i, j)| palette.get(i).zip(palette.get(j)).is_some_and(|(a, b)| apart(*a, *b) <= TONES_APART))
+            .collect();
+        if close.is_empty() {
+            return palette;
+        }
+        // Each opaque pixel goes to its nearest colour; for a close pair, the pixels of either are
+        // counted by where they lie from one to the other: at one, between, at the other.
+        let mut thirds = vec![[0usize; 3]; close.len()];
+        for p in pix.iter().filter(|p| p[3] > 0.9) {
+            let c = rgb255(p);
+            let Some(near) = (0..palette.len()).min_by(|&i, &j| dist2(c, palette[i].map(f64::from)).total_cmp(&dist2(c, palette[j].map(f64::from))))
+            else {
+                continue;
+            };
+            for (k, &(i, j)) in close.iter().enumerate() {
+                if near == i || near == j {
+                    let (a, b) = (palette[i].map(f64::from), palette[j].map(f64::from));
+                    let t = (0..3).map(|ch| (c[ch] - a[ch]) * (b[ch] - a[ch])).sum::<f64>() / dist2(a, b).max(1e-9);
+                    thirds[k][if t < 1.0 / 3.0 {
+                        0
+                    } else if t <= 2.0 / 3.0 {
+                        1
+                    } else {
+                        2
+                    }] += 1;
+                }
+            }
+        }
+        // The pair with the most between it, if that is no fewer than a third of what the lesser
+        // end has.
+        let filled = |t: &[usize; 3]| t[1] as f64 / (t[0].min(t[2]).max(1)) as f64;
+        let Some((k, _)) = thirds.iter().enumerate().filter(|(_, t)| filled(t) >= 1.0 / 3.0).max_by(|a, b| filled(a.1).total_cmp(&filled(b.1)))
+        else {
+            return palette;
+        };
+        let ((i, j), t) = (close[k], thirds[k]);
+        let (na, nb) = ((t[0] + t[1] / 2).max(1) as f64, (t[2] + t[1] / 2).max(1) as f64);
+        palette[i] = [0, 1, 2].map(|ch| ((f64::from(palette[i][ch]) * na + f64::from(palette[j][ch]) * nb) / (na + nb)).round() as u8);
+        palette.remove(j);
+    }
+}
+
 /// Colours the current palette cannot explain. `residual` is each pixel's error after the best blend
 /// of the known classes (see `unmix`); a solid run of pixels (a pixel and its four neighbours agree)
 /// with a large error is a colour that is missing, such as the small accent that was too few
