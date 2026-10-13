@@ -542,6 +542,35 @@ fn remote_rejects_a_reply_with_a_mismatched_id_and_reconnects() {
     assert_ne!(seen[0]["id"], seen[1]["id"]);
 }
 
+/// The app's refusals carry no id (a 17th connection gets one and is closed). The call reports the
+/// app's reason, not a mismatch, says nothing ran, and the next call starts a fresh connection.
+#[test]
+fn remote_reports_the_reason_of_a_refusal_without_an_id() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let h = std::thread::spawn(move || {
+        let (mut refused, _) = listener.accept().unwrap();
+        // The request is read first, so the refusal answers it and the close is orderly.
+        refused.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let _ = BufReader::new(refused.try_clone().unwrap()).read_line(&mut String::new());
+        writeln!(refused, "{}", json!({"ok": false, "error": "too many control connections"})).unwrap();
+        drop(refused);
+        let (stream, _) = listener.accept().unwrap();
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let mut out = stream.try_clone().unwrap();
+        let mut line = String::new();
+        BufReader::new(stream).read_line(&mut line).unwrap();
+        let msg: Value = serde_json::from_str(&line).unwrap();
+        writeln!(out, "{}", json!({"ok": true, "result": 7, "id": msg["id"]})).unwrap();
+    });
+    let mut remote = Remote::connect(&addr).unwrap();
+    let err = remote.call("document.inspect", json!({})).expect_err("a refusal is an error");
+    assert!(err.contains("too many control connections") && err.contains("nothing was run"), "{err}");
+    assert!(!err.contains("mismatch") && !err.contains("may have completed"), "{err}");
+    assert_eq!(remote.call("document.inspect", json!({})), Ok(json!(7)), "the next call reconnects");
+    h.join().unwrap();
+}
+
 #[test]
 fn remote_connect_fails_fast() {
     // A port this test holds, bound but not listening, so connecting to it is refused. (A port
