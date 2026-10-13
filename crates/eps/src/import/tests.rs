@@ -248,6 +248,12 @@ fn clips_become_clipping_groups() {
     // eoclip of a path.
     let o = objects(&read("10 10 moveto 30 10 lineto 30 30 lineto closepath eoclip newpath 0 0 50 50 rectfill").document);
     assert!(matches!(o[0].kind, NodeKind::Group { clip: true, .. }));
+    // #1542: a diamond touching the page edges has the page as its bounding box but still clips.
+    let o = objects(&read("50 0 moveto 100 50 lineto 50 100 lineto 0 50 lineto closepath clip newpath 0 0 100 100 rectfill").document);
+    assert!(matches!(o[0].kind, NodeKind::Group { clip: true, .. }), "{:?}", o[0].kind);
+    // A turned square around the whole page clips nothing.
+    let o = objects(&read("50 -60 moveto 160 50 lineto 50 160 lineto -60 50 lineto closepath clip newpath 0 0 100 100 rectfill").document);
+    assert!(matches!(o[0].kind, NodeKind::Path { .. }), "{:?}", o[0].kind);
 }
 
 #[test]

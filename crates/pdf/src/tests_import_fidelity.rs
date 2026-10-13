@@ -596,3 +596,16 @@ fn glyphs_closed_up_by_half_an_em_stay_one_line() {
     assert_eq!(t.len(), 1, "one line: {:?}", t.iter().map(|t| t.plain_text()).collect::<Vec<_>>());
     assert_eq!(t[0].plain_text(), "Tight");
 }
+
+/// #1542: a clip only counts as covering the page when it does; a diamond whose bounding box is
+/// the page still clips, a page rectangle or a turned square around it doesn't make a group.
+#[test]
+fn clips_with_the_page_as_bounding_box_still_clip() {
+    let clipped = |clip: &str| {
+        let d = open(&one_page(&format!("q {clip} W n 1 0.5 0 rg 0 0 100 100 re f Q"), "", &[]));
+        all(&d).iter().any(|n| matches!(n.kind, NodeKind::Group { clip: true, .. }))
+    };
+    assert!(clipped("50 0 m 100 50 l 50 100 l 0 50 l h"), "diamond");
+    assert!(!clipped("0 0 100 100 re"), "the page");
+    assert!(!clipped("50 -60 m 160 50 l 50 160 l -60 50 l h"), "a turned square around the page");
+}
