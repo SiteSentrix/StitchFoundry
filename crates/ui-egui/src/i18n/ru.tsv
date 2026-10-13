@@ -4955,3 +4955,22 @@ machine	Stop	Остановка
 	Worksheet Setup	Настройка рабочего листа
 	Merge Colours	Объединить цвета
 	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Нити одного или близкого цвета становятся одной, а их цветовые блоки соединяются; отмена возвращает их
+	Lettering Kiosk	Киоск надписей
+	Kiosk Lettering	Надпись в киоске
+	Type a name and make the design	Введите имя и создайте дизайн
+	No embroidery font is loaded: ask the shop to load one.	Шрифт для вышивки не загружен: попросите магазин загрузить его.
+	As large as fits	Как можно крупнее
+	Make Design	Создать дизайн
+	T-shirt	Футболка
+	Polo shirt	Рубашка поло
+	Hoodie	Худи
+	Tote bag	Сумка-шопер
+	Towel	Полотенце
+	Product	Изделие
+	Show on Product	Показать на изделии
+	Back to the Design	Назад к дизайну
+	Save Machine File…	Сохранить файл для машины…
+	Next Name	Следующее имя
+	PIN	PIN-код
+	Leave Kiosk	Выйти из киоска
+	Leaving the kiosk will take this PIN	Для выхода из киоска понадобится этот PIN-код

@@ -3708,6 +3708,51 @@ const TEST_FONT_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:in
 </svg>"##;
 
 #[test]
+fn the_kiosk_sets_a_name_in_a_template_and_locks_with_a_pin() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // no font yet
+    assert!(s.execute("embroidery.kiosk.order", &json!({"text": "AB"})).is_err());
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let r = s.execute("embroidery.kiosk.order", &json!({"text": "AB", "template": "name tape 100 × 30", "color": "#D62828"})).unwrap();
+    assert_eq!(
+        (r["template"].as_str(), r["font"].as_str(), r["color"].as_str(), r["title"].as_str()),
+        (Some("Name tape 100 × 30"), Some("Test Script"), Some("#d62828"), Some("AB")),
+        "{r}"
+    );
+    // inside the tape's border (90 × 20 mm), its middle the tape's (65, 30 mm)
+    assert!(r["widthMm"].as_f64().unwrap() <= 90.5 && r["heightMm"].as_f64().unwrap() <= 20.5, "{r}");
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let b = s.doc().unwrap().doc.node(id).unwrap().bounds_in(kurbo::Affine::IDENTITY, false).unwrap();
+    assert!((b.center().x / PT - 65.0).abs() < 1.0 && (b.center().y / PT - 30.0).abs() < 1.0, "{b:?}");
+    let threads: Vec<String> = s.embroidery_plan().unwrap().pattern().threads.iter().map(|t| t.color.to_hex()).collect();
+    assert!(threads.iter().any(|t| t == "#d62828"), "{threads:?}");
+    // a long name made smaller to fit
+    let r = s.execute("embroidery.kiosk.order", &json!({"text": "ABABABABABABABAB"})).unwrap();
+    assert!(r["widthMm"].as_f64().unwrap() <= 90.5, "{r}");
+    // the shop's offer, locked with a PIN
+    let r = s.execute("embroidery.kiosk", &json!({"on": true, "pin": "2468", "templates": ["cap front"], "colors": ["#FFFFFF"]})).unwrap();
+    assert_eq!(
+        (r["on"].clone(), r["locked"].clone(), r["templates"].clone(), r["colors"].clone()),
+        (json!(true), json!(true), json!(["Cap front"]), json!(["#ffffff"]))
+    );
+    assert!(s.execute("embroidery.kiosk.order", &json!({"text": "AB", "template": "Left chest logo"})).is_err());
+    assert!(s.execute("embroidery.kiosk.order", &json!({"text": "AB", "color": "#000000"})).is_err());
+    let r = s.execute("embroidery.kiosk.order", &json!({"text": "AB"})).unwrap();
+    assert_eq!((r["template"].as_str(), r["color"].as_str()), (Some("Cap front"), Some("#ffffff")));
+    // changing or leaving it takes the PIN
+    assert!(s.execute("embroidery.kiosk", &json!({"fonts": []})).is_err());
+    assert!(s.execute("embroidery.kiosk", &json!({"on": false, "pin": "1357"})).is_err());
+    s.execute("embroidery.kiosk", &json!({"on": false, "pin": "2468"})).unwrap();
+    let r = s.execute("embroidery.kiosk", &json!({})).unwrap();
+    assert_eq!((r["on"].clone(), r["locked"].clone()), (json!(false), json!(true)));
+    assert!(s.execute("embroidery.kiosk", &json!({"pin": "12"})).is_err());
+    assert!(s.execute("embroidery.kiosk", &json!({"templates": ["nope"]})).is_err());
+    assert!(s.execute("embroidery.kiosk", &json!({"format": "zzz"})).is_err());
+    assert!(s.execute("embroidery.kiosk.order", &json!({"text": "  "})).is_err());
+}
+
+#[test]
 fn embroidery_fonts_set_lettering_from_their_glyphs() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
     let mut s = session();

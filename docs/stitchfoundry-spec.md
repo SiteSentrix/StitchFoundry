@@ -469,7 +469,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CL-03 | Create custom embroidery fonts (from art or fonts) | Done | The font creator: a font document, one artboard per glyph with baseline and cap-height guides, digitized with the usual tools or started from a TrueType/OpenType family's outlines (`embroidery.fontDoc.fromType`), saved as a font folder lettering loads (`embroidery.fontDoc.*`); fonts in Ink/Stitch's format load and edit too | – |
 | CL-04 | Merge fonts | Done | `embroidery.fontDoc.merge`: another font's glyphs added to a font document, scaled to its capitals' height | – |
 | KDC-01 | Keyboard design collections (map designs to keys, type with them) | Done | A design assigned to a character in a font document (`embroidery.fontDoc.assign`) becomes its glyph; saved, the font types the designs like lettering | – |
-| KI-01 | Lettering kiosk (simplified mode for counter staff) | Missing | Locked-down "kiosk" workspace with templates | 6 |
+| KI-01 | Lettering kiosk (simplified mode for counter staff) | Done | Embroidery › Lettering Kiosk (`embroidery.kiosk`, `embroidery.kiosk.order`): one panel for the counter (template, name, font, thread, size; made to fit the template's area; shown on the product; sent to the machine folder or saved), the shop's choice of templates, fonts and threads, locked with a PIN, kept on across restarts | 0 |
 
 ### 6.12 Artwork and automatic digitizing
 
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 203 done,
-12 partial, 29 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 204 done,
+12 partial, 28 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

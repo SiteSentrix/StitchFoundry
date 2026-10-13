@@ -1,6 +1,7 @@
 //! Embroidery mode UI: the stitch overlay on the canvas, the Embroidery and Stitch
 //! Sequence panels, the stitch player and the digitizing widget.
 
+pub mod kiosk;
 pub mod overlay;
 pub mod panel;
 pub mod profile_curve;
@@ -176,6 +177,8 @@ pub struct EmbroideryUi {
     pub job_draft: (String, u32, String),
     /// When the send queue was last tried (UI time, seconds).
     pub queue_checked: f64,
+    /// The lettering kiosk's screen.
+    pub kiosk: kiosk::KioskView,
     /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
     /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
     pub monogram_letters: String,
@@ -298,6 +301,7 @@ impl Default for EmbroideryUi {
             template_name: String::new(),
             job_draft: (String::new(), 1, String::new()),
             queue_checked: 0.0,
+            kiosk: kiosk::KioskView::default(),
             monogram_letters: String::new(),
             monogram_style: 0,
             monogram_border: 1,

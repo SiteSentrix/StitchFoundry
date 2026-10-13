@@ -33,6 +33,7 @@ pub mod embroidery_hoops;
 pub mod embroidery_image;
 pub mod embroidery_input;
 pub mod embroidery_jobs;
+pub mod embroidery_kiosk;
 pub mod embroidery_laydown;
 pub mod embroidery_lettering;
 pub mod embroidery_library;
@@ -278,6 +279,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_jobs::specs());
         v.extend(embroidery_clipart::specs());
         v.extend(embroidery_queue::specs());
+        v.extend(embroidery_kiosk::specs());
         v.extend(embroidery_merge::specs());
         v.extend(embroidery_sheet_setup::specs());
         v.extend(embroidery_scatter::specs());

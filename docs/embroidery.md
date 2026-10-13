@@ -491,6 +491,25 @@ hoodies the caption, and `belowNeckMm`, say how far below the neckline the desig
 way placements are measured on a garment. Printed life-size placement templates come from the
 worksheet (`kind: template`), and a basting run round the design from the design settings.
 
+## The lettering kiosk
+
+**Embroidery › Lettering Kiosk** (`embroidery.kiosk {on: true}`) turns the app into a simple
+screen for counter staff: one panel and the design, nothing else (no menus, panels or
+keyboard shortcuts). They pick a template (a name
+tape, a cap front, a left chest…), type the name, pick a font and a thread, and **Make Design**
+(`embroidery.kiosk.order {text, template?, font?, color?, size?}`) starts a design from the
+template with the name set in the font, centred in the template's area and made as large as fits
+(or the size asked for), in the thread. **Show on Product** puts it on a T-shirt, polo, hoodie,
+cap, bag or towel (the Product Visualizer); **Send to Machine** queues it for the shop's machine
+folder, **Save Machine File…** saves it; **Next Name** starts again.
+
+The shop chooses what the counter offers (`embroidery.kiosk {templates, fonts, colors, folder,
+format}`: empty lists offer everything) and can lock the kiosk with a PIN of 4 to 12 digits
+(**Lock** on the kiosk screen, or `pin`): while it is on and locked, changing it or **Leave
+Kiosk** takes the PIN. The kiosk stays on across restarts, so a counter computer starts in it. The
+PIN keeps the full app out of reach by mistake; it is not a security barrier, since the
+preferences file can be edited.
+
 ## Merging colours
 
 **Merge Colours** (`embroidery.colors.merge {tolerance?, sequence?}`) makes the design's threads of

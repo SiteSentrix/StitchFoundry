@@ -1046,8 +1046,12 @@ impl VectorcraftApp {
             ctx.copy_text(t);
         }
         self.drain_inbox();
-        native_menu::run(self, ctx);
-        if self.fonts_ready {
+        // the lettering kiosk: no menus or shortcuts
+        let kiosk = self.session.prefs.embroidery_kiosk.on;
+        if !kiosk {
+            native_menu::run(self, ctx);
+        }
+        if self.fonts_ready && !kiosk {
             shortcuts::handle(self, ctx);
         }
         // Native only: the web host reads dropped files asynchronously and feeds the inboxes.
@@ -1205,6 +1209,15 @@ impl VectorcraftApp {
         let t0 = now_ms();
         scrub::begin_frame(self, &ctx);
         embroidery::tick(self, &ctx);
+        // the lettering kiosk: its panel and the design, nothing else
+        if self.session.prefs.embroidery_kiosk.on {
+            embroidery::kiosk::show(self, ui);
+            dialogs::show(self, &ctx);
+            self.ui_fonts.frame(&ctx);
+            scrub::end_frame(self, &ctx);
+            self.perf.frame_ms = now_ms() - t0;
+            return;
+        }
         font_menu::end_stale_preview(self, &ctx);
         floating::track(self, &ctx);
         let t = theme::Tokens::get(&ctx);

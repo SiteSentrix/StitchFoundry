@@ -112,7 +112,7 @@ fn pick(ui: &mut Ui, label: &str, id: &str, current: usize, options: &[&str]) ->
 
 /// [`pick`] for names that are data (styles, fabrics, hoops): shown as they are, never
 /// translated.
-fn pick_names(ui: &mut Ui, label: &str, id: &str, current: usize, options: &[&str]) -> Option<usize> {
+pub(crate) fn pick_names(ui: &mut Ui, label: &str, id: &str, current: usize, options: &[&str]) -> Option<usize> {
     let mut out = None;
     label_row(ui, label, LABEL_W, |ui| {
         let cur = options.get(current).copied().unwrap_or_default();
