@@ -257,6 +257,56 @@ fn a_modified_link_follows_the_update_links_preference() {
     assert!(s.doc().unwrap().history.undo.is_empty(), "opening is not an undo step");
 }
 
+/// The half of opening that the desktop app runs on a thread of its own (`read_for_open`) reads
+/// the linked files and lays out the type. The half left for the UI thread (`open_read`) reads no
+/// file: with a linked file moved away in between, it opens the document that `document.open` opens.
+#[test]
+fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
+    let dir = Folder::new("read-for-open");
+    let tif = dir.file("art/photo.tif");
+    let mut tiff = vec![];
+    image::RgbImage::from_pixel(600, 300, image::Rgb(RED)).write_to(&mut std::io::Cursor::new(&mut tiff), image::ImageFormat::Tiff).unwrap();
+    write(&tif, &tiff);
+    let (gone, changed) = (dir.file("gone.png"), dir.file("changed.png"));
+    write(&gone, &png(300, 100, BLUE));
+    write(&changed, &png(300, 100, BLUE));
+    let mut s = session();
+    let photo = place(&mut s, &tif);
+    place(&mut s, &gone);
+    place(&mut s, &changed);
+    let area = json!({"width": 150, "height": 20, "fit": "autoHeight"});
+    let r = s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Linked files and type. ".repeat(12), "area": area})).unwrap();
+    let text = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.areaOptions", &json!({"ids": [text.0], "columns": 2})).unwrap();
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&gone).unwrap();
+    write(&changed, &png(200, 200, RED));
+    let bytes = std::fs::read(&doc_path).unwrap();
+    let away = dir.file("away.tif");
+    for update in ["askWhenModified", "automatically"] {
+        let mut at_once = session();
+        at_once.execute("prefs.set", &json!({"key": "updateLinks", "value": update})).unwrap();
+        let expected = open(&mut at_once, &doc_path);
+        let rows = if update == "automatically" { &expected["updatedLinks"] } else { &expected["modifiedLinks"] };
+        assert!(expected["missingLinks"][0]["name"] == "gone.png" && rows[0]["name"] == "changed.png", "{update}: {expected}");
+        let file = cmd::fileio::read_for_open(&doc_path, &bytes, Some(doc_path.clone()), &Value::Null, update == "automatically").unwrap();
+        let doc = file.document();
+        let NodeKind::Image(im) = &doc.node(photo).unwrap().kind else { panic!("not an image") };
+        assert!(!doc.images[&im.key].is_proxy(), "{update}: the TIFF is read, not the preview saved for it");
+        let NodeKind::Text(t) = &doc.node(text).unwrap().kind else { panic!("not type") };
+        assert!(t.cached_bounds.is_some(), "{update}: the type is laid out");
+        std::fs::rename(&tif, &away).unwrap();
+        let mut opened = session();
+        let r = cmd::fileio::open_read(&mut opened, file).unwrap();
+        std::fs::rename(&away, &tif).unwrap();
+        assert_eq!(r, expected, "{update}");
+        let (a, b) = (at_once.doc().unwrap(), opened.doc().unwrap());
+        assert!(*b.doc == *a.doc, "{update}: the same document");
+        assert!(b.history.undo.is_empty() && !b.is_dirty(), "{update}");
+    }
+}
+
 #[test]
 fn links_from_older_files_load_and_keep_their_pixels() {
     let dir = Folder::new("legacy");

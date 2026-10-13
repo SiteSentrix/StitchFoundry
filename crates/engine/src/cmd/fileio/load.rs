@@ -9,6 +9,7 @@ use vectorcraft_geom::Affine;
 use super::super::*;
 use super::pdfimport::LoadOptions;
 use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
+use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
 /// A file read into a document, with its format and non-fatal import notes.
@@ -292,47 +293,67 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
-    open_read(s, read_for_open(name, bytes, p)?, path)
+    let update_links = s.prefs.update_links == "automatically";
+    open_read(s, read_for_open(name, bytes, path, p, update_links)?)
 }
 
 /// A file read for `document.open` but not opened yet ([`read_for_open`], [`open_read`]).
 pub struct ReadFile {
     loaded: Loaded,
     opts: LoadOptions,
+    /// Where the file was read from.
+    path: Option<String>,
+    /// What became of its linked files.
+    links: Resolved,
 }
 
-/// The first half of [`open_bytes_with`]: read and decode the file, which needs no session (an
-/// app may do it on another thread) → what [`open_read`] opens.
-pub fn read_for_open(name: &str, bytes: &[u8], p: &Value) -> Result<ReadFile> {
+#[cfg(test)]
+impl ReadFile {
+    /// The document as it was read, before it opens.
+    pub(crate) fn document(&self) -> &Document {
+        &self.loaded.doc
+    }
+}
+
+/// The first half of [`open_bytes_with`], which needs no session (an app may do it on another
+/// thread): read and decode the file, read its linked files and lay out its type → what
+/// [`open_read`] opens. The linked files are looked for from `path`, where the file was read from,
+/// and modified ones are read again when `update_links` (Preferences › File Handling › Update
+/// Links set to Automatically; see [`crate::cmd::links::resolve`]).
+pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    Ok(ReadFile { loaded: load_with(name, bytes, &opts)?, opts })
+    let mut loaded = load_with(name, bytes, &opts)?;
+    let links = crate::cmd::links::resolve(&mut loaded.doc, path.as_deref(), update_links);
+    Session::refresh_text_bounds(&mut loaded.doc);
+    Ok(ReadFile { loaded, opts, path, links })
 }
 
 /// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active
-/// document (`path`: where it was read from) → `document.open`'s result.
-pub fn open_read(s: &mut Session, file: ReadFile, path: Option<String>) -> Result<Value> {
-    open_loaded(s, file.loaded, path, &file.opts, false)
+/// document → `document.open`'s result.
+pub fn open_read(s: &mut Session, file: ReadFile) -> Result<Value> {
+    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false)
 }
 
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
 /// from there) as a new untitled document.
 pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value> {
-    let loaded = load(name, bytes)?;
+    let mut loaded = load(name, bytes)?;
     if loaded.preview_only {
         return Err(err(
             "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
-    open_loaded(s, loaded, path.map(str::to_string), &LoadOptions::default(), true)
+    let links = crate::cmd::links::resolve(&mut loaded.doc, path, s.prefs.update_links == "automatically");
+    open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true)
 }
 
-/// Make a loaded file the new active document; `opts` are the options it was read with.
-fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
+/// Make a loaded file the new active document; `links` is what became of its linked files, and
+/// `opts` are the options it was read with.
+fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
     let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded.with_grid_prefs(&s.prefs);
     // What reading the file left out of the document, if anything.
     let losses: Vec<String> = warnings.iter().filter(|w| is_loss(w)).cloned().collect();
     let source_path = path.clone().filter(|_| !losses.is_empty());
-    let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.
     let template = as_template || doc.template || matches!(format.id, "ait" | "template");
