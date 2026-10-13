@@ -505,6 +505,71 @@ fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
 }
 
 #[test]
+fn batch_output_writes_machine_files_worksheet_and_design_in_one_step() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let dir = std::env::temp_dir().join(format!("sf-output-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let d = dir.to_string_lossy().to_string();
+    let (docs, active) = (s.documents().len(), s.active_index());
+    let r = s.execute("embroidery.output", &json!({"dir": d, "formats": ["dst", "PES", "dst"], "name": "Logo"})).unwrap();
+    let files = r["files"].as_array().unwrap();
+    let kinds: Vec<&str> = files.iter().filter_map(|f| f["kind"].as_str()).collect();
+    assert_eq!(kinds, ["machine", "machine", "design", "worksheet"], "{r}");
+    let read = |f: &Value| std::fs::read(f["path"].as_str().unwrap()).unwrap();
+    let dst = sf_formats::read(sf_formats::Format::Dst, &read(&files[0])).unwrap();
+    assert!(dst.stitch_count() > 100 && files[1]["path"].as_str().unwrap().ends_with("Logo.pes"));
+    assert!(read(&files[3]).starts_with(b"%PDF") && files[3]["path"].as_str().unwrap().ends_with("Logo-worksheet.pdf"));
+    assert!(files[2]["path"].as_str().unwrap().ends_with("Logo.stitchfoundry") && !read(&files[2]).is_empty());
+    // the documents open stay as they were
+    assert_eq!((s.documents().len(), s.active_index()), (docs, active));
+    // the names taken: all numbered alike, unless replacing
+    let r = s.execute("embroidery.output", &json!({"dir": d, "formats": ["dst"], "worksheet": "none", "design": false, "name": "Logo"})).unwrap();
+    assert_eq!(r["name"].as_str(), Some("Logo-2"), "{r}");
+    let r = s
+        .execute("embroidery.output", &json!({"dir": d, "formats": ["dst"], "worksheet": "none", "design": false, "name": "Logo", "replace": true}))
+        .unwrap();
+    assert_eq!(r["name"].as_str(), Some("Logo"));
+    // a profile kept by name, its folder and choices used, what is asked winning
+    s.execute(
+        "embroidery.output.saveProfile",
+        &json!({"name": "Tajima shop", "formats": ["dst", "exp"], "worksheet": "approval", "design": false, "dir": d}),
+    )
+    .unwrap();
+    let list = s.execute("embroidery.output.profiles", &json!({})).unwrap();
+    assert_eq!(list["profiles"][0]["formats"], json!(["dst", "exp"]));
+    let r = s.execute("embroidery.output", &json!({"profile": "TAJIMA SHOP", "name": "Cap"})).unwrap();
+    let kinds: Vec<&str> = r["files"].as_array().unwrap().iter().filter_map(|f| f["format"].as_str()).collect();
+    assert_eq!(kinds, ["dst", "exp", "pdf"], "{r}");
+    let r = s.execute("embroidery.output", &json!({"profile": "tajima shop", "name": "Cap", "worksheet": "none", "replace": true})).unwrap();
+    assert_eq!(r["files"].as_array().unwrap().len(), 2);
+    // saved again: replaced, not added
+    s.execute("embroidery.output.saveProfile", &json!({"name": "tajima SHOP", "worksheet": "none"})).unwrap();
+    assert_eq!(s.prefs.embroidery_output_profiles.len(), 1);
+    // without formats: the design's machine's (else DST)
+    let r = s.execute("embroidery.output", &json!({"dir": d, "worksheet": "none", "design": false, "name": "Plain"})).unwrap();
+    assert_eq!(r["files"][0]["format"].as_str(), Some("dst"));
+    for bad in [
+        json!({"dir": d, "formats": ["zzz"]}),
+        json!({"dir": d, "worksheet": "poster"}),
+        json!({"formats": ["dst"]}),
+        json!({"dir": dir.join("missing").to_string_lossy(), "formats": ["dst"]}),
+        json!({"profile": "nobody"}),
+        json!({"dir": d, "formats": [], "worksheet": "none", "design": false}),
+        json!({"dir": d, "design": "yes"}),
+    ] {
+        assert!(s.execute("embroidery.output", &bad).is_err(), "{bad}");
+    }
+    assert_eq!((s.documents().len(), s.active_index()), (docs, active));
+    s.execute("embroidery.output.deleteProfile", &json!({"name": "Tajima Shop"})).unwrap();
+    assert!(s.execute("embroidery.output.deleteProfile", &json!({"name": "Tajima Shop"})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_design_library_lists_machine_files_with_their_figures() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

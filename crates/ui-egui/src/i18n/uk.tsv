@@ -4831,3 +4831,7 @@ machine	Stop	Зупинка
 	A sheet of the designs found, to print or save as PDF	Аркуш знайдених дизайнів для друку чи збереження в PDF
 @msg	larger than {_1} MB	більше {_1} МБ
 @msg	not a machine file: .{ext}	не файл для вишивальної машини: .{ext}
+	Batch Output	Пакетний вивід
+	Output Profiles	Профілі виводу
+	Save Output Profile	Зберегти профіль виводу
+	Delete Output Profile	Видалити профіль виводу

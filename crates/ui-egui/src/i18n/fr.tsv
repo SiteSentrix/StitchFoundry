@@ -4859,3 +4859,7 @@ machine	Stop	Arrêt
 	A sheet of the designs found, to print or save as PDF	Une feuille des motifs trouvés, à imprimer ou enregistrer en PDF
 @msg	larger than {_1} MB	plus de {_1} Mo
 @msg	not a machine file: .{ext}	pas un fichier de machine à broder : .{ext}
+	Batch Output	Sortie par lots
+	Output Profiles	Profils de sortie
+	Save Output Profile	Enregistrer le profil de sortie
+	Delete Output Profile	Supprimer le profil de sortie

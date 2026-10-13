@@ -896,7 +896,7 @@ fn convert_art(s: &mut Session, p: &Value) -> Result<Value> {
 /// The machine formats, by extension (what `embroidery.export` and File › Open take).
 pub const MACHINE_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01", "pcs", "tap"];
 
-fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
+pub(super) fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.export";
     // the design's machine reads this format, unless another is asked for
     let machine = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.machine_file_format(&s.prefs.embroidery_machines));
@@ -1017,23 +1017,23 @@ const MAX_SEND_DIRS: usize = 16;
 
 /// Whether `dir` is a folder that is there now (a USB stick plugged in, a share reachable).
 #[cfg(not(target_arch = "wasm32"))]
-fn folder_ready(dir: &str) -> bool {
+pub(super) fn folder_ready(dir: &str) -> bool {
     std::path::Path::new(dir).is_dir()
 }
 
 #[cfg(target_arch = "wasm32")]
-fn folder_ready(_: &str) -> bool {
+pub(super) fn folder_ready(_: &str) -> bool {
     false
 }
 
 /// Whether a file is at `path` already.
 #[cfg(not(target_arch = "wasm32"))]
-fn file_there(path: &std::path::Path) -> bool {
+pub(super) fn file_there(path: &std::path::Path) -> bool {
     path.exists()
 }
 
 #[cfg(target_arch = "wasm32")]
-fn file_there(_: &std::path::Path) -> bool {
+pub(super) fn file_there(_: &std::path::Path) -> bool {
     false
 }
 
