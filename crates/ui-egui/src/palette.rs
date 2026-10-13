@@ -203,7 +203,7 @@ mod tests {
         app.ui.palette_query = "zoom".into();
         let ctx = egui::Context::default();
         let key = |k| egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-        let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx())).textures_delta.clear();
             ctx.data(|d| d.get_temp::<(usize, String)>(egui::Id::new("palette-selected"))).unwrap().0
         };
