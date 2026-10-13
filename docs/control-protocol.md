@@ -286,7 +286,12 @@ drawer beside the toolbar; Escape or a click outside closes it. While it is open
 toolbar to add it (onto a button's top or bottom edge: its own slot before or after; onto its middle: into its
 group), from the toolbar into it to remove it, or within the toolbar to move it. `toolbar.addTool {tool, slot?,
 place?}`, `toolbar.removeTool {tool, group?}` and `toolbar.reset` do the same for the current Basic or Advanced
-toolbar and return its slots; the edits (`ui.toolbar_edits`) are saved with the preferences.
+toolbar and return its slots; the edits (`ui.toolbar_edits`) are saved with the preferences. The drawer lists
+the tools one per row (icon, name, shortcut), each flyout group framed together under its heading; its ☰ menu
+has Reset and the Basic and Advanced toolbars. Its Show section (`toolbar.show {control?, on?}`, `control` one
+of `fillStroke`, `coloring`, `drawMode`, `screenMode`) shows or hides the controls under the toolbar's tools,
+saved with the preferences (`ui.toolbar_show`). The toolbar names its groups only with Preferences › User
+Interface › Show Tool Group Labels, off as it ships (#1736).
 
 The Contextual Task Bar: its handle (the grip at its left end) drags it anywhere on the canvas, which always holds
 it whole, also when the window shrinks. Unpinned, the bar keeps that offset as it follows the selection, until

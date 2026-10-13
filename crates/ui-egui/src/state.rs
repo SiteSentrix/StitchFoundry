@@ -277,6 +277,10 @@ pub struct UiState {
     /// The Basic and Advanced toolbars as Edit Toolbar left them (none: as they ship).
     #[serde(default)]
     pub toolbar_edits: ToolbarEdits,
+    /// The controls under the toolbar's tools that the All Tools drawer's Show section shows
+    /// (`toolbar.show`).
+    #[serde(default)]
+    pub toolbar_show: ToolbarShow,
     /// Edit Toolbar's All Tools drawer is open beside the toolbar (`window.editToolbar`).
     #[serde(skip)]
     pub tools_drawer: bool,
@@ -458,6 +462,57 @@ pub struct ToolbarCategory {
     pub slots: Vec<Vec<String>>,
 }
 
+/// The controls under the toolbar's tools, each shown or hidden from the All Tools drawer's Show
+/// section: Fill and Stroke (the proxy), Coloring (Color, Gradient, None), Draw Mode and Screen
+/// Mode. All shown as it ships.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolbarShow {
+    #[serde(default = "yes")]
+    pub fill_stroke: bool,
+    #[serde(default = "yes")]
+    pub coloring: bool,
+    #[serde(default = "yes")]
+    pub draw_mode: bool,
+    #[serde(default = "yes")]
+    pub screen_mode: bool,
+}
+
+impl Default for ToolbarShow {
+    fn default() -> Self {
+        Self { fill_stroke: true, coloring: true, draw_mode: true, screen_mode: true }
+    }
+}
+
+impl ToolbarShow {
+    /// The controls as (`toolbar.show` name, label, icon), in the Show section's order.
+    pub const CONTROLS: [(&'static str, &'static str, &'static str); 4] = [
+        ("fillStroke", "Fill and Stroke Controls", "dc-stroke"),
+        ("coloring", "Coloring Controls", "dc-gradient"),
+        ("drawMode", "Draw Mode Controls", "dc-draw-normal"),
+        ("screenMode", "Screen Mode Controls", "dc-screen-mode"),
+    ];
+
+    /// The flag of the control named `name`.
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut bool> {
+        match name {
+            "fillStroke" => Some(&mut self.fill_stroke),
+            "coloring" => Some(&mut self.coloring),
+            "drawMode" => Some(&mut self.draw_mode),
+            "screenMode" => Some(&mut self.screen_mode),
+            _ => None,
+        }
+    }
+
+    pub fn get(self, name: &str) -> bool {
+        let mut s = self;
+        s.get_mut(name).is_some_and(|on| *on)
+    }
+
+    pub fn json(self) -> serde_json::Value {
+        serde_json::json!({"fillStroke": self.fill_stroke, "coloring": self.coloring, "drawMode": self.draw_mode, "screenMode": self.screen_mode})
+    }
+}
+
 /// The toolbars Edit Toolbar changed: each one is `None` while it is as it ships.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ToolbarEdits {
@@ -614,6 +669,7 @@ impl Default for UiState {
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             toolbar_edits: ToolbarEdits::default(),
+            toolbar_show: ToolbarShow::default(),
             tools_drawer: false,
             floating_panels: vec![],
             docking: None,

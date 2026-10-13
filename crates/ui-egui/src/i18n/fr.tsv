@@ -4747,6 +4747,14 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
+	Fill and Stroke Controls	Commandes de fond et de contour
+	Coloring Controls	Commandes de couleur
+	Draw Mode Controls	Commandes de mode de dessin
+	Screen Mode Controls	Commandes de mode d'affichage
+	Drawer menu	Menu du tiroir
+	Toolbar: Show Controls	Barre d’outils : Afficher les commandes
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control doit être fillStroke, coloring, drawMode ou screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	commande inconnue `{name}` : fillStroke, coloring, drawMode ou screenMode
 @msg	give a fraction `t` from 0 to 1	indiquez une valeur `t` comprise entre 0 et 1
 @msg	give the path `id`	indiquez l’`id` du tracé
 @msg	invalid stroke widths	largeurs de contour non valides

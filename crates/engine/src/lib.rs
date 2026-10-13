@@ -716,7 +716,7 @@ pub struct Prefs {
     pub canvas_color: String,
     pub auto_collapse_icon_panels: bool,
     /// User Interface › Show Tool Group Labels: the toolbar's group names (Select, Shapes, Draw…);
-    /// off, a faint dash separates the groups instead (#663).
+    /// off (as it ships, #1736), a faint dash separates the groups instead (#663).
     pub tool_group_labels: bool,
     pub open_documents_as_tabs: bool,
     pub large_tabs: bool,
@@ -942,7 +942,7 @@ impl Default for Prefs {
             ui_brightness: s("mediumDark"),
             canvas_color: s("matchUi"),
             auto_collapse_icon_panels: false,
-            tool_group_labels: true,
+            tool_group_labels: false,
             open_documents_as_tabs: true,
             large_tabs: false,
             ui_scaling: 1.0,

@@ -24,11 +24,11 @@ use crate::state::{ToolbarCategory, ToolbarEdits};
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, icons, widgets};
 
-/// A tool's cell in the drawer: its icon and name.
-const CELL: egui::Vec2 = vec2(176.0, 28.0);
-const ICON: f32 = 20.0;
-/// The drawer's width: two cells, the gap between them and room for the scroll bar.
-const WIDTH: f32 = 2.0 * CELL.x + 24.0;
+/// A tool's row in the drawer: its icon, name and shortcut.
+const ROW: f32 = 26.0;
+const ICON: f32 = 18.0;
+/// The drawer's width: one column of rows, framed in groups, and room for the scroll bar.
+const WIDTH: f32 = 268.0;
 /// Gap between the toolbar and the drawer, and the drawer's least distance from the window's edges.
 const GAP: f32 = 4.0;
 /// Size of the tool following the pointer while it is dragged.
@@ -244,6 +244,19 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 Ok(())
             })
         })(),
+        "toolbar.show" => (|| {
+            let on = crate::menus::opt_bool(p, "on")?;
+            if let Some(name) = p.get("control").filter(|v| !v.is_null()) {
+                let name = name.as_str().ok_or("control must be fillStroke, coloring, drawMode or screenMode")?;
+                let flag = app
+                    .ui
+                    .toolbar_show
+                    .get_mut(name)
+                    .ok_or_else(|| format!("unknown control `{name}`: fillStroke, coloring, drawMode or screenMode"))?;
+                *flag = on.unwrap_or(!*flag);
+            }
+            Ok(app.ui.toolbar_show.json())
+        })(),
         "toolbar.reset" => {
             *current(&mut app.ui.toolbar_edits, app.ui.toolbar_advanced) = None;
             Ok(slots_json(app))
@@ -362,6 +375,27 @@ fn sections() -> &'static [(&'static str, Vec<&'static ToolInfo>)] {
     })
 }
 
+/// The headings in order, each with the flyout groups listed under it (a group under the heading
+/// most of its tools have, the first tool's on a tie), each in its tools' order: what the drawer
+/// frames together.
+fn groups() -> &'static [(&'static str, Vec<&'static [ToolInfo]>)] {
+    static GROUPS: OnceLock<Vec<(&'static str, Vec<&'static [ToolInfo]>)>> = OnceLock::new();
+    GROUPS.get_or_init(|| {
+        let mut out: Vec<(&'static str, Vec<&'static [ToolInfo]>)> = sections().iter().map(|(cat, _)| (*cat, vec![])).collect();
+        for g in TOOL_GROUPS {
+            let Some(first) = g.first() else { continue };
+            let count = |h: &str| g.iter().filter(|t| heading(t.id) == h).count();
+            let h = g.iter().map(|t| heading(t.id)).fold(heading(first.id), |best, h| if count(h) > count(best) { h } else { best });
+            match out.iter_mut().find(|(c, _)| *c == h) {
+                Some((_, gs)) => gs.push(g),
+                None => out.push((h, vec![g])),
+            }
+        }
+        out.retain(|(_, gs)| !gs.is_empty());
+        out
+    })
+}
+
 /// The All Tools drawer beside the toolbar, its top by the ••• button (higher when that would put
 /// it past the window's bottom), while `tools_drawer` is on.
 pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -383,29 +417,69 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let removing = dragged.is_some_and(|d| d.from_toolbar) && ctx.memory(|m| m.area_rect(id)).is_some_and(over);
     let mut picked = None;
     let mut reset = false;
+    let mut advanced = None;
+    let mut show_toggle = None;
     let resp = egui::Area::new(id).order(egui::Order::Foreground).fixed_pos(pos2(x, y)).show(ctx, |ui| {
         crate::toolbar::flyout_frame(&t, removing).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
-            ui.set_width(WIDTH.min(screen.width() - 2.0 * GAP - 16.0).max(CELL.x));
+            let width = WIDTH.min(screen.width() - 2.0 * GAP - 16.0).max(160.0);
+            ui.set_width(width);
+            // All Tools, and the drawer's flyout menu: Reset, and the Basic or Advanced toolbar.
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!("All Tools")).size(13.0).color(t.text_strong));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| reset = widgets::flat_button(ui, "Reset", 64.0).clicked());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let (r, menu) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
+                    icons::paint(ui, "menu", r.shrink(1.0), if menu.hovered() { t.text_strong } else { t.text_dim });
+                    menu.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tl!("Drawer menu")));
+                    let menu = menu.on_hover_text(tl!("Drawer menu"));
+                    egui::Popup::menu(&menu).id(menu_id()).show(|ui| {
+                        ui.set_min_width(160.0);
+                        if widgets::menu_item(ui, "Reset", true, false) {
+                            reset = true;
+                        }
+                        ui.separator();
+                        for (label, adv) in [("Basic", false), ("Advanced", true)] {
+                            if widgets::menu_item(ui, label, true, app.ui.toolbar_advanced == adv) {
+                                advanced = Some(adv);
+                            }
+                        }
+                    });
+                });
             });
             ui.add_space(4.0);
             // As tall as its tools, up to the window's height (it scrolls then); the Area's size
             // from the last frame mustn't cap it.
-            let room = (screen.height() - 2.0 * GAP - 68.0).max(120.0);
+            let room = (screen.height() - 2.0 * GAP - 104.0).max(120.0);
             egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).auto_shrink([false, true]).show(ui, |ui| {
-                for (cat, tools) in sections() {
-                    widgets::subheader(ui, tl!(cat));
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
-                        for tool in tools {
-                            if cell(ui, &t, tool, tool.id == active, in_toolbar.contains(tool.id)) {
-                                picked = Some(tool.id);
-                            }
-                        }
-                    });
+                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                let inner = ui.available_width() - 10.0;
+                for (cat, gs) in groups() {
                     ui.add_space(6.0);
+                    ui.label(egui::RichText::new(format!("{}:", tl!(cat))).size(12.0).color(t.text_strong));
+                    ui.add_space(4.0);
+                    for g in gs {
+                        // A flyout group: its tools framed together, as one toolbar button holds them.
+                        egui::Frame::NONE.stroke(Stroke::new(1.0, t.divider)).corner_radius(2.0).show(ui, |ui| {
+                            ui.set_width(inner);
+                            for tool in g.iter() {
+                                if row(ui, &t, tool, tool.id == active, in_toolbar.contains(tool.id)) {
+                                    picked = Some(tool.id);
+                                }
+                            }
+                        });
+                        ui.add_space(5.0);
+                    }
+                }
+            });
+            // Show: the controls under the toolbar's tools.
+            ui.add_space(4.0);
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(tl!("Show:")).size(12.0).color(t.text));
+                ui.add_space(4.0);
+                for (name, label, icon) in crate::state::ToolbarShow::CONTROLS {
+                    if show_button(ui, &t, name, label, icon, app.ui.toolbar_show.get(name)) {
+                        show_toggle = Some(name);
+                    }
                 }
             });
         });
@@ -423,10 +497,21 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if reset && let Err(e) = app.run("toolbar.reset", json!({})) {
         app.ui.status = e;
     }
+    // Basic or Advanced: the menu item of the other toolbar switches to it.
+    if advanced.is_some_and(|a| a != app.ui.toolbar_advanced)
+        && let Err(e) = app.run("window.toolbarAdvanced", json!({}))
+    {
+        app.ui.status = e;
+    }
+    if let Some(name) = show_toggle
+        && let Err(e) = app.run("toolbar.show", json!({ "control": name }))
+    {
+        app.ui.status = e;
+    }
     if let Some(id) = picked {
         app.select_tool(id);
         app.ui.tools_drawer = false;
-    } else if resp.response.clicked_elsewhere() && !pointer.is_some_and(|p| bar.contains(p)) {
+    } else if resp.response.clicked_elsewhere() && !pointer.is_some_and(|p| bar.contains(p)) && !egui::Popup::is_id_open(ctx, menu_id()) {
         // A click in the toolbar (picking a tool, or the ••• button that toggles the drawer) leaves
         // it open.
         app.ui.tools_drawer = false;
@@ -434,19 +519,68 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     ghost(ctx, &t);
 }
 
-/// A tool's cell in the drawer: icon and name, dimmed when the tool is in the toolbar already (it
-/// can't be dragged in again). Returns whether it was clicked.
-fn cell(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(CELL, if dimmed { Sense::click() } else { Sense::click_and_drag() });
+/// A Show section toggle: lit while its control shows under the toolbar's tools. Fill and Stroke
+/// and Coloring are drawn as small copies of those controls, the modes with their buttons' icons.
+fn show_button(ui: &mut Ui, t: &Tokens, name: &str, label: &str, icon: &str, on: bool) -> bool {
+    let (r, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, tl!(label)));
+    let p = ui.painter();
+    if on {
+        p.rect_filled(r, 3.0, t.tool_active);
+    } else if resp.hovered() {
+        p.rect_filled(r, 3.0, t.hover);
+    }
+    let ink = if on { t.text_strong } else { t.icon };
+    let c = r.center();
+    match name {
+        "fillStroke" => {
+            // The proxy: a filled square in front of a stroked one.
+            let back = Rect::from_center_size(c + vec2(3.0, 3.0), vec2(10.0, 10.0));
+            p.rect_stroke(back, 0.0, Stroke::new(2.0, ink), StrokeKind::Inside);
+            p.rect_filled(Rect::from_center_size(c - vec2(3.0, 3.0), vec2(10.0, 10.0)), 0.0, ink);
+        }
+        "coloring" => {
+            // Color, Gradient and None.
+            for (k, x) in [-6.5f32, 0.0, 6.5].into_iter().enumerate() {
+                let chip = Rect::from_center_size(c + vec2(x, 0.0), vec2(5.5, 9.0));
+                match k {
+                    0 => {
+                        p.rect_filled(chip, 0.0, ink);
+                    }
+                    1 => {
+                        p.rect_filled(chip, 0.0, ink.gamma_multiply(0.5));
+                    }
+                    _ => {
+                        p.rect_stroke(chip, 0.0, Stroke::new(1.0, ink), StrokeKind::Inside);
+                        p.line_segment([chip.left_bottom(), chip.right_top()], Stroke::new(1.0, ink));
+                    }
+                }
+            }
+        }
+        _ => icons::paint(ui, icon, r.shrink(5.0), ink),
+    }
+    resp.on_hover_text(tl!(label)).clicked()
+}
+
+/// The drawer's flyout menu.
+fn menu_id() -> egui::Id {
+    egui::Id::new("tools-drawer-menu")
+}
+
+/// A tool's row in the drawer: icon, name and shortcut, dimmed when the tool is in the toolbar
+/// already (it can't be dragged in again). Returns whether it was clicked.
+fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), if dimmed { Sense::click() } else { Sense::click_and_drag() });
     if !dimmed {
         resp.dnd_set_drag_payload(ToolDrag { tool: tool.id, from_toolbar: false });
     }
+    let fill = rect.shrink(1.0);
     if on {
-        ui.painter().rect_filled(rect, 3.0, t.selection);
+        ui.painter().rect_filled(fill, 2.0, t.selection);
     } else if resp.hovered() {
-        ui.painter().rect_filled(rect, 3.0, t.hover);
+        ui.painter().rect_filled(fill, 2.0, t.hover);
     }
-    // The active tool's cell is lit, dimmed or not.
+    // The active tool's row is lit, dimmed or not.
     let color = if on {
         t.text_strong
     } else if dimmed {
@@ -454,12 +588,31 @@ fn cell(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool
     } else {
         t.text
     };
-    let icon = Rect::from_center_size(rect.left_center() + vec2(6.0 + ICON / 2.0, 0.0), vec2(ICON, ICON));
+    let icon = Rect::from_center_size(rect.left_center() + vec2(8.0 + ICON / 2.0, 0.0), vec2(ICON, ICON));
     icons::paint(ui, icons::tool_icon(tool.icon), icon, if dimmed || on { color } else { t.icon });
-    let name = tl!(tool.label);
-    let name = if crate::i18n::current() == crate::i18n::Lang::EN { name.trim_end_matches(" Tool") } else { name };
-    let text_at = pos2(icon.right() + 8.0, rect.center().y);
-    ui.painter().with_clip_rect(rect).text(text_at, egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), color);
+    let painter = ui.painter().with_clip_rect(rect);
+    let shortcut = crate::shortcut_editor::tool_shortcut(tool.id);
+    let keys_w = shortcut.as_ref().map_or(0.0, |k| {
+        let keys = if on {
+            t.text_strong
+        } else if dimmed {
+            t.text_disabled
+        } else {
+            t.text_dim
+        };
+        let g = painter.layout_no_wrap(k.to_string(), egui::FontId::proportional(11.5), keys);
+        let w = g.size().x;
+        painter.galley(pos2(rect.right() - 10.0 - w, rect.center().y - g.size().y / 2.0), g, keys);
+        w + 12.0
+    });
+    let text_at = pos2(icon.right() + 10.0, rect.center().y);
+    painter.with_clip_rect(Rect::from_min_max(rect.min, pos2(rect.right() - 10.0 - keys_w, rect.bottom()))).text(
+        text_at,
+        egui::Align2::LEFT_CENTER,
+        tl!(tool.label),
+        egui::FontId::proportional(12.5),
+        color,
+    );
     resp.on_hover_text(crate::toolbar::tip(tool)).clicked()
 }
 
@@ -483,7 +636,7 @@ mod tests {
     use super::*;
 
     /// Tall enough for the whole Basic toolbar and the whole drawer.
-    const SCREEN: egui::Vec2 = vec2(1000.0, 2400.0);
+    const SCREEN: egui::Vec2 = vec2(1000.0, 4000.0);
     /// A toolbar tool button.
     const BUTTON: egui::Vec2 = vec2(36.0, 29.0);
 
@@ -561,7 +714,7 @@ mod tests {
         ctx.memory(|m| m.areas().visible_last_frame(&egui::LayerId::new(egui::Order::Foreground, drawer_id())))
     }
 
-    /// A point inside the drawer's cell of the tool named `name` (as the drawer shows it), and the
+    /// A point inside the drawer's row of the tool named `name` (as the drawer shows it), and the
     /// colour of its name.
     fn cell_at(shown: &[(String, Pos2, Color32)], drawer: Rect, name: &str) -> (Pos2, Color32) {
         shown
@@ -569,6 +722,40 @@ mod tests {
             .find(|(s, p, _)| s == name && drawer.contains(*p))
             .map(|(_, p, c)| (*p, *c))
             .unwrap_or_else(|| panic!("no {name} in the drawer {drawer:?}"))
+    }
+
+    /// The drawer frames each flyout group whole, under the heading most of its tools have: every
+    /// tool once, the Pencil's group (led by the Shaper) under Draw.
+    #[test]
+    fn the_drawer_frames_every_flyout_group_once() {
+        let listed: Vec<&str> = groups().iter().flat_map(|(_, gs)| gs.iter().flat_map(|g| g.iter().map(|t| t.id))).collect();
+        let all: Vec<&str> = TOOL_GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
+        assert_eq!(listed.len(), all.len());
+        assert!(all.iter().all(|id| listed.contains(id)));
+        let under = |id: &str| groups().iter().find(|(_, gs)| gs.iter().any(|g| g.iter().any(|t| t.id == id))).map(|(c, _)| *c);
+        assert_eq!(under("pencil"), Some("Draw"));
+        assert_eq!(under("shaper"), Some("Draw"), "framed with the Pencil");
+        assert_eq!(under("rectangle"), Some("Shapes"));
+    }
+
+    /// The Show section's controls (#1736): each shows (true), hides (false) or toggles, saved with
+    /// the preferences; an unknown control is an error naming them.
+    #[test]
+    fn toolbar_show_turns_the_controls_under_the_tools_on_and_off() {
+        let mut app = app();
+        let all_on = json!({"fillStroke": true, "coloring": true, "drawMode": true, "screenMode": true});
+        assert_eq!(app.run("toolbar.show", json!({})).unwrap(), all_on);
+        assert_eq!(app.run("toolbar.show", json!({"control": "coloring"})).unwrap()["coloring"], json!(false));
+        assert_eq!(app.run("toolbar.show", json!({"control": "screenMode", "on": false})).unwrap()["screenMode"], json!(false));
+        assert!(!app.ui.toolbar_show.coloring && !app.ui.toolbar_show.screen_mode && app.ui.toolbar_show.fill_stroke);
+        let err = app.run("toolbar.show", json!({"control": "swatches"})).unwrap_err();
+        assert!(err.contains("swatches") && err.contains("fillStroke"), "{err}");
+        // Saved with the preferences; older preferences show them all.
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        assert_eq!(serde_json::from_value::<crate::state::UiState>(saved).unwrap().toolbar_show, app.ui.toolbar_show);
+        let mut old = serde_json::to_value(&app.ui).unwrap();
+        old.as_object_mut().unwrap().remove("toolbar_show");
+        assert_eq!(serde_json::from_value::<crate::state::UiState>(old).unwrap().toolbar_show, crate::state::ToolbarShow::default());
     }
 
     /// Every tool is listed once, under a heading; the Basic toolbar's groups come first, in its order.
@@ -699,7 +886,7 @@ mod tests {
         assert!((drawer.left() - bar.right() - GAP).abs() < 1.0, "beside the toolbar: {drawer:?} {bar:?}");
         assert!((drawer.top() - edit.top()).abs() < 1.0 || drawer.bottom() >= SCREEN.y - GAP - 1.0, "by the button: {drawer:?} {edit:?}");
         assert!(drawer.y_range().contains(edit.center().y), "by the button: {drawer:?} {edit:?}");
-        assert!(drawer.width() < 3.0 * CELL.x, "two tools wide: {drawer:?}");
+        assert!(drawer.width() < WIDTH + 24.0, "one row of tools wide: {drawer:?}");
         // A click on a toolbar tool picks it and leaves the drawer open.
         let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
         let ellipse = tools[slot_of(&app, "ellipse").unwrap()].center();
@@ -724,7 +911,7 @@ mod tests {
         app.run("window.editToolbar", json!({})).unwrap();
         frame(&mut app, &ctx, 7.0, vec![]);
         let shown = frame(&mut app, &ctx, 7.1, vec![]);
-        let (at, _) = cell_at(&shown, drawer_rect(&ctx).unwrap(), "Artboard");
+        let (at, _) = cell_at(&shown, drawer_rect(&ctx).unwrap(), "Artboard Tool");
         click(&mut app, &ctx, 8.0, at);
         assert!(!app.ui.tools_drawer && app.session.tool_id() == "artboard");
     }
@@ -739,13 +926,13 @@ mod tests {
         let shown = frame(&mut app, &ctx, 0.1, vec![]);
         let drawer = drawer_rect(&ctx).unwrap();
         let dim = Tokens::get(&ctx).text_disabled;
-        assert_eq!(cell_at(&shown, drawer, "Ellipse").1, dim);
-        assert_ne!(cell_at(&shown, drawer, "Artboard").1, dim);
+        assert_eq!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
+        assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
         app.run("toolbar.addTool", json!({"tool": "artboard"})).unwrap();
         app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
         let shown = frame(&mut app, &ctx, 0.2, vec![]);
-        assert_ne!(cell_at(&shown, drawer, "Ellipse").1, dim);
-        assert_eq!(cell_at(&shown, drawer, "Artboard").1, dim);
+        assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
+        assert_eq!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
     }
 
     /// #1018: tools drag from the drawer onto the toolbar (between two tools, or onto one to join
@@ -761,19 +948,24 @@ mod tests {
         let drawer = drawer_rect(&ctx).unwrap();
         let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
         // Onto the divider under the Selection tool: its own slot, second.
-        let (artboard, _) = cell_at(&shown, drawer, "Artboard");
+        let (artboard, _) = cell_at(&shown, drawer, "Artboard Tool");
         drag(&mut app, &ctx, 1.0, artboard, tools[0].center_bottom() - vec2(0.0, 3.0));
         assert_eq!(&slots(&app)[..2], [&["selection"][..], &["artboard"]]);
         assert!(app.ui.tools_drawer, "the drawer stays open");
         // Onto the middle of the Ellipse tool: into its group.
         let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
         let ellipse = slot_of(&app, "ellipse").unwrap();
-        let (slice, _) = cell_at(&shown, drawer, "Slice");
+        // The drawer moves with the ••• button the new slot pushed down: read it again.
+        let shown = frame(&mut app, &ctx, 1.9, vec![]);
+        let drawer = drawer_rect(&ctx).unwrap();
+        let (slice, _) = cell_at(&shown, drawer, "Slice Tool");
         drag(&mut app, &ctx, 2.0, slice, tools[ellipse].center());
         assert_eq!(slots(&app)[ellipse], ["ellipse", "slice"]);
         // A dimmed tool (in the toolbar already) doesn't drag.
         let before = slots(&app);
-        let (rectangle, _) = cell_at(&shown, drawer, "Rectangle");
+        let shown = frame(&mut app, &ctx, 2.9, vec![]);
+        let drawer = drawer_rect(&ctx).unwrap();
+        let (rectangle, _) = cell_at(&shown, drawer, "Rectangle Tool");
         drag(&mut app, &ctx, 3.0, rectangle, tools[0].center_bottom() - vec2(0.0, 3.0));
         assert_eq!(slots(&app), before);
         // From the toolbar into the drawer: out of the toolbar.

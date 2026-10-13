@@ -4714,6 +4714,14 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
+	Fill and Stroke Controls	Kitöltés és körvonal vezérlői
+	Coloring Controls	Színezés vezérlői
+	Draw Mode Controls	Rajzolási mód vezérlői
+	Screen Mode Controls	Képernyőmód vezérlői
+	Drawer menu	Fiók menüje
+	Toolbar: Show Controls	Eszköztár: Vezérlők megjelenítése
+@msg	control must be fillStroke, coloring, drawMode or screenMode	a control értéke fillStroke, coloring, drawMode vagy screenMode lehet
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	ismeretlen vezérlő: `{name}`; fillStroke, coloring, drawMode vagy screenMode
 @msg	give a fraction `t` from 0 to 1	add meg a `t` értékét 0 és 1 között
 @msg	give the path `id`	add meg az útvonal `id` értékét
 @msg	invalid stroke widths	érvénytelen körvonalszélességek

@@ -3902,7 +3902,14 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
-
+	Fill and Stroke Controls	填色和描边控件
+	Coloring Controls	颜色控件
+	Draw Mode Controls	绘图模式控件
+	Screen Mode Controls	屏幕模式控件
+	Drawer menu	抽屉菜单
+	Toolbar: Show Controls	工具栏：显示控件
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control 必须是 fillStroke、coloring、drawMode 或 screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	未知控件 `{name}`：fillStroke、coloring、drawMode 或 screenMode
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	统一圆角半径
 	Top Left:	左上：

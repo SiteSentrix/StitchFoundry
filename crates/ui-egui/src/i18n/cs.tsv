@@ -4747,6 +4747,14 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
+	Fill and Stroke Controls	Ovládací prvky výplně a tahu
+	Coloring Controls	Ovládací prvky barev
+	Draw Mode Controls	Ovládací prvky režimu kreslení
+	Screen Mode Controls	Ovládací prvky režimu zobrazení
+	Drawer menu	Nabídka zásuvky
+	Toolbar: Show Controls	Panel nástrojů: Zobrazit ovládací prvky
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control musí být fillStroke, coloring, drawMode nebo screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	neznámý ovládací prvek `{name}`: fillStroke, coloring, drawMode nebo screenMode
 @msg	give a fraction `t` from 0 to 1	zadejte hodnotu `t` od 0 do 1
 @msg	give the path `id`	zadejte `id` cesty
 @msg	invalid stroke widths	neplatné šířky tahu

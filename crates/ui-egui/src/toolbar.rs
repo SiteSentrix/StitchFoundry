@@ -443,38 +443,44 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes, screen mode and Edit Toolbar, as
 /// large as the toolbar's `cols` (one or two) leave room for (#1129): in two columns the proxy and
 /// buttons grow and the three drawing modes show side by side.
+/// The All Tools drawer's Show section hides any of them but Edit Toolbar.
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usize) {
     let two = cols == 2;
-    ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
-    ui.add_space(5.0);
+    let show = app.ui.toolbar_show;
+    if show.fill_stroke {
+        ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
+        ui.add_space(5.0);
+    }
     // Color (the last solid colour), Gradient (the last gradient) and None, as commands.
     let (chip, gap) = if two { (17.0, 4.0) } else { (11.0, 2.0) };
-    ui.horizontal(|ui| {
-        ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
-        ui.spacing_mut().item_spacing.x = gap;
-        let mut clicked = None;
-        for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
-            let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
-            match cmd {
-                "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
-                "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
-                _ => widgets::paint_chip(ui, r, &Paint::None),
+    if show.coloring {
+        ui.horizontal(|ui| {
+            ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
+            ui.spacing_mut().item_spacing.x = gap;
+            let mut clicked = None;
+            for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
+                let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
+                match cmd {
+                    "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
+                    "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
+                    _ => widgets::paint_chip(ui, r, &Paint::None),
+                }
+                if resp.on_hover_text(tl!(tip)).clicked() {
+                    clicked = Some(cmd);
+                }
             }
-            if resp.on_hover_text(tl!(tip)).clicked() {
-                clicked = Some(cmd);
+            if let Some(cmd) = clicked {
+                app.run(cmd, json!({})).ok();
             }
-        }
-        if let Some(cmd) = clicked {
-            app.run(cmd, json!({})).ok();
-        }
-    });
-    ui.add_space(6.0);
+        });
+        ui.add_space(6.0);
+    }
     let modes = [
         (vectorcraft_engine::DrawMode::Normal, "dc-draw-normal", "Draw Normal", "normal"),
         (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
         (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
     ];
-    if two {
+    if two && show.draw_mode {
         // Side by side, each one a click away.
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 3.0 * 22.0) / 2.0);
@@ -488,12 +494,13 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
     ui.vertical_centered(|ui| {
         // One column: the current mode's button, which cycles them.
         if !two
+            && show.draw_mode
             && let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
             && widgets::icon_button(ui, icon, &format!("{} (Shift+D)", tl!(name)), mode != vectorcraft_engine::DrawMode::Normal, 26.0).clicked()
         {
             app.run("view.drawMode", json!({})).ok();
         }
-        if widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
+        if show.screen_mode && widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
             app.run("view.screenMode", json!({})).ok();
         }
         // Edit Toolbar: the All Tools drawer opens beside the toolbar, by this button.
@@ -1433,8 +1440,8 @@ pub(crate) mod tests {
         assert!(r.min.x.is_finite() && r.min.y.is_finite() && r.left() >= 0.0, "on screen: {r:?}");
     }
 
-    /// User Interface › Show Tool Group Labels (#663): on, the toolbar names its groups; off, it
-    /// shows none of the names, a faint dash between the groups instead.
+    /// User Interface › Show Tool Group Labels (#663): off as it ships (#1736), the toolbar shows
+    /// none of its groups' names, a faint dash between the groups instead; on, it names them.
     #[test]
     fn tool_group_labels_can_be_hidden() {
         fn texts(s: &egui::Shape, out: &mut Vec<String>) {
@@ -1455,11 +1462,11 @@ pub(crate) mod tests {
             out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
             shown
         };
-        let with = draw(&mut app);
-        assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
-        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": false})).unwrap();
         let without = draw(&mut app);
         assert!(!without.iter().any(|t| ["Select", "Shapes", "Draw", "Modify", "Type"].contains(&t.as_str())), "{without:?}");
+        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
+        let with = draw(&mut app);
+        assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
     }
 
     /// Hover `at` for two seconds, coming from elsewhere: the texts painted meanwhile.

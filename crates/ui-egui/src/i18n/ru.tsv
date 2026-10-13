@@ -4312,6 +4312,15 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
+	Basic	Базовый
+	Fill and Stroke Controls	Элементы управления заливкой и обводкой
+	Coloring Controls	Элементы управления цветом
+	Draw Mode Controls	Элементы управления режимом рисования
+	Screen Mode Controls	Элементы управления режимом экрана
+	Drawer menu	Меню ящика
+	Toolbar: Show Controls	Панель инструментов: Показать элементы управления
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control должен быть fillStroke, coloring, drawMode или screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	неизвестный элемент управления `{name}`: fillStroke, coloring, drawMode или screenMode
 @msg	give a fraction `t` from 0 to 1	укажите значение `t` от 0 до 1
 @msg	give the path `id`	укажите `id` контура
 @msg	invalid stroke widths	недопустимые значения ширины обводки

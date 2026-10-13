@@ -3750,7 +3750,8 @@ axis	Both	Ambos
 @msg	unknown parameter `{key}`; the command takes no parameters	parâmetro desconhecido `{key}`; o comando não tem parâmetros
 @msg	unknown parameter `{key}`; the command takes: {keys}	parâmetro desconhecido `{key}`; o comando aceita: {keys}
 	Load EPS into Clipboard	Carregar EPS na Área de Transferência
-
+	Drawer menu	Menu da gaveta
+	Toolbar: Show Controls	Barra de ferramentas: Mostrar controles
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Raio de Canto Único
 	Top Left:	Superior Esquerdo:
