@@ -348,6 +348,15 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
 fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize) -> (String, Response, Rect) {
     let t = Tokens::get(ui.ctx());
     let editing = ui.memory(|m| m.has_focus(id));
+    // A press outside the field ends its editing in this frame, so the text typed is committed
+    // before the press acts: the canvas, drawn after the panels, may select another object, and a
+    // frame later the text would be committed to that one.
+    if editing
+        && let Some(at) = ui.input(|i| i.pointer.primary_pressed().then(|| i.pointer.interact_pos()).flatten())
+        && ui.ctx().read_response(id).is_some_and(|r| !r.rect.contains(at))
+    {
+        ui.memory_mut(|m| m.surrender_focus(id));
+    }
     // When the value changes under a focused field (the slider beside it, a preview, another
     // field's edit), its text follows: the text typed for the old value would otherwise go back in
     // on the next Enter, Tab or arrow key (#1457).
