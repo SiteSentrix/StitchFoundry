@@ -26,6 +26,7 @@ pub mod embroidery_buttonholes;
 pub mod embroidery_charts;
 pub mod embroidery_clipart;
 pub mod embroidery_colorways;
+pub mod embroidery_cutfile;
 pub mod embroidery_decor;
 pub mod embroidery_edit;
 pub mod embroidery_flow;
@@ -285,6 +286,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_kiosk::specs());
         v.extend(embroidery_photo::specs());
         v.extend(embroidery_recognise::specs());
+        v.extend(embroidery_cutfile::specs());
         v.extend(embroidery_decor::specs());
         v.extend(embroidery_merge::specs());
         v.extend(embroidery_sheet_setup::specs());

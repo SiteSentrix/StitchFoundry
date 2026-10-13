@@ -445,7 +445,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SQN-03 | Sequin fills (digitize, border, fancy, multi, split, flip) | Done | Honeycomb or grid fills at an angle (sewn back and forth), borders inside the edge, fancy shapes, multi sizes, half-overlap (split) by a negative gap, every other flipped | 0 |
 | SQN-04 | Convert objects to sequins; manual sequins; custom sequins | Done | Any line or shape set to sequins; one at each drawn point (`layout: manual`); custom size, shape and colour | 0 |
 | BD-01 | Beading: bead runs, fixings, edit runs, manual beads | Done | Beads along lines, in shapes or at points, sewn through and back; edited as the path; counted | 0 |
-| BL-01 | Bling: palettes, runs, fills, borders, manual stones, bling lettering, edit | Partial | Rhinestones SS6–SS30 along lines, round edges, packed in shapes, at points, on type (bling lettering); not sewn; shown with facets; templates still to come (MDO-01) | 4 |
+| BL-01 | Bling: palettes, runs, fills, borders, manual stones, bling lettering, edit | Done | Rhinestones SS6–SS30 along lines, round edges, packed in shapes, at points, on type (bling lettering); not sewn; shown with facets; templates by Cut File | 0 |
 | AP-01 | Convert vectors to appliqué; create appliqué | Done | Appliqué type | – |
 | AP-02 | Fabric swatches on appliqué (show the fabric) | Missing | Image fill in preview | 4 |
 | AP-03 | Partial-cover appliqué (cover only uncovered edges) | Done | `partial` on appliqué: the cover leaves out the edges objects sewn later lie over | – |
@@ -518,7 +518,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | OUT-03 | Send to machine / USB / network queue | Done | Send to Machine writes to remembered machine folders (USB, the machine's folder, network shares), checked first; a queue manager is HW-01 | – |
 | OUT-04 | Wireless transfer to specific machine brands | Out | Proprietary protocols; revisit if documented | – |
 | OUT-05 | Cost estimate (stitches, thread, time, machine heads) | Done | `embroidery.settings {cost}` (per 1000 stitches, machine hour over its heads, thread per 1000 m, set-up an order, currency); `embroidery.cost {quantity}`; shown in the Design section and on worksheets | 0 |
-| MDO-01 | Export vectors, appliqué cut files, bling templates, multi-decoration files | Missing | SVG/DXF/PLT exports of the relevant layers | 4 |
+| MDO-01 | Export vectors, appliqué cut files, bling templates, multi-decoration files | Done | **Cut File**: rhinestone templates (holes 0.3 mm over the stone) and appliqué piece outlines as SVG or DXF in mm, mirrored if asked, or opened life size to print; stone counts. PLT and machine-specific multi-decoration codes are not public | 0 |
 | NET-01 | Machine networking (device setup, queues, device settings) | Out | Vendor ecosystems | – |
 | DM-01 | Design library: browse folders, thumbnails, search, design info | Done | The Design Library section (`embroidery.library.scan`): a folder's machine files as stitch thumbnails with size, stitches, colours and date, searched and sorted, cached, opened with a click | 0 |
 | DM-02 | Job orders, batch convert, output selected designs | Done | Job orders (`embroidery.job.*`: customer, design, quantity, due, garment, placement, notes, status; worksheet with the job's barcode and cost; files in one step); batch convert of a folder or chosen designs | 0 |
@@ -559,7 +559,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-26 | Design notes kept with the design and printed on worksheets | Done | *Design notes* in the Design section (`embroidery.settings {notes}`), saved with the design, printed wrapped on worksheets | 0 |
 | NEW-27 | Echo and background quilting round objects | Missing | Offset runs or a stipple behind the design (CS-*, SP-*) | 7 |
 | NEW-28 | Embossed pattern that follows a turning satin | Missing | Pattern stretched along the turning direction (PS-*) | 7 |
-| NEW-29 | Appliqué cover choice (satin, blanket, zigzag or one's own) and printed mirrored cutting templates | Partial | Covers: satin, blanket, zigzag, triple run or none; printed templates still to come (MDO-01) | 4 |
+| NEW-29 | Appliqué cover choice (satin, blanket, zigzag or one's own) and printed mirrored cutting templates | Done | Covers: satin, blanket, zigzag, triple run or none; cutting templates from Cut File, mirrored if asked, printed life size | 0 |
 | NEW-30 | Catalogue print of a design folder (thumbnail sheets, lists) | Done | `embroidery.library.catalogue`: thumbnail sheets of a folder's designs in their colours with name, size, stitches, colours and format | 0 |
 | NEW-31 | Fabric presets that recommend a stabiliser | Done | Each fabric names a stabiliser (tear-away, cut-away, no-show mesh, wash-away) and a topping where it wants one; shown under Fabric settings and printed on worksheets | 0 |
 | NEW-32 | Help in place: F1 on a tool opens its help, a hints panel with short tips | Missing | Docs sections linked from tools | 7 |
@@ -579,8 +579,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 218 done,
-10 partial, 16 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 221 done,
+8 partial, 15 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

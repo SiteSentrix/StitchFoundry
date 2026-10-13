@@ -530,12 +530,21 @@ Five stitch types decorate instead of stitching a fill (Embroidery panel › Sti
   and back so it lies flat.
 - **Rhinestones**: stones (SS6 to SS30, by size in mm) along the line, round the edge, packed
   inside the shape or at points, round or square. They aren't sewn and add nothing to the
-  machine file; export their template (Cut File) to cut, brush the stones into and press.
+  machine file; export their template (**Cut File**, below) to cut, brush the stones into and press.
   Setting type to rhinestones makes bling lettering and bling borders.
 - **Cord**: a cord couched along the line with a zigzag a little wider than it (`size`: the
   cord's width).
 - **Boring**: each closed shape a cut-work hole: its outline run, a stop to cut it, then a
   satin edge round it (`size`: the edge's width).
+
+**Cut File** (Embroidery menu, `embroidery.cutFile {what?, format?, mirror?, path?, open?}`) writes
+what is cut rather than sewn, in millimetres, as SVG or DXF (R12 lines and circles, for cutters
+and laser tables): each rhinestone a hole 0.3 mm larger than its stone (the rhinestone template,
+to cut in template material, brush the stones into and press), and each appliqué piece's
+outline (to cut the fabric by hand or on a cutter). `what` takes `stones`, `applique` or `all`;
+`mirror` flips it for material cut from its back (heat-transfer flock, fabric with fusible
+backing). `open: true` opens it as a new document, life size, to print as a cutting template.
+It also lists the stones by size and colour, to order and to set.
 
 The machine stops before each sequin, cord and boring object (`stop`), for the operator to load
 the sequins, lay the cord or cut the holes: the codes that drive sequin, cording and boring
