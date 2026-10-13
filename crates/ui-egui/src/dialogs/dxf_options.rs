@@ -1,6 +1,6 @@
 //! DXF Options (Export As → DXF): version, scale (1 unit of the art = N drawing units) and
 //! lineweights, number of colours, the format of placed images, Preserve Appearance or Maximize
-//! Editability, and Export Selected Art Only, Alter Paths for Appearance and Outline Text.
+//! Editability, centerline stroke output, Export Selected Art Only, Alter Paths for Appearance and Outline Text.
 //!
 //! Fields: `document.export` params (`format: dxf`, `path?`, the artboard choice) and the DXF
 //! options of `document.exportDxf`. OK remembers the options for next time and writes the file
@@ -42,6 +42,7 @@ fn defaults() -> Map<String, Value> {
         ("colors", json!(ColorDepth::default().id())),
         ("rasterFormat", json!(RasterFormat::default().id())),
         ("preserve", json!(Preserve::default().id())),
+        ("centerlineStrokes", json!(false)),
         ("alterPaths", json!(false)),
         ("outlineText", json!(false)),
         ("selectedOnly", json!(false)),
@@ -65,6 +66,18 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    if widgets::flat_button(ui, tl!("3ds Max — R12 Linework"), 210.0).clicked() {
+        d.fields.insert("version".into(), json!(DxfVersion::R12.id()));
+        d.fields.insert("unit".into(), json!(Unit::Millimeters.label()));
+        d.fields.insert("scale".into(), json!(1));
+        d.fields.insert("preserve".into(), json!(Preserve::Editability.id()));
+        d.fields.insert("centerlineStrokes".into(), json!(true));
+        d.fields.insert("colors".into(), json!(ColorDepth::Aci256.id()));
+        d.fields.insert("outlineText".into(), json!(true));
+        d.fields.insert("alterPaths".into(), json!(false));
+        d.fields.insert("scaleLineweights".into(), json!(false));
+    }
+    ui.add_space(6.0);
     let versions: Vec<(&str, &str)> = DxfVersion::ALL.iter().map(|v| (v.id(), v.label())).collect();
     choice(ui, d, "version", tl!("Version:"), &versions);
     ui.add_space(4.0);
@@ -99,6 +112,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         d.fields.insert("selectedOnly".into(), json!(!d.bool("selectedOnly")));
     }
     check(ui, d, "alterPaths", tl!("Alter Paths for Appearance"));
+    check(ui, d, "centerlineStrokes", tl!("Export Strokes as Centerlines (0 width)"));
     // Preserve Appearance always outlines type.
     let appearance = preserve == Preserve::Appearance;
     if widgets::check(ui, tl!("Outline Text"), appearance || d.bool("outlineText"), !appearance) {
@@ -107,9 +121,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(8.0);
     super::form::caption(
         ui,
-        match preserve {
-            Preserve::Appearance => tl!("Type becomes outlines, and strokes a CAD line can't draw become filled shapes."),
-            Preserve::Editability => tl!("Type stays text, and every stroke is a line with its lineweight and dashes."),
+        if d.bool("centerlineStrokes") {
+            tl!("Stroked paths become one zero-width centerline; their fills are omitted.")
+        } else {
+            match preserve {
+                Preserve::Appearance => tl!("Type becomes outlines, and strokes a CAD line can't draw become filled shapes."),
+                Preserve::Editability => tl!("Type stays text, and every stroke is a line with its lineweight and dashes."),
+            }
         },
     );
     false

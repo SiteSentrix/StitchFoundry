@@ -134,6 +134,9 @@
 	Alt	Alt
 	Alt:	Alt：
 	Alter Paths for Appearance	依外觀調整路徑
+	3ds Max — R12 Linework	3ds Max — R12 線稿
+	Export Strokes as Centerlines (0 width)	將筆畫轉存為中心線 (寬度 0)
+	Stroked paths become one zero-width centerline; their fills are omitted.	具有筆畫的路徑會變成一條寬度為零的中心線；其填色不會保留。
 	Amount	數量
 	Amount:	數量：
 	Anchor Point	錨點

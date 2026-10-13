@@ -810,6 +810,9 @@
 	All the art	모든 아트워크
 	Alt:	Alt:
 	Alter Paths for Appearance	모양에 맞게 패스 변경
+	3ds Max — R12 Linework	3ds Max — R12 선 작업
+	Export Strokes as Centerlines (0 width)	선을 중심선으로 내보내기(두께 0)
+	Stroked paths become one zero-width centerline; their fills are omitted.	선이 있는 패스는 두께 0인 중심선 하나가 되며 칠은 생략됩니다.
 	Amount:	양:
 	Anchor Point	앵커 포인트
 	Anchor Point Tool	앵커 포인트 도구

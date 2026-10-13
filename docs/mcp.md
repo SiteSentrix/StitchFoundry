@@ -2277,6 +2277,14 @@ selected objects in their layers (every export takes it), and `useArtboards: tru
 artboard holding the art over it. What DXF can't hold (gradients and patterns as one colour, blending, opacity masks,
 raster effects, clipping) comes back in `warnings`.
 
+`centerlineStrokes: true` writes each stroked path once, as a zero-width centerline (its fill and stroke outline
+are left out): the linework 3D and CAM software extrude or sweep along, instead of the outline of the stroke's
+width. For linework intended for 3ds Max, Export As → DXF has a **3ds Max — R12 Linework** preset: millimetres, R12
+polylines (curves are flattened), editable strokes as centerlines, 256 colours and outlined text, the version older
+CAD importers read most reliably. Review the export warnings: R12 drops images and fill interiors. Through
+`document.exportDxf` the preset is `version: "R12"`, `unit: "mm"`, `preserve: "editability"`,
+`centerlineStrokes: true`, `colors: 256` and `outlineText: true`.
+
 DWG can't be written (no openly licensed writer exists): `document.formats` lists it under `unsupported` with that
 hint, and exporting to it answers with the hint to export DXF. PICT files are not supported either and say so when
 opened.

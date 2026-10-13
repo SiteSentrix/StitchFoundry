@@ -191,6 +191,10 @@
 	Alt	Alt
 	Alt:	Alt:
 	Alter Paths for Appearance	Sửa đường dẫn cho diện mạo
+	3ds Max — R12 Linework	3ds Max — đường nét R12
+	Export Strokes as Centerlines (0 width)	Xuất nét thành đường tâm (độ rộng 0)
+	Stroked paths become one zero-width centerline; their fills are omitted.	Các đường có nét trở thành một đường tâm có độ rộng 0; phần tô của chúng bị bỏ qua.
+	Ambient	Ánh sáng môi trường
 	Amount	Mức độ
 	Amount:	Mức độ:
 	Anchor Point	Điểm neo

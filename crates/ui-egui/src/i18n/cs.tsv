@@ -1906,6 +1906,9 @@ lighting	Light	Světlo
 	Scale to Fit Artboard	Přizpůsobit pracovní ploše
 	Scaling	Měřítko
 	Alter Paths for Appearance	Upravit cesty podle vzhledu
+	3ds Max — R12 Linework	Čárový výkres R12 pro 3ds Max
+	Export Strokes as Centerlines (0 width)	Exportovat tahy jako osy (tloušťka 0)
+	Stroked paths become one zero-width centerline; their fills are omitted.	Cesty s tahem se změní na jednu osu nulové tloušťky; jejich výplně se vynechají.
 	DXF Options	Možnosti DXF
 	Export Option	Možnost exportu
 	Export Selected Art Only	Exportovat jen vybranou kresbu

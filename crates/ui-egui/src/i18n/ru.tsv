@@ -163,6 +163,9 @@
 	Alt	Alt
 	Alt:	Alt:
 	Alter Paths for Appearance	Изменять контуры для оформления
+	3ds Max — R12 Linework	3ds Max — линии R12
+	Export Strokes as Centerlines (0 width)	Экспортировать обводки как осевые линии (толщина 0)
+	Stroked paths become one zero-width centerline; their fills are omitted.	Контуры с обводкой становятся одной осевой линией нулевой толщины; заливки опускаются.
 	Amount	Количество
 	Amount:	Количество:
 	Anchor Point	Опорная точка

@@ -277,6 +277,8 @@ pub struct DxfOptions {
     pub colors: ColorDepth,
     pub raster: RasterFormat,
     pub preserve: Preserve,
+    /// Write one zero-width centerline per stroked path, ignoring its fill and stroke outline.
+    pub centerline_strokes: bool,
     /// Alter Paths for Appearance: every stroke is written as the filled area it paints.
     pub alter_paths: bool,
     /// Type is written as glyph outlines (always with [`Preserve::Appearance`]).
@@ -297,6 +299,7 @@ impl Default for DxfOptions {
             colors: ColorDepth::default(),
             raster: RasterFormat::default(),
             preserve: Preserve::default(),
+            centerline_strokes: false,
             alter_paths: false,
             outline_text: false,
             region: Rect::ZERO,

@@ -166,6 +166,9 @@
 	Alt	Alt
 	Alt:	Alt :
 	Alter Paths for Appearance	Modifier les tracés selon l’aspect
+	3ds Max — R12 Linework	3ds Max — Tracé linéaire R12
+	Export Strokes as Centerlines (0 width)	Exporter les contours en lignes médianes (épaisseur 0)
+	Stroked paths become one zero-width centerline; their fills are omitted.	Les tracés avec contour deviennent une ligne médiane d’épaisseur nulle ; leurs fonds sont omis.
 	Amount	Quantité
 	Amount:	Quantité :
 	Anchor Point	Point d’ancrage
