@@ -1562,8 +1562,12 @@ pub(crate) fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label(tl!("Thread colors"));
+        // the theme's widget fill matches the panel, which would hide the rail
+        let t = Tokens::get(ui.ctx());
+        ui.visuals_mut().widgets.inactive.bg_fill = t.input_border;
+        ui.visuals_mut().selection.bg_fill = t.accent;
         let mut n = app.embroidery.digitize_colors.clamp(2, 32);
-        if ui.add(egui::Slider::new(&mut n, 2..=32)).changed() {
+        if ui.add(egui::Slider::new(&mut n, 2..=32).integer().trailing_fill(true)).changed() {
             app.embroidery.digitize_colors = n;
         }
     });
