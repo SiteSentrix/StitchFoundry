@@ -4829,3 +4829,10 @@ machine	Stop	Stopp
 	couldn't be read:	nicht lesbar:
 	Product Visualizer	Produktvorschau
 @msg	product outline: {e}	Produktumriss: {e}
+	Exports	Exporte
+	Nothing exported yet in this session.	In dieser Sitzung wurde noch nichts exportiert.
+	Again	Erneut
+	Export it again, as it was asked, from this document	Erneut exportieren, wie angefordert, aus diesem Dokument
+	Export History	Exportverlauf
+	Clear Export History	Exportverlauf leeren
+	Export Again	Erneut exportieren

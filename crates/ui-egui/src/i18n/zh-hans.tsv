@@ -4454,3 +4454,10 @@ machine	Stop	停止
 	Converted:	已转换：
 	couldn't be read:	无法读取：
 	Product Visualizer	产品预览
+	Exports	导出
+	Nothing exported yet in this session.	本次会话尚未导出任何内容。
+	Again	再次
+	Export it again, as it was asked, from this document	按原设置从此文档再次导出
+	Export History	导出历史
+	Clear Export History	清除导出历史
+	Export Again	再次导出

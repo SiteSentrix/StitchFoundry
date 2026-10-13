@@ -4238,3 +4238,10 @@ machine	Stop	停止
 	Converted:	已轉換：
 	couldn't be read:	無法讀取：
 	Product Visualizer	產品預覽
+	Exports	匯出
+	Nothing exported yet in this session.	本次工作階段尚未匯出任何內容。
+	Again	再次
+	Export it again, as it was asked, from this document	依原設定從此文件再次匯出
+	Export History	匯出記錄
+	Clear Export History	清除匯出記錄
+	Export Again	再次匯出

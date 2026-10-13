@@ -4869,3 +4869,10 @@ machine	Stop	停止
 	couldn't be read:	読み込めません:
 	Product Visualizer	製品プレビュー
 @msg	product outline: {e}	製品の輪郭: {e}
+	Exports	書き出し
+	Nothing exported yet in this session.	このセッションではまだ何も書き出していません。
+	Again	再実行
+	Export it again, as it was asked, from this document	この文書から、指定どおりにもう一度書き出します
+	Export History	書き出し履歴
+	Clear Export History	書き出し履歴を消去
+	Export Again	もう一度書き出し

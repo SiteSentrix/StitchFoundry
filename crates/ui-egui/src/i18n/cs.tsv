@@ -4900,3 +4900,10 @@ machine	Stop	Zastavení
 	couldn't be read:	nelze přečíst:
 	Product Visualizer	Náhled na výrobku
 @msg	product outline: {e}	obrys výrobku: {e}
+	Exports	Exporty
+	Nothing exported yet in this session.	V této relaci zatím nic nebylo exportováno.
+	Again	Znovu
+	Export it again, as it was asked, from this document	Exportovat znovu, jak bylo zadáno, z tohoto dokumentu
+	Export History	Historie exportů
+	Clear Export History	Vymazat historii exportů
+	Export Again	Exportovat znovu

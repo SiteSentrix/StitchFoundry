@@ -4883,3 +4883,10 @@ machine	Stop	Arrêt
 	couldn't be read:	illisibles :
 	Product Visualizer	Aperçu sur produit
 @msg	product outline: {e}	contour du produit : {e}
+	Exports	Exports
+	Nothing exported yet in this session.	Rien n'a encore été exporté dans cette session.
+	Again	Refaire
+	Export it again, as it was asked, from this document	L'exporter à nouveau, comme demandé, depuis ce document
+	Export History	Historique des exports
+	Clear Export History	Effacer l'historique des exports
+	Export Again	Exporter à nouveau

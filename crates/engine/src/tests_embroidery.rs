@@ -580,6 +580,45 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
 }
 
 #[test]
+fn exports_that_write_files_are_remembered_and_run_again() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let dir = std::env::temp_dir().join(format!("sf-exports-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let d = dir.to_string_lossy().to_string();
+    // a file written, files given back (not remembered), a failure, a batch
+    let svg = dir.join("art.svg").to_string_lossy().to_string();
+    s.execute("document.export", &json!({"path": svg, "format": "svg"})).unwrap();
+    s.execute("document.export", &json!({"format": "svg"})).unwrap();
+    s.execute("embroidery.export", &json!({"format": "dst"})).unwrap();
+    assert!(s.execute("embroidery.output", &json!({"dir": dir.join("missing").to_string_lossy(), "formats": ["dst"]})).is_err());
+    s.execute("embroidery.output", &json!({"dir": d, "formats": ["pes"], "worksheet": "none", "design": false, "name": "Job"})).unwrap();
+    let h = s.execute("export.history", &json!({})).unwrap();
+    let list = h["exports"].as_array().unwrap();
+    let commands: Vec<&str> = list.iter().filter_map(|e| e["command"].as_str()).collect();
+    assert_eq!(commands, ["embroidery.output", "embroidery.output", "document.export"], "{h}");
+    assert!(list[0]["ok"].as_bool().unwrap() && list[0]["paths"][0].as_str().unwrap().ends_with("Job.pes"), "{h}");
+    assert!(!list[1]["ok"].as_bool().unwrap() && list[1]["error"].as_str().unwrap().contains("isn't there"));
+    assert_eq!(list[2]["paths"][0].as_str(), Some(svg.as_str()));
+    assert!(list[0].get("params").is_none(), "what was asked stays inside");
+    // again: the same files written again, not numbered beside them, and remembered
+    std::fs::remove_file(dir.join("Job.pes")).unwrap();
+    let r = s.execute("export.again", &json!({})).unwrap();
+    assert!(r["files"][0]["path"].as_str().unwrap().ends_with("Job.pes") && dir.join("Job.pes").exists(), "{r}");
+    std::fs::write(&svg, b"old").unwrap();
+    s.execute("export.again", &json!({"index": 3})).unwrap();
+    assert!(std::fs::read_to_string(&svg).unwrap().contains("<svg"));
+    assert_eq!(s.execute("export.history", &json!({"limit": 2})).unwrap()["exports"].as_array().unwrap().len(), 2);
+    assert!(s.execute("export.again", &json!({"index": 99})).is_err());
+    assert_eq!(s.execute("export.history.clear", &json!({})).unwrap()["cleared"].as_u64(), Some(5));
+    assert!(s.execute("export.again", &json!({})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn batch_output_writes_machine_files_worksheet_and_design_in_one_step() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

@@ -4871,3 +4871,10 @@ machine	Stop	Остановка
 	couldn't be read:	не читаются:
 	Product Visualizer	Просмотр на изделии
 @msg	product outline: {e}	контур изделия: {e}
+	Exports	Экспорт
+	Nothing exported yet in this session.	В этом сеансе ещё ничего не экспортировано.
+	Again	Повторить
+	Export it again, as it was asked, from this document	Экспортировать снова, как было задано, из этого документа
+	Export History	История экспорта
+	Clear Export History	Очистить историю экспорта
+	Export Again	Экспортировать снова

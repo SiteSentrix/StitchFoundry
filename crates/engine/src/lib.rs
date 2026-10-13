@@ -967,6 +967,8 @@ pub struct Session {
     /// What the design library read from each machine file, by path, kept while the file's size
     /// and date stay the same (`embroidery.library.scan`).
     pub design_library: std::collections::HashMap<String, cmd::embroidery_library::Entry>,
+    /// The exports of this session that wrote files, newest first ([`cmd::export_history`]).
+    pub export_history: std::collections::VecDeque<serde_json::Value>,
 }
 
 impl Default for Session {
@@ -1027,6 +1029,7 @@ impl Session {
             embroidery_fonts: Vec::new(),
             embroidery_fonts_ready: false,
             design_library: Default::default(),
+            export_history: Default::default(),
         }
     }
 
@@ -1186,6 +1189,10 @@ impl Session {
             self.batch_stash = None;
         }
         let r = if self.depth == 0 { self.run_guarded(id, |s| (spec.run)(s, params)) } else { self.run_nested(|s| (spec.run)(s, params)) };
+        // an export asked for, not one a command makes on its way: remembered, worked or not
+        if self.depth == 0 {
+            cmd::export_history::note(self, id, params, r.as_ref().map_err(ToString::to_string));
+        }
         let r = r?;
         if self.depth == 0 {
             self.inherit_new_art();

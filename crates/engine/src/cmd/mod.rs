@@ -43,6 +43,7 @@ pub mod embroidery_splits;
 pub mod embroidery_stitches;
 pub mod embroidery_visualizer;
 pub mod expand;
+pub mod export_history;
 pub(crate) mod fileinfo;
 pub mod fileio;
 pub mod findfiles;
@@ -258,6 +259,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_library::specs());
         v.extend(embroidery_output::specs());
         v.extend(embroidery_visualizer::specs());
+        v.extend(export_history::specs());
         v.extend(embroidery_scatter::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
