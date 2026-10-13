@@ -566,6 +566,7 @@ fn structured_junk() {
         ("embroidery.image.colors", json!({"id": 1, "colors": 99, "chart": 3})),
         ("embroidery.image.prepare", json!({"id": "x", "colors": 1, "smooth": 9, "clean": -1})),
         ("embroidery.autoDigitize", json!({"details": f64::NAN, "outline": 3, "outlineWidth": f64::INFINITY, "chart": []})),
+        ("embroidery.stitchesToObjects", json!({"ids": ["x", -1, null]})),
         ("embroidery.photoStitch", json!({"mode": "coral", "density": f64::NAN, "contrast": f64::INFINITY, "spacing": -1})),
         ("embroidery.kiosk", json!({"on": "x", "pin": 3, "templates": [1], "colors": ["red"], "format": "zzz"})),
         ("embroidery.kiosk.order", json!({"text": "\u{0}", "template": 3, "font": [], "size": f64::NAN})),

@@ -959,6 +959,15 @@ one line.
 
 - Opening or placing a machine file turns each thread into a path of **Manual** stitches (one
   subpath per run between trims), which you can edit, move, scale and recolour.
+- **Embroidery › Convert Stitches to Objects** (`embroidery.stitchesToObjects {ids?}`) then
+  recognises those stitches from the way the needle moves: where it swings from side to side
+  stitch after stitch it is a satin column (its two sides become the column's rails, with stitch
+  angles where it turned), where it sews rows of several stitches back and forth side by side it
+  is a tatami fill (the rows' outline, angle, spacing and stitch length), and the rest are runs.
+  They become ordinary objects in the same thread, in the same order, in the manual stitches'
+  place (one undo step), so a design whose source is lost can be resized and sewn again with its
+  stitches made afresh. Underlay is recognised as runs or fills of its own; delete those you
+  don't want, since the new objects make their own.
 - PCS is **experimental**: its layout comes from public descriptions of the format, and no
   machine has sewn one yet. It holds 16 colours at most, positions in 1/6 mm, and no trim (a
   trim is written as a move to where the needle is). TAP is DST's records without the header.
