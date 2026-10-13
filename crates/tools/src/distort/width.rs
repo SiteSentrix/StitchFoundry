@@ -298,7 +298,7 @@ impl Tool for WidthTool {
                 let Some(spot) = Self::spot_at(cx, p) else { return vec![] };
                 let Some((w, _)) = Self::hit(cx, &spot, p) else { return vec![] };
                 self.selected = Some((spot.owner, vec![w.t]));
-                vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "index": w.index}))]
+                vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "index": w.index, "adjustAdjoining": ev.mods.shift}))]
             }
             PointerKind::Down => {
                 let Some(spot) = Self::spot_at(cx, p) else {
@@ -694,9 +694,15 @@ mod tests {
         let (d, id) = doc_three_points();
         let (s, p) = (Selection::default(), paint());
         let c = cx(&d, &s, &p);
-        let mut t = WidthTool::default();
-        let acts = t.pointer(&c, &ev(PointerKind::DoubleClick, 200.0, 195.0, Mods::default()));
-        assert_eq!(acts, vec![Action::Dialog("widthPoint".into(), json!({"id": id.0, "index": 2}))]);
-        assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 200.0, Mods::default())).is_empty(), "not on a width point");
+        for shift in [false, true] {
+            let mut t = WidthTool::default();
+            let mods = Mods { shift, ..Default::default() };
+            let acts = t.pointer(&c, &ev(PointerKind::DoubleClick, 200.0, 195.0, mods));
+            let [Action::Dialog(kind, p)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
+            assert_eq!(kind, "widthPoint");
+            assert_eq!((&p["id"], &p["index"]), (&json!(id.0), &json!(2)));
+            assert_eq!(p.get("adjustAdjoining").and_then(serde_json::Value::as_bool).unwrap_or(false), shift);
+            assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 200.0, mods)).is_empty(), "not on a width point");
+        }
     }
 }
