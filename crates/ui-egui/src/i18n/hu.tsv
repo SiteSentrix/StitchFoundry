@@ -1811,11 +1811,9 @@
 	Remember My Choices	Választásaim megjegyzése
 	{ready} of {total} ready	Kész: {ready}/{total}
 	The file is too large to read in full, so only its first part is listed.	A fájl túl nagy a teljes beolvasáshoz, ezért csak az első része szerepel a listában.
-	Copy Report	Jelentés másolása
 	Report copied	Jelentés másolva
 	Line {line}	{line}. sor
 	Line {line}: {name}: {status}	{line}. sor: {name}: {status}
-	Not read	Nincs beolvasva
 	Read Shortcut Set File	Billentyűparancs-készlet beolvasása fájlból
 	Import Matches	Importálási megfeleltetések
 	Remember Import Matches	Importálási megfeleltetések megjegyzése

@@ -1407,11 +1407,9 @@
 	Remember My Choices	Meine Auswahl merken
 	{ready} of {total} ready	{ready} von {total} bereit
 	The file is too large to read in full, so only its first part is listed.	Die Datei ist zu groß, um sie vollständig zu lesen. Daher wird nur ihr erster Teil aufgeführt.
-	Copy Report	Bericht kopieren
 	Report copied	Bericht kopiert
 	Line {line}	Zeile {line}
 	Line {line}: {name}: {status}	Zeile {line}: {name}: {status}
-	Not read	Nicht gelesen
 	Imported. Press OK to keep the imported set.	Importiert. Klicken Sie auf „OK“, um den importierten Satz zu behalten.
 	Read Shortcut Set File	Tastaturbefehlssatz-Datei lesen
 	Import Matches	Import-Zuordnungen

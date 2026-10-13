@@ -1631,11 +1631,9 @@
 	Remember My Choices	選択内容を記憶
 	{ready} of {total} ready	{total} 件中 {ready} 件が適用可能
 	The file is too large to read in full, so only its first part is listed.	ファイルが大きすぎて全体を読み込めないため、最初の部分のみを表示しています。
-	Copy Report	レポートをコピー
 	Report copied	レポートをコピーしました
 	Line {line}	{line} 行目
 	Line {line}: {name}: {status}	{line} 行目: {name}: {status}
-	Not read	読み込まれていません
 	Imported. Press OK to keep the imported set.	読み込みました。読み込んだセットを保持するには OK を押してください。
 	Read Shortcut Set File	ショートカットセットファイルを読む
 	Import Matches	読み込み時の対応付け

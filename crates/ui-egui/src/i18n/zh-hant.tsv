@@ -1400,11 +1400,9 @@
 	Remember My Choices	記住我的選擇
 	{ready} of {total} ready	{total} 個中有 {ready} 個就緒
 	The file is too large to read in full, so only its first part is listed.	檔案太大，無法完整讀取，因此只列出開頭的部分。
-	Copy Report	複製報告
 	Report copied	已複製報告
 	Line {line}	第 {line} 行
 	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
-	Not read	未讀取
 	Imported. Press OK to keep the imported set.	已匯入。按一下「確定」以保留匯入的快速鍵組。
 	Read Shortcut Set File	讀取快速鍵組檔案
 	Import Matches	匯入對應

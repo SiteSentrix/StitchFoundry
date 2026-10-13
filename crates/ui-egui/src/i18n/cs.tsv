@@ -140,11 +140,9 @@
 	Remember My Choices	Zapamatovat si moje volby
 	{ready} of {total} ready	Připraveno {ready} z {total}
 	The file is too large to read in full, so only its first part is listed.	Soubor je příliš velký na úplné přečtení, proto je uvedena jen jeho první část.
-	Copy Report	Kopírovat zprávu
 	Report copied	Zpráva zkopírována
 	Line {line}	Řádek {line}
 	Line {line}: {name}: {status}	Řádek {line}: {name}: {status}
-	Not read	Nepřečteno
 	Read Shortcut Set File	Přečíst soubor sady klávesových zkratek
 	Import Matches	Přiřazení z importů
 	Remember Import Matches	Zapamatovat přiřazení z importů

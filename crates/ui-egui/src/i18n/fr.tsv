@@ -1408,7 +1408,6 @@
 	from the format's public description	d’après la description publique du format
 	not known yet	encore inconnu
 	Shortcuts	Raccourcis
-	Shortcut	Raccourci
 	In the File	Dans le fichier
 	In VectorCraft	Dans VectorCraft
 	Needs Attention Only	À vérifier uniquement
@@ -1424,12 +1423,9 @@
 	Remember My Choices	Mémoriser mes choix
 	{ready} of {total} ready	{ready} sur {total} prêts
 	The file is too large to read in full, so only its first part is listed.	Le fichier est trop volumineux pour être lu en entier, seule sa première partie est donc listée.
-	Copy Report	Copier le rapport
 	Report copied	Rapport copié
 	Line {line}	Ligne {line}
 	Line {line}: {name}: {status}	Ligne {line}, {name}, {status}
-	Not read	Non lu
-	Imported. Press OK to keep the imported set.	Importé. Cliquez sur OK pour conserver le jeu importé.
 	Read Shortcut Set File	Lire un fichier de jeu de raccourcis
 	Import Matches	Correspondances d’importation
 	Remember Import Matches	Mémoriser les correspondances d’importation

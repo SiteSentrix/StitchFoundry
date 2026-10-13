@@ -1409,7 +1409,6 @@
 	from the format's public description	según la descripción pública del formato
 	not known yet	aún desconocido
 	Shortcuts	Métodos abreviados
-	Shortcut	Método abreviado
 	In the File	En el archivo
 	In VectorCraft	En VectorCraft
 	Needs Attention Only	Solo lo que requiere atención
@@ -1425,12 +1424,9 @@
 	Remember My Choices	Recordar mis elecciones
 	{ready} of {total} ready	{ready} de {total} listos
 	The file is too large to read in full, so only its first part is listed.	El archivo es demasiado grande para leerlo completo, así que solo se muestra su primera parte.
-	Copy Report	Copiar informe
 	Report copied	Informe copiado
 	Line {line}	Línea {line}
 	Line {line}: {name}: {status}	Línea {line}: {name}: {status}
-	Not read	No leído
-	Imported. Press OK to keep the imported set.	Importado. Haz clic en Aceptar para conservar el conjunto importado.
 	Read Shortcut Set File	Leer archivo de conjunto de métodos abreviados
 	Import Matches	Asociaciones de importación
 	Remember Import Matches	Recordar asociaciones de importación

@@ -3320,11 +3320,9 @@ imageTrace	Outline	轮廓
 	Remember My Choices	记住我的选择
 	{ready} of {total} ready	{total} 个中有 {ready} 个就绪
 	The file is too large to read in full, so only its first part is listed.	文件太大，无法完整读取，因此只列出开头部分。
-	Copy Report	复制报告
 	Report copied	已复制报告
 	Line {line}	第 {line} 行
 	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
-	Not read	未读取
 	Read Shortcut Set File	读取快捷键组文件
 	Import Matches	导入对应
 	Remember Import Matches	记住导入对应

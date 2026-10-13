@@ -1425,11 +1425,9 @@
 	Remember My Choices	Ricorda le mie scelte
 	{ready} of {total} ready	{ready} su {total} pronti
 	The file is too large to read in full, so only its first part is listed.	Il file è troppo grande per essere letto per intero, quindi ne viene elencata solo la prima parte.
-	Copy Report	Copia rapporto
 	Report copied	Rapporto copiato
 	Line {line}	Riga {line}
 	Line {line}: {name}: {status}	Riga {line}: {name}: {status}
-	Not read	Non letto
 	Imported. Press OK to keep the imported set.	Importato. Premi OK per mantenere il set importato.
 	Read Shortcut Set File	Leggi file di set di scelte rapide
 	Import Matches	Abbinamenti di importazione

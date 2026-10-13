@@ -1423,11 +1423,9 @@
 	Remember My Choices	Запомнить мой выбор
 	{ready} of {total} ready	Готово: {ready} из {total}
 	The file is too large to read in full, so only its first part is listed.	Файл слишком большой, чтобы прочитать его целиком, поэтому показана только его первая часть.
-	Copy Report	Копировать отчёт
 	Report copied	Отчёт скопирован
 	Line {line}	Строка {line}
 	Line {line}: {name}: {status}	Строка {line}: {name}: {status}
-	Not read	Не прочитано
 	Imported. Press OK to keep the imported set.	Импортировано. Нажмите «ОК», чтобы сохранить импортированный набор.
 	Read Shortcut Set File	Прочитать файл набора сочетаний клавиш
 	Import Matches	Сопоставления импорта

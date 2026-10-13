@@ -1419,11 +1419,9 @@
 	Remember My Choices	Запам’ятати мій вибір
 	{ready} of {total} ready	Готово: {ready} з {total}
 	The file is too large to read in full, so only its first part is listed.	Файл завеликий, щоб прочитати його повністю, тому показано лише його першу частину.
-	Copy Report	Копіювати звіт
 	Report copied	Звіт скопійовано
 	Line {line}	Рядок {line}
 	Line {line}: {name}: {status}	Рядок {line}: {name}: {status}
-	Not read	Не прочитано
 	Imported. Press OK to keep the imported set.	Імпортовано. Натисніть «ОК», щоб зберегти імпортований набір.
 	Read Shortcut Set File	Прочитати файл набору сполучень клавіш
 	Import Matches	Зіставлення імпорту
