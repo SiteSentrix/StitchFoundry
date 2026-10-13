@@ -44,7 +44,7 @@ pub enum Edge {
     Right,
 }
 
-/// All angles are degrees; offset is in document points, lighting values are 0..1.
+/// All angles are degrees; offset is in document points, lighting values are 0..1 (ambient 0..2).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Revolve {
     pub angle: f64,
@@ -57,12 +57,24 @@ pub struct Revolve {
     pub perspective: f64,
     /// Radial subdivisions for a full turn, clamped to 8..128.
     pub segments: usize,
-    pub light_azimuth: f64,
-    pub light_elevation: f64,
+    /// The light's Rotation, −180° to 180°: round the object on the page, 0° on its right and
+    /// counterclockwise.
+    pub light_rotation: f64,
+    /// The light's Height, 0° to 90°: from beside the object (0°) to straight in front of it.
+    pub light_height: f64,
+    /// The light is behind the object (Move light to the back of object) rather than in front.
+    pub light_behind: bool,
     pub light_intensity: f64,
+    /// Softness, 0 (a sharp fall-off) to 1: how far round the object the light reaches.
+    pub light_softness: f64,
+    /// Ambient Light, 0 to 2.
     pub ambient: f64,
     pub shade: bool,
 }
+
+/// The default light's Rotation and Height: the light of the earlier default direction (45° to the
+/// left of the eye and 45° up), to the left of and above the object, 30° in front of it.
+pub const DEFAULT_LIGHT: (f64, f64) = (125.264_389_682_754_65, 30.0);
 
 impl Default for Revolve {
     fn default() -> Self {
@@ -75,9 +87,11 @@ impl Default for Revolve {
             rotation_z: 0.0,
             perspective: 0.0,
             segments: 64,
-            light_azimuth: -45.0,
-            light_elevation: 45.0,
+            light_rotation: DEFAULT_LIGHT.0,
+            light_height: DEFAULT_LIGHT.1,
+            light_behind: false,
             light_intensity: 0.8,
+            light_softness: 0.0,
             ambient: 0.25,
             shade: true,
         }
@@ -109,6 +123,32 @@ fn perspective_scale(eye: Option<f64>, z: f64) -> f64 {
 pub fn perspective_from_strength(strength: f64) -> f64 {
     let s = finite(strength, 0.0, 0.0, 1.0);
     2.0 * (3f64.sqrt() * s / 4.0).asin().to_degrees()
+}
+
+/// The Rotation, Height and side of the light an earlier effect set by its azimuth (degrees round
+/// the vertical axis, 0° at the eye) and elevation (degrees up): the same direction, so it lights
+/// the object exactly as before.
+pub fn light_from_azimuth_elevation(azimuth: f64, elevation: f64) -> (f64, f64, bool) {
+    let (azimuth, elevation) = (finite(azimuth, -45.0, -360.0, 360.0), finite(elevation, 45.0, -90.0, 90.0));
+    let (sl, cl) = elevation.to_radians().sin_cos();
+    let (sa, ca) = azimuth.to_radians().sin_cos();
+    let [x, y, z] = [cl * sa, -sl, cl * ca];
+    // Straight in front or behind, any Rotation is the same light.
+    let rotation = if x.hypot(y) < 1e-12 { 0.0 } else { (-y).atan2(x).to_degrees() + 0.0 };
+    (rotation, z.abs().min(1.0).asin().to_degrees(), z < 0.0)
+}
+
+/// How bright a face with unit normal `n` is under the light `l` (both in view space): the ambient
+/// light plus the light's intensity where it reaches. Without softness the light falls off with
+/// the cosine to nothing at 90°; softness wraps it further round the object, at 100 % to nothing
+/// only straight away from it. Never brighter than the art's own colour.
+fn brightness(o: &Revolve, n: V3, l: V3) -> f64 {
+    if !o.shade {
+        return 1.0;
+    }
+    let s = o.light_softness;
+    let lit = ((n.dot(l) + s) / (1.0 + s)).max(0.0);
+    (o.ambient + o.light_intensity * lit).clamp(0.0, 1.0)
 }
 
 fn finite(v: f64, fallback: f64, min: f64, max: f64) -> f64 {
@@ -165,39 +205,31 @@ impl Revolve {
     /// Directional light in view space, shared by shading and interactive guides.
     pub fn light_direction(self) -> [f64; 3] {
         let o = self.sanitized();
-        let (sl, cl) = o.light_elevation.to_radians().sin_cos();
-        let (sa, ca) = o.light_azimuth.to_radians().sin_cos();
-        [cl * sa, -sl, cl * ca]
+        let (sr, cr) = o.light_rotation.to_radians().sin_cos();
+        let (sh, ch) = o.light_height.to_radians().sin_cos();
+        [ch * cr, -ch * sr, if o.light_behind { -sh } else { sh }]
     }
 
     /// Light-direction orbits as (centre, cosine basis, sine basis), in view space.
-    /// The first changes azimuth at the current elevation. The second changes elevation
-    /// at the current azimuth. The meridian's valid parameter range is -90..90 degrees.
+    /// The first changes the Rotation at the current Height: a circle on the page. The second
+    /// changes the Height at the current Rotation; its parameter runs 0..90 degrees.
     pub fn light_orbits(self) -> [[[f64; 3]; 3]; 2] {
         let o = self.sanitized();
-        let (se, ce) = o.light_elevation.to_radians().sin_cos();
-        let (sa, ca) = o.light_azimuth.to_radians().sin_cos();
-        [[[0.0, -se, 0.0], [0.0, 0.0, ce], [ce, 0.0, 0.0]], [[0.0, 0.0, 0.0], [sa, 0.0, ca], [0.0, -1.0, 0.0]]]
+        let (sr, cr) = o.light_rotation.to_radians().sin_cos();
+        let (sh, ch) = o.light_height.to_radians().sin_cos();
+        let side = if o.light_behind { -1.0 } else { 1.0 };
+        [[[0.0, 0.0, side * sh], [ch, 0.0, 0.0], [0.0, -ch, 0.0]], [[0.0, 0.0, 0.0], [cr, -sr, 0.0], [0.0, 0.0, side]]]
     }
 
-    /// Move a light on its current hemisphere, preserving the azimuth at the poles.
-    /// A light behind the object stays behind when its projected handle is dragged.
+    /// The Rotation and Height of a light dragged to `point` on the page (in units of the light
+    /// guide's radius, y down), on the side it is already on: the further out, the lower. At the
+    /// centre the Rotation is kept.
     pub fn light_at_on_side(self, point: Point) -> [f64; 2] {
         let o = self.sanitized();
         let point = Point::new(finite(point.x, 0.0, -1e8, 1e8), finite(point.y, 0.0, -1e8, 1e8));
-        let length = point.x.hypot(point.y).max(1.0);
-        let (x, y) = (point.x / length, point.y / length);
-        let z = (1.0 - x * x - y * y).max(0.0).sqrt().copysign(o.light_direction()[2]);
-        let azimuth = if x.hypot(z) < 1e-9 { o.light_azimuth } else { x.atan2(z).to_degrees() };
-        [azimuth, (-y).clamp(-1.0, 1.0).asin().to_degrees()]
-    }
-
-    /// A dragged light position on the front hemisphere, in normalized view coordinates.
-    pub fn light_at(point: Point) -> [f64; 2] {
-        let length = point.x.hypot(point.y).max(1.0);
-        let (x, y) = (point.x / length, point.y / length);
-        let z = (1.0 - x * x - y * y).max(0.0).sqrt();
-        [x.atan2(z).to_degrees(), (-y).clamp(-1.0, 1.0).asin().to_degrees()]
+        let r = point.x.hypot(point.y);
+        let rotation = if r < 1e-9 { o.light_rotation } else { (-point.y).atan2(point.x).to_degrees() };
+        [rotation, r.min(1.0).acos().to_degrees()]
     }
 
     fn sanitized(self) -> Self {
@@ -209,10 +241,11 @@ impl Revolve {
             rotation_z: finite(self.rotation_z, 0.0, -360.0, 360.0),
             perspective: finite(self.perspective, 0.0, 0.0, MAX_PERSPECTIVE),
             segments: self.segments.clamp(8, 128),
-            light_azimuth: finite(self.light_azimuth, -45.0, -360.0, 360.0),
-            light_elevation: finite(self.light_elevation, 45.0, -90.0, 90.0),
+            light_rotation: (finite(self.light_rotation, DEFAULT_LIGHT.0, -1e6, 1e6) + 180.0).rem_euclid(360.0) - 180.0,
+            light_height: finite(self.light_height, DEFAULT_LIGHT.1, 0.0, 90.0),
             light_intensity: finite(self.light_intensity, 0.8, 0.0, 1.0),
-            ambient: finite(self.ambient, 0.25, 0.0, 1.0),
+            light_softness: finite(self.light_softness, 0.0, 0.0, 1.0),
+            ambient: finite(self.ambient, 0.25, 0.0, 2.0),
             ..self
         }
     }
@@ -316,7 +349,7 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
                 if normal.2 < 0.0 {
                     normal = V3(-normal.0, -normal.1, -normal.2);
                 }
-                let brightness = if o.shade { (o.ambient + o.light_intensity * normal.dot(light).max(0.0)).clamp(0.0, 1.0) } else { 1.0 };
+                let brightness = brightness(&o, normal, light);
                 let points: Vec<_> = vertices
                     .iter()
                     .map(|v| {
@@ -352,26 +385,82 @@ mod tests {
     use super::*;
     #[test]
     fn light_orbits_and_handle_projection_match_the_shading_direction_on_both_sides() {
-        for azimuth in [-170.0f64, -45.0, 0.0, 83.0, 167.0] {
-            for elevation in [-85.0f64, -30.0, 0.0, 45.0, 90.0] {
-                let o = Revolve { light_azimuth: azimuth, light_elevation: elevation, ..Default::default() };
-                let direction = o.light_direction();
-                for ([center, u, v], angle) in o.light_orbits().into_iter().zip([azimuth, elevation]) {
-                    let (s, c) = angle.to_radians().sin_cos();
-                    for i in 0..3 {
-                        assert!((center[i] + u[i] * c + v[i] * s - direction[i]).abs() < 1e-12);
+        for rotation in [-170.0f64, -45.0, 0.0, 83.0, 167.0] {
+            for height in [0.0f64, 15.0, 45.0, 80.0] {
+                for behind in [false, true] {
+                    let o = Revolve { light_rotation: rotation, light_height: height, light_behind: behind, ..Default::default() };
+                    let direction = o.light_direction();
+                    assert!((direction[0].hypot(direction[1]).hypot(direction[2]) - 1.0).abs() < 1e-12);
+                    assert_eq!(direction[2] < 0.0, behind && height > 0.0);
+                    for ([center, u, v], angle) in o.light_orbits().into_iter().zip([rotation, height]) {
+                        let (s, c) = angle.to_radians().sin_cos();
+                        for i in 0..3 {
+                            assert!((center[i] + u[i] * c + v[i] * s - direction[i]).abs() < 1e-12);
+                        }
                     }
+                    let [r, h] = o.light_at_on_side(Point::new(direction[0], direction[1]));
+                    assert!((r - rotation).abs() < 1e-9 && (h - height).abs() < 1e-6, "{rotation}, {height} -> {r}, {h}");
                 }
-                let [a, e] = o.light_at_on_side(Point::new(direction[0], direction[1]));
-                assert!((a - azimuth).abs() < 1e-9 && (e - elevation).abs() < 1e-9, "{azimuth}, {elevation} -> {a}, {e}");
             }
         }
-        let o = Revolve { light_azimuth: 135.0, ..Default::default() };
-        let [azimuth, elevation] = o.light_at_on_side(Point::new(0.3, -0.4));
-        let [x, y, z] = Revolve { light_azimuth: azimuth, light_elevation: elevation, ..o }.light_direction();
-        assert!((x - 0.3).abs() < 1e-12 && (y + 0.4).abs() < 1e-12 && z < 0.0);
-        let [a, e] = o.light_at_on_side(Point::new(f64::NAN, f64::INFINITY));
-        assert!(a.is_finite() && e.is_finite());
+        // Dragged to the centre: straight in front, the Rotation kept; past the rim: at 0°.
+        let o = Revolve { light_rotation: 135.0, ..Default::default() };
+        assert_eq!(o.light_at_on_side(Point::new(0.0, 0.0)), [135.0, 90.0]);
+        let [r, h] = o.light_at_on_side(Point::new(0.0, -3.0));
+        assert!((r - 90.0).abs() < 1e-12 && h == 0.0);
+        let [r, h] = o.light_at_on_side(Point::new(f64::NAN, f64::INFINITY));
+        assert!(r.is_finite() && h.is_finite());
+    }
+
+    /// An effect from before Rotation and Height (azimuth and elevation) gets the same light:
+    /// the same direction, so the same shading.
+    #[test]
+    fn an_earlier_azimuth_and_elevation_give_the_same_light() {
+        let old = |azimuth: f64, elevation: f64| {
+            let (sl, cl) = elevation.to_radians().sin_cos();
+            let (sa, ca) = azimuth.to_radians().sin_cos();
+            [cl * sa, -sl, cl * ca]
+        };
+        for azimuth in [-360.0f64, -170.0, -45.0, 0.0, 90.0, 135.0, 179.0] {
+            for elevation in [-90.0f64, -60.0, -1.0, 0.0, 30.0, 45.0, 89.0, 90.0] {
+                let (light_rotation, light_height, light_behind) = light_from_azimuth_elevation(azimuth, elevation);
+                assert!((-180.0..=180.0).contains(&light_rotation) && (0.0..=90.0).contains(&light_height));
+                let new = Revolve { light_rotation, light_height, light_behind, ..Default::default() }.light_direction();
+                let want = old(azimuth, elevation);
+                for i in 0..3 {
+                    assert!((new[i] - want[i]).abs() < 1e-12, "{azimuth}, {elevation}: {new:?} against {want:?}");
+                }
+            }
+        }
+        // The default light is the earlier default's.
+        let (r, h, behind) = light_from_azimuth_elevation(-45.0, 45.0);
+        assert!((r - DEFAULT_LIGHT.0).abs() < 1e-12 && (h - DEFAULT_LIGHT.1).abs() < 1e-12 && !behind, "{r} {h}");
+    }
+
+    /// Softness wraps the light further round the object; without it, the earlier shading. Ambient
+    /// Light runs to 200 %, never past the art's own colour.
+    #[test]
+    fn softness_wraps_the_light_and_ambient_reaches_200_percent() {
+        let o = Revolve::default().sanitized();
+        let l = V3(0.0, 0.0, 1.0);
+        let n = |deg: f64| {
+            let (s, c) = deg.to_radians().sin_cos();
+            V3(s, 0.0, c)
+        };
+        for deg in [0.0, 30.0, 60.0, 89.0, 120.0] {
+            let lambert = (o.ambient + o.light_intensity * n(deg).dot(l).max(0.0)).clamp(0.0, 1.0);
+            assert!((brightness(&o, n(deg), l) - lambert).abs() < 1e-12);
+        }
+        let soft = Revolve { light_softness: 1.0, ..o };
+        assert!(brightness(&soft, n(120.0), l) > brightness(&o, n(120.0), l) + 0.1, "lit past 90°");
+        assert!((brightness(&soft, n(180.0), l) - o.ambient).abs() < 1e-12, "nothing straight away");
+        assert!((brightness(&soft, n(0.0), l) - brightness(&o, n(0.0), l)).abs() < 1e-12, "the same facing the light");
+        let bright = Revolve { ambient: 2.0, ..o };
+        assert_eq!(brightness(&bright, n(180.0), l), 1.0);
+        assert_eq!(
+            Revolve { ambient: 5.0, light_softness: -1.0, light_height: 120.0, ..o }.sanitized(),
+            Revolve { ambient: 2.0, light_softness: 0.0, light_height: 90.0, ..o }
+        );
     }
 
     #[test]
@@ -403,11 +492,11 @@ mod tests {
         let o = Revolve { rotation_x: 0.0, rotation_y: 0.0, rotation_z: 0.0, offset: 10.0, ..Default::default() };
         assert_eq!(o.view_axes(), [Point::new(1.0, 0.0), Point::new(0.0, 1.0), Point::new(0.0, 0.0)]);
         assert_eq!(o.projected_axis(Rect::new(20.0, 30.0, 80.0, 100.0)), [Point::new(10.0, 30.0), Point::new(10.0, 100.0)]);
-        let [azimuth, elevation] = Revolve::light_at(Point::new(0.3, -0.4));
-        let [x, y, z] = Revolve { light_azimuth: azimuth, light_elevation: elevation, ..o }.light_direction();
+        let [light_rotation, light_height] = o.light_at_on_side(Point::new(0.3, -0.4));
+        let [x, y, z] = Revolve { light_rotation, light_height, ..o }.light_direction();
         assert!((x - 0.3).abs() < 1e-9 && (y + 0.4).abs() < 1e-9 && z > 0.0);
-        let [azimuth, elevation] = Revolve::light_at(Point::new(2.0, -2.0));
-        assert!(azimuth.is_finite() && elevation.is_finite() && elevation.abs() <= 90.0);
+        let [rotation, height] = o.light_at_on_side(Point::new(2.0, -2.0));
+        assert!(rotation.is_finite() && height == 0.0);
     }
     fn cylinder() -> (PathData, Rect) {
         let mut bp = BezPath::new();

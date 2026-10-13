@@ -21,9 +21,11 @@ pub struct View {
     pub rotation_z: f64,
     /// Perspective, 0° (none) to 160°, as Revolve's.
     pub perspective: f64,
-    pub light_azimuth: f64,
-    pub light_elevation: f64,
+    pub light_rotation: f64,
+    pub light_height: f64,
+    pub light_behind: bool,
     pub light_intensity: f64,
+    pub light_softness: f64,
     pub ambient: f64,
     pub shade: bool,
 }
@@ -36,9 +38,11 @@ impl Default for View {
             rotation_y: r.rotation_y,
             rotation_z: r.rotation_z,
             perspective: r.perspective,
-            light_azimuth: r.light_azimuth,
-            light_elevation: r.light_elevation,
+            light_rotation: r.light_rotation,
+            light_height: r.light_height,
+            light_behind: r.light_behind,
             light_intensity: r.light_intensity,
+            light_softness: r.light_softness,
             ambient: r.ambient,
             shade: r.shade,
         }
@@ -53,9 +57,11 @@ impl View {
             rotation_y: self.rotation_y,
             rotation_z: self.rotation_z,
             perspective: self.perspective,
-            light_azimuth: self.light_azimuth,
-            light_elevation: self.light_elevation,
+            light_rotation: self.light_rotation,
+            light_height: self.light_height,
+            light_behind: self.light_behind,
             light_intensity: self.light_intensity,
+            light_softness: self.light_softness,
             ambient: self.ambient,
             shade: self.shade,
             ..Revolve::default()
@@ -421,7 +427,7 @@ impl Camera {
         n.dot(to_eye)
     }
     fn brightness(&self, n: V3) -> f64 {
-        if self.view.shade { (self.view.ambient + self.view.light_intensity * n.dot(self.light).max(0.0)).clamp(0.0, 1.0) } else { 1.0 }
+        crate::brightness(&self.view, n, self.light)
     }
 }
 

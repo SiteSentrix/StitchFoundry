@@ -4182,9 +4182,6 @@ axis	Both	Обидві
 	Rotation Y	Обертання Y
 	Rotation Z	Обертання Z
 	Shading	Затінення
-	Direction	Напрямок
-	Elevation	Висота
-	Ambient	Навколишнє освітлення
 	Segments	Сегменти
 	Show axis	Показати вісь
 	Reset all	Скинути все
@@ -4296,3 +4293,6 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
+	Softness	М'якість
+	Ambient Light	Навколишнє світло
+	Light behind the object	Світло позаду об'єкта

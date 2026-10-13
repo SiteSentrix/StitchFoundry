@@ -252,7 +252,6 @@
 	Alt+Drag	Alt+húzás
 	Alt:	Helyettesítő szöveg:
 	Alter Paths for Appearance	Útvonalak módosítása a megjelenés szerint
-	Ambient	Környezeti fény
 	Amount	Mérték
 	Amount:	Mérték:
 	Analogous	Analóg
@@ -971,7 +970,6 @@
 	Dimensions	Méretek
 	Direct Selection	Közvetlen kijelölés
 	Direct Selection Tool	Közvetlen kijelölés
-	Direction	Irány
 	Direction Balance	Irányegyensúly
 	Direction Handles	Iránykezelő fogantyúk
 	Direction:	Irány:
@@ -1152,7 +1150,6 @@
 	Effective PPI	Tényleges PPI
 	Effects	Effektusok
 	Effect…	Effektus…
-	Elevation	Emelkedési szög
 	Eliminate	Eltávolítás
 	Ellipse	Ellipszis
 	Ellipse Properties:	Ellipszis tulajdonságai:
@@ -4714,3 +4711,6 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
+	Softness	Lágyság
+	Ambient Light	Környezeti fény
+	Light behind the object	Fény az objektum mögött

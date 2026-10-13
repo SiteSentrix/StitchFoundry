@@ -10,7 +10,8 @@ line, give it a nonzero offset. A vertical line at zero offset lies on the axis 
 **Revolve angle** sweeps 0 to 360 degrees. **Rotation X/Y/Z** rotates the viewing direction, with all three axes defaulting to 0 degrees. **Perspective**
 runs 0° to 160°, as documented: 0° is an orthographic view, and wider angles bring the eye nearer (see
 [three-d.md](three-d.md#perspective)). **Segments** controls radial resolution (8 to 128 for a full turn).
-Lighting is a directional light with azimuth, elevation, intensity and ambient contribution.
+Lighting is one directional light with the documented Light Settings (see [three-d.md](three-d.md#lighting)):
+**Intensity**, **Rotation**, **Height**, **Softness** and **Ambient Light**, and **Light behind the object**.
 Turn **Shading** off to keep the source paint without lighting.
 
 The dialog has **Rotation** and **Lighting** tabs. Rotation groups the profile and view controls. Drag a value or its label
@@ -27,12 +28,13 @@ keeps the settings open. Escape again or Cancel restores the document before the
 The gizmo appears while editing Revolve; normal source-path selection returns when the dialog closes.
 
 Select the **Lighting** tab to use the light gizmo on the artboard. Drag the sun handle to move
-its direction on the current hemisphere. A hollow sun marks a back light. Drag the **Direction**
-ring or its label horizontally to adjust azimuth; drag the **Elevation** arc or its label vertically
-to adjust elevation. The labels remain usable when a ring is viewed edge-on or the light is at a pole.
+the light on its side of the object: round the centre for its Rotation, towards the centre for a
+greater Height. A hollow sun marks a light behind the object. Drag the **Rotation** ring or its label
+horizontally to turn the light round the object; drag the **Height** line or its label vertically to
+raise or lower it. The labels remain usable when the ring shrinks to a point (Height 90°).
 Hold Shift to snap to 15-degree increments. Light gestures update their matching fields without
 rotating the object, and keep the same temporary preview, Escape, Cancel and undo behaviour.
-Light intensity and ambient contribution remain available as draggable fields and sliders.
+Intensity, Softness and Ambient Light are draggable fields and sliders.
 
 **Shading** off hides the light gizmo and disables lighting controls. Switch to **Rotation** to return
 to the object rings. **Show axis** in **Advanced** displays the source's vertical axis on the object.

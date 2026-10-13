@@ -3796,9 +3796,6 @@ effect	Vertical	垂直
 	Rotation Y	Y 轴旋转
 	Rotation Z	Z 轴旋转
 	Shading	明暗处理
-	Direction	方向
-	Elevation	仰角
-	Ambient	环境光
 	Segments	分段数
 	Show axis	显示轴
 	Reset all	全部重置
@@ -3904,3 +3901,6 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+	Softness	柔和度
+	Ambient Light	环境光
+	Light behind the object	光源位于对象后方

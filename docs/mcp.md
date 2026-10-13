@@ -1024,11 +1024,13 @@ SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is suppor
 
 Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
 `edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspectiveAngle`
-(degrees, 0..160, default 0; an earlier `perspective`, 0..100%, is read as the angle that shows the same view), `segments` (8..128, default 64), `shade` (default true), `lightAzimuth`
-(degrees, default -45), `lightElevation` (degrees, default 45), `lightIntensity` (0..100%, default 80),
-`ambient` (0..100%, default 25), and `expandVisibleOnly` (boolean, default true). A vertical-line profile needs a positive offset to have a radius.
+(degrees, 0..160, default 0; an earlier `perspective`, 0..100%, is read as the angle that shows the same view), `segments` (8..128, default 64), `shade` (default true), `lightIntensity` (0..100%, default 80),
+`lightRotation` (degrees, -180..180, default 125.26; 0 on the object's right, counterclockwise), `lightHeight`
+(degrees, 0..90, default 30; 90 straight in front), `lightBehind` (default false), `lightSoftness` (0..100%,
+default 0), `ambient` (Ambient Light, 0..200%, default 25; an earlier `lightAzimuth` and `lightElevation` are read
+as the same light), and `expandVisibleOnly` (boolean, default true). A vertical-line profile needs a positive offset to have a radius.
 Open profiles have no end caps. Visibility of intersecting surfaces is approximate.
-The dialog's Lighting tab manipulates the same `lightAzimuth` and `lightElevation` parameters;
+The dialog's Lighting tab manipulates the same `lightRotation` and `lightHeight` parameters;
 its guide visibility and tab choice are UI state, excluded from saved effect parameters.
 `expandVisibleOnly` is saved with the effect. It trims covered portions of opaque solid surfaces only
 when running `effect.expandAppearance`, preserving visible interiors through openings. Set it to false
@@ -1038,7 +1040,7 @@ See [Revolve](revolve.md) for the scope and limitations.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.revolve","item":null,"params":{"angle":360,"offset":20,"edge":"left","rotationX":0,"rotationY":0,"rotationZ":0}}}}
-{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"angle":180,"lightAzimuth":30}}}}
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"angle":180,"lightRotation":30}}}}
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"expandVisibleOnly":true}}}}
 {"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{}}}
 ```

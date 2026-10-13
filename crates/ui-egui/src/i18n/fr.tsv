@@ -4210,9 +4210,6 @@ effect	Soft	Doux
 	Rotation Y	Rotation Y
 	Rotation Z	Rotation Z
 	Shading	Ombrage
-	Direction	Direction
-	Elevation	Élévation
-	Ambient	Lumière ambiante
 	Segments	Segments
 	Show axis	Afficher l’axe
 	Reset all	Tout réinitialiser
@@ -4747,3 +4744,6 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
+	Softness	Douceur
+	Ambient Light	Lumière ambiante
+	Light behind the object	Lumière derrière l'objet

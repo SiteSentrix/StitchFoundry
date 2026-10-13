@@ -543,6 +543,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | 3D and Materials: the documented light settings, Intensity, Rotation, Height, Softness and Ambient Light ([three-d.md](three-d.md#lighting)); scores unchanged (3D ~25%) |
 | 2026-10-13 | minor | 3D and Materials: Perspective is the documented 0°–160° angle ([three-d.md](three-d.md#perspective)); scores unchanged (3D ~25%) |
 | 2026-10-13 | minor | Control transport deadlines (#1726): idle and partial clients and blocked replies release connection slots; parity scores and estimates unchanged. |
 | 2026-10-13 | minor | Colour: the Color panel keeps the mode picked last between sessions and shows the defaults for new art in it when nothing is selected; a selected colour still shows in its own model (fixes #1675); scores and hours unchanged (estimated) |
