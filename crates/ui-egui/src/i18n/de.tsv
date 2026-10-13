@@ -4863,3 +4863,6 @@ machine	Stop	Stopp
 	Recolour	Umfärben
 	Recolour Threads	Garne umfärben
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Jedes Garn nach dem Schema geändert und der Garntabelle des Designs angepasst; Rückgängig stellt sie wieder her
+	Garment Background	Kleidungshintergrund
+	Garment Photo…	Kleidungsfoto…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Ein Foto des Kleidungsstücks hinter dem Design, in Originalgröße, auf einer gesperrten Vorlagenebene, die nie gestickt wird

@@ -473,6 +473,14 @@ quarter. **Custom Hoops** keeps hoops of one's own by name with their field
 standard ones everywhere a hoop is chosen (`embroidery.hoops` lists them all, with whether the
 design fits each).
 
+## Garment photo
+
+**Garment Photo…** in the Design section (`embroidery.background {path, width?, at?}`) puts a
+photo of the garment behind the design while it is digitized, life size (`width`: the mm the
+photo shows across, 500), its middle on the design's: on a locked template layer below the
+current one, so it is never stitched, printed or exported with the design. Delete the layer to
+take it away. The fabric colour still tints the artboard under the stitches.
+
 ## Multi-hooping
 
 A design larger than the hoop is sewn in several hoopings: `embroidery.multiHoop {hoop?, width?,

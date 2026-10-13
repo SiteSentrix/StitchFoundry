@@ -505,6 +505,40 @@ fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
 }
 
 #[test]
+fn a_garment_photo_goes_behind_the_design_life_size_and_unstitched() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let png = std::env::temp_dir().join(format!("sf-garment-{}.png", std::process::id()));
+    let mut photo = session();
+    rect(&mut photo, 0.0, 0.0, 400.0, 300.0);
+    photo.execute("document.export", &json!({"path": png.to_string_lossy(), "format": "png"})).unwrap();
+    let mut s = session();
+    rect(&mut s, 40.0 * PT, 40.0 * PT, 60.0 * PT, 30.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let before = s.embroidery_plan().unwrap().pattern().stitch_count();
+    let r = s.execute("embroidery.background", &json!({"path": png.to_string_lossy(), "width": 400})).unwrap();
+    assert_eq!(r["widthMm"].as_f64(), Some(400.0));
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    // on a template layer, its middle on the design's, 400 mm across
+    let layer = d.layers.iter().find(|l| matches!(l.kind, NodeKind::Layer { template: true, .. })).expect("a template layer");
+    assert!(layer.children().is_some_and(|c| c.iter().any(|n| n.id == id)));
+    let b = d.node(id).unwrap().bounds_in(kurbo::Affine::IDENTITY, false).unwrap();
+    assert!((b.width() / PT - 400.0).abs() < 1.0, "{b:?}");
+    assert!(((b.x0 + b.x1) / 2.0 / PT - 70.0).abs() < 2.0 && ((b.y0 + b.y1) / 2.0 / PT - 55.0).abs() < 2.0, "{b:?}");
+    // never stitched
+    assert_eq!(s.embroidery_plan().unwrap().pattern().stitch_count(), before);
+    for bad in [
+        json!({}),
+        json!({"path": png.to_string_lossy(), "width": 10}),
+        json!({"path": "/nowhere.png"}),
+        json!({"path": png.to_string_lossy(), "at": [1]}),
+    ] {
+        assert!(s.execute("embroidery.background", &bad).is_err(), "{bad}");
+    }
+    let _ = std::fs::remove_file(&png);
+}
+
+#[test]
 fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

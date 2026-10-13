@@ -4269,3 +4269,6 @@ machine	Stop	停止
 	Recolour	重新配色
 	Recolour Threads	重新配色繡線
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	依方案變更每條繡線並配合設計的色卡；復原可還原
+	Garment Background	服裝背景
+	Garment Photo…	服裝照片…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	設計後方的服裝照片，實際尺寸，位於鎖定的範本圖層，永不刺繡
