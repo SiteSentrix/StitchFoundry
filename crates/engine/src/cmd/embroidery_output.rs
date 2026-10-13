@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 
-use super::embroidery::MACHINE_EXTS;
+use super::embroidery::{MACHINE_EXTS, TEXT_EXTS};
 use super::*;
 
 /// Output profiles kept at most.
@@ -85,8 +85,8 @@ fn formats_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>> {
     let mut out: Vec<String> = Vec::new();
     for v in list {
         let ext = v.as_str().map(|f| f.trim().trim_start_matches('.').to_ascii_lowercase()).unwrap_or_default();
-        if !MACHINE_EXTS.contains(&ext.as_str()) {
-            return Err(bad(cmd, format!("unknown format `{ext}`: one of {}", MACHINE_EXTS.join(", "))));
+        if !MACHINE_EXTS.contains(&ext.as_str()) && !TEXT_EXTS.contains(&ext.as_str()) {
+            return Err(bad(cmd, format!("unknown format `{ext}`: one of {}, {}", MACHINE_EXTS.join(", "), TEXT_EXTS.join(", "))));
         }
         if !out.contains(&ext) {
             out.push(ext);

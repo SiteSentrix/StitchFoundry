@@ -192,7 +192,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Machine File",
             ["Embroidery"],
             None,
-            "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01 (the design's machine, else dst), name?: design label, center?: bool (true)} the stitch plan as a machine embroidery file → {dataBase64, format, bytes, stitches, colors}",
+            "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap (the design's machine, else dst), or an open text export: csv|json (stitch lists: x, y in mm from the centre, y down, command, thread) or gcode (G21 G90; G0 jumps, G1 stitches each followed by a needle cycle; thread changes pause), name?: design label, center?: bool (true), gcode?: {feed?: mm/min (1200), zStep?: Z advance a stitch (1; 0: none), stitchCommand?: after each stitch (none), colorCommand?: at a thread change or stop (M0), trimCommand?: at a trim (none), flipY?: bool (true: y up)}} the stitch plan as a machine embroidery file → {dataBase64, format, bytes, stitches, colors}",
             has_doc,
             export_machine_file
         ),
@@ -896,15 +896,68 @@ fn convert_art(s: &mut Session, p: &Value) -> Result<Value> {
 /// The machine formats, by extension (what `embroidery.export` and File › Open take).
 pub const MACHINE_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01", "pcs", "tap"];
 
+/// Open text exports of the stitches (export only): CSV and JSON stitch lists, G-code.
+pub const TEXT_EXTS: &[&str] = &["csv", "json", "gcode"];
+
+/// The stitches as one of [`TEXT_EXTS`], G-code as `p`'s `gcode` options say.
+fn text_export(key: &str, pattern: &sf_core::Pattern, p: &Value) -> Result<Vec<u8>> {
+    const CMD: &str = "embroidery.export";
+    let center = bool_or(p, "center", true);
+    Ok(match key {
+        "csv" => sf_formats::textual::write_csv(pattern, center).into_bytes(),
+        "json" => sf_formats::textual::write_json(pattern, center).into_bytes(),
+        _ => {
+            let g = &p["gcode"];
+            let mut o = sf_formats::textual::GcodeOptions { center, ..Default::default() };
+            if let Some(v) = g.get("feed").filter(|v| !v.is_null()) {
+                o.feed = v.as_f64().filter(|f| (1.0..=100_000.0).contains(f)).ok_or_else(|| bad(CMD, "`gcode.feed` is 1 to 100000 mm/min"))?;
+            }
+            if let Some(v) = g.get("zStep").filter(|v| !v.is_null()) {
+                o.z_step = v.as_f64().filter(|z| (0.0..=100.0).contains(z)).ok_or_else(|| bad(CMD, "`gcode.zStep` is 0 to 100"))?;
+            }
+            let text = |k: &str| g.get(k).and_then(Value::as_str).map(|t| t.chars().take(200).collect::<String>());
+            if let Some(t) = text("stitchCommand") {
+                o.stitch_command = t;
+            }
+            if let Some(t) = text("colorCommand") {
+                o.color_command = t;
+            }
+            if let Some(t) = text("trimCommand") {
+                o.trim_command = t;
+            }
+            o.flip_y = g.get("flipY").and_then(Value::as_bool).unwrap_or(true);
+            sf_formats::textual::write_gcode(pattern, &o).into_bytes()
+        }
+    })
+}
+
 pub(super) fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.export";
     // the design's machine reads this format, unless another is asked for
     let machine = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.machine_file_format(&s.prefs.embroidery_machines));
     let key = str_param(p, "format").map(str::to_string).or(machine).unwrap_or_else(|| "dst".to_string());
+    let key = key.trim_start_matches('.').to_ascii_lowercase();
     let key = key.as_str();
-    let format =
-        sf_formats::Format::from_extension(key).ok_or_else(|| bad(CMD, format!("unknown format `{key}`: one of {}", MACHINE_EXTS.join(", "))))?;
     let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
+    if TEXT_EXTS.contains(&key) {
+        if plan.is_empty() {
+            return Err(bad(CMD, "nothing is stitched yet: give objects a stitch type first"));
+        }
+        let mut pattern = plan.pattern().clone();
+        if let Some(name) = str_param(p, "name") {
+            pattern.name = name.to_string();
+        }
+        let bytes = text_export(key, &pattern, p)?;
+        return Ok(json!({
+            "dataBase64": vectorcraft_format::base64_encode(&bytes),
+            "format": key,
+            "bytes": bytes.len(),
+            "stitches": pattern.stitch_count(),
+            "colors": pattern.color_blocks().len(),
+        }));
+    }
+    let format = sf_formats::Format::from_extension(key)
+        .ok_or_else(|| bad(CMD, format!("unknown format `{key}`: one of {}, {}", MACHINE_EXTS.join(", "), TEXT_EXTS.join(", "))))?;
     if plan.is_empty() {
         return Err(bad(CMD, "nothing is stitched yet: give objects a stitch type first"));
     }

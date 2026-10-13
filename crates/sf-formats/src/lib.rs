@@ -268,6 +268,9 @@ pub enum FormatError {
 }
 
 /// Encodes `pattern` as a `format` file.
+/// Open text exports of a design's stitches: CSV and JSON stitch lists, G-code.
+pub mod textual;
+
 pub fn write(format: Format, pattern: &Pattern, opts: &WriteOptions) -> Result<Vec<u8>, FormatError> {
     match format {
         Format::Dst => dst::write(pattern, opts),

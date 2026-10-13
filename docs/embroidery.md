@@ -462,6 +462,24 @@ sewn, then sew on. Without `dir` it only plans (which object goes where). Object
 across hoopings yet: one larger than a hooping is refused (choose a larger hoop or a wider
 overlap).
 
+## Stitch lists and G-code
+
+Besides the machine formats, `embroidery.export` (and Batch Output, Send to Machine) writes the
+stitches as open text StitchFoundry defines, to read into a spreadsheet or a script or to drive
+a home-built machine:
+
+- `csv`: a line a stitch, `index,command,x,y,thread,color,name` (mm from the design's centre, y
+  down; command `stitch`, `jump`, `trim`, `color`, `stop` or `end`; thread from 1);
+- `json`: `{format: "stitchfoundry-stitches", version: 1, units: "mm", name, threads: [{color,
+  name, code, chart}], stitches: [[x, y, command]…]}`;
+- `gcode`: millimetres, absolute (`G21 G90`); a jump is `G0`, a stitch a `G1` move then a needle
+  cycle: the Z axis advances by `zStep` (1; 0 for none) and/or `stitchCommand` is written (for a
+  needle relay, say `M3`); a thread change or stop writes a comment naming the next thread and
+  `colorCommand` (`M0`, a pause); a trim a comment and `trimCommand`; y counts up unless
+  `flipY: false`; `feed` sets the stitching speed (1200 mm/min).
+
+These are exports only: they aren't read back.
+
 ## Export history
 
 Every export that writes files is remembered for the session, newest first: File › Export,
