@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use kurbo::{ParamCurve, ParamCurveNearest};
+use kurbo::{CubicBez, ParamCurve, ParamCurveNearest};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PressureProfile, Selection};
@@ -1048,17 +1048,46 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Optio
         open.anchors.push(open.anchors[0]);
         m.push(false);
         open.closed = false;
-        let mut res = smooth_open(&open.anchors, &m, tol);
+        let mut res = smooth_open(&open.anchors, &m, near, tol);
         let l = res.pop()?;
         if let Some(r0) = res.first_mut() {
             r0.h_in = l.h_in;
         }
         return Some(SubPath::new(res, true));
     }
-    Some(SubPath::new(smooth_open(&sp.anchors, &marked, tol), false))
+    Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol), false))
 }
 
-fn smooth_open(anchors: &[Anchor], marked: &[bool], tol: f64) -> Vec<Anchor> {
+/// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
+/// enters the reach: the part outside, then the part in reach. `None` when no more than a sliver
+/// is outside.
+fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez, CubicBez)> {
+    const STEPS: u32 = 32;
+    let step = 1.0 / f64::from(STEPS);
+    // Back from the end in reach to the first sample outside, then halving to the crossing.
+    let outside = (1..=STEPS).map(|i| 1.0 - f64::from(i) * step).find(|t| !near(c.eval(*t)))?;
+    let (mut lo, mut hi) = (outside, outside + step);
+    for _ in 0..20 {
+        let mid = (lo + hi) / 2.0;
+        if near(c.eval(mid)) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    // A straight segment's parts stay straight, their handles on their ends.
+    let straight = c.p1 == c.p0 && c.p2 == c.p3;
+    let part = |range| {
+        let s = c.subsegment(range);
+        if straight { CubicBez::new(s.p0, s.p0, s.p3, s.p3) } else { s }
+    };
+    (hi > 0.02).then(|| (part(0.0..hi), part(hi..1.0)))
+}
+
+/// `anchors` with each run of `marked` ones refitted, together with the stretch of the segments
+/// leading into the run that is in the drag's reach (`near`): a short drag smooths what is under
+/// it, and the rest of a long segment next to it stays as it was (#1512).
+fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool, tol: f64) -> Vec<Anchor> {
     let n = anchors.len();
     let mut runs = vec![];
     let mut i = 0;
@@ -1079,8 +1108,27 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], tol: f64) -> Vec<Anchor> {
         if hi - lo < 2 {
             continue;
         }
-        let new = refit_run(&out[lo..=hi], tol);
-        out.splice(lo..=hi, new);
+        let mut piece = out[lo..=hi].to_vec();
+        // The anchors outside the reach, kept with the part of their segment that is outside.
+        let (mut head, mut tail) = (None, None);
+        if hi > b
+            && let [.., inner, outer] = piece.as_mut_slice()
+            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_in, inner.h_out, inner.p), near)
+        {
+            inner.h_out = reach.p2;
+            tail = Some(Anchor { h_in: far.p1, ..*outer });
+            *outer = Anchor::with_handles(far.p3, reach.p1, far.p2);
+        }
+        if lo < a
+            && let [outer, inner, ..] = piece.as_mut_slice()
+            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_out, inner.h_in, inner.p), near)
+        {
+            inner.h_in = reach.p2;
+            head = Some(Anchor { h_out: far.p1, ..*outer });
+            *outer = Anchor::with_handles(far.p3, far.p2, reach.p1);
+        }
+        let new = refit_run(&piece, tol);
+        out.splice(lo..=hi, head.into_iter().chain(new).chain(tail));
     }
     out
 }
