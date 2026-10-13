@@ -111,6 +111,7 @@ fn symbol_type_redraws_when_its_font_becomes_available() {
 /// fonts change.
 #[test]
 fn enveloped_type_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
     const FAMILY: &str = "Warped Serif 4";
     let mut d = Document::new(300.0, 150.0);
     let word = |d: &mut Document, at: Point| {
@@ -150,6 +151,7 @@ fn enveloped_type_redraws_when_its_font_becomes_available() {
 /// envelope in a group with a geometry effect or with a fill of its own.
 #[test]
 fn enveloped_type_under_effects_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
     use vectorcraft_color::{Color, Paint};
     use vectorcraft_doc::{AppearanceItem, Effect, FillLayer};
     let cases = [

@@ -627,6 +627,7 @@ fn arc_envelope(d: &mut Document, content: Vec<Node>, patterns: bool) -> Node {
 /// pattern, and type whose characters are filled with it.
 #[test]
 fn live_objects_draw_pattern_layout_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::pattern::{Overlap, PatternDef, TileType, pattern_paint};
     use vectorcraft_doc::text::{CharStyle, TextObject};
     use vectorcraft_geom::shapes::rectangle;
@@ -672,6 +673,7 @@ fn live_objects_draw_pattern_layout_edits() {
 /// the art of the symbol it bends and a symbol in the art of a pattern it tiles.
 #[test]
 fn live_objects_draw_symbol_and_pattern_art_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::pattern::{PatternDef, TileType, pattern_paint};
     use vectorcraft_geom::shapes::rectangle;
     // Symbol `S` ([`symbol_art`]) becomes a wide red bar.
