@@ -238,6 +238,25 @@ fn visibility_and_lock_per_row_are_undoable() {
     assert_eq!(node(&s, sub).display_name(), "Sub", "a layer keeps its name");
 }
 
+/// Preferences › Units › Identify Objects By › XML ID (#394): `layer.setProps` takes a valid XML
+/// id and stores the object name; Object Name (the default) keeps free text. The Layers label is
+/// the XML id when that preference is on.
+#[test]
+fn identify_objects_by_xml_id_names_layers() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0);
+    run(&mut s, "layer.setProps", json!({"id": a.0, "name": "My Rect #2"}));
+    assert_eq!(node(&s, a).display_name(), "My Rect #2");
+    assert_eq!(node(&s, a).identify_label(true), "My_Rect__x23_2");
+    run(&mut s, "prefs.set", json!({"key": "identifyObjectsBy", "value": "xmlId"}));
+    assert!(s.execute("layer.setProps", &json!({"id": a.0, "name": "My Rect"})).is_err(), "spaces are refused");
+    run(&mut s, "layer.setProps", json!({"id": a.0, "name": "My_Rect__x23_2"}));
+    assert_eq!(node(&s, a).display_name(), "My Rect #2", "the XML id is stored as the object name");
+    run(&mut s, "prefs.set", json!({"key": "identifyObjectsBy", "value": "objectName"}));
+    run(&mut s, "layer.setProps", json!({"id": a.0, "name": "My Rect"}));
+    assert_eq!(node(&s, a).display_name(), "My Rect");
+}
+
 #[test]
 fn object_set_props_deselects_the_objects_it_hides_or_locks() {
     let mut s = session();

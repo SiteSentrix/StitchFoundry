@@ -97,6 +97,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     // Owned snapshots: the rows below run commands, which borrow the app mutably.
+    let xml_id = app.session.prefs.identify_objects_by == "xmlId";
     let vars: Vec<VarRow> = st
         .doc
         .variables
@@ -106,7 +107,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
             let object = match bound.as_slice() {
                 [] => String::new(),
-                [one] => st.doc.node(NodeId(*one)).map(|n| n.display_name()).unwrap_or_default(),
+                [one] => st.doc.node(NodeId(*one)).map(|n| n.identify_label(xml_id)).unwrap_or_default(),
                 _ => tl!("Multiple objects").to_string(),
             };
             VarRow { name: v.name.clone(), kind: v.kind, bound, object }
