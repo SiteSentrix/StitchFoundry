@@ -138,15 +138,6 @@ fn r12_viewport_has_no_duplicate_group_codes() {
 }
 
 #[test]
-fn centerline_strokes_write_one_line_per_stroked_path_and_no_fill() {
-    let d = shapes_doc();
-    let out = export(&d, &DxfOptions { centerline_strokes: true, ..opts(&d) }).unwrap();
-    let k = kinds(&out);
-    assert!(k.iter().all(|kind| kind != "HATCH"), "the stroked rectangle's fill is left out: {k:?}");
-    assert_eq!(k.len(), 2, "one centerline for each of the two stroked paths: {k:?}");
-}
-
-#[test]
 fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     let d = shapes_doc();
     let out = export(&d, &opts(&d)).unwrap();

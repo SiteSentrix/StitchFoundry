@@ -1851,9 +1851,6 @@ lighting	Light	Światło
 	Scale to Fit Artboard	Skaluj, aby dopasować do obszaru kompozycji
 	Scaling	Skalowanie
 	Alter Paths for Appearance	Zmień ścieżki dla zachowania wyglądu
-	3ds Max — R12 Linework	3ds Max — linie R12
-	Export Strokes as Centerlines (0 width)	Eksportuj obrysy jako linie środkowe (szerokość 0)
-	Stroked paths become one zero-width centerline; their fills are omitted.	Ścieżki z obrysem stają się jedną linią środkową o zerowej szerokości; ich wypełnienia są pomijane.
 	DXF Options	Opcje DXF
 	Export Option	Opcja eksportu
 	Export Selected Art Only	Eksportuj tylko zaznaczoną kompozycję

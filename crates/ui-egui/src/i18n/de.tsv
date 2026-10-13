@@ -147,9 +147,6 @@
 	Alt	Alt
 	Alt:	Alt-Text:
 	Alter Paths for Appearance	Pfade für das Aussehen anpassen
-	3ds Max — R12 Linework	3ds Max — R12-Linien
-	Export Strokes as Centerlines (0 width)	Konturen als Mittellinien exportieren (Breite 0)
-	Stroked paths become one zero-width centerline; their fills are omitted.	Pfade mit Kontur werden zu einer Mittellinie der Breite 0; ihre Flächen entfallen.
 	Amount	Stärke
 	Amount:	Stärke:
 	Anchor Point	Ankerpunkt

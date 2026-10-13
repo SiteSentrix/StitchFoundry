@@ -165,9 +165,6 @@
 	Alt	Alt
 	Alt:	Alt:
 	Alter Paths for Appearance	Modifica tracciati in base all'aspetto
-	3ds Max — R12 Linework	3ds Max — Linee R12
-	Export Strokes as Centerlines (0 width)	Esporta tracce come linee d’asse (spessore 0)
-	Stroked paths become one zero-width centerline; their fills are omitted.	I tracciati con traccia diventano un’unica linea d’asse a spessore zero; i riempimenti vengono omessi.
 	Amount	Quantità
 	Amount:	Quantità:
 	Anchor Point	Punto di ancoraggio

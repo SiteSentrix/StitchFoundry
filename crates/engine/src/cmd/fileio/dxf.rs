@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Export DXF",
         [],
         None,
-        "{path?, version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), centerlineStrokes?: false (one zero-width centerline per stroked path; omits its fill), alterPaths?: false (every stroke as its filled outline), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}",
+        "{path?, version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), alterPaths?: false (every stroke as its filled outline), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}",
         has_doc,
         export_dxf
     )]
@@ -59,12 +59,6 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         ty: "string",
         default: "\"appearance\"",
         description: "appearance (type as outlines, strokes a CAD line can't draw as filled outlines) or editability (type as text, strokes as lines)",
-    },
-    FormatOption {
-        name: "centerlineStrokes",
-        ty: "boolean",
-        default: "false",
-        description: "one zero-width centerline per stroked path; omits the path's fill and stroke outline",
     },
     FormatOption {
         name: "alterPaths",
@@ -127,7 +121,6 @@ struct Params {
     colors: Option<Value>,
     raster_format: Option<String>,
     preserve: Option<String>,
-    centerline_strokes: Option<bool>,
     alter_paths: Option<bool>,
     outline_text: Option<bool>,
 }
@@ -170,7 +163,6 @@ fn parse(p: &Value) -> Result<(DxfOptions, ArtboardPick)> {
         colors: choice("colors", q.colors.as_ref().map(text), ColorDepth::from_id, d.colors, "8, 16, 256 or true")?,
         raster: choice("rasterFormat", q.raster_format, RasterFormat::from_id, d.raster, "png or jpeg")?,
         preserve: choice("preserve", q.preserve, Preserve::from_id, d.preserve, "appearance or editability")?,
-        centerline_strokes: q.centerline_strokes.unwrap_or(d.centerline_strokes),
         alter_paths: q.alter_paths.unwrap_or(d.alter_paths),
         outline_text: q.outline_text.unwrap_or(d.outline_text),
         ..d

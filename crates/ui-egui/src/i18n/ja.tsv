@@ -815,9 +815,6 @@
 	All the art	すべてのアート
 	Alt:	代替テキスト:
 	Alter Paths for Appearance	外観を保つためにパスを変更
-	3ds Max — R12 Linework	3ds Max — R12 線画
-	Export Strokes as Centerlines (0 width)	線を中心線として書き出し (幅 0)
-	Stroked paths become one zero-width centerline; their fills are omitted.	線のあるパスは幅 0 の中心線 1 本になり、塗りは省略されます。
 	Amount:	量:
 	Anchor Point	アンカーポイント
 	Anchor Point Tool	アンカーポイントツール

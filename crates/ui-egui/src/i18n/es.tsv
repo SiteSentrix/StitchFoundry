@@ -165,9 +165,6 @@
 	Alt	Alt
 	Alt:	Alt:
 	Alter Paths for Appearance	Modificar trazados según la apariencia
-	3ds Max — R12 Linework	Trazado lineal R12 para 3ds Max
-	Export Strokes as Centerlines (0 width)	Exportar trazos como líneas centrales (grosor 0)
-	Stroked paths become one zero-width centerline; their fills are omitted.	Los trazados con trazo se convierten en una línea central de grosor cero; se omiten sus rellenos.
 	Amount	Cantidad
 	Amount:	Cantidad:
 	Anchor Point	Punto de ancla

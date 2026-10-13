@@ -457,39 +457,21 @@ impl<'a> Scene<'a> {
         if bp.elements().is_empty() {
             return;
         }
-        let centerline = self.o.centerline_strokes
-            && n.appearance
-                .items
-                .iter()
-                .any(|item| matches!(item, AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && st.width.is_finite()));
-        let mut wrote_centerline = false;
         for item in &n.appearance.items {
             match item {
-                AppearanceItem::Fill(_) if centerline => {}
                 AppearanceItem::Fill(f) if f.visible => {
                     if let Some(rgb) = self.paint_rgb(&f.paint) {
                         let style = self.style(rgb, f.opacity, None, None);
                         self.area(bp, rule, &style, false);
                     }
                 }
-                // One centerline per path, however many strokes it has.
-                AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && st.width.is_finite() && !(centerline && wrote_centerline) => {
-                    self.stroke(bp, rule, st, centerline);
-                    wrote_centerline |= centerline;
-                }
+                AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && st.width.is_finite() => self.stroke(bp, rule, st),
                 _ => {}
             }
         }
     }
 
-    fn stroke(&mut self, bp: &BezPath, rule: FillRule, st: &StrokeLayer, centerline: bool) {
-        if centerline {
-            let Some(rgb) = self.paint_rgb(&st.paint) else { return };
-            let linetype = st.dash.as_ref().filter(|d| d.is_dashed()).map(|d| self.linetype(d));
-            let style = self.style(rgb, st.opacity, Some(0.0), linetype);
-            self.lines(bp, &style, 0.0);
-            return;
-        }
+    fn stroke(&mut self, bp: &BezPath, rule: FillRule, st: &StrokeLayer) {
         let appearance = self.o.preserve == Preserve::Appearance;
         if appearance
             && st.brush.is_some()
