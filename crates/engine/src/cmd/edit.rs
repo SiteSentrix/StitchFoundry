@@ -132,7 +132,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection_or_guides,
             clear
         ),
-        cmd!("edit.duplicate", "Duplicate", [], None, "{dx?, dy?} duplicate the selection in place (offset optional)", has_selection, duplicate),
+        cmd!(
+            "edit.duplicate",
+            "Duplicate",
+            ["Edit"],
+            None,
+            "{dx?, dy?} duplicate the selection in place (offset optional)",
+            has_selection,
+            duplicate
+        ),
     ]
 }
 
