@@ -383,9 +383,14 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
         let mut styles: Vec<Style> = vec![];
         let mut shapes: Vec<po::Shape> = vec![];
         let mut names: Vec<Option<String>> = vec![];
-        let mut push = |mut path: PathData, rule: FillRule, st: Style, name: Option<String>| {
+        let mut push = |mut path: PathData, rule: FillRule, mut st: Style, name: Option<String>| {
             if path.is_empty() {
                 return;
+            }
+            // Trim, Merge and Crop remove any strokes (and Merge then merges by fill alone), as the
+            // public Pathfinder documentation describes.
+            if matches!(op, PathfinderOp::Trim | PathfinderOp::Merge | PathfinderOp::Crop) {
+                st.appearance.items.retain(|i| !matches!(i, AppearanceItem::Stroke(_)));
             }
             if op == PathfinderOp::Divide && st.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if !f.paint.is_none())) {
                 // Filled open contours keep their implicit closing edge. A zero-area line

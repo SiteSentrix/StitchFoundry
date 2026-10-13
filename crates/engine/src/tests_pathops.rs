@@ -893,3 +893,29 @@ fn divide_keeps_implicitly_closed_filled_paths_including_zero_signed_area() {
         assert!(pieces.iter().all(|n| n.appearance == source.appearance));
     }
 }
+
+/// #1570: Trim, Merge and Crop remove the objects' strokes; Merge then merges same-coloured
+/// fills whatever their strokes were.
+#[test]
+fn trim_merge_and_crop_remove_strokes() {
+    for op in ["trim", "merge", "crop"] {
+        let mut s = session();
+        let (a, b) = two_rects(&mut s);
+        for (id, c) in [(a, Color::rgb(0.0, 0.0, 0.0)), (b, Color::rgb(1.0, 0.0, 0.0))] {
+            s.edit("t", |d, _| {
+                d.node_mut(id).unwrap().appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::solid(c), 3.0).into();
+                Ok(())
+            })
+            .unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        let r = ids(&s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap());
+        let g = node(&s, r[0]);
+        let pieces = g.children().unwrap();
+        assert!(!pieces.is_empty(), "{op}");
+        assert!(pieces.iter().all(|c| c.appearance.stroke_width() == 0.0 && c.appearance.fill().is_some()), "{op} keeps a stroke");
+        if op == "merge" {
+            assert_eq!(pieces.len(), 1, "same fill, different strokes: merged");
+        }
+    }
+}
