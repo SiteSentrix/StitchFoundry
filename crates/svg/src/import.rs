@@ -524,7 +524,7 @@ impl Edits {
     /// skipped.
     fn apply(mut self, svg: &str) -> Cow<'_, str> {
         for (at, has_style, decls) in std::mem::take(&mut self.styles).into_values() {
-            self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", &decls[1..]) });
+            self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", decls.strip_prefix(';').unwrap_or(&decls)) });
         }
         if self.list.is_empty() {
             return svg.into();
