@@ -367,6 +367,59 @@
 	Character Style Options	Параметры стиля символа
 	Character Styles	Стили символов
 	Check Links	Проверить связи
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Проверить сценарий
+	Check Script…	Проверить сценарий…
+	Copy Report	Копировать отчёт
+	VectorCraft read this script without running it.	VectorCraft прочитал этот сценарий, не запуская его.
+	Needs nothing beyond plain JavaScript	Нужен только обычный JavaScript
+	Needs the script language's own objects or directives	Нужны собственные объекты или директивы языка сценариев
+	Needs the document model	Нужна модель документа
+	Needs files	Нужны файлы
+	Needs menu commands	Нужны команды меню
+	Needs dialogs	Нужны диалоговые окна
+	Needs features only the reference app has	Нужны функции, которые есть только в эталонном приложении
+	Outside the document	Вне документа
+	Writes, moves or deletes files	Записывает, перемещает или удаляет файлы
+	Opens files in other apps	Открывает файлы в других приложениях
+	Opens network connections	Открывает сетевые подключения
+	Loads native code	Загружает нативный код
+	Sends messages to other apps	Отправляет сообщения другим приложениям
+	Reads or sets environment variables	Читает или задаёт переменные среды
+	Runs code the checker can't read	Выполняет код, который проверка не может прочитать
+	Changes the reference app's preferences	Изменяет настройки эталонного приложения
+	Menu commands	Команды меню
+	Names the script builds as it runs: {count}	Имена, которые сценарий составляет во время выполнения: {count}
+	Document model	Модель документа
+	Object types: {names}	Типы объектов: {names}
+	Directives	Директивы
+	Includes	Подключаемые файлы
+	Checked	Проверен
+	Not followed: outside the script's folder	Пропущен: вне папки сценария
+	Includes itself	Подключает сам себя
+	Not read	Не прочитан
+	Not read: a limit was reached	Не прочитан: достигнут предел
+	Compiled or not text	Скомпилирован или не является текстом
+	Problems	Проблемы
+	String not closed	Строка не закрыта
+	Comment not closed	Комментарий не закрыт
+	Regular expression not closed	Регулярное выражение не закрыто
+	Template literal not closed	Шаблонная строка не закрыта
+	XML literal not closed	XML-литерал не закрыт
+	Bracket never closed	Скобка не закрыта
+	Closing bracket with no opening one	Закрывающая скобка без открывающей
+	Syntax newer than ES3	Синтаксис новее ES3
+	Unknown directive	Неизвестная директива
+	Not valid UTF-8: unreadable bytes were replaced	Недопустимый UTF-8: нечитаемые байты заменены
+	Mixed line endings	Смешанные концы строк
+	Nesting too deep to follow	Слишком глубокая вложенность
+	line {line}	строка {line}
+	lines {lines}	строки {lines}
+	{file}, line {line}	{file}, строка {line}
+	Compiled script: ask its author for the .jsx file	Скомпилированный сценарий: попросите у автора файл .jsx
+	Too large to check	Слишком большой для проверки
+	Not a script for the reference app	Это не сценарий для эталонного приложения
+	Some lists were cut short at their limit.	Некоторые списки обрезаны по пределу.
 	Check Spelling…	Проверить орфографию…
 	Choose a folder	Выберите папку
 	Choose…	Выбрать…
@@ -3402,6 +3455,7 @@ axis	Both	Оба
 @msg	Convert to Artboards: selection has no area	Преобразование в монтажные области: у выделения нет области
 @msg	Convert to Shape: no rectangles or ellipses selected	Преобразование в фигуру: не выделены прямоугольники или эллипсы
 @msg	Copied the CSS of {rules} object(s)	Скопирован CSS для {rules} объекта(ов)
+@msg	Copied the script report	Отчёт о сценарии скопирован
 @msg	Corners edits the corners of a path	«Углы» редактирует углы контура
 @msg	Couldn't copy to the system clipboard: {e}	Не удалось скопировать в системный буфер обмена: {e}
 @msg	Couldn't open {name}: {e}	Не удалось открыть {name}: {e}
@@ -3893,6 +3947,7 @@ axis	Both	Оба
 @msg	{name}: no such recovery entry	{name}: такой записи восстановления нет
 @msg	{path} can't be found: relink it first	{path} не найден: сначала восстановите связь
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: здесь нет файловой системы (передайте dataBase64 для открытия; опустите путь, чтобы получить dataBase64)
+@msg	{path}: not a file	{path}: не файл
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не удалось поместить {name}: {e}

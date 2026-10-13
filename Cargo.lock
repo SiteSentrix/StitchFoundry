@@ -4654,6 +4654,7 @@ dependencies = [
  "vectorcraft-pdf",
  "vectorcraft-plugins",
  "vectorcraft-render",
+ "vectorcraft-scriptcheck",
  "vectorcraft-svg",
  "vectorcraft-testkit",
  "vectorcraft-text",
@@ -4821,6 +4822,13 @@ dependencies = [
  "vello_common 0.2.0",
  "vello_cpu 0.2.0",
  "weezl",
+]
+
+[[package]]
+name = "vectorcraft-scriptcheck"
+version = "0.10.0"
+dependencies = [
+ "proptest",
 ]
 
 [[package]]

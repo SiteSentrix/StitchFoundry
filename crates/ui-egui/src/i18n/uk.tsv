@@ -363,6 +363,59 @@
 	Character Style Options	Параметри стилю символу
 	Character Styles	Стилі символів
 	Check Links	Перевірити зв’язки
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Перевірити сценарій
+	Check Script…	Перевірити сценарій…
+	Copy Report	Копіювати звіт
+	VectorCraft read this script without running it.	VectorCraft прочитав цей сценарій, не запускаючи його.
+	Needs nothing beyond plain JavaScript	Потрібен лише звичайний JavaScript
+	Needs the script language's own objects or directives	Потрібні власні об’єкти або директиви мови сценаріїв
+	Needs the document model	Потрібна модель документа
+	Needs files	Потрібні файли
+	Needs menu commands	Потрібні команди меню
+	Needs dialogs	Потрібні діалогові вікна
+	Needs features only the reference app has	Потрібні функції, які має лише еталонна програма
+	Outside the document	Поза документом
+	Writes, moves or deletes files	Записує, переміщує або видаляє файли
+	Opens files in other apps	Відкриває файли в інших програмах
+	Opens network connections	Відкриває мережеві з’єднання
+	Loads native code	Завантажує нативний код
+	Sends messages to other apps	Надсилає повідомлення іншим програмам
+	Reads or sets environment variables	Читає або задає змінні середовища
+	Runs code the checker can't read	Виконує код, який перевірка не може прочитати
+	Changes the reference app's preferences	Змінює налаштування еталонної програми
+	Menu commands	Команди меню
+	Names the script builds as it runs: {count}	Імена, які сценарій складає під час виконання: {count}
+	Document model	Модель документа
+	Object types: {names}	Типи об’єктів: {names}
+	Directives	Директиви
+	Includes	Підключені файли
+	Checked	Перевірено
+	Not followed: outside the script's folder	Пропущено: поза папкою сценарію
+	Includes itself	Підключає сам себе
+	Not read	Не прочитано
+	Not read: a limit was reached	Не прочитано: досягнуто межі
+	Compiled or not text	Скомпільований або не текст
+	Problems	Проблеми
+	String not closed	Рядок не закрито
+	Comment not closed	Коментар не закрито
+	Regular expression not closed	Регулярний вираз не закрито
+	Template literal not closed	Шаблонний рядок не закрито
+	XML literal not closed	XML-літерал не закрито
+	Bracket never closed	Дужку не закрито
+	Closing bracket with no opening one	Закривна дужка без відкривної
+	Syntax newer than ES3	Синтаксис, новіший за ES3
+	Unknown directive	Невідома директива
+	Not valid UTF-8: unreadable bytes were replaced	Недійсний UTF-8: нечитабельні байти замінено
+	Mixed line endings	Змішані кінці рядків
+	Nesting too deep to follow	Надто глибока вкладеність
+	line {line}	рядок {line}
+	lines {lines}	рядки {lines}
+	{file}, line {line}	{file}, рядок {line}
+	Compiled script: ask its author for the .jsx file	Скомпільований сценарій: попросіть в автора файл .jsx
+	Too large to check	Завеликий для перевірки
+	Not a script for the reference app	Це не сценарій для еталонної програми
+	Some lists were cut short at their limit.	Деякі списки обрізано на межі.
 	Check Spelling…	Перевірити орфографію…
 	Choose a folder	Виберіть папку
 	Choose…	Вибрати…
@@ -3390,6 +3443,7 @@ axis	Both	Обидві
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
 @msg	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
+@msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
@@ -3881,6 +3935,7 @@ axis	Both	Обидві
 @msg	{name}: no such recovery entry	{name}: такого запису відновлення немає
 @msg	{path} can't be found: relink it first	{path} не знайдено: спочатку відновіть зв’язок
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: тут немає файлової системи (передайте dataBase64 для відкриття; опустіть шлях, щоб отримати dataBase64)
+@msg	{path}: not a file	{path}: не файл
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не вдалося помістити {name}: {e}

@@ -369,6 +369,59 @@
 	Character Style Options	Opciones de estilo de carácter
 	Character Styles	Estilos de carácter
 	Check Links	Comprobar vínculos
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Comprobar script
+	Check Script…	Comprobar script…
+	Copy Report	Copiar informe
+	VectorCraft read this script without running it.	VectorCraft leyó este script sin ejecutarlo.
+	Needs nothing beyond plain JavaScript	Solo necesita JavaScript simple
+	Needs the script language's own objects or directives	Necesita objetos o directivas propios del lenguaje del script
+	Needs the document model	Necesita el modelo de documento
+	Needs files	Necesita archivos
+	Needs menu commands	Necesita comandos de menú
+	Needs dialogs	Necesita cuadros de diálogo
+	Needs features only the reference app has	Necesita funciones que solo tiene la aplicación de referencia
+	Outside the document	Fuera del documento
+	Writes, moves or deletes files	Escribe, mueve o elimina archivos
+	Opens files in other apps	Abre archivos en otras aplicaciones
+	Opens network connections	Abre conexiones de red
+	Loads native code	Carga código nativo
+	Sends messages to other apps	Envía mensajes a otras aplicaciones
+	Reads or sets environment variables	Lee o define variables de entorno
+	Runs code the checker can't read	Ejecuta código que la comprobación no puede leer
+	Changes the reference app's preferences	Cambia las preferencias de la aplicación de referencia
+	Menu commands	Comandos de menú
+	Names the script builds as it runs: {count}	Nombres que el script arma al ejecutarse: {count}
+	Document model	Modelo de documento
+	Object types: {names}	Tipos de objeto: {names}
+	Directives	Directivas
+	Includes	Archivos incluidos
+	Checked	Comprobado
+	Not followed: outside the script's folder	Omitido: fuera de la carpeta del script
+	Includes itself	Se incluye a sí mismo
+	Not read	No leído
+	Not read: a limit was reached	No leído: se alcanzó un límite
+	Compiled or not text	Compilado o no es texto
+	Problems	Problemas
+	String not closed	Cadena sin cerrar
+	Comment not closed	Comentario sin cerrar
+	Regular expression not closed	Expresión regular sin cerrar
+	Template literal not closed	Literal de plantilla sin cerrar
+	XML literal not closed	Literal XML sin cerrar
+	Bracket never closed	Delimitador sin cerrar
+	Closing bracket with no opening one	Delimitador de cierre sin apertura
+	Syntax newer than ES3	Sintaxis más reciente que ES3
+	Unknown directive	Directiva desconocida
+	Not valid UTF-8: unreadable bytes were replaced	UTF-8 no válido: se reemplazaron los bytes ilegibles
+	Mixed line endings	Finales de línea mezclados
+	Nesting too deep to follow	Anidamiento demasiado profundo para seguirlo
+	line {line}	línea {line}
+	lines {lines}	líneas {lines}
+	{file}, line {line}	{file}, línea {line}
+	Compiled script: ask its author for the .jsx file	Script compilado: pídele el archivo .jsx a su autor
+	Too large to check	Demasiado grande para comprobarlo
+	Not a script for the reference app	No es un script para la aplicación de referencia
+	Some lists were cut short at their limit.	Algunas listas se recortaron al llegar a su límite.
 	Check Spelling…	Revisar ortografía…
 	Choose a folder	Elige una carpeta
 	Choose…	Elegir…
@@ -3406,6 +3459,7 @@ axis	Both	Ambos
 @msg	Convert to Artboards: selection has no area	Convertir en mesas de trabajo: la selección no tiene área
 @msg	Convert to Shape: no rectangles or ellipses selected	Convertir en forma: no hay rectángulos ni elipses seleccionados
 @msg	Copied the CSS of {rules} object(s)	Se copió el CSS de {rules} objeto(s)
+@msg	Copied the script report	Se copió el informe del script
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
@@ -3897,6 +3951,7 @@ axis	Both	Ambos
 @msg	{name}: no such recovery entry	{name}: no existe esa entrada de recuperación
 @msg	{path} can't be found: relink it first	no se encuentra {path}: vuelve a vincularlo primero
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: aquí no hay sistema de archivos (pasa dataBase64 para abrir; omite la ruta para obtener dataBase64)
+@msg	{path}: not a file	{path}: no es un archivo
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	No se pudo colocar {name}: {e}

@@ -301,8 +301,8 @@ impl VectorcraftApp {
     /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
-    /// own and a picture or text is placed in the middle of the view. A library, a presets file or
-    /// a plug-in opens wherever it is dropped, as File → Open opens it ([`io::opens_as`]).
+    /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
+    /// plug-in or a script opens wherever it is dropped, as File → Open opens it ([`io::opens_as`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
         let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
         let at = match pos {

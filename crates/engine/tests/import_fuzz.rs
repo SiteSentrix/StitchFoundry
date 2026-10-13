@@ -8,7 +8,8 @@
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
 //! font files a folder search reads (damaged fonts, collections whose headers give any count of
-//! faces).
+//! faces), nor scripts written for the reference app checked without running them (garbage,
+//! generated script text and mutated scripts).
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -2325,5 +2326,117 @@ proptest! {
             bytes.truncate(cut);
         }
         search_reads("mutated font file", &bytes)?;
+    }
+}
+
+// ---------- scripts checked without running them ----------
+
+/// A script written for these tests, with invented names: directives in both forms, member chains,
+/// files, a dialog, menu commands, E4X, an operator and a message to another app.
+const SCRIPT_SAMPLE: &str = concat!(
+    "#target acme_2-12-en_US\n",
+    "//@include \"lib/util.jsxinc\"\n",
+    "#includepath \"lib;shared\"\n",
+    "#targetengine session\n",
+    "var doc = app.activeDocument;\n",
+    "var w = new Window(\"dialog { text: 'Tidy' }\");\n",
+    "var f = File.saveDialog('Save'); f.open('w'); f.write(doc.acmeName); f.close();\n",
+    "app.executeMenuCommand('acmecopyall');\n",
+    "var x = <root><item id=\"1\">{doc.acmeName}</item></root>;\n",
+    "for each (var i in x..item) { $.writeln(i.@id); }\n",
+    "Vec.prototype['+'] = function (o) { return o; };\n",
+    "var bt = new BridgeTalk(); bt.target = 'acme'; bt.send();\n",
+    "if (item.typename == 'AcmeShape') { alert(/a[/]b/g.test(s) ? 'yes' : \"no\"); }\n",
+);
+
+/// The pieces generated scripts are made of.
+const SCRIPT_PIECES: &[&str] = &[
+    "#target acme",
+    "//@include 'a.jsxinc'",
+    "#includepath 'x;..'",
+    "#pragma",
+    "app",
+    "activeDocument",
+    "selection",
+    "var doc = ",
+    ".",
+    ".acmeItems",
+    "(",
+    ")",
+    "[",
+    "]",
+    "{",
+    "}",
+    ";",
+    "=",
+    "'str'",
+    "\"open",
+    "/re[/]x/g",
+    "/",
+    "<a b=\"{v}\">",
+    "</a>",
+    "<!--",
+    ".@",
+    "..",
+    "`t",
+    "=>",
+    "\n",
+    "\r",
+    "\u{2028}",
+    "@JSXBIN@",
+    "executeMenuCommand",
+    "new File(p)",
+    "Window(",
+    "import",
+    "/*",
+    "\\",
+    "0x1F",
+    " ",
+];
+
+/// `script.check` with `p`, which mustn't panic, and whose lists keep to their limit.
+fn checked(what: &str, p: Value) -> Result<(), TestCaseError> {
+    let r = catch_quiet(|| no_panic(vectorcraft_engine::Session::new().execute("script.check", &p)))
+        .map_err(|e| TestCaseError::fail(format!("{what}: script.check panicked: {e}")))?;
+    if let Ok(r) = r {
+        for list in [&r["targets"], &r["directives"], &r["includes"], &r["problems"], &r["dom"]["members"], &r["menuCommands"]["strings"]] {
+            prop_assert!(list.as_array().is_some_and(|l| l.len() <= 1000), "{}: {}", what, list);
+        }
+    }
+    Ok(())
+}
+
+/// The sample the properties mutate reaches every part of the check.
+#[test]
+fn the_script_sample_is_checked_whole() {
+    let r = vectorcraft_engine::Session::new().execute("script.check", &json!({"data": SCRIPT_SAMPLE})).unwrap();
+    assert_eq!(r["kind"], "script");
+    assert_eq!(r["needs"], json!(["language", "dom", "files", "menuCommands", "dialogs", "hostOnly"]));
+    assert_eq!(r["problems"], json!([]));
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn script_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..2_000), compiled in any::<bool>()) {
+        let name = if compiled { "garbage.jsxbin" } else { "garbage.jsx" };
+        checked("script garbage", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": name}))?;
+    }
+
+    #[test]
+    fn generated_scripts_never_panic(pieces in prop::collection::vec(prop::sample::select(SCRIPT_PIECES.to_vec()), 0..120)) {
+        checked("generated script", json!({"data": pieces.concat()}))?;
+    }
+
+    #[test]
+    fn mutated_scripts_never_panic(cut in 0usize..1_200, edits in prop::collection::vec((0usize..1_200, any::<u8>()), 0..12)) {
+        let mut bytes = SCRIPT_SAMPLE.as_bytes().to_vec();
+        for (at, b) in edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        bytes.truncate(cut);
+        checked("mutated script", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "sample.jsx"}))?;
     }
 }

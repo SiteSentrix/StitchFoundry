@@ -937,6 +937,59 @@
 	Character Set:	文字セット:
 	Character Style Options	文字スタイルオプション
 	Check Links	リンクを確認
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	スクリプトをチェック
+	Check Script…	スクリプトをチェック…
+	Copy Report	レポートをコピー
+	VectorCraft read this script without running it.	VectorCraft はこのスクリプトを実行せずに読み取りました。
+	Needs nothing beyond plain JavaScript	通常の JavaScript 以外は不要
+	Needs the script language's own objects or directives	スクリプト言語固有のオブジェクトまたはディレクティブが必要
+	Needs the document model	ドキュメントモデルが必要
+	Needs files	ファイルが必要
+	Needs menu commands	メニューコマンドが必要
+	Needs dialogs	ダイアログが必要
+	Needs features only the reference app has	参照アプリだけにある機能が必要
+	Outside the document	ドキュメントの外
+	Writes, moves or deletes files	ファイルを書き込み、移動、削除
+	Opens files in other apps	ほかのアプリでファイルを開く
+	Opens network connections	ネットワーク接続を開く
+	Loads native code	ネイティブコードを読み込む
+	Sends messages to other apps	ほかのアプリにメッセージを送る
+	Reads or sets environment variables	環境変数を読み取りまたは設定
+	Runs code the checker can't read	チェックで読み取れないコードを実行
+	Changes the reference app's preferences	参照アプリの環境設定を変更
+	Menu commands	メニューコマンド
+	Names the script builds as it runs: {count}	スクリプトが実行時に組み立てる名前：{count}
+	Document model	ドキュメントモデル
+	Object types: {names}	オブジェクトの種類：{names}
+	Directives	ディレクティブ
+	Includes	インクルード
+	Checked	チェック済み
+	Not followed: outside the script's folder	読み込み対象外：スクリプトのフォルダーの外
+	Includes itself	自身をインクルードしています
+	Not read	読み込んでいません
+	Not read: a limit was reached	読み込んでいません：上限に達しました
+	Compiled or not text	コンパイル済みかテキストではありません
+	Problems	問題
+	String not closed	文字列が閉じていません
+	Comment not closed	コメントが閉じていません
+	Regular expression not closed	正規表現が閉じていません
+	Template literal not closed	テンプレートリテラルが閉じていません
+	XML literal not closed	XML リテラルが閉じていません
+	Bracket never closed	括弧が閉じていません
+	Closing bracket with no opening one	対応する開き括弧のない閉じ括弧
+	Syntax newer than ES3	ES3 より新しい構文
+	Unknown directive	不明なディレクティブ
+	Not valid UTF-8: unreadable bytes were replaced	有効な UTF-8 ではありません：読み取れないバイトを置き換えました
+	Mixed line endings	改行コードが混在しています
+	Nesting too deep to follow	入れ子が深すぎてたどれません
+	line {line}	{line} 行目
+	lines {lines}	{lines} 行目
+	{file}, line {line}	{file}、{line} 行目
+	Compiled script: ask its author for the .jsx file	コンパイル済みスクリプト：作成者に .jsx ファイルを依頼してください
+	Too large to check	大きすぎてチェックできません
+	Not a script for the reference app	参照アプリ用のスクリプトではありません
+	Some lists were cut short at their limit.	一部の一覧は上限で打ち切られました。
 	Choose a folder	フォルダーを選択
 	Choose…	選択…
 	Circle	円
@@ -3558,6 +3611,7 @@ theme	Appearance	外観
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
 @msg	no library `{id}`	ライブラリ `{id}` が見つかりません
+@msg	{path}: not a file	{path}: ファイルではありません
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 画像は書き出せません
 @msg	Replace Spine: select a blend and a path	ブレンド軸を置き換え: ブレンドとパスを選択してください
@@ -3917,6 +3971,7 @@ theme	Appearance	外観
 @msg	{_1} font families available	{_1} 個のフォントファミリーを使用できます
 @msg	{_1} has no {_2} style	{_1} には {_2} スタイルがありません
 @msg	Copied the CSS of {rules} object(s)	{rules} 個のオブジェクトの CSS をコピーしました
+@msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
 @msg	unknown highlight `{h}`	`{h}` は不明なハイライトの指定です

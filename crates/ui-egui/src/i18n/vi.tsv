@@ -446,6 +446,59 @@
 	Character Styles	Các kiểu ký tự
 	Character:	Ký tự:
 	Check Links	Kiểm tra liên kết
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Kiểm tra script
+	Check Script…	Kiểm tra script…
+	Copy Report	Sao chép báo cáo
+	VectorCraft read this script without running it.	VectorCraft đã đọc script này mà không chạy nó.
+	Needs nothing beyond plain JavaScript	Chỉ cần JavaScript thông thường
+	Needs the script language's own objects or directives	Cần các đối tượng hoặc chỉ thị riêng của ngôn ngữ script
+	Needs the document model	Cần mô hình tài liệu
+	Needs files	Cần tệp
+	Needs menu commands	Cần lệnh menu
+	Needs dialogs	Cần hộp thoại
+	Needs features only the reference app has	Cần tính năng mà chỉ ứng dụng tham chiếu có
+	Outside the document	Bên ngoài tài liệu
+	Writes, moves or deletes files	Ghi, di chuyển hoặc xóa tệp
+	Opens files in other apps	Mở tệp trong ứng dụng khác
+	Opens network connections	Mở kết nối mạng
+	Loads native code	Tải mã gốc
+	Sends messages to other apps	Gửi thông điệp đến ứng dụng khác
+	Reads or sets environment variables	Đọc hoặc đặt biến môi trường
+	Runs code the checker can't read	Chạy mã mà trình kiểm tra không đọc được
+	Changes the reference app's preferences	Thay đổi tùy chọn của ứng dụng tham chiếu
+	Menu commands	Lệnh menu
+	Names the script builds as it runs: {count}	Tên do script tạo ra khi chạy: {count}
+	Document model	Mô hình tài liệu
+	Object types: {names}	Kiểu đối tượng: {names}
+	Directives	Chỉ thị
+	Includes	Tệp được bao gồm
+	Checked	Đã kiểm tra
+	Not followed: outside the script's folder	Bỏ qua: nằm ngoài thư mục của script
+	Includes itself	Tự bao gồm chính nó
+	Not read	Chưa đọc
+	Not read: a limit was reached	Chưa đọc: đã đạt giới hạn
+	Compiled or not text	Đã biên dịch hoặc không phải văn bản
+	Problems	Vấn đề
+	String not closed	Chuỗi chưa đóng
+	Comment not closed	Chú thích chưa đóng
+	Regular expression not closed	Biểu thức chính quy chưa đóng
+	Template literal not closed	Chuỗi mẫu chưa đóng
+	XML literal not closed	Hằng XML chưa đóng
+	Bracket never closed	Dấu ngoặc không được đóng
+	Closing bracket with no opening one	Dấu ngoặc đóng không có dấu ngoặc mở
+	Syntax newer than ES3	Cú pháp mới hơn ES3
+	Unknown directive	Chỉ thị không xác định
+	Not valid UTF-8: unreadable bytes were replaced	UTF-8 không hợp lệ: các byte không đọc được đã bị thay thế
+	Mixed line endings	Kết thúc dòng lẫn lộn
+	Nesting too deep to follow	Lồng nhau quá sâu để theo dõi
+	line {line}	dòng {line}
+	lines {lines}	các dòng {lines}
+	{file}, line {line}	{file}, dòng {line}
+	Compiled script: ask its author for the .jsx file	Script đã biên dịch: hãy xin tác giả tệp .jsx
+	Too large to check	Quá lớn để kiểm tra
+	Not a script for the reference app	Không phải script cho ứng dụng tham chiếu
+	Some lists were cut short at their limit.	Một số danh sách đã bị cắt ngắn ở giới hạn của chúng.
 	Check Spelling…	Kiểm tra chính tả…
 	Choose a folder	Chọn thư mục
 	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Chọn tệp để liên kết lại từng tệp liên kết. Các tệp có kích thước và nội dung đã lưu cùng liên kết được hiển thị trước.
@@ -3723,6 +3776,7 @@ theme	Appearance	Giao diện
 @msg	Convert to Artboards: selection has no area	Chuyển thành bảng vẽ: vùng chọn không có diện tích
 @msg	Convert to Shape: no rectangles or ellipses selected	Chuyển thành hình dạng: chưa chọn hình chữ nhật hay hình elip
 @msg	Copied the CSS of {rules} object(s)	Đã sao chép CSS của {rules} đối tượng
+@msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}
@@ -4237,6 +4291,7 @@ theme	Appearance	Giao diện
 @msg	{path} can't be found: relink it first	{path} không tìm thấy: hãy liên kết lại trước
 @msg	{path} is not a folder	{path} không phải là thư mục
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: không có hệ thống tệp ở đây (truyền dataBase64 để mở; bỏ path để nhận dataBase64)
+@msg	{path}: not a file	{path}: không phải là tệp
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ

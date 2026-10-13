@@ -130,6 +130,8 @@ mod tests_saveext;
 #[cfg(test)]
 mod tests_screenmode;
 #[cfg(test)]
+mod tests_script_check;
+#[cfg(test)]
 mod tests_scrub;
 #[cfg(test)]
 mod tests_selectall;
