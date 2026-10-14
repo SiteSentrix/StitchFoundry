@@ -254,7 +254,7 @@ pub(crate) fn generate(col: &Column, params: &SatinParams, hint: Option<Point>, 
         col.reverse();
     }
 
-    let fine = sample_pairs(&col, |w| effective_spacing(params, w) * 0.5);
+    let fine = pushed(sample_pairs(&col, |w| effective_spacing(params, w) * 0.5), params.push_comp);
     if fine.len() < 2 {
         return Vec::new();
     }
@@ -275,6 +275,30 @@ pub(crate) fn generate(col: &Column, params: &SatinParams, hint: Option<Point>, 
         out.stitches(pts);
     }
     out.finish()
+}
+
+/// The column's rungs less `push` mm at each end (push compensation), measured along its middle;
+/// a column too short for it keeps its length.
+fn pushed(fine: Vec<(Point, Point)>, push: f64) -> Vec<(Point, Point)> {
+    if !(push.is_finite() && push > 0.0) || fine.len() < 3 {
+        return fine;
+    }
+    let mids: Vec<Point> = fine.iter().map(|(a, b)| a.midpoint(*b)).collect();
+    let mut along = Vec::with_capacity(mids.len());
+    let mut d = 0.0;
+    for (i, m) in mids.iter().enumerate() {
+        if let Some(prev) = i.checked_sub(1).and_then(|k| mids.get(k)) {
+            d += prev.distance(*m);
+        }
+        along.push(d);
+    }
+    let push = push.min(5.0);
+    // a ring (a satin border round a closed shape) has no open ends
+    let closed = mids.first().zip(mids.last()).is_some_and(|(a, b)| a.distance(*b) < 0.1);
+    if closed || d < 2.0 * push + 0.5 {
+        return fine;
+    }
+    fine.into_iter().zip(along).filter(|(_, t)| *t >= push && *t <= d - push).map(|(p, _)| p).collect()
 }
 
 /// A puff end cap across the column's first (or `last`) rung: satin whose stitches lie along
@@ -558,6 +582,23 @@ mod tests {
             assert!(s.y.abs() < 1e-9 || (s.y - 3.0).abs() < 1e-9, "{s:?}");
             assert_eq!(s.cmd, Cmd::Stitch);
         }
+    }
+
+    #[test]
+    fn push_comp_shortens_open_ends_only() {
+        let col = Column::new(vec![
+            Rung::new(Point::new(0.0, 0.0), Point::new(0.0, 4.0), Default::default()),
+            Rung::new(Point::new(20.0, 0.0), Point::new(20.0, 4.0), Default::default()),
+        ]);
+        let bare = SatinParams { underlay: SatinUnderlay { auto: false, center_run: false, ..Default::default() }, ..Default::default() };
+        let span = |p: &SatinParams| {
+            let st = generate(&col, p, None, None, 12.1);
+            let xs: Vec<f64> = st.iter().filter(|s| s.cmd == crate::pattern::Cmd::Stitch).map(|s| s.x).collect();
+            (xs.iter().copied().fold(f64::INFINITY, f64::min), xs.iter().copied().fold(f64::NEG_INFINITY, f64::max))
+        };
+        let (a0, b0) = span(&bare);
+        let (a1, b1) = span(&SatinParams { push_comp: 0.5, ..bare.clone() });
+        assert!(a1 - a0 > 0.4 && b0 - b1 > 0.4, "{a0} {b0} → {a1} {b1}");
     }
 
     #[test]

@@ -1055,6 +1055,9 @@ pub struct SatinParams {
     /// e.g. less where the column lies on other stitching. `None` = `pull_comp`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pull_comp_2: Option<f64>,
+    /// Push compensation: the column ends this much short at each open end (mm), where the
+    /// stitches push the fabric out along the column.
+    pub push_comp: f64,
     /// Tighten spacing on narrow columns and open it on wide ones.
     pub auto_spacing: bool,
     /// Split stitches longer than this (mm) into staggered shorter ones; 0 = never.
@@ -1267,6 +1270,7 @@ impl Default for SatinParams {
             spacing: 0.4,
             pull_comp: 0.15,
             pull_comp_2: None,
+            push_comp: 0.0,
             auto_spacing: true,
             split_length: 8.0,
             short_stitches: true,
@@ -1622,6 +1626,9 @@ pub struct FillParams {
     pub split_length: f64,
     /// Extension of row ends against fabric pull-in (mm).
     pub pull_comp: f64,
+    /// Push compensation: the fill stops this much short of the outline across its rows (mm),
+    /// where the rows push the fabric out.
+    pub push_comp: f64,
     /// If > 0, row spacing changes linearly from `spacing` to this value across the
     /// shape (gradient / colour-blending effect).
     pub spacing_end: f64,
@@ -1685,6 +1692,7 @@ impl Default for FillParams {
             offset: 0.25,
             split_length: 7.0,
             pull_comp: 0.2,
+            push_comp: 0.0,
             spacing_end: 0.0,
             center: None,
             random: 0.0,

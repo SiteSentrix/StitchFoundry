@@ -134,6 +134,27 @@ fn fill_piece(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<Point>,
     out.region = saved_region;
 }
 
+/// `piece` less `push` mm across its rows at `angle` (degrees): what the rows' push leaves for
+/// them to cover. `None` without push, or when nothing would be left.
+fn push_in(piece: &Polygon, angle: f64, push: f64) -> Option<Polygon> {
+    if !(push.is_finite() && push > 0.0) {
+        return None;
+    }
+    let a = angle.to_radians();
+    let n = Point::new(-a.sin(), a.cos()) * push.min(5.0);
+    let moved = |d: Point| {
+        let mut p = piece.clone();
+        p.transform(&crate::geom::Affine::translate(d));
+        p
+    };
+    let left: Vec<Polygon> = poly::intersection(&[moved(n)], &[moved(-n)]).into_iter().filter(|p| p.area() > 0.01).collect();
+    // a narrow waist the push would cut through keeps the piece whole
+    match <[Polygon; 1]>::try_from(left) {
+        Ok([one]) => Some(one),
+        Err(_) => None,
+    }
+}
+
 fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<Point>, exit: Option<Point>, trim: f64) {
     let params = job.params;
     let angle = params.angle + job.extra_angle;
@@ -166,6 +187,9 @@ fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<P
     }
     // the top stitching starts at the object's start point (the underlay's end only without one)
     let here = hint.or(out.pos());
+    // push compensation: rows stop short of the outline across them
+    let pushed_piece = push_in(piece, angle, params.push_comp);
+    let piece = pushed_piece.as_ref().unwrap_or(piece);
     match params.kind {
         FillKind::Tatami | FillKind::Satin => {
             let satin = params.kind == FillKind::Satin;
@@ -810,6 +834,23 @@ mod tests {
         // the top layer (the last part) climbs steadily and ends at the top
         assert!(at(0.70) > at(0.85) && at(0.85) > at(0.97), "{} {} {}", at(0.70), at(0.85), at(0.97));
         assert!(*ys.last().unwrap() < 2.0);
+    }
+
+    #[test]
+    fn push_comp_keeps_fill_rows_short_of_the_edges_across_them() {
+        let shape = Shape::rect(Point::new(0.0, 0.0), Point::new(30.0, 30.0));
+        let bare =
+            FillParams { angle: 0.0, underlay: FillUnderlay { edge_run: false, tatami: false, ..Default::default() }, ..FillParams::default() };
+        let span = |p: &FillParams| {
+            let job = FillJob { params: p, splits: &[], flow: &[], extra_angle: 0.0 };
+            let ys: Vec<f64> = fill_shape(&shape, job, &[], None, None, (2.0, 12.1)).iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.y).collect();
+            (ys.iter().copied().fold(f64::INFINITY, f64::min), ys.iter().copied().fold(f64::NEG_INFINITY, f64::max))
+        };
+        let (a0, b0) = span(&bare);
+        let (a1, b1) = span(&FillParams { push_comp: 0.6, ..bare.clone() });
+        // rows run across (along x): the push takes the top and bottom rows in, not the row ends
+        assert!(a0 < 0.1 && b0 > 29.5, "{a0} {b0}");
+        assert!(a1 >= 0.59 && b1 <= 29.41, "{a1} {b1}");
     }
 
     #[test]
