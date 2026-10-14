@@ -309,23 +309,190 @@ fn rowed(w: f64, h: f64, gap: f64, m: &Motif) -> Vec<(f64, f64)> {
     by_rows(w, h, gap / 2.0, m.pitch, m.amp, |x0, x1, y| (m.row)(x0, x1, y))
 }
 
-/// A corner square `a` mm across where two border strips meet: one row of the motif bent round a
-/// quarter circle, in from the right edge's middle and out through the bottom edge's middle (the
-/// top left corner of a quilt; turn the hoop for the others), squeezed to fit.
+/// A corner square `a` mm across where two border strips meet: rows of the motif bent round
+/// quarter circles about its inner corner (bottom right), in from the right edge and out through
+/// the bottom, nested from the inner corner out, each row coming back the other way along the edge
+/// to the next (the top left corner of a quilt; turn the hoop for the others), squeezed to fit.
 fn corner(a: f64, gap: f64, m: &Motif) -> Vec<(f64, f64)> {
+    use std::f64::consts::FRAC_PI_2;
     let margin = gap / 2.0;
-    let r0 = a / 2.0;
-    let squeeze = if m.amp > r0 - margin && m.amp > 0.0 { ((r0 - margin) / m.amp).max(0.05) } else { 1.0 };
-    let len = r0 * std::f64::consts::FRAC_PI_2;
-    (m.row)(0.0, len, 0.0)
-        .into_iter()
-        .map(|(s, v)| {
-            // along the arc by `s`, outwards (towards the quilt's edge) for a motif's up
-            let phi = -std::f64::consts::FRAC_PI_2 - s / r0;
-            let r = r0 - v * squeeze;
-            ((a + r * phi.cos()).clamp(margin, a - margin), (a + r * phi.sin()).clamp(margin, a - margin))
-        })
-        .collect()
+    let squeeze = if m.amp > a / 2.0 - margin && m.amp > 0.0 { ((a / 2.0 - margin) / m.amp).max(0.05) } else { 1.0 };
+    let amp = m.amp * squeeze;
+    let (lo, hi) = (margin + amp, a - margin - amp);
+    let n = if hi > lo { ((hi - lo) / m.pitch).round() as usize + 1 } else { 1 }.clamp(1, 500);
+    let radii: Vec<f64> = if n == 1 { vec![a / 2.0] } else { (0..n).map(|k| lo + (hi - lo) * k as f64 / (n - 1) as f64).collect() };
+    let mut out = Vec::new();
+    for (k, r0) in radii.into_iter().enumerate() {
+        let mut row: Vec<(f64, f64)> = (m.row)(0.0, r0 * FRAC_PI_2, 0.0)
+            .into_iter()
+            .map(|(s, v)| {
+                // along the arc by `s`, outwards (towards the quilt's edge) for a motif's up
+                let phi = -FRAC_PI_2 - s / r0;
+                let r = r0 - v * squeeze;
+                ((a + r * phi.cos()).clamp(margin, a - margin), (a + r * phi.sin()).clamp(margin, a - margin))
+            })
+            .collect();
+        if k % 2 == 1 {
+            row.reverse();
+        }
+        out.extend(row);
+    }
+    out
+}
+
+/// The area round the stitches art nodes `ids` sew, `clearance` mm out, its holes (the counters of
+/// letters) filled: its outer edges as rings in mm, traced on a half-millimetre grid and smoothed.
+/// From the stitches themselves, so any art (words, shapes, appliqué, a picture) gives its true
+/// outline.
+fn sewn_rings(s: &Session, ids: &[u64], clearance: f64) -> Vec<Vec<(f64, f64)>> {
+    let Some(plan) = s.embroidery_plan() else { return Vec::new() };
+    // the art and everything in it
+    let mut nodes = std::collections::HashSet::new();
+    if let Ok(st) = s.doc() {
+        let mut stack: Vec<vectorcraft_doc::NodeId> = ids.iter().map(|&i| vectorcraft_doc::NodeId(i)).collect();
+        while let Some(id) = stack.pop() {
+            if nodes.insert(id)
+                && let Some(kids) = st.doc.node(id).and_then(|n| n.children())
+            {
+                stack.extend(kids.iter().map(|k| k.id));
+            }
+        }
+    }
+    // its stitches as line pieces
+    let stitches = &plan.pattern().stitches;
+    let mut segs: Vec<((f64, f64), (f64, f64))> = Vec::new();
+    let mut last: Option<(f64, f64)> = None;
+    for (i, st) in stitches.iter().enumerate() {
+        let ours = st.cmd == sf_core::Cmd::Stitch && plan.node_at_record(i).is_some_and(|n| nodes.contains(&n));
+        if !ours {
+            last = None;
+            continue;
+        }
+        let p = (st.x, st.y);
+        segs.push((last.unwrap_or(p), p));
+        last = Some(p);
+    }
+    if segs.is_empty() {
+        return Vec::new();
+    }
+    let cell = 0.5;
+    let pad = clearance + 2.0;
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for (a, b) in &segs {
+        for p in [a, b] {
+            (x0, y0, x1, y1) = (x0.min(p.0), y0.min(p.1), x1.max(p.0), y1.max(p.1));
+        }
+    }
+    let (ox, oy) = (x0 - pad, y0 - pad);
+    let cols = (((x1 - x0 + 2.0 * pad) / cell).ceil() as usize).clamp(1, 3000);
+    let rows = (((y1 - y0 + 2.0 * pad) / cell).ceil() as usize).clamp(1, 3000);
+    let mut sewn = vec![false; cols * rows];
+    let at = |x: f64, y: f64| -> Option<usize> {
+        let (i, j) = (((x - ox) / cell).floor(), ((y - oy) / cell).floor());
+        (i >= 0.0 && j >= 0.0 && (i as usize) < cols && (j as usize) < rows).then(|| j as usize * cols + i as usize)
+    };
+    for (a, b) in &segs {
+        let n = ((b.0 - a.0).hypot(b.1 - a.1) / (cell / 2.0)).ceil().clamp(1.0, 100_000.0) as usize;
+        for k in 0..=n {
+            let t = k as f64 / n as f64;
+            if let Some(c) = at(a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t) {
+                sewn[c] = true;
+            }
+        }
+    }
+    // widen by the clearance (a disc round every sewn cell)
+    let r = (clearance / cell).ceil() as i64;
+    let disc: Vec<(i64, i64)> = (-r..=r).flat_map(|dy| (-r..=r).map(move |dx| (dx, dy))).filter(|(dx, dy)| dx * dx + dy * dy <= r * r).collect();
+    let mut keep = vec![false; cols * rows];
+    for (c, _) in sewn.iter().enumerate().filter(|(_, s)| **s) {
+        let (ci, cj) = ((c % cols) as i64, (c / cols) as i64);
+        for (dx, dy) in &disc {
+            let (i, j) = (ci + dx, cj + dy);
+            if i >= 0 && j >= 0 && (i as usize) < cols && (j as usize) < rows {
+                keep[j as usize * cols + i as usize] = true;
+            }
+        }
+    }
+    // holes filled: whatever the outside can't reach is kept clear
+    let mut outside = vec![false; cols * rows];
+    let mut stack: Vec<usize> = (0..cols)
+        .chain((0..cols).map(|i| (rows - 1) * cols + i))
+        .chain((0..rows).map(|j| j * cols))
+        .chain((0..rows).map(|j| j * cols + cols - 1))
+        .collect();
+    while let Some(c) = stack.pop() {
+        if c >= keep.len() || keep[c] || outside[c] {
+            continue;
+        }
+        outside[c] = true;
+        let (i, j) = (c % cols, c / cols);
+        if i > 0 {
+            stack.push(c - 1);
+        }
+        if i + 1 < cols {
+            stack.push(c + 1);
+        }
+        if j > 0 {
+            stack.push(c - cols);
+        }
+        if j + 1 < rows {
+            stack.push(c + cols);
+        }
+    }
+    let solid = |i: i64, j: i64| i >= 0 && j >= 0 && (i as usize) < cols && (j as usize) < rows && !outside[j as usize * cols + i as usize];
+    // the edges between kept and outside cells, chained into rings
+    let mut next_of: std::collections::HashMap<(i64, i64), (i64, i64)> = std::collections::HashMap::new();
+    for j in 0..rows as i64 {
+        for i in 0..cols as i64 {
+            if !solid(i, j) {
+                continue;
+            }
+            if !solid(i, j - 1) {
+                next_of.insert((i, j), (i + 1, j));
+            }
+            if !solid(i + 1, j) {
+                next_of.insert((i + 1, j), (i + 1, j + 1));
+            }
+            if !solid(i, j + 1) {
+                next_of.insert((i + 1, j + 1), (i, j + 1));
+            }
+            if !solid(i - 1, j) {
+                next_of.insert((i, j + 1), (i, j));
+            }
+        }
+    }
+    let mut keys: Vec<(i64, i64)> = next_of.keys().copied().collect();
+    keys.sort_unstable();
+    let mut used = std::collections::HashSet::new();
+    let mut rings = Vec::new();
+    for k in keys {
+        if used.contains(&k) {
+            continue;
+        }
+        let mut ring = Vec::new();
+        let mut cur = k;
+        while used.insert(cur) {
+            ring.push((ox + cur.0 as f64 * cell, oy + cur.1 as f64 * cell));
+            match next_of.get(&cur) {
+                Some(&n) => cur = n,
+                None => break,
+            }
+        }
+        if ring.len() >= 8 {
+            // rounded off (Chaikin), the grid's steps gone
+            for _ in 0..3 {
+                let n = ring.len();
+                ring = (0..n)
+                    .flat_map(|i| {
+                        let (a, b) = (ring[i], ring[(i + 1) % n]);
+                        [(a.0 * 0.75 + b.0 * 0.25, a.1 * 0.75 + b.1 * 0.25), (a.0 * 0.25 + b.0 * 0.75, a.1 * 0.25 + b.1 * 0.75)]
+                    })
+                    .collect();
+            }
+            rings.push(ring);
+        }
+    }
+    rings
 }
 
 /// Whether `p` is inside the ring.
@@ -514,14 +681,30 @@ fn quilt_block(s: &mut Session, p: &Value) -> Result<Value> {
             art.push(id);
         }
     }
-    let art_nodes: Vec<vectorcraft_doc::NodeId> = art.iter().map(|&i| vectorcraft_doc::NodeId(i)).collect();
     let id = match pattern {
         // round the art: the block's rectangle with the art's outline left out, filled
         "stipple" | "spiral" if !art.is_empty() => {
-            let rect = json!([left / PT_PER_MM, top / PT_PER_MM, w, h]);
-            let r = s.execute("embroidery.outlineAround", &json!({ "ids": art, "kind": "stipple", "gap": clearance, "rect": rect }))?;
+            // the block with the art's outline left out (even-odd: the rings are holes)
+            let mut d = format!(
+                "M{:.3} {:.3} L{:.3} {:.3} L{:.3} {:.3} L{:.3} {:.3} Z ",
+                left,
+                top,
+                left + w * PT_PER_MM,
+                top,
+                left + w * PT_PER_MM,
+                top + h * PT_PER_MM,
+                left,
+                top + h * PT_PER_MM
+            );
+            for ring in sewn_rings(s, &art, clearance) {
+                d.push_str(&path_d(&ring, 0.0, 0.0));
+                d.push_str("Z ");
+            }
+            let r = s.execute("path.create", &json!({ "d": d }))?;
             let id = r["id"].as_u64().ok_or_else(|| bad(CMD, "the block wasn't made"))?;
             s.execute("select.set", &json!({ "ids": [id] }))?;
+            s.execute("path.setFillRule", &json!({ "rule": "evenOdd" }))?;
+            s.execute("embroidery.set", &json!({ "type": "fill" }))?;
             let kind = if pattern == "stipple" { "Meander" } else { "Spiral" };
             let mut params = json!({ "kind": kind, "spacing": if pattern == "stipple" { gap / 2.0 } else { gap }, "stitch_length": stitch, "underlay": { "kinds": [] } });
             if pattern == "stipple" {
@@ -553,10 +736,8 @@ fn quilt_block(s: &mut Session, p: &Value) -> Result<Value> {
             // round the art: the line goes round its outline instead of over it
             if !art.is_empty() {
                 let (lx, ty) = (left / PT_PER_MM, top / PT_PER_MM);
-                let rings: Vec<Vec<(f64, f64)>> = super::embroidery::art_rings(s, &art_nodes, clearance)?
-                    .into_iter()
-                    .map(|r| r.into_iter().map(|(x, y)| (x - lx, y - ty)).collect())
-                    .collect();
+                let rings: Vec<Vec<(f64, f64)>> =
+                    sewn_rings(s, &art, clearance).into_iter().map(|r| r.into_iter().map(|(x, y)| (x - lx, y - ty)).collect()).collect();
                 pts = detour(&pts, &rings);
             }
             let r = s.execute("path.create", &json!({ "d": path_d(&pts, left, top) }))?;
@@ -692,12 +873,14 @@ mod tests {
             // a quarter circle half the corner across: a short line
             assert!(info["stitches"].as_u64().unwrap() > 20, "{pattern}: {info}");
         }
-        // the bent row comes in at the right edge's middle and leaves through the bottom's
+        // the bent rows start on the right edge and end on the bottom or right edge, nested
         let m = motif("waves", 6.0).unwrap();
         let pts = corner(76.2, 6.0, &m);
         let (first, last) = (pts[0], pts[pts.len() - 1]);
-        assert!((first.0 - 73.2).abs() < 1.0 && (first.1 - 38.1).abs() < 3.0, "{first:?}");
-        assert!((last.1 - 73.2).abs() < 1.0 && (last.0 - 38.1).abs() < 3.0, "{last:?}");
+        assert!((first.0 - 73.2).abs() < 1.0, "starts on the right edge: {first:?}");
+        assert!((last.0 - 73.2).abs() < 1.0 || (last.1 - 73.2).abs() < 1.0, "ends on an edge: {last:?}");
+        // reaching well into the square, not just round its inner corner
+        assert!(pts.iter().any(|p| p.0 < 25.0 && p.1 < 40.0), "fills the corner");
         // round the art: every pattern keeps clear of the words and shape, in one line
         for (pattern, _) in PATTERNS {
             s.execute(
