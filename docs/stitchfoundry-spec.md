@@ -531,7 +531,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
-| NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Partial | Make Blend makes the layers as separate objects (one per thread), not one object | 2 |
+| NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Done | Make Blend keeps the layers in the one fill (`FillParams.blend`: a thread and spacing profile each), sewn as one object per layer in its thread, underlay under the first; Remove Blend in the panel; `separate: true` for objects of their own | 0 |
 | NEW-02 | Custom accordion profiles | Done | Presets and a curve editor in the Embroidery panel (drag, add and take out points); any points through `embroidery.setParams` | – |
 | NEW-03 | Redwork | Done | SP-13 | – |
 | NEW-04 | Buttonholes | Done | SP-14 | – |

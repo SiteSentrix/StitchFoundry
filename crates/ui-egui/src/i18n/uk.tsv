@@ -5097,3 +5097,5 @@ machine	Stop	Зупинка
 @msg	`level` is beginner, digitizer, business or all	`level` — beginner, digitizer, business або all
 	Echo Quilting	Ехо-стьобання
 	Background Quilting	Фонове стьобання
+	Remove Blend	Прибрати змішування
+	Blend layers	Шари змішування

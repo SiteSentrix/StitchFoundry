@@ -5111,3 +5111,5 @@ machine	Stop	停止
 @msg	`level` is beginner, digitizer, business or all	`level` は beginner、digitizer、business、all のいずれかです
 	Echo Quilting	エコーキルティング
 	Background Quilting	背景キルティング
+	Remove Blend	ブレンドを解除
+	Blend layers	ブレンドの層

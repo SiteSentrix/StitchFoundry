@@ -5071,3 +5071,5 @@ machine	Stop	Stopp
 @msg	`level` is beginner, digitizer, business or all	`level` ist beginner, digitizer, business oder all
 	Echo Quilting	Echo-Quilting
 	Background Quilting	Hintergrund-Quilting
+	Remove Blend	Verlauf entfernen
+	Blend layers	Verlaufsebenen

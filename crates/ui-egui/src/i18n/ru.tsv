@@ -5113,3 +5113,5 @@ machine	Stop	Остановка
 @msg	`level` is beginner, digitizer, business or all	`level` — beginner, digitizer, business или all
 	Echo Quilting	Эхо-стёжка
 	Background Quilting	Фоновая стёжка
+	Remove Blend	Убрать смешение
+	Blend layers	Слои смешения

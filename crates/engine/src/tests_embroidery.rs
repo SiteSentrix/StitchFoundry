@@ -4980,7 +4980,7 @@ fn a_fill_blends_into_other_colours_across_its_rows() {
     let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
     s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
     let plain = needles(&s, a).len() as f64;
-    let r = s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#ffff00", "#0000ff"]})).unwrap();
+    let r = s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#ffff00", "#0000ff"], "separate": true})).unwrap();
     let ids: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
     assert_eq!(ids.len(), 3);
     assert_eq!(ids[0], a, "the fill itself is the first layer");
@@ -5418,4 +5418,34 @@ fn echo_and_background_quilting_go_round_the_art() {
     let NodeKind::Path { path, .. } = &n.kind else { panic!("a path") };
     assert_eq!(path.subpaths.len(), 2);
     assert!(stitches(&s) > 0);
+}
+
+/// NEW-01: Multi Blend as one object: the layers sew from the one fill, each in its thread and
+/// with its own spacing, underlay under the first only; taking the blend out sews it plain again.
+#[test]
+fn a_blend_stays_one_object_and_sews_its_layers_in_their_threads() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = needles(&s, a).len() as f64;
+    let r = s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#ffff00", "#0000ff"]})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers[0].children().unwrap().len(), 1, "no new objects");
+    let f = fill_params(&s, a);
+    assert_eq!(f.blend.len(), 3);
+    assert_eq!(f.blend[1].spacing_profile, vec![[0.0, 0.0], [0.5, 0.4], [1.0, 0.0]]);
+    assert_eq!(emb(&s, a).thread.unwrap().color, Rgb::new(255, 0, 0));
+    // the plan: three objects from the one node, in the three threads, in order
+    let plan = s.embroidery_plan().unwrap();
+    let colors: Vec<Rgb> = plan.design.objects.iter().map(|o| plan.design.palette[o.color].color).collect();
+    assert_eq!(colors, vec![Rgb::new(255, 0, 0), Rgb::new(255, 255, 0), Rgb::new(0, 0, 255)]);
+    assert!(plan.nodes.iter().all(|n| *n == a));
+    let total = needles(&s, a).len() as f64;
+    assert!((0.7..1.4).contains(&(total / plain)), "{total} vs {plain}");
+    // taking the blend out
+    s.execute("embroidery.setParams", &json!({"params": {"blend": []}})).unwrap();
+    assert!(fill_params(&s, a).blend.is_empty());
+    assert_eq!(s.embroidery_plan().unwrap().design.objects.len(), 1);
+    assert!(s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#0000ff"], "separate": "yes"})).is_err());
 }

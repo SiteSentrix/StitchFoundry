@@ -2464,6 +2464,20 @@ fn profile_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillP
     if let Some(p) = super::profile_curve::show(ui, egui::Id::new("emb-profile-curve"), &f.spacing_profile, d) {
         set(app, target, json!({ "spacing_profile": p }));
     }
+    // a Multi Blend's layers in their threads, and taking the blend out
+    if !f.blend.is_empty() {
+        ui.horizontal(|ui| {
+            ui.label(tl!("Blend layers"));
+            for l in &f.blend {
+                let (r, resp) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+                ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgb(l.thread.color.r, l.thread.color.g, l.thread.color.b));
+                resp.on_hover_text(l.thread.color.to_hex());
+            }
+            if button(ui, tl!("Remove Blend")).clicked() {
+                set(app, target, json!({ "blend": [] }));
+            }
+        });
+    }
     let Target::Selection(id) = target else { return };
     ui.horizontal(|ui| {
         ui.label(tl!("Blend into"));

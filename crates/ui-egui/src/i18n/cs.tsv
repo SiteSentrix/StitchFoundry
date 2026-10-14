@@ -5142,3 +5142,5 @@ machine	Stop	Zastavení
 @msg	`level` is beginner, digitizer, business or all	`level` je beginner, digitizer, business nebo all
 	Echo Quilting	Ozvěnové prošívání
 	Background Quilting	Prošívání pozadí
+	Remove Blend	Odebrat prolínání
+	Blend layers	Vrstvy prolínání
