@@ -62,7 +62,7 @@ pub(crate) fn read(bytes: &[u8]) -> Result<Pattern, FormatError> {
     dec.finish(Vec::new(), dst::header_label(bytes))
 }
 
-/// A DST header followed by DSZ records, most of them stitches: a DST body never has a record
+/// A DST header followed by DSZ records, a good share of them stitches: a DST body never has a record
 /// whose low five bits are 0 or 1 (DST sets bits 0 and 1 of every record's last byte).
 pub(crate) fn sniff(bytes: &[u8]) -> bool {
     if !dst::sniff(bytes) {
@@ -79,7 +79,7 @@ pub(crate) fn sniff(bytes: &[u8]) -> bool {
         }
         records += 1;
     }
-    stitches > 0 && stitches * 2 >= records
+    stitches > 0 && stitches * 4 >= records
 }
 
 #[cfg(test)]
