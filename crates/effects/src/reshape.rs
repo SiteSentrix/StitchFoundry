@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeKind};
-use vectorcraft_geom::{FillRule, PathData, Rect, shapes};
+use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
 
 use crate::{GeomContext, apply_one, is_geometry, merged_params};
 
@@ -197,7 +197,9 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 }
 
 /// Apply `fx` to every path under `art` as one piece: each effect takes the whole art's bounds as
-/// its reference box and the art's seed (a random Transform moves the pieces together).
+/// its reference box and the art's seed (a random Transform moves the pieces together). Images
+/// follow a Transform effect the same way ([`transform_images`]); other geometry effects leave
+/// them as they are (a raster follows a non-affine map only as a mesh warp).
 pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
     let seed = art.id.0;
     for e in fx {
@@ -208,6 +210,48 @@ pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
             let out = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, ..GeomContext::of(leaf) });
             set_geometry(leaf, out, rule);
         });
+        if e.id == "distort.transform" {
+            let (m, copies) = crate::distort::transform_map(bounds, &params, seed);
+            transform_images(art, m, copies);
+        }
+    }
+}
+
+/// Apply the Transform effect's map `m` to every image under `n`, as [`for_each_leaf`] does to
+/// paths: the map goes into the image's placement (pixel space → document), and `copies` more
+/// images follow, each mapped once more than the last. Without copies the image itself takes the
+/// map, as a path does.
+fn transform_images(n: &mut Node, m: Affine, copies: usize) {
+    let Some(children) = n.children_mut() else { return };
+    for c in children.iter_mut() {
+        if !matches!(c.kind, NodeKind::Image(_)) {
+            transform_images(Arc::make_mut(c), m, copies);
+            continue;
+        }
+        let src = (**c).clone();
+        let placed = |xf: Affine| {
+            let mut one = src.clone();
+            if let NodeKind::Image(im) = &mut one.kind {
+                im.xf = xf * im.xf;
+            }
+            one
+        };
+        if copies == 0 {
+            *c = Arc::new(placed(m));
+            continue;
+        }
+        // The copies become image nodes of their own, under a group with the image's id, name and
+        // place in the art (as the runs an outlined text gets).
+        let mut images: Vec<Arc<Node>> = Vec::with_capacity(copies + 1);
+        images.push(Arc::new(placed(Affine::IDENTITY)));
+        let mut xf = Affine::IDENTITY;
+        for _ in 0..copies {
+            xf *= m;
+            images.push(Arc::new(placed(xf)));
+        }
+        let mut g = Node::group(src.id, images);
+        g.name = src.name.clone();
+        *c = Arc::new(g);
     }
 }
 

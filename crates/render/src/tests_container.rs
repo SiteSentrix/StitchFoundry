@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, Knockout, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, ImageBlob, ImageObject, Knockout, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{Point, shapes};
 
 use super::*;
@@ -131,6 +131,28 @@ fn group_geometry_effects_move_the_members_as_one_piece() {
         green_fill(g);
     }));
     assert_eq!((img.pixel(25, 75), img.pixel(65, 75)), (GREEN, GREEN));
+}
+
+/// #2023: a Transform effect on a group moves and copies its images as it does its paths (the
+/// image's placement takes the map, and every copy is drawn at its own place).
+#[test]
+fn group_geometry_effects_move_and_copy_images_too() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
+    let b = rect(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), solid(0.0, 0.0, 1.0));
+    let im = ImageObject { key: "red".into(), width: 30, height: 30, xf: Affine::translate((10.0, 30.0)), link: None, placement: Default::default() };
+    let image = Arc::new(Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))));
+    let mut g = Node::group(d.alloc_id(), vec![b, image]);
+    g.appearance.effects.push(fx("distort.transform", json!({"moveH": 50, "copies": 1})));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let img = render(&d);
+    assert_eq!(img.pixel(25, 45), RED, "the image itself");
+    assert_eq!(img.pixel(75, 45), RED, "its copy, 50 pt to the right");
+    assert_eq!(img.pixel(60, 10), BLUE, "the path's copy");
+    assert_eq!(img.pixel(5, 10), BLUE, "the path itself");
 }
 
 #[test]
