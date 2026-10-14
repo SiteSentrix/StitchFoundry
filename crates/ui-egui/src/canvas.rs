@@ -435,7 +435,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         rulers(ui, full, &xf, app.hover_doc, app.session.general_unit(), &t);
     }
-    if app.ui.task_bar && !revolve_edit && !app.session.tool_busy() && app.ui.screen_mode < 3 {
+    // simple mode has its own actions (Your Design)
+    if app.ui.task_bar && !revolve_edit && !app.session.tool_busy() && app.ui.screen_mode < 3 && !crate::simple::active(app) {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {

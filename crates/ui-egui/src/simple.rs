@@ -134,8 +134,15 @@ fn part(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, count: usize) {
         .session
         .active()
         .and_then(|st| {
-            let n = st.doc.node(*st.selection.objects.first()?)?;
-            let e = n.embroidery.as_deref()?;
+            // the part itself, or the first stitched part inside it (a shape is a group)
+            let top = st.doc.node(*st.selection.objects.first()?)?;
+            let mut found = None;
+            top.walk(&mut |m| {
+                if found.is_none() {
+                    found = m.embroidery.as_deref().map(|e| (m, e));
+                }
+            });
+            let (n, e) = found?;
             use vectorcraft_embroidery::sf_core::attr::StitchType;
             let ty = match &e.stitch {
                 StitchType::Fill(_) => "fill",
