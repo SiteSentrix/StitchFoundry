@@ -103,10 +103,14 @@ fn writes_the_documented_operators() {
         "\nq\n",
         "\n1 A\n",
         "XI\n",
-        "%%EOF\n",
+        "%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\nend\n%%EOF\n",
     ] {
         assert!(text.contains(needle), "missing {needle:?} in\n{text}");
     }
+    // The prolog defines the page trailer's `annotatepage` (§3), in the dictionary the setup begins.
+    let prolog = text.split("%%BeginProlog\n").nth(1).and_then(|t| t.split("%%EndProlog\n").next()).unwrap();
+    assert!(prolog.contains("/VCLegacy 8 dict def\nVCLegacy begin\n/annotatepage {} bind def\nend\n"), "{prolog}");
+    assert!(text.contains("%%DocumentSuppliedResources: procset VectorCraft_Legacy 1 0\n"), "{text}");
     // The hidden layer is written hidden: visible 0.
     assert!(text.contains("%AI5_BeginLayer\n0 1 1 1 0 0 1 "), "{text}");
     // Art space is y up from the artboard's bottom-left: the red square (10..40 down from the top)
@@ -119,7 +123,7 @@ fn writes_the_documented_operators() {
     // The clipping path: closed by `h`, then `W n` (§5.6.2).
     assert!(text.contains(" L\nh\nW\nn\n"), "{text}");
     // Gradients: counted (`Bn`), each stop's operands before `%_Bs` (§3.5).
-    assert!(text.contains("%%BeginSetup\n1 Bn\n%AI5_BeginGradient: (Gradient)\n(Gradient) 0 2 Bd\n[\n"), "{text}");
+    assert!(text.contains("%%BeginSetup\nVCLegacy begin\n1 Bn\n%AI5_BeginGradient: (Gradient)\n(Gradient) 0 2 Bd\n[\n"), "{text}");
     assert!(text.contains(" 2 50 100 %_Bs\n") && !text.contains("Np\n"), "{text}");
     assert!(text.contains("1 0 0 1 0 0 Bg\nf\n0 BB\n"), "{text}");
     // The image: operands and `XI` on a line, its samples on comment lines (§8).

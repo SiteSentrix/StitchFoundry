@@ -51,8 +51,10 @@
 //! Windows-1252, vertical type, inline graphics, gradient or pattern fills) is written as its
 //! outlines, and all type with [`LegacyAiOptions::outline_text`].
 //!
-//! No prolog is written: the file names none, so PostScript printers can't print it, as the `.ai`
-//! files other apps write in this format.
+//! The prolog defines the one procedure the script calls that isn't an operator of the format,
+//! the page trailer's `annotatepage` ([`PROLOG`]); the format's operators are left to the app that
+//! reads the file, so PostScript printers can't print it, as the `.ai` files other apps write in
+//! this format.
 
 use std::fmt::Write;
 use std::sync::Arc;
@@ -196,7 +198,11 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     let _ = writeln!(s, "%AI5_ArtSize: {} {}", ps::num(width), ps::num(height));
     s.push_str("%AI5_RulerUnits: 2\n");
     let _ = writeln!(s, "%AI5_NumLayers: {layers}");
-    s.push_str("%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
+    s.push_str("%%DocumentSuppliedResources: procset VectorCraft_Legacy 1 0\n");
+    s.push_str("%%EndComments\n%%BeginProlog\n");
+    s.push_str(PROLOG);
+    s.push_str("%%EndProlog\n%%BeginSetup\n");
+    s.push_str("VCLegacy begin\n");
     fonts(&mut s, &w.fonts);
     if !w.gradients.is_empty() {
         let _ = writeln!(s, "{} Bn", w.gradients.len());
@@ -206,7 +212,9 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     }
     s.push_str("%%EndSetup\n");
     s.push_str(&w.body);
-    s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n");
+    // The page trailer as the specification's script has it (§3); the document trailer takes the
+    // prolog's dictionary off the dictionary stack (its procedure set termination, §3).
+    s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\nend\n%%EOF\n");
     Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings })
 }
 
@@ -233,6 +241,19 @@ fn fonts(s: &mut String, fonts: &[(String, bool)]) {
         }
     }
 }
+
+/// The prolog: a procedure set of this writer's own (`VectorCraft_Legacy 1 0`), in a dictionary
+/// (`VCLegacy`) the setup begins and the trailer ends (§1.2: the prolog holds definitions only,
+/// the setup activates them, the trailer deactivates them). The page trailer of the
+/// specification's script (§3, Script Setup: `gsave annotatepage grestore showpage`) calls
+/// `annotatepage`, which marks nothing here.
+const PROLOG: &str = "%%BeginResource: procset VectorCraft_Legacy 1 0
+/VCLegacy 8 dict def
+VCLegacy begin
+/annotatepage {} bind def
+end
+%%EndResource
+";
 
 /// The first line of a PostScript file (the DSC version comment).
 const PS_HEADER: &str = "%!PS-Adobe-3.0"; // brand-ok: the PostScript header comment
