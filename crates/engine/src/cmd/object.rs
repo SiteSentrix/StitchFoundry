@@ -1426,15 +1426,7 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let fixed = [all[0] - m[0], all[1] - m[1], all[2] - m[2], all[3] - m[3]];
     let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
     let rp = vectorcraft_geom::reference_point(v, refi);
-    let mut w = f64_or(p, "width", v.width());
-    let mut h = f64_or(p, "height", v.height());
-    if bool_or(p, "proportional", false) {
-        if p.get("width").is_some() && v.width() > 0.0 {
-            h = v.height() * w / v.width();
-        } else if p.get("height").is_some() && v.height() > 0.0 {
-            w = v.width() * h / v.height();
-        }
-    }
+    let (w, h) = wanted_size(p, v);
     // The geometric scale that gives the visual size: margins grow by the strokes' scale `f`. It is
     // exact for proportional scales of one path; [`Spans::refit`] checks it, and solves for the
     // scales where it misses.
@@ -1484,12 +1476,9 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p, false)
 }
 
-/// `object.setBounds` with anchors selected with Direct Selection (#1824): the values are those of
-/// `b`, the box around the anchors (and the objects selected whole) square to the page, and only
-/// the anchors, their handles with them, and those objects move or scale.
-fn set_anchor_bounds(s: &mut Session, p: &Value, ids: Vec<NodeId>, b: Rect) -> Result<Value> {
-    let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
-    let rp = vectorcraft_geom::reference_point(b, refi);
+/// The `width` and `height` `object.setBounds` asks for a box now `b`: the one not given stays, or
+/// with `proportional` follows the one given.
+fn wanted_size(p: &Value, b: Rect) -> (f64, f64) {
     let mut w = f64_or(p, "width", b.width());
     let mut h = f64_or(p, "height", b.height());
     if bool_or(p, "proportional", false) {
@@ -1499,6 +1488,16 @@ fn set_anchor_bounds(s: &mut Session, p: &Value, ids: Vec<NodeId>, b: Rect) -> R
             w = b.width() * h / b.height();
         }
     }
+    (w, h)
+}
+
+/// `object.setBounds` with anchors selected with Direct Selection (#1824): the values are those of
+/// `b`, the box around the anchors (and the objects selected whole) square to the page, and only
+/// the anchors, their handles with them, and those objects move or scale.
+fn set_anchor_bounds(s: &mut Session, p: &Value, ids: Vec<NodeId>, b: Rect) -> Result<Value> {
+    let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
+    let rp = vectorcraft_geom::reference_point(b, refi);
+    let (w, h) = wanted_size(p, b);
     // A single anchor, or anchors in a line, have no size to scale on that side.
     let ratio = |size: f64, now: f64| if now > 1e-9 { size / now } else { 1.0 };
     let scale = about(rp, Affine::scale_non_uniform(ratio(w, b.width()), ratio(h, b.height())));
