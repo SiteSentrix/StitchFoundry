@@ -153,7 +153,7 @@ fn recolor(s: &mut Session, p: &Value) -> Result<Value> {
     if plans.is_empty() {
         return Err(bad(CMD, "no thread of the design changes"));
     }
-    let new = super::embroidery::new_stitching(&s.doc()?.doc);
+    let new = super::embroidery::new_stitching(s);
     s.edit("Recolour Threads", |d, _| {
         for (id, t) in &plans {
             let c = Color::rgb8(t.color.r, t.color.g, t.color.b);

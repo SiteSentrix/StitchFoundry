@@ -672,6 +672,11 @@ pub struct Prefs {
     /// Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embroidery_templates: Vec<cmd::embroidery_templates::OwnTemplate>,
+    /// Stitch properties new objects take in every design, by stitch type (`embroidery.current
+    /// .saveAsDefault`): a design's own Properties for New Objects come first. A local library, not
+    /// a Preferences dialog field.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub embroidery_default_properties: std::collections::BTreeMap<String, sf_core::attr::Embroidery>,
     /// Job orders (`embroidery.job.create`). A local list, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embroidery_jobs: Vec<cmd::embroidery_jobs::Job>,
@@ -874,6 +879,7 @@ impl Default for Prefs {
             embroidery_custom_hoops: vec![],
             embroidery_thread_charts: vec![],
             embroidery_templates: vec![],
+            embroidery_default_properties: Default::default(),
             embroidery_jobs: vec![],
             embroidery_queue: vec![],
             embroidery_sheet_setup: Default::default(),

@@ -5075,3 +5075,7 @@ machine	Stop	Arrêt
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Vérifier le motif, dans le menu Broderie, repère les couches denses, les points longs et le texte trop petit.
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Regardez le motif se broder avec le lecteur de la Séquence de points avant de l’envoyer.
 	Export with Embroidery › Export Machine File and pick your machine's format.	Exportez avec Broderie › Exporter le fichier machine et choisissez le format de votre machine.
+	Save as Default	Enregistrer par défaut
+	Clear Default	Effacer le défaut
+	Every new design starts with these properties	Chaque nouveau motif commence avec ces propriétés
+	New designs take the built-in properties again	Les nouveaux motifs reprennent les propriétés intégrées

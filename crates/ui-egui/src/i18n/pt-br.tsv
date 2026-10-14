@@ -4337,3 +4337,7 @@ machine	Trim	Corte de linha
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Verificar desenho, no menu Bordado, encontra camadas densas, pontos longos e texto pequeno demais.
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Veja o desenho bordar com o reprodutor da Sequência de pontos antes de enviá-lo.
 	Export with Embroidery › Export Machine File and pick your machine's format.	Exporte com Bordado › Exportar arquivo de máquina e escolha o formato da sua máquina.
+	Save as Default	Salvar como padrão
+	Clear Default	Limpar padrão
+	Every new design starts with these properties	Todo desenho novo começa com estas propriedades
+	New designs take the built-in properties again	Desenhos novos voltam a usar as propriedades internas

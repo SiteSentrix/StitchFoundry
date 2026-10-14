@@ -928,7 +928,11 @@ type and set its density, underlay, pull compensation and the rest. Objects you 
 stitch type (with the Stitch Type list or Convert Artwork to Embroidery) take them. With
 an object selected, **Make Current** (also Embroidery › Make Properties Current) makes its
 properties the ones new objects of its type take. **Reset to Defaults** goes back to the built-in
-values. These are saved with the design, so a template carries them to new designs.
+values. These are saved with the design, so a template carries them to new designs. **Save as
+Default** keeps them for every design (with the app's preferences): a pull compensation of 0.7,
+say, set once, is what every new satin in every new design takes, until the design sets its own
+or **Clear Default** forgets it (`embroidery.current.saveAsDefault {type?}`,
+`embroidery.current.clearDefault {type?}`).
 
 **Embroidery styles** are named sets of stitch properties. In the **Embroidery Styles** panel
 (Window › Embroidery Styles), the new-style button saves the selected object's properties as a

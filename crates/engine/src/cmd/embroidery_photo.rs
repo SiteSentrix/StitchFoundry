@@ -706,7 +706,7 @@ fn colour_fills(s: &Session, pic: &Picture, n: usize, cell: f64, chart: &ThreadC
         l(b).total_cmp(&l(a))
     });
     let to_doc = kurbo::Affine::translate((b.x0, b.y0)) * kurbo::Affine::scale(c);
-    let new = super::embroidery::new_stitching(&s.doc()?.doc);
+    let new = super::embroidery::new_stitching(s);
     let mut out = Vec::new();
     for (k, i) in order.iter().enumerate() {
         if skip == Some(*i) {

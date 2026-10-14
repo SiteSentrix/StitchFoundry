@@ -458,7 +458,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // the properties made current for the type (not when a run style of it is asked for)
     let current = match &st {
-        Some(st) if st.type_name() == canonical(name) => s.doc()?.doc.embroidery.as_deref().and_then(|c| c.current_for(st.type_name()).cloned()),
+        Some(st) if st.type_name() == canonical(name) => current_props(s, st.type_name()),
         _ => None,
     };
     s.edit("Stitch Type", |d, _| {
@@ -561,7 +561,7 @@ fn set_thread(s: &mut Session, p: &Value) -> Result<Value> {
             chart: str_param(p, "chart").unwrap_or_default().to_string(),
         }
     });
-    let new = new_stitching(&s.doc()?.doc);
+    let new = new_stitching(s);
     s.edit("Set Thread", |d, _| {
         for id in &ids {
             put_thread(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, &new, thread.clone(), color.filter(|_| repaint));
@@ -571,14 +571,17 @@ fn set_thread(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
+/// The properties new objects of stitch type `key` take: the design's own (Properties for New
+/// Objects), else the user's defaults for every design (`embroidery.current.saveAsDefault`).
+pub(crate) fn current_props(s: &Session, key: &str) -> Option<Embroidery> {
+    let own = s.doc().ok().and_then(|st| st.doc.embroidery.as_deref().and_then(|c| c.current_for(key).cloned()));
+    own.or_else(|| s.prefs.embroidery_default_properties.get(key).filter(|e| e.stitch.type_name() == key).cloned())
+}
+
 /// What unstitched art becomes when it gets a thread: shapes a fill, open lines a run (each with
 /// the properties made current for it).
-pub(super) fn new_stitching(d: &Document) -> [Embroidery; 2] {
-    let cfg = d.embroidery.as_deref();
-    [
-        cfg.and_then(|c| c.current_for("fill").cloned()).unwrap_or_else(Embroidery::fill),
-        cfg.and_then(|c| c.current_for("run").cloned()).unwrap_or_else(Embroidery::run),
-    ]
+pub(super) fn new_stitching(s: &Session) -> [Embroidery; 2] {
+    [current_props(s, "fill").unwrap_or_else(Embroidery::fill), current_props(s, "run").unwrap_or_else(Embroidery::run)]
 }
 
 /// Gives a node its thread (unstitched art becomes `new`: `[fill, run]` for shapes and open
@@ -625,7 +628,7 @@ fn match_threads(s: &mut Session, p: &Value) -> Result<Value> {
     if plans.is_empty() {
         return Err(bad(CMD, "nothing stitched to match"));
     }
-    let new = new_stitching(&s.doc()?.doc);
+    let new = new_stitching(s);
     s.edit("Match Threads to Chart", |d, _| {
         for (id, t) in &plans {
             let c = Color::rgb8(t.color.r, t.color.g, t.color.b);
@@ -864,17 +867,16 @@ fn convert_art(s: &mut Session, p: &Value) -> Result<Value> {
     let mut plans: Vec<(NodeId, Embroidery)> = Vec::new();
     {
         let d = &s.doc()?.doc;
-        let cfg = d.embroidery.as_deref();
         for id in &ids {
             let Some(n) = d.node(*id) else { continue };
             if n.embroidery.is_some() && !force {
                 continue;
             }
             let mut e = vectorcraft_embroidery::suggest(n);
-            if let Some(c) = cfg.and_then(|c| c.current_for(e.stitch.type_name())) {
+            if let Some(c) = current_props(s, e.stitch.type_name()) {
                 // the type's current properties; a width read from the stroke stays
                 let width = e.width;
-                e.take_properties(c);
+                e.take_properties(&c);
                 e.width = width.or(e.width);
             }
             plans.push((*id, e));

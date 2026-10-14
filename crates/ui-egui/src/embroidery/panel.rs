@@ -1964,11 +1964,24 @@ fn current_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.new_type = t.1.to_string();
         }
         let key = types.get(types.iter().position(|t| t.1 == app.embroidery.new_type).unwrap_or(0)).map_or("fill", |t| t.1);
-        let Some(e) = cfg.current_for(key).cloned().or_else(|| StitchType::from_name(key).map(Embroidery::new)) else { return };
+        let saved = app.session.prefs.embroidery_default_properties.get(key).cloned();
+        let Some(e) = cfg.current_for(key).cloned().or_else(|| saved.clone()).or_else(|| StitchType::from_name(key).map(Embroidery::new)) else {
+            return;
+        };
         props_rows(app, ui, Target::Current(key), &e, true);
-        if cfg.current.contains_key(key) && button(ui, tl!("Reset to Defaults")).clicked() {
-            app.run("embroidery.current.reset", json!({ "type": key })).ok();
-        }
+        ui.horizontal_wrapped(|ui| {
+            if cfg.current.contains_key(key) {
+                if button(ui, tl!("Save as Default")).on_hover_text(tl!("Every new design starts with these properties")).clicked() {
+                    app.run("embroidery.current.saveAsDefault", json!({ "type": key })).ok();
+                }
+                if button(ui, tl!("Reset to Defaults")).clicked() {
+                    app.run("embroidery.current.reset", json!({ "type": key })).ok();
+                }
+            }
+            if saved.is_some() && button(ui, tl!("Clear Default")).on_hover_text(tl!("New designs take the built-in properties again")).clicked() {
+                app.run("embroidery.current.clearDefault", json!({ "type": key })).ok();
+            }
+        });
     });
 }
 

@@ -5092,3 +5092,7 @@ machine	Stop	Zastavení
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Kontrola motivu v nabídce Vyšívání najde husté vrstvy, dlouhé stehy a příliš malý text.
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Než motiv odešlete, sledujte jeho šití přehrávačem stehů v Pořadí stehů.
 	Export with Embroidery › Export Machine File and pick your machine's format.	Exportujte přes Vyšívání › Exportovat soubor pro stroj a zvolte formát svého stroje.
+	Save as Default	Uložit jako výchozí
+	Clear Default	Zrušit výchozí
+	Every new design starts with these properties	Každý nový motiv začne s těmito vlastnostmi
+	New designs take the built-in properties again	Nové motivy opět převezmou vestavěné vlastnosti

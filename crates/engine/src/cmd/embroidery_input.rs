@@ -83,7 +83,7 @@ fn column(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "id": id.0 }));
     }
     // new columns take the current satin properties and are drawn in the stroke colour
-    let props = s.doc()?.doc.embroidery.as_deref().and_then(|c| c.current_for("satin").cloned()).unwrap_or_else(Embroidery::satin);
+    let props = super::embroidery::current_props(s, "satin").unwrap_or_else(Embroidery::satin);
     let paint = [&s.paint.stroke, &s.paint.fill]
         .into_iter()
         .find(|p| matches!(p, Paint::Solid { .. }))

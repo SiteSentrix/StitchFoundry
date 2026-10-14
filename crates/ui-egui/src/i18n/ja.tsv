@@ -5061,3 +5061,7 @@ machine	Stop	停止
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	刺繍メニューの「デザインをチェック」で、密な重なり、長い針目、小さすぎる文字が見つかります。
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	送る前に、ステッチ順序のステッチプレーヤーで縫う様子を見ましょう。
 	Export with Embroidery › Export Machine File and pick your machine's format.	刺繍 › ミシンファイルを書き出し で、ミシンの形式を選んで書き出します。
+	Save as Default	デフォルトとして保存
+	Clear Default	デフォルトを解除
+	Every new design starts with these properties	新しいデザインはすべてこのプロパティで始まります
+	New designs take the built-in properties again	新しいデザインは再び組み込みのプロパティになります

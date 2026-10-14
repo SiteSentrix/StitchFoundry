@@ -5063,3 +5063,7 @@ machine	Stop	Остановка
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Проверка дизайна в меню «Вышивка» находит плотные слои, длинные стежки и слишком мелкий текст.
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Перед отправкой посмотрите, как вышивается дизайн, в проигрывателе «Порядка стежков».
 	Export with Embroidery › Export Machine File and pick your machine's format.	Экспортируйте через Вышивка › Экспорт файла для машины и выберите формат своей машины.
+	Save as Default	Сохранить по умолчанию
+	Clear Default	Сбросить умолчания
+	Every new design starts with these properties	Каждый новый дизайн начинается с этих свойств
+	New designs take the built-in properties again	Новые дизайны снова получают встроенные свойства
