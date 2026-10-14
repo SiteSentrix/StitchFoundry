@@ -39,3 +39,5 @@ vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 serde_json = { workspace = true }
+# `draw_text`, to write test files with live text as other writers do.
+krilla = { workspace = true, features = ["simple-text"] }
