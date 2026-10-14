@@ -150,6 +150,30 @@ fn undo_while_typing_takes_back_only_the_typing_and_redo_returns_it() {
     assert_eq!(obj(&s, id).plain_text(), "abc!");
 }
 
+/// #1881: a Cmd/Ctrl drag while typing (the Selection tool lent to the Type tool) moves the type
+/// and keeps what was typed, and typing goes on after it.
+#[test]
+fn a_cmd_drag_while_typing_moves_the_type_and_keeps_the_typing() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Hello", v).unwrap();
+    let before = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    let (at, cmd) = (before.center(), Mods { cmd: true, ..Default::default() });
+    for (kind, dx) in [(PointerKind::Down, 0.0), (PointerKind::Drag, 100.0), (PointerKind::Up, 100.0)] {
+        s.pointer(&PointerEvent::new(kind, at.x + dx, at.y).with_mods(cmd), v).unwrap();
+    }
+    assert_eq!(obj(&s, id).plain_text(), "Hello", "the typing is kept");
+    let moved = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert!(moved.x0 - before.x0 > 50.0, "the type moved: {before:?} → {moved:?}");
+    s.tool_text("!", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello!");
+    let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert!((after.x0 - moved.x0).abs() < 1e-6, "and stays where it was moved: {after:?}");
+}
+
 #[test]
 fn undo_during_a_drag_takes_back_only_the_drag() {
     let mut s = session();

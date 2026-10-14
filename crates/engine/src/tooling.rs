@@ -115,6 +115,12 @@ impl Session {
             return *ev;
         }
         let Some(id) = self.lent_tool(self.tool.id()) else { return *ev };
+        // Typing in progress is kept as its own step first: the lent tool's drag previews from the
+        // document its interaction started from, which would drop the typing (#1881).
+        if crate::cmd::typing_in_progress(self) {
+            // Fails only without a document, and then there is no typing to keep.
+            let _ = crate::cmd::settle_interaction(self);
+        }
         let lent = self.make_tool(id);
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }
