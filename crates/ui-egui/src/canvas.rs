@@ -4342,6 +4342,45 @@ mod tests {
     }
 
     #[test]
+    fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("directSelection");
+        let ctx = egui::Context::default();
+        let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+            let mut out =
+                ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        timed(&mut app, 0.0, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let text = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        // Double-click the middle of the text with Direct Selection.
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        let at = xf.to_screen(b.center());
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(&mut app, 1.1, vec![]);
+        // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
+        // into the text, not to tool shortcuts.
+        assert_eq!(app.session.tool_id(), "type");
+        assert!(app.session.tool_wants_text());
+        let o = app.session.tool_options();
+        assert_eq!(o["editing"], json!(id));
+        let caret = o["caret"].as_u64().unwrap();
+        assert!((1..11).contains(&caret), "caret {caret}");
+        app.session.tool_text("X", app.view_info()).unwrap();
+        let t = text(&app);
+        assert_eq!((t.len(), t.find('X')), (12, Some(caret as usize)), "{t}");
+    }
+
+    #[test]
     fn a_symbol_dropped_on_the_canvas_is_placed_there() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();

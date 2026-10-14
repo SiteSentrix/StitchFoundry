@@ -407,7 +407,19 @@ impl Tool for DirectSelectionTool {
                     vec![Action::Exec("select.set".into(), json!({"ids": [target.0]}))]
                 }
             }
-            (PointerKind::DoubleClick, _) if !self.group => corners::double_click(cx, p, true).into_iter().collect(),
+            (PointerKind::DoubleClick, _) if !self.group => {
+                self.state = State::Idle;
+                if let Some(a) = corners::double_click(cx, p, true) {
+                    return vec![a];
+                }
+                if crate::rulerguide::guide_at(cx, p).is_some() {
+                    return vec![];
+                }
+                if hit_test(cx.doc, p, cx.hit_options()).and_then(|h| cx.doc.node(h.leaf)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) {
+                    return vec![Action::SwitchTool("type".into())];
+                }
+                vec![]
+            }
             (PointerKind::Move, State::Idle) => {
                 self.hover = if self.group || !cx.highlight_anchors { None } else { hovered_anchor(cx, p) };
                 vec![]
@@ -1527,5 +1539,37 @@ mod tests {
             let (v, _) = drag(&mut t, &c, (350.0, 350.0), (253.0, 351.0), Mods::default());
             assert_eq!(v["matrix"], json!([1.0, 0.0, 0.0, 1.0, -100.0, 1.0]), "group: {group}");
         }
+    }
+
+    #[test]
+    fn double_clicking_type_switches_to_type_tool() {
+        use std::sync::Arc;
+        let (mut d, id) = doc_with_area_type();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let b = d.node(id).unwrap().geometric_bounds().unwrap();
+        let mid = b.center();
+        // Direct Selection (shortcut A, group == false) switches to the Type tool on double click.
+        let mut t = DirectSelectionTool::new(false);
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, mid.x, mid.y));
+        assert_eq!(acts, vec![Action::SwitchTool("type".into())]);
+
+        // Group Selection (group == true) does not switch to Type tool.
+        let mut gt = DirectSelectionTool::new(true);
+        let acts_group = gt.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, mid.x, mid.y));
+        assert!(acts_group.is_empty(), "group selection shouldn't switch: {acts_group:?}");
+
+        // Text inside a group also switches to Type tool with Direct Selection.
+        let gid = d.alloc_id();
+        let text_id = d.alloc_id();
+        let text_node = Node::new(
+            text_id,
+            vectorcraft_doc::NodeKind::Text(Box::new(vectorcraft_doc::TextObject::point(Point::new(50.0, 50.0), "In group", Default::default()))),
+        );
+        d.insert(Some(d.layers[0].id), 2, Node::group(gid, vec![Arc::new(text_node)])).unwrap();
+        let in_group_b = d.node(gid).unwrap().geometric_bounds().unwrap();
+        let c2 = cx(&d, &s, &p);
+        let acts_group_text = t.pointer(&c2, &PointerEvent::new(PointerKind::DoubleClick, in_group_b.center().x, in_group_b.center().y));
+        assert_eq!(acts_group_text, vec![Action::SwitchTool("type".into())]);
     }
 }
