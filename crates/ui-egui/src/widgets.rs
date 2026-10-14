@@ -1468,13 +1468,19 @@ pub fn channel_slider(
 }
 
 /// A hex colour field (`E67828`, no `#`) after a `#` label. Returns the text on commit when it
-/// changed.
+/// was typed into the field and differs from `hex`.
 pub fn hex_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, hex: &str) -> Option<String> {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new("#").size(15.0).color(t.text));
     let id = ui.id().with(id);
     let editing = ui.memory(|m| m.has_focus(id));
-    let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
+    // Until the user types into it, the field shows `hex` as it is now, also while it has the
+    // focus. Tab can give it the focus in the frame another field commits an edit, before the edit
+    // changes `hex`; the text from before that edit is not committed when the focus moves on
+    // (#1692).
+    let edited_id = id.with("edited");
+    let edited = editing && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
+    let mut buf: String = if edited { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
     let resp = egui::Frame::NONE
         .fill(t.input)
         .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
@@ -1493,7 +1499,11 @@ pub fn hex_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, hex: &
         })
         .inner;
     let commit = resp.lost_focus() && buf != hex;
-    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    let focused = ui.memory(|m| m.has_focus(id));
+    ui.data_mut(|d| {
+        d.insert_temp(id, buf.clone());
+        d.insert_temp(edited_id, (edited || resp.changed()) && focused);
+    });
     commit.then_some(buf)
 }
 
@@ -1569,7 +1579,16 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
     let id = ui.id().with(id);
     let shown = value.map(|v| unit.number(v)).unwrap_or_default();
     let editing = ui.memory(|m| m.has_focus(id));
-    let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
+    // As in `hex_field`: until the user types into it, the field shows `shown` as it is now
+    // (#1692). When `shown` changes while the field has the focus and nothing has been typed into
+    // it, all of the new text is selected, as on keyboard focus.
+    let edited_id = id.with("edited");
+    let edited = editing && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
+    let before = ui.data_mut(|d| d.get_temp::<String>(id));
+    let mut buf: String = if edited { before.clone().unwrap_or_else(|| shown.clone()) } else { shown.clone() };
+    if editing && !edited && before.is_some_and(|b| b != buf) {
+        select_all(ui, id, &buf);
+    }
     let enabled = ui.is_enabled();
     let framed = egui::Frame::NONE
         .fill(t.input)
@@ -1591,7 +1610,11 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
     // ↑/↓ and the wheel step a value (an empty field stays empty); a drag on its label scrubs it.
     let stepped = step_value(ui, &resp, &mut buf, |b| Some(unit.from_pt(unit.parse(b)?)), |v| unit.number(unit.to_pt(v)));
     let scrubbed = scrub::field(ui, id, framed.response.rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS);
-    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    let focused = ui.memory(|m| m.has_focus(id));
+    ui.data_mut(|d| {
+        d.insert_temp(id, buf.clone());
+        d.insert_temp(edited_id, (edited || resp.changed()) && focused);
+    });
     if resp.lost_focus() && buf != shown {
         let s = buf.trim();
         if s.is_empty() { Some(None) } else { typed_unit(ui.ctx(), unit).parse(s).map(Some) }

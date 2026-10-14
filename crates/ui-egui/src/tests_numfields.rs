@@ -45,6 +45,135 @@ fn a_focused_field_follows_a_value_changed_from_outside() {
     assert_eq!(frame(50.0, vec![button(away, false)]).0, None);
 }
 
+/// #1692: a hex field that the focus only passes through shows the color as it is now and commits
+/// nothing. Tab out of an edited field gives the hex field after it the focus in the frame the edit
+/// is committed, and the color changes after the hex field is drawn, as in the Color Picker.
+/// Shift+Tab out of the field after it gives it the focus a frame later, in the frame that field
+/// commits.
+#[test]
+fn a_hex_field_passed_through_with_tab_commits_nothing() {
+    let mut f = Field::new();
+    // Red and Blue fields on either side of the hex field of the color they make.
+    let rgb = Cell::new([255.0, 128.0, 0.0]);
+    let (hex, blue, hex_id) = (Cell::new(None), Cell::new(None), Cell::new(egui::Id::NULL));
+    let draw = |ui: &mut egui::Ui| {
+        let [r, g, b] = rgb.get();
+        let red = widgets::plain_field(ui, "red", r, "", 0, 80.0);
+        hex_id.set(ui.id().with("hex"));
+        hex.set(widgets::hex_field(ui, "hex", &format!("{:02X}{:02X}{:02X}", r as u8, g as u8, b as u8)));
+        blue.set(widgets::plain_field(ui, "blue", b, "", 0, 80.0));
+        red
+    };
+    // One frame, its edits applied after it. → What the hex field committed.
+    let step = |f: &mut Field, events: Vec<Event>| {
+        let red = f.frame(events, &draw);
+        let [r, g, b] = rgb.get();
+        rgb.set([red.unwrap_or(r), g, blue.take().unwrap_or(b)]);
+        hex.take()
+    };
+    // The text the hex field shows (it keeps it under its id).
+    let shows = |f: &Field| f.ctx.data(|d| d.get_temp::<String>(hex_id.get()));
+    let (tab, back) = (key(Key::Tab, Modifiers::NONE), key(Key::Tab, Modifiers::SHIFT));
+    step(&mut f, vec![]);
+    // Tab into Red, type 50 over it, and Tab on to the hex field, then on to Blue.
+    for events in [vec![tab.clone()], vec![Event::Text("50".into())], vec![tab.clone()], vec![]] {
+        assert_eq!(step(&mut f, events), None);
+    }
+    assert_eq!(shows(&f).as_deref(), Some("328000"), "the hex field shows Red's edit");
+    for events in [vec![tab.clone()], vec![]] {
+        assert_eq!(step(&mut f, events), None);
+    }
+    assert_eq!(rgb.get(), [50.0, 128.0, 0.0], "Red keeps what was typed");
+    // Type 200 over Blue, Shift+Tab back into the hex field and Tab out of it again.
+    for events in [vec![Event::Text("200".into())], vec![back], vec![], vec![]] {
+        assert_eq!(step(&mut f, events), None);
+    }
+    assert_eq!(shows(&f).as_deref(), Some("3280C8"), "the hex field shows Blue's edit");
+    for events in [vec![tab], vec![]] {
+        assert_eq!(step(&mut f, events), None);
+    }
+    assert_eq!(rgb.get(), [50.0, 128.0, 200.0], "Blue keeps what was typed");
+}
+
+/// What is typed into a hex field is committed when Tab or Enter ends its focus, and Escape drops
+/// it.
+#[test]
+fn typing_into_a_hex_field_commits_it() {
+    let mut f = Field::new();
+    let hex = Cell::new(None);
+    let draw = |ui: &mut egui::Ui| {
+        let red = widgets::plain_field(ui, "red", 255.0, "", 0, 80.0);
+        hex.set(widgets::hex_field(ui, "hex", "FF8000"));
+        red
+    };
+    let step = |f: &mut Field, events: Vec<Event>| {
+        f.frame(events, &draw);
+        hex.take()
+    };
+    let tab = || key(Key::Tab, Modifiers::NONE);
+    let escape = || key(Key::Escape, Modifiers::NONE);
+    step(&mut f, vec![]);
+    for (end, commits) in [(tab(), true), (enter(), true), (escape(), false)] {
+        // Tab into Red and on into the hex field, select its text and type over it.
+        let mut got = vec![];
+        for events in
+            [vec![tab()], vec![tab()], vec![], vec![key(Key::A, Modifiers::COMMAND)], vec![Event::Text("00FF00".into())], vec![end.clone()], vec![]]
+        {
+            got.extend(step(&mut f, events));
+        }
+        let want: Vec<String> = if commits { vec!["00FF00".into()] } else { vec![] };
+        assert_eq!(got, want, "{end:?}");
+        // Neither field has the focus for the next round.
+        step(&mut f, vec![escape()]);
+    }
+}
+
+/// #1692: the Stroke panel's dash and gap fields ([`widgets::opt_field`]) are blank while the
+/// selected objects' dashes differ. Tab out of the dash after typing into it gives the gap the
+/// focus; the gap then shows the dash's length, which the committed dash repeats as its gap. Tab
+/// out of the gap commits nothing, and what is typed into the gap replaces all of that length.
+#[test]
+fn a_gap_field_passed_through_with_tab_commits_nothing() {
+    use crate::panels::stroke::{dash_fields, dash_pattern};
+    let shown = Cell::new([None; 6]);
+    let (dash, gap) = (Cell::new(None), Cell::new(None));
+    let draw = |ui: &mut egui::Ui| -> Option<f64> {
+        let [d, g, ..] = shown.get();
+        dash.set(widgets::opt_field(ui, "dash", d, Unit::Points, 60.0));
+        gap.set(widgets::opt_field(ui, "gap", g, Unit::Points, 60.0));
+        None
+    };
+    // One frame, then its commit applied the way the Stroke panel applies it. → What the gap
+    // committed.
+    let step = |f: &mut Field, events: Vec<Event>| {
+        f.frame(events, &draw);
+        let (d, g) = (dash.take(), gap.take());
+        if d.is_some() || g.is_some() {
+            let mut fields = shown.get();
+            fields[0] = d.unwrap_or(fields[0]);
+            fields[1] = g.unwrap_or(fields[1]);
+            shown.set(dash_fields(&dash_pattern(&fields)));
+        }
+        g
+    };
+    let tab = || key(Key::Tab, Modifiers::NONE);
+    for (typed, commits, pattern) in [(None, None, [20.0, 20.0]), (Some("5"), Some(Some(5.0)), [20.0, 5.0])] {
+        let mut f = Field::new();
+        shown.set([None; 6]);
+        step(&mut f, vec![]);
+        // Tab into the dash, type 20 and Tab on into the gap.
+        for events in [vec![tab()], vec![Event::Text("20".into())], vec![tab()], vec![]] {
+            assert_eq!(step(&mut f, events), None);
+        }
+        if let Some(text) = typed {
+            assert_eq!(step(&mut f, vec![Event::Text(text.into())]), None);
+        }
+        assert_eq!(step(&mut f, vec![tab()]), commits, "{typed:?}");
+        assert_eq!(step(&mut f, vec![]), None);
+        assert_eq!(dash_pattern(&shown.get()), pattern, "{typed:?}");
+    }
+}
+
 /// Headless frames of one field: its rect and id as last drawn.
 struct Field {
     ctx: egui::Context,
