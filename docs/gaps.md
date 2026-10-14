@@ -144,10 +144,10 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   during a drag keeps the drag (#1856, #1719); a template layer dims its images by Dim Images instead of fading the
   whole layer (#1864, #1683); a failed save or export is reported in a dialog that names the file and stays until
   closed, the document left modified (#1865, #1685).
-- **Missing (noted for reporters, 2026-10-14):** the Shape Builder offers no region for an empty area enclosed
-  only by closed shapes, such as the middle of four circles that touch (#1691); deleting an interior anchor of an
-  open path joins across the gap, where the documented behaviour removes the point and its connecting segments.
-  Inside the estimate below.
+- **Done:** the Shape Builder offers the empty areas closed shapes enclose as regions, such as the middle of four
+  circles that touch, and merges them with the regions around them (#1691). Gap Detection is still missing.
+- **Missing (noted for reporters, 2026-10-14):** deleting an interior anchor of an open path joins across the gap,
+  where the documented behaviour removes the point and its connecting segments. Inside the estimate below.
 - **Missing:** Shape Builder misses planar regions and targets whole shapes (#937); Transform effect dialog's invisible checkboxes and missing options (#885);
   PDF text boxes moving on open (#722); SVG units reverting to points (#864); bezier drag preview freezing (#834).
 - **Impact:** wrong output in everyday work.

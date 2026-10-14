@@ -152,6 +152,39 @@ fn shape_builder_regions_query() {
     assert!(regs.iter().any(|x| x["sources"].as_array().unwrap().len() == 2));
 }
 
+/// #1691: four circles in a 2×2 grid, each touching its neighbours, enclose a diamond nothing
+/// fills. It is a region, and a drag from a circle into it merges the two.
+#[test]
+fn shape_builder_merges_the_gap_touching_circles_enclose() {
+    let mut s = session();
+    let mut circles = vec![];
+    for (x, y) in [(0.0, 0.0), (100.0, 0.0), (0.0, 100.0), (100.0, 100.0)] {
+        let r = s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": 100, "height": 100})).unwrap();
+        circles.push(NodeId(r["id"].as_u64().unwrap()));
+    }
+    set_fill(&mut s, circles[0], Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": circles.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    let regs = r["regions"].as_array().unwrap();
+    assert_eq!(regs.len(), 5, "{regs:?}");
+    assert_eq!(regs.iter().filter(|x| x["sources"].as_array().unwrap().is_empty()).count(), 1, "the diamond");
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 50], [100, 100]]})).unwrap();
+    assert_eq!(r["regions"], 2);
+    let out = ids(&r);
+    assert_eq!(out.len(), 4, "the merged shape and the three other circles");
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    // A circle (its Bézier outline: 7,854.9) and the diamond between the four (2,145.1).
+    assert!((area(&s, merged) - 10000.0).abs() < 10.0, "{}", area(&s, merged));
+    assert_eq!(node(&s, merged).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the look of the circle the drag began on");
+    assert_eq!(layer_children(&s), 4);
+    // A click in the diamond alone makes it a shape of its own.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": circles.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[100, 100]]})).unwrap();
+    assert_eq!(ids(&r).len(), 5);
+    assert!((area(&s, NodeId(r["merged"].as_u64().unwrap())) - 2146.0).abs() < 10.0);
+}
+
 #[test]
 fn shape_builder_tool_drives_the_command() {
     let mut s = session();
