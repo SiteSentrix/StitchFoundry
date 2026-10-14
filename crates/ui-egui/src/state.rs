@@ -456,6 +456,10 @@ pub struct UiState {
     /// The Image Trace panel's Advanced section is open (as it was last left).
     #[serde(default = "yes")]
     pub image_trace_advanced: bool,
+    /// Glyphs panel preview step, kept with the other panel choices. `0` is the default 30 pt
+    /// cell; `1`..=`7` is a step from smallest to largest (`crates/ui-egui/src/panels/glyphs.rs`).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub glyphs_preview: u8,
     /// The desktop window's size, position and maximized state, saved when the app quits and
     /// restored at the next launch (the desktop host reads and writes it; none on the web).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -756,6 +760,7 @@ impl Default for UiState {
             layers_panel: Default::default(),
             layers_filter: Default::default(),
             image_trace_advanced: true,
+            glyphs_preview: 0,
             window: None,
         }
     }
@@ -763,6 +768,10 @@ impl Default for UiState {
 
 fn yes() -> bool {
     true
+}
+
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
 }
 
 fn default_shortcut_set() -> String {
