@@ -388,6 +388,57 @@ fn transform_each_that_changes_nothing_records_no_undo_step() {
     assert_eq!(history(&s), (before.0 + 1, 0, true));
 }
 
+/// #1732: Transform Again (⌘D) repeats a Transform Each — the same transform on the objects
+/// again, another copy when the Transform Each made copies — rather than an earlier transform.
+#[test]
+fn transform_again_repeats_transform_each() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    // An earlier Transform must not be what Transform Again repeats.
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 5]})).unwrap();
+    s.execute("object.transformEach", &json!({"moveH": 50})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(55.0, 5.0, 155.0, 105.0));
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(105.0, 5.0, 205.0, 105.0), "50 pt more, not 5");
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(155.0, 5.0, 255.0, 105.0), "again and again");
+    // With Copy, every Transform Again makes another copy, further on each time.
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let r = s.execute("object.transformEach", &json!({"moveH": 50, "copy": true})).unwrap();
+    let first = NodeId(r["ids"][0].as_u64().unwrap());
+    assert_eq!(bounds(&s, first), Rect::new(50.0, 0.0, 150.0, 100.0));
+    let r = s.execute("object.transformAgain", &json!({})).unwrap();
+    let second = NodeId(r["ids"][0].as_u64().unwrap());
+    assert_ne!(second, first);
+    assert_eq!(bounds(&s, second), Rect::new(100.0, 0.0, 200.0, 100.0), "another copy, 50 pt further");
+    assert_eq!(bounds(&s, a), Rect::new(0.0, 0.0, 100.0, 100.0), "the original stays");
+    assert_eq!(bounds(&s, first), Rect::new(50.0, 0.0, 150.0, 100.0), "and the first copy too");
+}
+
+/// #1732: the Transform Each dialog previews through an interaction; OK commits it, and
+/// Transform Again repeats what the commit recorded. A preview that changed nothing doesn't take
+/// the record over (it records no undo step either).
+#[test]
+fn transform_again_repeats_a_committed_transform_each_preview() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.begin_interaction("Transform Each").unwrap();
+    s.preview("object.transformEach", &json!({"moveH": 50})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(50.0, 0.0, 150.0, 100.0));
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(100.0, 0.0, 200.0, 100.0), "the dialog's Transform Each repeats");
+    s.begin_interaction("Transform Each").unwrap();
+    s.preview("object.transformEach", &json!({})).unwrap();
+    s.commit_interaction().unwrap();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(150.0, 0.0, 250.0, 100.0), "still the one that changed something");
+}
+
 #[test]
 fn reset_bounding_box_is_a_noop() {
     let mut s = session();

@@ -312,6 +312,19 @@ fn about(o: Point, a: Affine) -> Affine {
 }
 
 fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
+    transform_each_as(s, p, "Transform Each")
+}
+
+/// Object → Transform → Transform Again (⌘D) repeating a Transform Each: the same per-object
+/// transform again (or another copy), run as the command so each object turns about its own
+/// bounds (see [`transform_again`](super::object::transform_again)).
+pub(crate) fn transform_each_again(s: &mut Session, p: &Value) -> Result<Value> {
+    transform_each_as(s, p, "Transform Again")
+}
+
+/// [`transform_each`] under an undo label. Outside an interaction it records what Transform Again
+/// repeats; a dialog's preview records it as it commits (`Session::commit_interaction`).
+fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let roots = selected_roots(s)?;
     // Bounded so coordinates stay finite (and the document stays serializable).
     let sh = f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0);
@@ -337,7 +350,7 @@ fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
     if roots.is_empty() || (!copy && sh == 100.0 && sv == 100.0 && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
         return Ok(ids_json(&roots));
     }
-    let ids = s.edit("Transform Each", |d, sel| {
+    let ids = s.edit(label, |d, sel| {
         let targets = if copy { duplicate_in(d, sel, &roots, Affine::IDENTITY)? } else { roots.clone() };
         for id in &targets {
             let Some(b) = d.node(*id).and_then(|n| n.geometric_bounds()) else { continue };
@@ -359,6 +372,11 @@ fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(targets)
     })?;
+    let st = s.doc_mut()?;
+    if st.interaction.is_none() {
+        st.last_transform = Some(crate::LastTransform::Each(p.clone()));
+        st.last_perspective = None;
+    }
     Ok(ids_json(&ids))
 }
 
