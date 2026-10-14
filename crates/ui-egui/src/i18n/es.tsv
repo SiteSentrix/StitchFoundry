@@ -4750,25 +4750,31 @@ mark-style	Japanese	Japonesas
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
 # Dimension tool (linked dimension annotations)
-	 a highlighted edge, then click to place its dimension | 	 en un borde resaltado y luego haga clic para colocar su cota | 
-	 cancels | Double-click the tool for options	 cancela | Doble clic en la herramienta para ver las opciones
-	All selected edges	Todos los bordes seleccionados
 	Create Dimension	Crear cota
-	Dimension Selected Paths	Acotar trazados seleccionados
 	Dimension Tool	Herramienta Cota
 	Dimension Tool Options	Opciones de la herramienta Cota
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Dibujo : tamaño real — 1:10 significa que 1 cm en la página representa 10 cm.
 	Font Family:	Familia de fuentes:
 	Font Style:	Estilo de fuente:
 	Precision:	Precisión:
-	Preview (1 cm on page)	Vista previa (1 cm en la página)
 	Update Dimensions	Actualizar cotas
 	Display	Visualización
 
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	Cota
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Dibujo : tamaño real — 1:10 rotula 1 unidad de la página como 10.
+	Preview (1 inch on the page)	Vista previa (1 pulgada en la página)
+	Set as Default	Establecer como predeterminado
+	 out from a highlighted edge to place its dimension  |  	 hacia fuera desde un borde resaltado para colocar su cota  |  
+	 cancels  |  Double-click the tool for options	 cancela  |  Doble clic en la herramienta para ver las opciones
+	Angular	Angular
+	Away from the Line	Lejos de la línea
+	Between Line and Object	Entre la línea y el objeto
+	Drag out from a segment, or click two points, then click to place.	Arrastre hacia fuera desde un segmento, o haga clic en dos puntos y luego haga clic para colocar.
+	Drag out from a corner, or click two straight lines, then click to place.	Arrastre hacia fuera desde una esquina, o haga clic en dos líneas rectas y luego haga clic para colocar.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Arrastre desde un círculo o arco hacia fuera para el radio, hacia dentro para el diámetro.
+@msg	Choose a circle or a perfect arc	Elija un círculo o un arco perfecto
+@msg	Choose a precision from 0 to 6	Elija una precisión de 0 a 6
 @msg	Angles require two straight segments	Los ángulos requieren dos segmentos rectos
-@msg	Choose a circular path	Elija un trazado circular
-@msg	Choose a length unit and precision from 0 to 6	Elija una unidad de longitud y una precisión de 0 a 6
 @msg	Choose two different points	Elija dos puntos distintos
 @msg	Choose two non-parallel straight segments	Elija dos segmentos rectos no paralelos
 @msg	Choose two nonzero angle arms	Elija dos lados del ángulo de longitud distinta de cero
@@ -4780,7 +4786,6 @@ mark-style	Japanese	Japonesas
 @msg	Invalid drawing scale	Escala de dibujo no válida
 @msg	Invalid real scale	Escala real no válida
 @msg	Measured anchor no longer exists	El punto de ancla medido ya no existe
-@msg	Measured path no longer exists	El trazado medido ya no existe
 @msg	Measured segment no longer exists	El segmento medido ya no existe
 @msg	Non-finite dimension	Cota no finita
 @msg	Scale must be drawing:real, for example 1:10	La escala debe ser dibujo:real, por ejemplo 1:10

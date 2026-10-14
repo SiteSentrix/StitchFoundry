@@ -1,58 +1,54 @@
 # Dimensions
 
-Choose **Dimension Tool** in the Modify section of the toolbar. Its control strip offers
-**Length**, **Angle**, **Radius**, **Diameter**, **Options…** and **All selected edges**.
+The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers **Linear**,
+**Angular**, **Radial** and **Tool Options…** (double-clicking the tool opens Tool Options too).
 
-- **Length:** hover a path to highlight the segment between two anchors. Click it, move the
-  pointer to place the dimension, then click again. Curved segments report their actual curve
-  length, prefixed **Arc**, rather than the distance between their endpoints.
-- **Two points:** Alt-click an anchor to start measuring individual points, click the second
-  point, then click to place the dimension. Picked anchors remain linked to their original paths.
-  Empty-space clicks also work; these fixed points have no source object to follow. Shift
-  constrains a manually picked point to 45-degree increments.
-- **Angle:** click two nonparallel straight segments, then click to place the angle. To choose
-  three points instead, Alt-click the first arm, click the vertex, then the second arm; click
-  once more to place the annotation. Angles use the smaller angle between the chosen arms.
-- **Radius / Diameter:** click a circular path, then move and click to choose the direction of
-  the annotation. Ellipses are rejected because they have no single radius.
-- **All selected edges:** select paths or groups, then use this button or
-  **Object → Dimensions → Dimension Selected Paths**. Adds up to 1,000 segment dimensions in
-  one undo step. Existing dimension groups, hidden art and locked art are skipped.
-- **Escape** or switching tools cancels a measurement being placed.
+- **Linear:** hover a path segment and drag outwards: releasing places the dimension. Or click two
+  points (anchors snap, Shift constrains to 45°), then click to place. A curved segment is measured
+  from end to end.
+- **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
+  straight lines that meet (or would, extended), then click to place.
+- **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
+  radius, inwards its diameter. Clicking it gives its radius. Ellipses have no single radius.
+- **Escape** or switching tools cancels a dimension being placed.
 
-Double-click the tool or choose **Options…** for units, precision (0–6 decimal places), scale,
-line weight/type/colour, arrows and arrow size, extension-line gaps/overshoot/visibility, font
-family/style/size/colour, text position/orientation/offset. **Reset** restores defaults in the
-dialog; **Cancel** leaves settings unchanged. **Save** stores tool defaults, and optionally
-updates selected dimension groups. These changes are undoable; defaults persist in preferences.
+**Tool Options** set the style of new dimensions: units (inches, millimetres, points, picas,
+pixels, centimetres, metres, feet, yards), precision (0–6 decimals), scale, the dimension and
+extension lines (weight, type, colour, arrows), and the text (font, size, colour, position and
+alignment). **Position** is **Away from the Line** (the label on the far side of the dimension line
+from the object) or **Between Line and Object**; **Alignment** is **Left**, **Center** or
+**Right** along the line. **Save** keeps them for new dimensions; existing ones don't change.
 
-Scale means **drawing : real size**, independent of zoom. At **1:10**, a 1 cm line on the page
-is labelled 10 cm. At **10:1**, it is labelled 0.1 cm. Presets and custom positive ratios are
-supported. Scale affects lengths, not angles or the physical size of text/arrows.
+Scale means **drawing : real size**, independent of zoom. At **1:10** a 1 in line on the page is
+labelled 10 in; at **10:1**, 0.1 in. It scales lengths, not angles or the size of text and arrows.
 
-Measurements track source moves, scaling and anchor/handle edits, including undo/redo.
-Deleting a source or making it degenerate removes its linked annotations in the same undo
-step. Changing a path's anchor count/closedness invalidates indexed references and removes
-those annotations rather than attaching them to a different edge. Recreate them after such
-topology edits. A circle changed into an ellipse similarly loses its radius/diameter annotation.
+**Properties** shows a selected dimension's units, precision, line, arrows, text size, colour,
+position and alignment; changing one changes that dimension. **Apply to All** gives every
+dimension in the document its style; **Set as Default** makes it the style of new dimensions.
 
-Native `.vectorcraft` files retain recipes and links. SVG/PDF/bitmap output contains ordinary
-paths and text, so exported dimensions look the same; generic SVG/PDF round trips do not promise
-editable measurement links. Ungrouping exposes the generated paths/text as ordinary artwork.
-Copied/pasted dimensions retain their measured geometry but detach their original links, so
-source ids cannot accidentally bind to unrelated objects in another document.
+Measurements follow the art they measure through moves, scaling and anchor and handle edits,
+undo and redo included. Deleting the art, or changing its number of anchors or whether it is
+closed, removes its dimensions in the same undo step rather than attaching them to a different
+edge. A linked dimension moved on its own stays where it was dropped (its distance from the art
+changes); moved together with its art, it keeps its distance.
+
+Native `.vectorcraft` files keep the recipes and links. SVG, PDF and bitmap output contain
+ordinary paths and text, so exported dimensions look the same. Ungrouping a dimension leaves its
+paths and text as ordinary art. Pasted dimensions keep their geometry and drop their links, so
+they never bind to unrelated art in another document.
 
 ## Commands
 
-- `dimension.create`: fixed points or linked segment/angle/circle/anchor sources, mode, offset,
-  and style options; returns the group id and label.
-- `dimension.selection`: all selected path segments, one undo step.
-- `dimension.update`: change existing groups' options and/or placement offset.
+- `dimension.create`: two points, or a source (segment, angle, circle, arc, points), the mode,
+  offset and style; returns the group id and label.
+- `dimension.update`: restyle or move existing dimensions.
+- `dimension.applyToAll`: every dimension takes one dimension's style, in one undo step.
 - `tool.select {"tool":"dimension"}` and
-  `tool.setOption {"tool":"dimension","values":{"mode":"linear","style":{"units":"cm","scale":"1:10"}}}`.
-- `tool.options {"tool":"dimension"}` opens the agent-accessible `dimensionOptions` dialog.
+  `tool.setOption {"tool":"dimension","values":{"mode":"linear","style":{"units":"mm","scale":"1:10"}}}`
+  (`mode`: `linear`, `angular` or `radial`).
+- `tool.options {"tool":"dimension"}` opens the `dimensionOptions` dialog.
 
-Recipes live on normal document groups (`Node.dimension`); rendering and export use their
-generated children. Commands validate options and finite bounds before mutation. Source edits
-refresh annotations inside `Session::edit`, sharing history and cancellation with the source.
-The icon uses the project's existing original measurement artwork; no external assets are added.
+Recipes live on ordinary groups (the node's `dimension` field); rendering and export use their
+generated children. Commands check options and bounds before changing anything. Linked
+dimensions refresh inside `Session::edit`, sharing the source edit's undo step; documents without
+any (`Document::dimensions` unset) skip that refresh.

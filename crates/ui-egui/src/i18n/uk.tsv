@@ -4362,25 +4362,32 @@ lighting	Light	Світло
 	Light behind the object	Світло позаду об'єкта
 
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
-	 a highlighted edge, then click to place its dimension | 	 по виділеному краю, потім клацніть, щоб розмістити розмір | 
-	 cancels | Double-click the tool for options	 — скасування | Подвійне клацання по інструменту — параметри
-	All selected edges	Усі виділені краї
+	Dimension	Розмір
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Креслення : реальний розмір — при 1:10 1 одиниця на сторінці підписується як 10.
+	Preview (1 inch on the page)	Попередній перегляд (1 дюйм на сторінці)
+	Set as Default	Встановити за замовчуванням
+	 out from a highlighted edge to place its dimension  |  	 назовні від підсвіченого краю, щоб розмістити його розмір  |  
+	 cancels  |  Double-click the tool for options	 скасовує  |  Подвійне клацання по інструменту відкриває параметри
+	Linear	Лінійний
+	Angular	Кутовий
+	Away from the Line	Далі від лінії
+	Between Line and Object	Між лінією та об'єктом
+	Drag out from a segment, or click two points, then click to place.	Перетягніть назовні від сегмента або клацніть дві точки, потім клацніть, щоб розмістити.
+	Drag out from a corner, or click two straight lines, then click to place.	Перетягніть назовні від кута або клацніть дві прямі лінії, потім клацніть, щоб розмістити.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Перетягніть від кола або дуги назовні — радіус, усередину — діаметр.
+@msg	Choose a circle or a perfect arc	Виберіть коло або правильну дугу
+@msg	Choose a precision from 0 to 6	Виберіть точність від 0 до 6
 	Create Dimension	Створити розмір
-	Dimension Selected Paths	Проставити розміри виділених контурів
 	Dimension Tool	Інструмент «Розмір»
 	Dimension Tool Options	Параметри інструмента «Розмір»
 	Display	Відображення
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Креслення : реальний розмір — 1:10 означає, що 1 см на сторінці відповідає 10 см.
 	Font Family:	Сімейство шрифтів:
 	Font Style:	Накреслення:
 	Precision:	Точність:
-	Preview (1 cm on page)	Попередній перегляд (1 см на сторінці)
 	Update Dimensions	Оновити розміри
 	X:	X:
 	Y:	Y:
 @msg	Angles require two straight segments	Для кута потрібні два прямі сегменти
-@msg	Choose a circular path	Виберіть круглий контур
-@msg	Choose a length unit and precision from 0 to 6	Виберіть одиницю довжини й точність від 0 до 6
 @msg	Choose two different points	Виберіть дві різні точки
 @msg	Choose two non-parallel straight segments	Виберіть два непаралельні прямі сегменти
 @msg	Choose two nonzero angle arms	Виберіть дві сторони кута ненульової довжини
@@ -4392,7 +4399,6 @@ lighting	Light	Світло
 @msg	Invalid drawing scale	Неприпустимий масштаб креслення
 @msg	Invalid real scale	Неприпустимий реальний масштаб
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
-@msg	Measured path no longer exists	Виміряний контур більше не існує
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
 @msg	Scale must be drawing:real, for example 1:10	Масштаб має бути у вигляді креслення:реальність, наприклад 1:10

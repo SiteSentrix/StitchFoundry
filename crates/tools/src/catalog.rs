@@ -102,7 +102,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[t("gradient", "Gradient Tool", Some("G"), "tool-gradient")],
     &[t("eyedropper", "Eyedropper Tool", Some("I"), "tool-eyedropper"), t("measure", "Measure Tool", None, "tool-measure")],
     &[t("blend", "Blend Tool", Some("W"), "tool-blend")],
-    &[t("dimension", "Dimension Tool", None, "tool-measure")],
+    &[t("dimension", "Dimension Tool", None, "tool-dimension")],
     &[
         t("symbolSprayer", "Symbol Sprayer Tool", Some("Shift+S"), "tool-symbol"),
         t("symbolShifter", "Symbol Shifter Tool", None, "tool-symbol"),

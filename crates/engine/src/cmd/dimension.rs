@@ -3,7 +3,7 @@ use super::*;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::dimension::{Dimension, DimensionOptions, DimensionSource, SegmentRef};
+use vectorcraft_doc::dimension::{ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, TextAlignment, TextPosition};
 use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
@@ -14,27 +14,27 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle,first: edge,second: edge}|{kind: circle,node}, offset?: pt, options?: {units,precision,scale,hideUnits,lineWeight,lineType,lineColor,arrowStyle,arrowScale,extensionWeight,extensionType,extensionColor,extensionOffset,extensionLength,hideExtensions,fontFamily,fontStyle,fontSize,textColor,textPosition,textAlignment,textOffset}} → {id,label}; scale is drawing:real; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}}, offset?: pt, options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
-        ),
-        cmd!(
-            "dimension.selection",
-            "Dimension Selected Paths",
-            ["Object", "Dimensions"],
-            None,
-            "{offset?: pt = 30, options?: dimension options} add a linked dimension to every segment of the selected paths (up to 1000), as one undo step → {ids}",
-            has_selection,
-            selection
         ),
         cmd!(
             "dimension.update",
             "Update Dimensions",
             [],
             None,
-            "{ids?: [dimension ids] (default selection), options?: dimension options, offset?: pt} edit existing dimensions → {ids}",
+            "{ids?: [dimension ids] (default selection), options?: dimension options, offset?: pt} restyle or move existing dimensions → {ids}",
             has_doc,
             update
+        ),
+        cmd!(
+            "dimension.applyToAll",
+            "Apply to All",
+            [],
+            None,
+            "{id?: dimension id (default the first selected dimension)} gives every dimension in the document that dimension's style (its scale too), as one undo step → {ids}",
+            has_doc,
+            apply_to_all
         ),
     ]
 }
@@ -65,30 +65,9 @@ fn distance(p: &Value, fallback: f64) -> Result<f64> {
     }
 }
 
-/// Return the signed winding area of a closed path subpath. Positive area means
-/// the path interior is to the left of its directed segments, which lets the
-/// automatic dimension command put its positive (left-normal) offset outside.
-fn subpath_area(path: &PathData, subpath: usize) -> Option<f64> {
-    use vectorcraft_geom::kurbo::ParamCurve;
-    let sp = path.subpaths.get(subpath)?;
-    if !sp.closed || sp.segment_count() == 0 {
-        return None;
-    }
-    let mut area = 0.0;
-    for index in 0..sp.segment_count() {
-        let segment = sp.segment(index);
-        let mut previous = segment.eval(0.0);
-        for step in 1..=16 {
-            let current = segment.eval(step as f64 / 16.0);
-            area += previous.x * current.y - current.x * previous.y;
-            previous = current;
-        }
-    }
-    (area.is_finite() && area.abs() > 1e-9).then_some(area * 0.5)
-}
-
 fn recipe(s: &Session, p: &Value) -> Result<Dimension> {
-    let mode = p.get("mode").map_or(Ok("linear"), |v| v.as_str().ok_or_else(|| error("Invalid dimension mode")))?;
+    let mode: DimensionMode =
+        p.get("mode").map(|v| serde_json::from_value(v.clone()).map_err(|_| error("Unknown dimension mode"))).transpose()?.unwrap_or_default();
     let source: Option<DimensionSource> = p.get("source").map(|v| serde_json::from_value(v.clone()).map_err(error)).transpose()?;
     if let Some(source) = &source {
         let doc = &s.doc()?.doc;
@@ -97,26 +76,25 @@ fn recipe(s: &Session, p: &Value) -> Result<Dimension> {
                 return Err(error("Choose original artwork, not a dimension's generated paths"));
             }
         }
-    }
-    if let Some(source) = &source {
         let compatible = matches!(
             (mode, source),
-            ("linear", DimensionSource::Segment { .. })
-                | ("angular", DimensionSource::Angle { .. })
-                | ("radius" | "diameter", DimensionSource::Circle { .. })
+            (DimensionMode::Linear, DimensionSource::Segment { .. })
+                | (DimensionMode::Angular, DimensionSource::Angle { .. })
+                | (DimensionMode::Radius | DimensionMode::Diameter, DimensionSource::Circle { .. } | DimensionSource::Arc { .. })
+                | (DimensionMode::Linear | DimensionMode::Angular, DimensionSource::Points { .. })
         );
-        if !compatible && !matches!((mode, source), ("linear" | "angular", DimensionSource::Points { .. })) {
+        if !compatible {
             return Err(error("Dimension mode does not match its source"));
         }
     }
     let a = if source.is_none() || p.get("a").is_some() { point(p, "a")? } else { Point::ZERO };
     let b = if source.is_none() || p.get("b").is_some() { point(p, "b")? } else { Point::new(1.0, 0.0) };
-    let vertex = if mode == "angular" && (source.is_none() || matches!(source, Some(DimensionSource::Points { .. }))) {
+    let vertex = if mode == DimensionMode::Angular && (source.is_none() || matches!(source, Some(DimensionSource::Points { .. }))) {
         point(p, "vertex")?
     } else {
         Point::ZERO
     };
-    let mut d = Dimension { mode: mode.into(), a, b, vertex, offset: distance(p, 30.0)?, length: a.distance(b), options: options(s, p)?, source };
+    let mut d = Dimension { mode, a, b, vertex, offset: distance(p, 30.0)?, length: a.distance(b), options: options(s, p)?, source, moved: None };
     d.resolve(&s.doc()?.doc).map_err(error)?;
     Ok(d)
 }
@@ -126,6 +104,7 @@ fn insert(doc: &mut Document, parent: Option<NodeId>, dim: Dimension) -> Result<
     let mut group = Node::new(id, NodeKind::Group { children: vec![], clip: false });
     group.name = Some(format!("Dimension · {}", dim.label().map_err(error)?));
     group.kind = NodeKind::Group { children: artwork(doc, &dim, &[])?, clip: false };
+    doc.dimensions = true;
     group.extras_mut().dimension = Some(Box::new(dim));
     doc.insert(parent, usize::MAX, group)?;
     Ok(id)
@@ -144,79 +123,8 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id":id.0,"label":label}))
 }
 
-fn selection(s: &mut Session, p: &Value) -> Result<Value> {
-    let o = options(s, p)?;
-    let offset = distance(p, 30.0)?;
-    let st = s.doc()?;
-    let mut refs = Vec::new();
-    fn gather(n: &Node, refs: &mut Vec<SegmentRef>) -> Result<()> {
-        if !n.visible || n.locked || n.extras().dimension.is_some() {
-            return Ok(());
-        }
-        if let Some(path) = n.path_data() {
-            for (si, sp) in path.subpaths.iter().enumerate() {
-                for seg in 0..sp.segment_count() {
-                    if refs.len() >= 1000 {
-                        return Err(error("Select at most 1000 segments at a time"));
-                    }
-                    if sp.segment(seg).p0.distance(sp.segment(seg).p3) > 1e-6 {
-                        refs.push(SegmentRef { node: n.id, subpath: si, segment: seg });
-                    }
-                }
-            }
-        }
-        if let Some(children) = n.children() {
-            for c in children {
-                gather(c, refs)?;
-            }
-        }
-        Ok(())
-    }
-    for id in &st.selection.objects {
-        if !st.doc.is_editable(*id) {
-            continue;
-        }
-        if let Some(n) = st.doc.node(*id) {
-            gather(n, &mut refs)?;
-        }
-    }
-    refs.sort_by_key(|r| (r.node, r.subpath, r.segment));
-    refs.dedup();
-    if refs.is_empty() {
-        return Err(error("Select one or more paths first"));
-    }
-    let parent = st.insertion_parent();
-    let offsets: Vec<f64> = refs
-        .iter()
-        .map(|edge| {
-            st.doc
-                .node(edge.node)
-                .and_then(Node::path_data)
-                .and_then(|path| subpath_area(path, edge.subpath))
-                .map_or(offset, |area| -area.signum() * offset.abs())
-        })
-        .collect();
-    s.note_journal("options", serde_json::to_value(&o).map_err(error)?);
-    let ids = s.edit("Dimension Selected Paths", |doc, sel| {
-        let mut ids = Vec::new();
-        for (edge, edge_offset) in refs.into_iter().zip(offsets) {
-            let mut dim = Dimension {
-                mode: "linear".into(),
-                a: Point::ZERO,
-                b: Point::ZERO,
-                vertex: Point::ZERO,
-                offset: edge_offset,
-                length: 0.0,
-                options: o.clone(),
-                source: Some(DimensionSource::Segment { edge }),
-            };
-            dim.resolve(doc).map_err(error)?;
-            ids.push(insert(doc, parent, dim)?);
-        }
-        sel.set(ids.clone());
-        Ok(ids)
-    })?;
-    Ok(json!({"ids":ids}))
+fn dimension_of(doc: &Document, id: NodeId) -> Result<Dimension> {
+    doc.node(id).and_then(|n| n.extras().dimension.as_deref()).cloned().ok_or_else(|| error("Select only dimensions"))
 }
 
 fn update(s: &mut Session, p: &Value) -> Result<Value> {
@@ -224,8 +132,8 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => serde_json::from_value(v.clone()).map_err(error)?,
         None => s.doc()?.selection.objects.clone(),
     };
-    if ids.is_empty() || ids.len() > 1000 {
-        return Err(error("Select dimensions to update (at most 1000)"));
+    if ids.is_empty() || ids.len() > 10_000 {
+        return Err(error("Select dimensions to update"));
     }
     let o = if p.get("options").is_some() { Some(options(s, p)?) } else { None };
     s.edit("Update Dimensions", |doc, _| {
@@ -233,12 +141,41 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
             if !doc.is_editable(*id) {
                 return Err(error("Dimension is locked or hidden"));
             }
-            let mut dim =
-                doc.node(*id).and_then(|n| n.extras().dimension.as_deref()).cloned().ok_or_else(|| error("Select only dimension groups"))?;
+            let mut dim = dimension_of(doc, *id)?;
             if let Some(o) = &o {
                 dim.options = o.clone();
             }
             dim.offset = distance(p, dim.offset)?;
+            dim.resolve(doc).map_err(error)?;
+            replace(doc, *id, dim)?;
+        }
+        Ok(())
+    })?;
+    Ok(json!({"ids":ids}))
+}
+
+fn apply_to_all(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    let from = match p.get("id") {
+        Some(v) => NodeId(v.as_u64().ok_or_else(|| error("id must be a dimension id"))?),
+        None => *st
+            .selection
+            .objects
+            .iter()
+            .find(|id| st.doc.node(**id).is_some_and(|n| n.extras().dimension.is_some()))
+            .ok_or_else(|| error("Select a dimension first"))?,
+    };
+    let o = dimension_of(&st.doc, from)?.options;
+    let mut ids = vec![];
+    st.doc.walk(|n| {
+        if n.extras().dimension.is_some() && st.doc.is_editable(n.id) {
+            ids.push(n.id);
+        }
+    });
+    s.edit("Apply to All", |doc, _| {
+        for id in &ids {
+            let mut dim = dimension_of(doc, *id)?;
+            dim.options = o.clone();
             dim.resolve(doc).map_err(error)?;
             replace(doc, *id, dim)?;
         }
@@ -258,21 +195,39 @@ fn replace(doc: &mut Document, id: NodeId, dim: Dimension) -> Result<()> {
     Ok(())
 }
 
-/// Called inside the source edit transaction, so its dimensions and undo history stay in sync.
+/// Called inside every edit, so dimensions and their undo history stay in step with the art they
+/// measure. Returns at once in documents without dimensions.
 pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
+    if !doc.dimensions {
+        return Ok(());
+    }
     let mut dimensions = Vec::new();
     doc.walk(|n| {
         if let Some(d) = &n.extras().dimension {
             dimensions.push((n.id, (**d).clone()));
         }
     });
+    doc.dimensions = !dimensions.is_empty();
     for (id, old) in dimensions {
         let mut next = old.clone();
+        let moved = next.moved.take();
         if next.source.as_ref().is_some_and(|s| s.topology_changed(before, doc)) || next.resolve(doc).is_err() {
             // A deleted/degenerate source has no valid measurement. Remove its annotation in
             // this same undo step instead of keeping a silently wrong number.
             doc.remove(id)?;
-        } else if next != old || before.node(id).and_then(|n| n.extras().dimension.as_deref()).is_some_and(|d| d != &next) {
+            continue;
+        }
+        // Moved on its own (the art it measures stayed put): it keeps its new place.
+        if let Some(v) = moved
+            && (next.a, next.b, next.vertex) == (old.a, old.b, old.vertex)
+        {
+            next.place(next.handle() + v);
+            if next.resolve(doc).is_err() {
+                next = old.clone();
+                next.moved = None;
+            }
+        }
+        if next != old || before.node(id).and_then(|n| n.extras().dimension.as_deref()).is_some_and(|d| d != &next) {
             replace(doc, id, next)?;
         }
     }
@@ -291,23 +246,23 @@ fn line(a: Point, b: Point) -> BezPath {
 
 fn appearance(o: &DimensionOptions, ext: bool, arrows: bool) -> Appearance {
     let (color, width, kind) =
-        if ext { (o.extension_color, o.extension_weight, o.extension_type.as_str()) } else { (o.line_color, o.line_weight, o.line_type.as_str()) };
+        if ext { (o.extension_color, o.extension_weight, o.extension_type) } else { (o.line_color, o.line_weight, o.line_type) };
     let mut a = Appearance::basic(Paint::None, paint(color), width);
     if let Some(st) = a.stroke_mut() {
         st.dash = match kind {
-            "dashed" => Some(Dash { pattern: vec![width * 5.0, width * 3.0], ..Default::default() }),
-            "dotted" => {
+            LineType::Dashed => Some(Dash { pattern: vec![width * 5.0, width * 3.0], ..Default::default() }),
+            LineType::Dotted => {
                 st.cap = vectorcraft_doc::LineCap::Round;
                 Some(Dash { pattern: vec![0.0, width * 3.0], ..Default::default() })
             }
-            _ => None,
+            LineType::Solid => None,
         };
         if arrows {
-            let head = match o.arrow_style.as_str() {
-                "filled" => Some(Arrowhead::Triangle),
-                "open" => Some(Arrowhead::TriangleOpen),
-                "tick" => Some(Arrowhead::Slash),
-                _ => None,
+            let head = match o.arrow_style {
+                ArrowStyle::Filled => Some(Arrowhead::Triangle),
+                ArrowStyle::Open => Some(Arrowhead::TriangleOpen),
+                ArrowStyle::Tick => Some(Arrowhead::Slash),
+                ArrowStyle::None => None,
             };
             st.start_arrow = head;
             st.end_arrow = head;
@@ -318,6 +273,15 @@ fn appearance(o: &DimensionOptions, ext: bool, arrows: bool) -> Appearance {
     a
 }
 
+/// How far along the line (0 start, 0.5 middle, 1 end) the label sits, kept clear of the arrows.
+fn along(o: &DimensionOptions) -> f64 {
+    match o.text_alignment {
+        TextAlignment::Left => 0.2,
+        TextAlignment::Center => 0.5,
+        TextAlignment::Right => 0.8,
+    }
+}
+
 fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<Node>>> {
     d.validate().map_err(error)?;
     let o = &d.options;
@@ -325,13 +289,9 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
     let mut paths: Vec<(BezPath, Appearance)> = Vec::new();
     let mut angle = 0.0;
     let text_at;
-    let side = if d.offset < 0.0 { -1.0 } else { 1.0 };
-    let text_shift = match o.text_position.as_str() {
-        "below" => o.text_offset + o.font_size,
-        "center" => o.font_size * 0.35,
-        _ => -o.text_offset,
-    };
-    if d.mode == "angular" {
+    // Away from the object: past the dimension line; between: on the object's side of it.
+    let away = o.text_position == TextPosition::Away;
+    if d.mode == DimensionMode::Angular {
         let start = (d.a - d.vertex).atan2();
         let sweep = d.angle();
         let r = d.offset.abs().max(12.0);
@@ -348,31 +308,41 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
                 paths.push((line(d.vertex + dir * o.extension_offset, d.vertex + dir * (r + o.extension_length)), appearance(o, true, false)));
             }
         }
-        text_at = d.vertex + Vec2::from_angle(start + sweep * 0.5) * (r + o.text_offset + o.font_size * 0.5);
+        let dir = Vec2::from_angle(start + sweep * along(o));
+        let gap = o.text_offset + o.font_size * 0.5;
+        text_at = d.vertex + dir * if away { r + gap } else { (r - gap).max(o.font_size * 0.5) };
     } else {
         let delta = d.b - d.a;
         let u = delta / delta.hypot();
         let n = Vec2::new(-u.y, u.x);
-        let (a, b) = match d.mode.as_str() {
-            "radius" => (d.a, d.b),
-            "diameter" => (d.a - delta, d.b),
+        let (a, b) = match d.mode {
+            DimensionMode::Radius => (d.a, d.b),
+            DimensionMode::Diameter => (d.a - delta, d.b),
             _ => (d.a + n * d.offset, d.b + n * d.offset),
         };
-        if d.mode == "linear" && !o.hide_extensions {
+        // The side of the line facing away from the object.
+        let outward = match d.mode {
+            DimensionMode::Linear => {
+                if d.offset < 0.0 {
+                    -n
+                } else {
+                    n
+                }
+            }
+            _ => n,
+        };
+        if d.mode == DimensionMode::Linear && !o.hide_extensions {
             for (p, q) in [(d.a, a), (d.b, b)] {
-                paths.push((line(p + n * (o.extension_offset * side), q + n * (o.extension_length * side)), appearance(o, true, false)));
+                paths.push((line(p + outward * o.extension_offset, q + outward * o.extension_length), appearance(o, true, false)));
             }
         }
         angle = u.atan2();
         if !(-std::f64::consts::FRAC_PI_2..=std::f64::consts::FRAC_PI_2).contains(&angle) {
             angle += std::f64::consts::PI;
         }
-        let normal = Vec2::new(-angle.sin(), angle.cos());
-        text_at = a.midpoint(b) + normal * text_shift;
+        let shift = o.text_offset + o.font_size * 0.5;
+        text_at = a.lerp(b, along(o)) + outward * if away { shift } else { -shift };
         paths.push((line(a, b), appearance(o, false, true)));
-    }
-    if o.text_alignment == "horizontal" {
-        angle = 0.0;
     }
     let style = CharStyle {
         font_family: o.font_family.clone(),
@@ -384,32 +354,10 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
     let mut text = TextObject::point(Point::ZERO, &label, style);
     text.para.justify = vectorcraft_doc::Justify::Center;
     super::typecmd::refresh_bounds(&mut text);
-    text.xf = Affine::translate(text_at.to_vec2()) * Affine::rotate(angle);
-    // Split the centre line around the label rather than paint an opaque white patch over art.
-    if o.text_position == "center"
-        && d.mode != "angular"
-        && let Some((path, app)) = paths.pop()
-    {
-        let elems = path.elements();
-        if let (Some(vectorcraft_geom::PathEl::MoveTo(a)), Some(vectorcraft_geom::PathEl::LineTo(b))) = (elems.first(), elems.get(1)) {
-            let delta = *b - *a;
-            let len = delta.hypot();
-            let u = delta / len;
-            let bounds = text.cached_bounds.unwrap_or_else(|| text.estimate_bounds());
-            let gap = (bounds.width() * 0.5 + 4.0).min(len * 0.45);
-            let mid = a.midpoint(*b);
-            let mut left = app.clone();
-            if let Some(st) = left.stroke_mut() {
-                st.end_arrow = None;
-            }
-            let mut right = app;
-            if let Some(st) = right.stroke_mut() {
-                st.start_arrow = None;
-            }
-            paths.push((line(*a, mid - u * gap), left));
-            paths.push((line(mid + u * gap, *b), right));
-        }
-    }
+    // Centre the label's box on its anchor point, along the line.
+    let bounds = text.cached_bounds.unwrap_or_else(|| text.estimate_bounds());
+    let middle = Affine::translate(-bounds.center().to_vec2());
+    text.xf = Affine::translate(text_at.to_vec2()) * Affine::rotate(angle) * middle;
     let mut children = Vec::new();
     for (path, a) in paths {
         let id = old.get(children.len()).copied().unwrap_or_else(|| doc.alloc_id());

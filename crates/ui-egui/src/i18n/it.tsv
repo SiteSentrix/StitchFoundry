@@ -4382,25 +4382,32 @@ lighting	Light	Luce
 	Light behind the object	Luce dietro l'oggetto
 
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
-	 a highlighted edge, then click to place its dimension | 	 su un bordo evidenziato, poi fai clic per posizionarne la quota | 
-	 cancels | Double-click the tool for options	 per annullare | Doppio clic sullo strumento per le opzioni
-	All selected edges	Tutti i bordi selezionati
+	Dimension	Quota
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Disegno : dimensione reale — 1:10 indica 1 unità sulla pagina come 10.
+	Preview (1 inch on the page)	Anteprima (1 pollice sulla pagina)
+	Set as Default	Imposta come predefinito
+	 out from a highlighted edge to place its dimension  |  	 verso l'esterno da un bordo evidenziato per posizionarne la quota  |  
+	 cancels  |  Double-click the tool for options	 annulla  |  Doppio clic sullo strumento per le opzioni
+	Linear	Lineare
+	Angular	Angolare
+	Away from the Line	Lontano dalla linea
+	Between Line and Object	Tra linea e oggetto
+	Drag out from a segment, or click two points, then click to place.	Trascina verso l'esterno da un segmento, oppure fai clic su due punti, poi fai clic per posizionare.
+	Drag out from a corner, or click two straight lines, then click to place.	Trascina verso l'esterno da un angolo, oppure fai clic su due linee rette, poi fai clic per posizionare.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Trascina da un cerchio o un arco verso l'esterno per il raggio, verso l'interno per il diametro.
+@msg	Choose a circle or a perfect arc	Scegli un cerchio o un arco perfetto
+@msg	Choose a precision from 0 to 6	Scegli una precisione da 0 a 6
 	Create Dimension	Crea quota
-	Dimension Selected Paths	Quota i tracciati selezionati
 	Dimension Tool	Strumento Quota
 	Dimension Tool Options	Opzioni strumento Quota
 	Display	Visualizzazione
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Disegno : dimensione reale — 1:10 significa che 1 cm sulla pagina rappresenta 10 cm.
 	Font Family:	Famiglia di font:
 	Font Style:	Stile font:
 	Precision:	Precisione:
-	Preview (1 cm on page)	Anteprima (1 cm sulla pagina)
 	Update Dimensions	Aggiorna quote
 	X:	X:
 	Y:	Y:
 @msg	Angles require two straight segments	Gli angoli richiedono due segmenti rettilinei
-@msg	Choose a circular path	Scegli un tracciato circolare
-@msg	Choose a length unit and precision from 0 to 6	Scegli un’unità di lunghezza e una precisione da 0 a 6
 @msg	Choose two different points	Scegli due punti diversi
 @msg	Choose two non-parallel straight segments	Scegli due segmenti rettilinei non paralleli
 @msg	Choose two nonzero angle arms	Scegli due lati dell’angolo di lunghezza non nulla
@@ -4412,7 +4419,6 @@ lighting	Light	Luce
 @msg	Invalid drawing scale	Scala del disegno non valida
 @msg	Invalid real scale	Scala reale non valida
 @msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
-@msg	Measured path no longer exists	Il tracciato misurato non esiste più
 @msg	Measured segment no longer exists	Il segmento misurato non esiste più
 @msg	Non-finite dimension	Quota non finita
 @msg	Scale must be drawing:real, for example 1:10	La scala deve essere disegno:reale, ad esempio 1:10

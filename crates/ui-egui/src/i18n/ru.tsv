@@ -4378,25 +4378,32 @@ lighting	Light	Свет
 	Light behind the object	Свет позади объекта
 
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
-	 a highlighted edge, then click to place its dimension | 	 по выделенному краю, затем щёлкните, чтобы разместить размер | 
-	 cancels | Double-click the tool for options	 — отмена | Двойной щелчок по инструменту — параметры
-	All selected edges	Все выделенные края
+	Dimension	Размер
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Чертёж : реальный размер — при 1:10 1 единица на странице подписывается как 10.
+	Preview (1 inch on the page)	Просмотр (1 дюйм на странице)
+	Set as Default	Установить по умолчанию
+	 out from a highlighted edge to place its dimension  |  	 наружу от подсвеченного края, чтобы разместить его размер  |  
+	 cancels  |  Double-click the tool for options	 отменяет  |  Двойной щелчок по инструменту открывает параметры
+	Linear	Линейный
+	Angular	Угловой
+	Away from the Line	Вдали от линии
+	Between Line and Object	Между линией и объектом
+	Drag out from a segment, or click two points, then click to place.	Перетащите наружу от сегмента или щёлкните две точки, затем щёлкните, чтобы разместить.
+	Drag out from a corner, or click two straight lines, then click to place.	Перетащите наружу от угла или щёлкните две прямые линии, затем щёлкните, чтобы разместить.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Перетащите от окружности или дуги наружу — радиус, внутрь — диаметр.
+@msg	Choose a circle or a perfect arc	Выберите окружность или правильную дугу
+@msg	Choose a precision from 0 to 6	Выберите точность от 0 до 6
 	Create Dimension	Создать размер
-	Dimension Selected Paths	Проставить размеры выделенных контуров
 	Dimension Tool	Инструмент «Размер»
 	Dimension Tool Options	Параметры инструмента «Размер»
 	Display	Отображение
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Чертёж : реальный размер — 1:10 означает, что 1 см на странице соответствует 10 см.
 	Font Family:	Семейство шрифтов:
 	Font Style:	Начертание:
 	Precision:	Точность:
-	Preview (1 cm on page)	Просмотр (1 см на странице)
 	Update Dimensions	Обновить размеры
 	X:	X:
 	Y:	Y:
 @msg	Angles require two straight segments	Для угла нужны два прямых сегмента
-@msg	Choose a circular path	Выберите круглый контур
-@msg	Choose a length unit and precision from 0 to 6	Выберите единицу длины и точность от 0 до 6
 @msg	Choose two different points	Выберите две разные точки
 @msg	Choose two non-parallel straight segments	Выберите два непараллельных прямых сегмента
 @msg	Choose two nonzero angle arms	Выберите две стороны угла ненулевой длины
@@ -4408,7 +4415,6 @@ lighting	Light	Свет
 @msg	Invalid drawing scale	Недопустимый масштаб чертежа
 @msg	Invalid real scale	Недопустимый реальный масштаб
 @msg	Measured anchor no longer exists	Измеряемая опорная точка больше не существует
-@msg	Measured path no longer exists	Измеряемый контур больше не существует
 @msg	Measured segment no longer exists	Измеряемый сегмент больше не существует
 @msg	Non-finite dimension	Размер не является конечным числом
 @msg	Scale must be drawing:real, for example 1:10	Масштаб должен быть в виде чертёж:реальность, например 1:10

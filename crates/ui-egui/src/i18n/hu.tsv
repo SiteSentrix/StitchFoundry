@@ -4777,23 +4777,29 @@ imageTrace	Outline	Körvonal
 	Light behind the object	Fény az objektum mögött
 
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
-	 a highlighted edge, then click to place its dimension | 	 egy kiemelt élre, majd kattintson a méretvonal elhelyezéséhez | 
-	 cancels | Double-click the tool for options	 – mégse | Kattintson duplán az eszközre a beállításokért
-	All selected edges	Minden kijelölt él
+	Dimension	Méret
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Rajz : valós méret — 1:10 esetén az oldalon 1 egység 10-ként jelenik meg.
+	Preview (1 inch on the page)	Előnézet (1 hüvelyk az oldalon)
+	Set as Default	Beállítás alapértelmezettként
+	 out from a highlighted edge to place its dimension  |  	 egy kiemelt élről kifelé a méret elhelyezéséhez  |  
+	 cancels  |  Double-click the tool for options	 megszakítja  |  Dupla kattintás az eszközre a beállításokhoz
+	Angular	Szög
+	Away from the Line	A vonaltól távol
+	Between Line and Object	A vonal és az objektum között
+	Drag out from a segment, or click two points, then click to place.	Húzzon kifelé egy szakaszról, vagy kattintson két pontra, majd kattintson az elhelyezéshez.
+	Drag out from a corner, or click two straight lines, then click to place.	Húzzon kifelé egy sarokról, vagy kattintson két egyenes vonalra, majd kattintson az elhelyezéshez.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Húzzon egy körről vagy ívről kifelé a sugárhoz, befelé az átmérőhöz.
+@msg	Choose a circle or a perfect arc	Válasszon egy kört vagy egy tökéletes ívet
+@msg	Choose a precision from 0 to 6	Válasszon 0 és 6 közötti pontosságot
 	Create Dimension	Méretvonal létrehozása
-	Dimension Selected Paths	Kijelölt útvonalak méretezése
 	Dimension Tool	Méretezés eszköz
 	Dimension Tool Options	Méretezés eszköz beállításai
 	Display	Megjelenítés
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Rajz : valós méret — 1:10 azt jelenti, hogy az oldalon 1 cm 10 cm-nek felel meg.
 	Font Family:	Betűcsalád:
 	Font Style:	Betűstílus:
 	Precision:	Pontosság:
-	Preview (1 cm on page)	Előnézet (1 cm az oldalon)
 	Update Dimensions	Méretek frissítése
 @msg	Angles require two straight segments	A szöghöz két egyenes szakasz kell
-@msg	Choose a circular path	Válassz kör alakú útvonalat
-@msg	Choose a length unit and precision from 0 to 6	Válassz hosszegységet és 0–6 közötti pontosságot
 @msg	Choose two different points	Válassz két különböző pontot
 @msg	Choose two non-parallel straight segments	Válassz két nem párhuzamos egyenes szakaszt
 @msg	Choose two nonzero angle arms	Válassz két nem nulla hosszúságú szögszárat
@@ -4805,7 +4811,6 @@ imageTrace	Outline	Körvonal
 @msg	Invalid drawing scale	Érvénytelen rajzlépték
 @msg	Invalid real scale	Érvénytelen valós lépték
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
-@msg	Measured path no longer exists	A mért útvonal már nem létezik
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
 @msg	Scale must be drawing:real, for example 1:10	A léptéknek rajz:valós alakúnak kell lennie, például 1:10

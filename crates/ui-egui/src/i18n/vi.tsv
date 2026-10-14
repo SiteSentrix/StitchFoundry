@@ -4363,23 +4363,30 @@ theme	Appearance	Giao diện
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
-	 a highlighted edge, then click to place its dimension | 	 một cạnh được tô sáng, rồi nhấp để đặt kích thước của nó | 
-	 cancels | Double-click the tool for options	 để hủy | Nhấp đúp vào công cụ để mở tùy chọn
-	All selected edges	Tất cả các cạnh đã chọn
+	Dimension	Kích thước
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Bản vẽ : kích thước thực — 1:10 ghi 1 đơn vị trên trang thành 10.
+	Preview (1 inch on the page)	Xem trước (1 inch trên trang)
+	Set as Default	Đặt làm mặc định
+	 out from a highlighted edge to place its dimension  |  	 ra ngoài từ một cạnh được tô sáng để đặt kích thước của nó  |  
+	 cancels  |  Double-click the tool for options	 để hủy  |  Nhấp đúp vào công cụ để mở tùy chọn
+	Linear	Tuyến tính
+	Angular	Góc
+	Away from the Line	Cách xa đường
+	Between Line and Object	Giữa đường và đối tượng
+	Drag out from a segment, or click two points, then click to place.	Kéo ra ngoài từ một đoạn, hoặc nhấp hai điểm, rồi nhấp để đặt.
+	Drag out from a corner, or click two straight lines, then click to place.	Kéo ra ngoài từ một góc, hoặc nhấp hai đường thẳng, rồi nhấp để đặt.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Kéo từ đường tròn hoặc cung ra ngoài để lấy bán kính, vào trong để lấy đường kính.
+@msg	Choose a circle or a perfect arc	Hãy chọn một đường tròn hoặc một cung hoàn hảo
+@msg	Choose a precision from 0 to 6	Hãy chọn độ chính xác từ 0 đến 6
 	Create Dimension	Tạo kích thước
-	Dimension Selected Paths	Ghi kích thước cho các đường đã chọn
 	Dimension Tool	Công cụ Kích thước
 	Dimension Tool Options	Tùy chọn công cụ Kích thước
 	Display	Hiển thị
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Bản vẽ : kích thước thực — 1:10 nghĩa là 1 cm trên trang tương ứng với 10 cm.
 	Font Family:	Họ phông chữ:
 	Font Style:	Kiểu phông chữ:
 	Precision:	Độ chính xác:
-	Preview (1 cm on page)	Xem trước (1 cm trên trang)
 	Update Dimensions	Cập nhật kích thước
 @msg	Angles require two straight segments	Góc cần hai đoạn thẳng
-@msg	Choose a circular path	Hãy chọn một đường tròn
-@msg	Choose a length unit and precision from 0 to 6	Hãy chọn đơn vị độ dài và độ chính xác từ 0 đến 6
 @msg	Choose two different points	Hãy chọn hai điểm khác nhau
 @msg	Choose two non-parallel straight segments	Hãy chọn hai đoạn thẳng không song song
 @msg	Choose two nonzero angle arms	Hãy chọn hai cạnh góc có độ dài khác 0
@@ -4391,7 +4398,6 @@ theme	Appearance	Giao diện
 @msg	Invalid drawing scale	Tỷ lệ bản vẽ không hợp lệ
 @msg	Invalid real scale	Tỷ lệ thực không hợp lệ
 @msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
-@msg	Measured path no longer exists	Đường được đo không còn tồn tại
 @msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
 @msg	Non-finite dimension	Kích thước không phải là số hữu hạn
 @msg	Scale must be drawing:real, for example 1:10	Tỷ lệ phải có dạng bản vẽ:thực tế, ví dụ 1:10

@@ -1,22 +1,64 @@
-//! Click a highlighted segment, then click to place its linked dimension. Empty-space clicks
-//! measure two points (three for an angle). Escape cancels without leaving any artwork.
+//! The Dimension tool. Hover a segment (linear), a corner (angular) or a circle or perfect arc
+//! (radial) and drag outwards: releasing places the linked dimension. Plain clicks pick what to
+//! measure instead: two points (linear) or two straight lines (angular), then a click places it;
+//! a click on a circle or arc gives its radius. Escape cancels without leaving any artwork.
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 use serde_json::{Value, json};
 use vectorcraft_doc::{
     Node,
-    dimension::{Dimension, DimensionOptions, DimensionSource, SegmentRef},
+    dimension::{self, Dimension, DimensionMode, DimensionOptions, DimensionSource, PointRef, SegmentRef},
 };
 use vectorcraft_geom::{BezPath, Point, Vec2};
 
+/// The three kinds of dimension the tool draws.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Kind {
+    #[default]
+    Linear,
+    Angular,
+    Radial,
+}
+
+impl Kind {
+    pub fn id(self) -> &'static str {
+        match self {
+            Kind::Linear => "linear",
+            Kind::Angular => "angular",
+            Kind::Radial => "radial",
+        }
+    }
+    /// `radius` and `diameter` are the radial kind.
+    pub fn parse(s: &str) -> Option<Kind> {
+        match s {
+            "linear" => Some(Kind::Linear),
+            "angular" => Some(Kind::Angular),
+            "radial" | "radius" | "diameter" => Some(Kind::Radial),
+            _ => None,
+        }
+    }
+}
+
+/// What the pointer is over.
+#[derive(Clone, Debug, PartialEq)]
+enum Target {
+    Segment(SegmentRef),
+    Corner { first: SegmentRef, second: SegmentRef, at: Point },
+    Radial { source: DimensionSource, center: Point, radius: f64 },
+}
+
 #[derive(Default)]
 pub struct DimensionTool {
-    mode: String,
+    kind: Kind,
     style: DimensionOptions,
-    points: Vec<Point>,
-    point_refs: Vec<Option<vectorcraft_doc::dimension::PointRef>>,
-    first_edge: Option<SegmentRef>,
+    /// Where the button went down, and what was under it.
+    press: Option<(Point, Option<Target>)>,
+    /// Plain-click picks: points (linear) or straight lines (angular).
+    points: Vec<(Point, Option<PointRef>)>,
+    lines: Vec<SegmentRef>,
+    /// A dimension being placed: previews follow the pointer.
     pending: Option<Dimension>,
-    hover: Option<SegmentRef>,
+    dragging: bool,
+    hover: Option<Target>,
     at: Point,
     began: bool,
 }
@@ -58,22 +100,64 @@ pub fn pick(cx: &ToolContext, p: Point) -> Option<SegmentRef> {
     best
 }
 
+/// The anchor of `edge` within reach of `p`, if any.
+fn anchor_near(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<(usize, Point)> {
+    let sp = cx.doc.node(edge.node)?.path_data()?.subpaths.get(edge.subpath)?;
+    let next = if edge.segment + 1 < sp.anchors.len() { edge.segment + 1 } else { 0 };
+    [edge.segment, next]
+        .into_iter()
+        .filter_map(|i| Some((i, sp.anchors.get(i)?.p)))
+        .filter(|(_, a)| a.distance(p) <= cx.tol(8.0))
+        .min_by(|(_, a), (_, b)| a.distance(p).total_cmp(&b.distance(p)))
+}
+
 impl DimensionTool {
-    fn point_source(&self, angular: bool) -> Option<DimensionSource> {
-        if self.point_refs.iter().all(Option::is_none) {
-            return None;
+    fn target(&self, cx: &ToolContext, p: Point) -> Option<Target> {
+        let edge = pick(cx, p)?;
+        match self.kind {
+            Kind::Linear => Some(Target::Segment(edge)),
+            Kind::Angular => {
+                let (anchor, at) = anchor_near(cx, &edge, p)?;
+                let (first, second) = dimension::corner(cx.doc, edge.node, edge.subpath, anchor)?;
+                Some(Target::Corner { first, second, at })
+            }
+            Kind::Radial => {
+                if let Some((center, radius)) = dimension::circle(cx.doc, edge.node) {
+                    return Some(Target::Radial { source: DimensionSource::Circle { node: edge.node }, center, radius });
+                }
+                let (center, radius) = dimension::arc(cx.doc, &edge)?;
+                Some(Target::Radial { source: DimensionSource::Arc { edge }, center, radius })
+            }
         }
-        Some(DimensionSource::Points {
-            a: self.point_refs.first().cloned().flatten(),
-            b: self.point_refs.get(if angular { 2 } else { 1 }).cloned().flatten(),
-            vertex: if angular { self.point_refs.get(1).cloned().flatten() } else { None },
-        })
     }
-    fn mode(&self) -> &str {
-        if self.mode.is_empty() { "linear" } else { &self.mode }
+    fn recipe(&self, mode: DimensionMode, a: Point, b: Point, vertex: Point, source: Option<DimensionSource>) -> Dimension {
+        Dimension { mode, a, b, vertex, offset: 0.0, length: a.distance(b), options: self.style.clone(), source, moved: None }
     }
-    fn recipe(&self, a: Point, b: Point, vertex: Point, source: Option<DimensionSource>) -> Dimension {
-        Dimension { mode: self.mode().into(), a, b, vertex, offset: 30.0, length: a.distance(b), options: self.style.clone(), source }
+    /// The dimension a target gives when dragged from.
+    fn dimension_for(&self, target: &Target, p: Point) -> Option<Dimension> {
+        let mut d = match target {
+            Target::Segment(edge) => self.recipe(
+                DimensionMode::Linear,
+                Point::ZERO,
+                Point::new(1.0, 0.0),
+                Point::ZERO,
+                Some(DimensionSource::Segment { edge: edge.clone() }),
+            ),
+            Target::Corner { first, second, .. } => self.recipe(
+                DimensionMode::Angular,
+                Point::ZERO,
+                Point::new(1.0, 0.0),
+                Point::ZERO,
+                Some(DimensionSource::Angle { first: first.clone(), second: second.clone() }),
+            ),
+            Target::Radial { source, center, radius } => {
+                // Dragged outwards: the radius; inwards: the diameter.
+                let mode = if p.distance(*center) >= *radius { DimensionMode::Radius } else { DimensionMode::Diameter };
+                self.recipe(mode, *center, p, Point::ZERO, Some(source.clone()))
+            }
+        };
+        d.offset = 30.0;
+        Some(d)
     }
     fn params(d: &Dimension) -> Value {
         let mut p = json!({"mode":d.mode,"a":[d.a.x,d.a.y],"b":[d.b.x,d.b.y],"vertex":[d.vertex.x,d.vertex.y],"offset":d.offset,"options":d.options});
@@ -84,16 +168,12 @@ impl DimensionTool {
     }
     fn preview(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
         let Some(d) = &mut self.pending else { return vec![] };
-        if d.mode == "linear" {
-            let u = d.b - d.a;
-            d.offset = (p - d.a).dot(Vec2::new(-u.y, u.x) / u.hypot());
-        } else if d.mode == "angular" {
-            d.offset = p.distance(d.vertex).max(12.0);
-        } else if p.distance(d.a) > 1e-6 {
-            let r = d.a.distance(d.b);
-            let u = p - d.a;
-            d.b = d.a + u / u.hypot() * r;
+        if matches!(d.mode, DimensionMode::Radius | DimensionMode::Diameter)
+            && let Some(Target::Radial { center, radius, .. }) = self.press.as_ref().and_then(|(_, t)| t.as_ref())
+        {
+            d.mode = if p.distance(*center) >= *radius { DimensionMode::Radius } else { DimensionMode::Diameter };
         }
+        d.place(p);
         if d.resolve(cx.doc).is_err() {
             return vec![];
         }
@@ -105,12 +185,83 @@ impl DimensionTool {
         actions.push(Action::Preview("dimension.create".into(), Self::params(d)));
         actions
     }
+    /// Places the pending dimension at `p` and commits it.
+    fn place(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        let mut out = self.preview(cx, p);
+        if self.began {
+            out.push(Action::Commit);
+        }
+        self.reset();
+        out
+    }
     fn reset(&mut self) {
         self.pending = None;
+        self.press = None;
         self.points.clear();
-        self.point_refs.clear();
-        self.first_edge = None;
+        self.lines.clear();
+        self.dragging = false;
         self.began = false;
+    }
+    /// A plain click: picks a point or a line, or measures a circle's radius.
+    fn click(&mut self, cx: &ToolContext, p: Point, target: Option<Target>, mods: Mods) -> Vec<Action> {
+        match self.kind {
+            Kind::Linear => {
+                let (mut at, _) = crate::guides::snap_pick(cx, p);
+                let mut reference = None;
+                if let Some(edge) = pick(cx, p)
+                    && let Some((anchor, point)) = anchor_near(cx, &edge, p)
+                {
+                    at = point;
+                    reference = Some(PointRef { node: edge.node, subpath: edge.subpath, anchor });
+                }
+                if mods.shift
+                    && let Some((last, _)) = self.points.last()
+                {
+                    at = *last + vectorcraft_geom::constrain_angle_from(at - *last, 45.0, cx.constrain_angle);
+                    reference = reference.filter(|r| r.position(cx.doc) == Some(at));
+                }
+                self.points.push((at, reference));
+                if let [(a, ra), (b, rb)] = self.points.as_slice() {
+                    let source = (ra.is_some() || rb.is_some()).then(|| DimensionSource::Points { a: ra.clone(), b: rb.clone(), vertex: None });
+                    let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
+                    if d.resolve(cx.doc).is_ok() {
+                        self.pending = Some(d);
+                    }
+                    self.points.clear();
+                }
+                vec![]
+            }
+            Kind::Angular => {
+                let Some(edge) = pick(cx, p).filter(|e| e.is_straight(cx.doc)) else { return vec![] };
+                if self.lines.first().is_some_and(|first| *first == edge) {
+                    return vec![];
+                }
+                self.lines.push(edge);
+                if let [first, second] = self.lines.as_slice() {
+                    let mut d = self.recipe(
+                        DimensionMode::Angular,
+                        Point::ZERO,
+                        Point::new(1.0, 0.0),
+                        Point::ZERO,
+                        Some(DimensionSource::Angle { first: first.clone(), second: second.clone() }),
+                    );
+                    if d.resolve(cx.doc).is_ok() {
+                        d.offset = 30.0;
+                        self.pending = Some(d);
+                    }
+                    self.lines.clear();
+                }
+                vec![]
+            }
+            Kind::Radial => {
+                let Some(target @ Target::Radial { .. }) = target else { return vec![] };
+                let Some(mut d) = self.dimension_for(&target, p) else { return vec![] };
+                d.mode = DimensionMode::Radius;
+                self.pending = Some(d);
+                self.press = Some((p, Some(target)));
+                self.place(cx, p)
+            }
+        }
     }
 }
 
@@ -119,19 +270,19 @@ impl Tool for DimensionTool {
         "dimension"
     }
     fn busy(&self) -> bool {
-        self.pending.is_some() || !self.points.is_empty() || self.first_edge.is_some()
+        self.pending.is_some() || !self.points.is_empty() || !self.lines.is_empty()
     }
     fn cursor(&self, _: &ToolContext, _: Point, _: Mods) -> Cursor {
         Cursor::Crosshair
     }
     fn options(&self) -> Value {
-        json!({"mode":self.mode(),"style":self.style})
+        json!({"mode":self.kind.id(),"style":self.style})
     }
     fn set_option(&mut self, key: &str, value: &Value) {
         if key == "mode"
-            && let Some(v) = value.as_str().filter(|v| ["linear", "angular", "radius", "diameter"].contains(v))
+            && let Some(kind) = value.as_str().and_then(Kind::parse)
         {
-            self.mode = v.into();
+            self.kind = kind;
         }
         if key == "style"
             && let Ok(o) = serde_json::from_value::<DimensionOptions>(value.clone())
@@ -142,97 +293,45 @@ impl Tool for DimensionTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.at = ev.pos;
-        if matches!(ev.kind, PointerKind::Move | PointerKind::Drag) {
-            if self.pending.is_some() {
-                return self.preview(cx, ev.pos);
-            }
-            self.hover = pick(cx, ev.pos);
-            return vec![];
-        }
-        if ev.kind != PointerKind::Down {
-            return vec![];
-        }
-        if self.pending.is_some() {
-            let mut out = self.preview(cx, ev.pos);
-            if self.began {
-                out.push(Action::Commit);
-            }
-            self.reset();
-            return out;
-        }
-        let hit = pick(cx, ev.pos);
-        let mut candidate = None;
-        match self.mode() {
-            "linear" if self.points.is_empty() && hit.is_some() && !ev.mods.alt => {
-                candidate = hit.map(|edge| self.recipe(Point::ZERO, Point::new(1.0, 0.0), Point::ZERO, Some(DimensionSource::Segment { edge })));
-            }
-            "angular" if hit.is_some() && self.points.is_empty() && !ev.mods.alt => {
-                if let Some(second) = hit {
-                    let straight = |edge: &SegmentRef| {
-                        cx.doc
-                            .node(edge.node)
-                            .and_then(Node::path_data)
-                            .and_then(|p| p.subpaths.get(edge.subpath))
-                            .is_some_and(|sp| edge.segment < sp.segment_count() && sp.segment_is_line(edge.segment))
-                    };
-                    if !straight(&second) {
-                        return vec![];
-                    }
-                    if let Some(first) = self.first_edge.clone() {
-                        candidate = Some(self.recipe(Point::ZERO, Point::new(1.0, 0.0), Point::ZERO, Some(DimensionSource::Angle { first, second })));
-                    } else {
-                        self.first_edge = Some(second);
-                    }
+        match ev.kind {
+            PointerKind::Move => {
+                if self.pending.is_some() {
+                    return self.preview(cx, ev.pos);
                 }
+                self.hover = self.target(cx, ev.pos);
+                vec![]
             }
-            "radius" | "diameter" => {
-                if let Some(edge) = hit
-                    && let Some((center, _)) = vectorcraft_doc::dimension::circle(cx.doc, edge.node)
+            PointerKind::Down => {
+                if self.pending.is_some() && !self.dragging {
+                    // The second click of a picked measurement places it.
+                    return self.place(cx, ev.pos);
+                }
+                self.press = Some((ev.pos, self.target(cx, ev.pos)));
+                vec![]
+            }
+            PointerKind::Drag => {
+                if self.pending.is_none()
+                    && let Some((start, Some(target))) = self.press.clone()
+                    && start.distance(ev.pos) > cx.tol(3.0)
+                    && self.points.is_empty()
+                    && self.lines.is_empty()
                 {
-                    candidate = Some(self.recipe(center, ev.pos, Point::ZERO, Some(DimensionSource::Circle { node: edge.node })));
+                    self.pending = self.dimension_for(&target, ev.pos);
+                    self.dragging = self.pending.is_some();
+                }
+                if self.dragging { self.preview(cx, ev.pos) } else { vec![] }
+            }
+            PointerKind::Up => {
+                if self.dragging {
+                    return self.place(cx, ev.pos);
+                }
+                match self.press.take() {
+                    Some((start, target)) if self.pending.is_none() => self.click(cx, start, target, ev.mods),
+                    _ => vec![],
                 }
             }
-            _ => {
-                let (mut p, _) = crate::guides::snap_pick(cx, ev.pos);
-                let reference = hit.as_ref().and_then(|edge| {
-                    let sp = cx.doc.node(edge.node)?.path_data()?.subpaths.get(edge.subpath)?;
-                    let next = if edge.segment + 1 < sp.anchors.len() { edge.segment + 1 } else { 0 };
-                    [edge.segment, next]
-                        .into_iter()
-                        .filter_map(|i| Some((i, sp.anchors.get(i)?.p)))
-                        .filter(|(_, point)| point.distance(ev.pos) <= cx.tol(8.0))
-                        .min_by(|(_, a), (_, b)| a.distance(ev.pos).total_cmp(&b.distance(ev.pos)))
-                        .map(|(anchor, point)| {
-                            p = point;
-                            vectorcraft_doc::dimension::PointRef { node: edge.node, subpath: edge.subpath, anchor }
-                        })
-                });
-                if ev.mods.shift
-                    && let Some(a) = self.points.last()
-                {
-                    p = *a + vectorcraft_geom::constrain_angle_from(p - *a, 45.0, cx.constrain_angle);
-                }
-                self.points.push(p);
-                self.point_refs.push(reference.filter(|r| r.position(cx.doc) == Some(p)));
-                match self.points.as_slice() {
-                    [a, b] if self.mode() == "linear" => candidate = Some(self.recipe(*a, *b, Point::ZERO, self.point_source(false))),
-                    [a, v, b] if self.mode() == "angular" => candidate = Some(self.recipe(*a, *b, *v, self.point_source(true))),
-                    _ => {}
-                }
-            }
+            _ => vec![],
         }
-        if let Some(mut d) = candidate {
-            if d.resolve(cx.doc).is_ok() {
-                self.pending = Some(d);
-                self.points.clear();
-                self.point_refs.clear();
-                self.first_edge = None;
-            } else if self.points.len() >= 2 {
-                self.points.clear();
-                self.point_refs.clear();
-            }
-        }
-        vec![]
     }
     fn key(&mut self, _: &ToolContext, key: ToolKey, _: Mods) -> Vec<Action> {
         if key == ToolKey::Escape {
@@ -248,29 +347,52 @@ impl Tool for DimensionTool {
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let color = [60, 150, 255];
         let mut out = vec![];
-        if self.pending.is_none()
-            && let Some(edge) = &self.hover
-            && let Some(sp) = cx.doc.node(edge.node).and_then(Node::path_data).and_then(|p| p.subpaths.get(edge.subpath))
-            && edge.segment < sp.segment_count()
-        {
-            let c = sp.segment(edge.segment);
-            let mut path = BezPath::new();
-            path.move_to(c.p0);
-            path.curve_to(c.p1, c.p2, c.p3);
-            out.push(Overlay::Path { path, color, width: 3.0, dashed: false });
-            for p in [c.p0, c.p3] {
-                out.push(Overlay::Anchor { p, color, filled: true, size: 6.0 });
-            }
-            if let Some((_, _, length)) = edge.endpoints(cx.doc)
-                && let Ok(text) = self.style.label(length, false)
+        let segment = |edge: &SegmentRef, out: &mut Vec<Overlay>| {
+            if let Some(sp) = cx.doc.node(edge.node).and_then(Node::path_data).and_then(|p| p.subpaths.get(edge.subpath))
+                && edge.segment < sp.segment_count()
             {
-                out.push(Overlay::Measure { p: self.at + Vec2::new(12.0, 12.0), text });
+                let c = sp.segment(edge.segment);
+                let mut path = BezPath::new();
+                path.move_to(c.p0);
+                path.curve_to(c.p1, c.p2, c.p3);
+                out.push(Overlay::Path { path, color, width: 3.0, dashed: false });
+            }
+        };
+        if self.pending.is_none() {
+            match &self.hover {
+                Some(Target::Segment(edge)) => {
+                    segment(edge, &mut out);
+                    if let Some((a, b)) = edge.endpoints(cx.doc) {
+                        for p in [a, b] {
+                            out.push(Overlay::Anchor { p, color, filled: true, size: 6.0 });
+                        }
+                        if let Ok(text) = self.style.label(a.distance(b), false) {
+                            out.push(Overlay::Measure { p: self.at + Vec2::new(12.0, 12.0), text });
+                        }
+                    }
+                }
+                Some(Target::Corner { first, second, at }) => {
+                    segment(first, &mut out);
+                    segment(second, &mut out);
+                    out.push(Overlay::Anchor { p: *at, color, filled: true, size: 7.0 });
+                }
+                Some(Target::Radial { center, radius, .. }) => {
+                    out.push(Overlay::Anchor { p: *center, color, filled: false, size: 6.0 });
+                    let toward = self.at - *center;
+                    if toward.hypot() > 1e-9 {
+                        out.push(Overlay::Line { a: *center, b: *center + toward / toward.hypot() * *radius, color, dashed: true });
+                    }
+                }
+                None => {}
             }
         }
-        for p in &self.points {
+        for (p, _) in &self.points {
             out.push(Overlay::Anchor { p: *p, color, filled: true, size: 6.0 });
         }
-        if let Some(p) = self.points.last() {
+        for edge in &self.lines {
+            segment(edge, &mut out);
+        }
+        if let Some((p, _)) = self.points.last() {
             out.push(Overlay::Line { a: *p, b: self.at, color, dashed: true });
         }
         out

@@ -459,7 +459,7 @@ impl Session {
                 options.validate()?;
             }
             if let Some(mode) = values.get("mode")
-                && !mode.as_str().is_some_and(|m| ["linear", "angular", "radius", "diameter"].contains(&m))
+                && !mode.as_str().is_some_and(|m| ["linear", "angular", "radial", "radius", "diameter"].contains(&m))
             {
                 return Err("Unknown dimension mode".into());
             }

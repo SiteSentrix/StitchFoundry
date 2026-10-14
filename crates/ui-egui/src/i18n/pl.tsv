@@ -4652,23 +4652,29 @@ mark-style	Japanese	Japońskie
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
-	 a highlighted edge, then click to place its dimension | 	 podświetloną krawędź, a następnie kliknij, aby umieścić jej wymiar | 
-	 cancels | Double-click the tool for options	 anuluje | Kliknij dwukrotnie narzędzie, aby wyświetlić opcje
-	All selected edges	Wszystkie zaznaczone krawędzie
+	Dimension	Wymiar
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Rysunek : rozmiar rzeczywisty — 1:10 opisuje 1 jednostkę na stronie jako 10.
+	Preview (1 inch on the page)	Podgląd (1 cal na stronie)
+	Set as Default	Ustaw jako domyślne
+	 out from a highlighted edge to place its dimension  |  	 od podświetlonej krawędzi na zewnątrz, aby umieścić jej wymiar  |  
+	 cancels  |  Double-click the tool for options	 anuluje  |  Kliknij dwukrotnie narzędzie, aby wyświetlić opcje
+	Angular	Kątowy
+	Away from the Line	Z dala od linii
+	Between Line and Object	Między linią a obiektem
+	Drag out from a segment, or click two points, then click to place.	Przeciągnij na zewnątrz od odcinka albo kliknij dwa punkty, a następnie kliknij, aby umieścić.
+	Drag out from a corner, or click two straight lines, then click to place.	Przeciągnij na zewnątrz od narożnika albo kliknij dwie proste linie, a następnie kliknij, aby umieścić.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Przeciągnij od okręgu lub łuku na zewnątrz, aby uzyskać promień, do wewnątrz — średnicę.
+@msg	Choose a circle or a perfect arc	Wybierz okrąg lub idealny łuk
+@msg	Choose a precision from 0 to 6	Wybierz dokładność od 0 do 6
 	Create Dimension	Utwórz wymiar
-	Dimension Selected Paths	Zwymiaruj zaznaczone ścieżki
 	Dimension Tool	Narzędzie Wymiar
 	Dimension Tool Options	Opcje narzędzia Wymiar
 	Display	Wyświetlanie
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Rysunek : rozmiar rzeczywisty — 1:10 oznacza, że 1 cm na stronie odpowiada 10 cm.
 	Font Family:	Rodzina czcionek:
 	Font Style:	Styl czcionki:
 	Precision:	Dokładność:
-	Preview (1 cm on page)	Podgląd (1 cm na stronie)
 	Update Dimensions	Aktualizuj wymiary
 @msg	Angles require two straight segments	Kąty wymagają dwóch prostych odcinków
-@msg	Choose a circular path	Wybierz ścieżkę w kształcie okręgu
-@msg	Choose a length unit and precision from 0 to 6	Wybierz jednostkę długości i dokładność od 0 do 6
 @msg	Choose two different points	Wybierz dwa różne punkty
 @msg	Choose two non-parallel straight segments	Wybierz dwa nierównoległe proste odcinki
 @msg	Choose two nonzero angle arms	Wybierz dwa niezerowe ramiona kąta
@@ -4680,7 +4686,6 @@ mark-style	Japanese	Japońskie
 @msg	Invalid drawing scale	Nieprawidłowa skala rysunku
 @msg	Invalid real scale	Nieprawidłowa skala rzeczywista
 @msg	Measured anchor no longer exists	Mierzony punkt kontrolny już nie istnieje
-@msg	Measured path no longer exists	Mierzona ścieżka już nie istnieje
 @msg	Measured segment no longer exists	Mierzony odcinek już nie istnieje
 @msg	Non-finite dimension	Wymiar nie jest liczbą skończoną
 @msg	Scale must be drawing:real, for example 1:10	Skala musi mieć postać rysunek:rzeczywistość, na przykład 1:10

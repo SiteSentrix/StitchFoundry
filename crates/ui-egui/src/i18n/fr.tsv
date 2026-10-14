@@ -4810,23 +4810,29 @@ theme	Appearance	Apparence
 	Light behind the object	Lumière derrière l'objet
 
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
-	 a highlighted edge, then click to place its dimension | 	 sur un bord en surbrillance, puis cliquez pour placer sa cote | 
-	 cancels | Double-click the tool for options	 pour annuler | Double-cliquez sur l’outil pour ses options
-	All selected edges	Tous les bords sélectionnés
+	Dimension	Cote
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Dessin : taille réelle — 1:10 étiquette 1 unité de la page comme 10.
+	Preview (1 inch on the page)	Aperçu (1 pouce sur la page)
+	Set as Default	Définir par défaut
+	 out from a highlighted edge to place its dimension  |  	 vers l'extérieur depuis un bord mis en évidence pour placer sa cote  |  
+	 cancels  |  Double-click the tool for options	 annule  |  Double-clic sur l'outil pour les options
+	Angular	Angulaire
+	Away from the Line	À l'écart de la ligne
+	Between Line and Object	Entre la ligne et l'objet
+	Drag out from a segment, or click two points, then click to place.	Faites glisser vers l'extérieur depuis un segment, ou cliquez sur deux points, puis cliquez pour placer.
+	Drag out from a corner, or click two straight lines, then click to place.	Faites glisser vers l'extérieur depuis un angle, ou cliquez sur deux lignes droites, puis cliquez pour placer.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Faites glisser depuis un cercle ou un arc vers l'extérieur pour le rayon, vers l'intérieur pour le diamètre.
+@msg	Choose a circle or a perfect arc	Choisissez un cercle ou un arc parfait
+@msg	Choose a precision from 0 to 6	Choisissez une précision de 0 à 6
 	Create Dimension	Créer une cote
-	Dimension Selected Paths	Coter les tracés sélectionnés
 	Dimension Tool	Outil Cotation
 	Dimension Tool Options	Options de l’outil Cotation
 	Display	Affichage
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	Dessin : taille réelle — 1:10 signifie que 1 cm sur la page représente 10 cm.
 	Font Family:	Famille de polices :
 	Font Style:	Style de police :
 	Precision:	Précision :
-	Preview (1 cm on page)	Aperçu (1 cm sur la page)
 	Update Dimensions	Mettre à jour les cotes
 @msg	Angles require two straight segments	Les angles nécessitent deux segments droits
-@msg	Choose a circular path	Choisissez un tracé circulaire
-@msg	Choose a length unit and precision from 0 to 6	Choisissez une unité de longueur et une précision de 0 à 6
 @msg	Choose two different points	Choisissez deux points différents
 @msg	Choose two non-parallel straight segments	Choisissez deux segments droits non parallèles
 @msg	Choose two nonzero angle arms	Choisissez deux côtés d’angle de longueur non nulle
@@ -4838,7 +4844,6 @@ theme	Appearance	Apparence
 @msg	Invalid drawing scale	Échelle du dessin non valide
 @msg	Invalid real scale	Échelle réelle non valide
 @msg	Measured anchor no longer exists	Le point d’ancrage mesuré n’existe plus
-@msg	Measured path no longer exists	Le tracé mesuré n’existe plus
 @msg	Measured segment no longer exists	Le segment mesuré n’existe plus
 @msg	Non-finite dimension	Cote non finie
 @msg	Scale must be drawing:real, for example 1:10	L’échelle doit être dessin:réel, par exemple 1:10

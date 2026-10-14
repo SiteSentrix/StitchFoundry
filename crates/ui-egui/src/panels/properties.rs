@@ -60,6 +60,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         type_sections(app, ui);
         divider(ui);
     }
+    if crate::dialogs::dimension::selected(app).is_some() {
+        crate::dialogs::dimension::properties_section(app, ui);
+        divider(ui);
+    }
     appearance_section(app, ui);
     divider(ui);
     section_header(ui, tl!("Align"));

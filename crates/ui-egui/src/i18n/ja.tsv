@@ -4375,27 +4375,34 @@ lighting	Light	ライト
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
 # Dimension tool (linked dimension annotations)
-	 a highlighted edge, then click to place its dimension | 	：ハイライトされたエッジをクリックし、もう一度クリックして寸法を配置 | 
-	 cancels | Double-click the tool for options	：キャンセル | ツールをダブルクリックでオプション
-	All selected edges	選択したすべてのエッジ
 	Create Dimension	寸法を作成
-	Dimension Selected Paths	選択したパスに寸法を記入
 	Dimension Tool	寸法ツール
 	Dimension Tool Options	寸法ツールオプション
-	Drawing : real size — 1:10 means 1 cm on the page represents 10 cm.	図面 : 実寸 — 1:10 は、ページ上の 1 cm が実際の 10 cm を表します。
 	Font Family:	フォントファミリー:
 	Font Style:	フォントスタイル:
 	Precision:	精度:
-	Preview (1 cm on page)	プレビュー (ページ上の 1 cm)
 	Update Dimensions	寸法を更新
 	Display	表示
 
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	寸法
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	図面 : 実寸 — 1:10 では、ページ上の 1 単位を 10 と表示します。
+	Preview (1 inch on the page)	プレビュー（ページ上の 1 インチ）
+	Set as Default	デフォルトに設定
+	 out from a highlighted edge to place its dimension  |  	 でハイライトされた辺から外側へ寸法を配置  |  
+	 cancels  |  Double-click the tool for options	 でキャンセル  |  ツールをダブルクリックしてオプション
+	Linear	直線
+	Angular	角度
+	Away from the Line	寸法線から離す
+	Between Line and Object	寸法線とオブジェクトの間
+	Drag out from a segment, or click two points, then click to place.	セグメントから外側へドラッグするか、2 点をクリックしてからクリックして配置します。
+	Drag out from a corner, or click two straight lines, then click to place.	角から外側へドラッグするか、2 本の直線をクリックしてからクリックして配置します。
+	Drag out from a circle or arc for its radius, inwards for its diameter.	円または円弧から外側へドラッグすると半径、内側へドラッグすると直径になります。
+@msg	Choose a circle or a perfect arc	円または正確な円弧を選択してください
+@msg	Choose a precision from 0 to 6	精度は 0〜6 で選択してください
 	X:	X:
 	Y:	Y:
 @msg	Angles require two straight segments	角度には直線セグメントが 2 つ必要です
-@msg	Choose a circular path	円形のパスを選択してください
-@msg	Choose a length unit and precision from 0 to 6	長さの単位と 0〜6 の精度を選択してください
 @msg	Choose two different points	異なる 2 点を選択してください
 @msg	Choose two non-parallel straight segments	平行でない直線セグメントを 2 つ選択してください
 @msg	Choose two nonzero angle arms	長さが 0 でない角度の辺を 2 つ選択してください
@@ -4407,7 +4414,6 @@ lighting	Light	ライト
 @msg	Invalid drawing scale	図面の縮尺が無効です
 @msg	Invalid real scale	実寸の縮尺が無効です
 @msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
-@msg	Measured path no longer exists	測定したパスはもう存在しません
 @msg	Measured segment no longer exists	測定したセグメントはもう存在しません
 @msg	Non-finite dimension	寸法が有限ではありません
 @msg	Scale must be drawing:real, for example 1:10	縮尺は 図面:実寸 の形式にしてください (例: 1:10)

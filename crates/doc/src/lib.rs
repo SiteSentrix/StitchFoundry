@@ -687,6 +687,10 @@ pub struct Document {
     /// state, never saved.
     #[serde(skip)]
     pub puppet: Option<Arc<PuppetPins>>,
+    /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
+    /// is set, so documents without any pay nothing for them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dimensions: bool,
     /// Where each node is in the tree, for lookups by id ([`id_index`]): a cache, never saved.
     #[serde(skip)]
     index: id_index::IdIndex,
@@ -767,6 +771,7 @@ impl Document {
             print_setup: None,
             assets: vec![],
             puppet: None,
+            dimensions: false,
             index: Default::default(),
         };
         let id = d.alloc_id();
