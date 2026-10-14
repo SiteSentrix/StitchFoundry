@@ -137,17 +137,7 @@ impl Renderer {
     fn flatten(&mut self, ctx: &mut RenderContext, r: Region) -> Arc<Pixmap> {
         let all = self.finish(ctx, self.raster);
         ctx.reset();
-        let crop = if (r.x, r.y, r.w, r.h) == (0, 0, all.width(), all.height()) {
-            None
-        } else {
-            let mut out = Pixmap::new(r.w, r.h);
-            let (src_w, w) = (all.width() as usize, r.w as usize);
-            for row in 0..r.h as usize {
-                let from = (r.y as usize + row) * src_w + r.x as usize;
-                out.data_mut()[row * w..(row + 1) * w].copy_from_slice(&all.data()[from..from + w]);
-            }
-            Some(Arc::new(out))
-        };
+        let crop = if (r.x, r.y, r.w, r.h) == (0, 0, all.width(), all.height()) { None } else { Some(Arc::new(cropped(&all, r))) };
         let all = Arc::new(all);
         // With 8-bit compositing, rendering over the picture gives the pixels that drawing it back
         // as an image gives: the context starts again empty, and `finish` renders what it draws
@@ -241,25 +231,39 @@ impl Renderer {
     }
 
     /// Draw knockout element `c` in a layer composited with `compose`: as its knockout shape
-    /// (`DestOut` erases what the elements below drew there, `DestIn` keeps only that part), or
-    /// as itself (`Plus` adds it). In a non-isolated knockout group (`backdrop`), the element is
-    /// laid over the group's backdrop and cut to its shape, so it composites against the art
-    /// below the group instead of the elements below it.
-    pub(crate) fn knockout_pass(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>, compose: Compose, backdrop: Option<&Arc<Pixmap>>) {
+    /// (`DestOut` erases what the elements below drew there, `SrcOver` draws the shape), or as
+    /// itself (`Plus` adds it).
+    pub(crate) fn knockout_pass(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>, compose: Compose) {
         ctx.set_transform(Affine::IDENTITY);
         ctx.push_layer(None, Some(BlendMode::new(Mix::Normal, compose)), None, None, None);
         self.nested += 1;
-        if let Some(b) = backdrop {
-            draw_pixmap(ctx, b.clone(), (0.0, 0.0));
-        }
         let shape = compose != Compose::Plus && !c.knockout_shape;
         self.shape_of = if shape { Arc::as_ptr(c) as usize } else { 0 };
         self.draw_arc(ctx, f, c);
         self.shape_of = 0;
-        if backdrop.is_some() {
-            self.knockout_pass(ctx, f, c, Compose::DestIn, None);
-        }
         self.nested -= 1;
+        ctx.pop_layer();
+    }
+
+    /// Add knockout element `c` of a non-isolated knockout group drawn over a copy of its backdrop
+    /// (`backdrop`, in `ctx`'s pixels), once its `DestOut` pass has erased what the elements below
+    /// it drew: `c` composited with the backdrop at a shape of 1, times its knockout shape
+    /// (ISO 32000-1 §11.4.6). That is `c` drawn over the backdrop, less (1 − shape) × backdrop.
+    /// `c` over the backdrop and its shape are drawn offscreen over `c`'s bounds, and `c` is drawn
+    /// as in the other knockout passes (groups in it can't copy their backdrop).
+    pub(crate) fn knockout_over(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>, backdrop: &Arc<Pixmap>) {
+        let bounds = self.bounds_of(f.symbols, c);
+        let Some(r) = region(ctx, f, bounds) else { return };
+        let view = Affine::translate((-(r.x as f64), -(r.y as f64))) * f.view;
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, r.w as f64, r.h as f64));
+        let sub = Frame { mt: false, view, visible, ..*f };
+        let whole = (r.x, r.y, r.w, r.h) == (0, 0, backdrop.width(), backdrop.height());
+        let below = if whole { backdrop.clone() } else { Arc::new(cropped(backdrop, r)) };
+        let over = self.offscreen(r, &sub, Some(below.clone()), &mut |s, cx, fr| s.inside_layer(|s| s.draw_arc(cx, fr, c)));
+        let shape = self.offscreen(r, &sub, None, &mut |s, cx, fr| s.knockout_pass(cx, fr, c, Compose::SrcOver));
+        ctx.set_transform(Affine::IDENTITY);
+        ctx.push_layer(None, Some(BlendMode::new(Mix::Normal, Compose::Plus)), None, None, None);
+        draw_pixmap(ctx, Arc::new(inside_shape(over, &shape, &below)), (r.x as f64, r.y as f64));
         ctx.pop_layer();
     }
 }
@@ -293,6 +297,17 @@ fn region(ctx: &RenderContext, f: &Frame, bounds: Option<Rect>) -> Option<Region
     (x1 > x0 && y1 > y0).then_some(Region { x: x0 as u16, y: y0 as u16, w: (x1 - x0) as u16, h: (y1 - y0) as u16 })
 }
 
+/// The pixels of region `r` of `pm`.
+fn cropped(pm: &Pixmap, r: Region) -> Pixmap {
+    let mut out = Pixmap::new(r.w, r.h);
+    let (src_w, w) = (pm.width() as usize, r.w as usize);
+    for row in 0..r.h as usize {
+        let from = (r.y as usize + row) * src_w + r.x as usize;
+        out.data_mut()[row * w..(row + 1) * w].copy_from_slice(&pm.data()[from..from + w]);
+    }
+    out
+}
+
 /// The group's own colour from `content` (the group drawn over `backdrop`) and `alone` (drawn
 /// over transparency, for its coverage): content = group + (1 − group alpha) × backdrop, all
 /// premultiplied.
@@ -303,4 +318,17 @@ fn remove_backdrop(mut content: Pixmap, alone: &Pixmap, backdrop: &Pixmap) -> Pi
         (c.r, c.g, c.b, c.a) = (sub(c.r, b.r), sub(c.g, b.g), sub(c.b, b.b), a.a);
     }
     content
+}
+
+/// What a knockout element adds once its knockout shape has erased what was below it: `over` (the
+/// element drawn over `backdrop`) less (1 − shape alpha) × `backdrop`, with `shape` the knockout
+/// shape, all premultiplied. Each color is kept within the alpha left.
+fn inside_shape(mut over: Pixmap, shape: &Pixmap, backdrop: &Pixmap) -> Pixmap {
+    for ((o, s), b) in over.data_mut().iter_mut().zip(shape.data()).zip(backdrop.data()) {
+        let outside = 255 - s.a as u32;
+        let sub = |v: u8, bv: u8| (v as u32).saturating_sub((outside * bv as u32 + 127) / 255);
+        let a = sub(o.a, b.a);
+        (o.r, o.g, o.b, o.a) = (sub(o.r, b.r).min(a) as u8, sub(o.g, b.g).min(a) as u8, sub(o.b, b.b).min(a) as u8, a as u8);
+    }
+    over
 }
