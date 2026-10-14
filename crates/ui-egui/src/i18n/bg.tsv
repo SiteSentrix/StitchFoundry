@@ -2,11 +2,11 @@
 # (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" English forms,
 # translated as two Bulgarian forms "one|other"; see `plural` in i18n/mod.rs).
 #
-# Clean-room: every entry is written from the meaning of VectorCraft's English label, following
-# the general Bulgarian vocabulary of vector illustration (работна област, път, опорна точка,
-# дръжка…) and Adobe Illustrator's Bulgarian UI conventions; no other application's Bulgarian
-# localisation was consulted or copied. Drafted with AI assistance (Gemini) from the English
-# meaning; not yet reviewed by a native speaker.
+# Clean-room: every entry is written from the plain meaning of VectorCraft's English labels, in
+# ordinary Bulgarian vocabulary of vector illustration (работна област, път, опорна точка,
+# дръжка…); no Illustrator (or any other application's) Bulgarian UI, string table or localisation
+# resource was consulted or copied. Drafted with AI assistance (Gemini) from the English meaning;
+# not yet reviewed by a native speaker.
 	Glowing Edges…	Сияйни ръбове…
 	Glowing Edges	Сияйни ръбове
 	Edge Width	Ширина на ръба
@@ -188,7 +188,7 @@
 	Apply Graphic Style	Прилагане на графичен стил
 	Apply Last Color	Прилагане на последния цвят
 	Apply Last Effect	Прилагане на последния ефект
-	Apply Last Gradient	Прилагане на последната разградка
+	Apply Last Gradient	Прилагане на последния градиент
 	Apply Paragraph Style	Прилагане на стил на абзац
 	Apply SVG Filter…	Прилагане на SVG филтър…
 	Apply to All	Прилагане към всички
@@ -274,9 +274,9 @@
 	Black and White	Черно-бяло
 	Black and White Logo	Черно-бяло лого
 	BLANK DOCUMENT PRESETS	ПРЕДВАРИТЕЛНИ НАСТРОЙКИ ЗА ПРАЗЕН ДОКУМЕНТ
-	Bleed	Окъркване
-	Bleed:	Окъркване:
-	Bleeds	Окърквания
+	Bleed	Изтичане
+	Bleed:	Изтичане:
+	Bleeds	Изтичания
 	Blend	Преливане
 	Blend Front to Back	Преливане от пред на гръб
 	Blend Horizontally	Хоризонтално преливане
@@ -428,9 +428,9 @@
 	Click	Щракване
 	Click an anchor point	Щракнете върху опорна точка
 	Click or drag	Щракнете или плъзнете
-	Click the art with the Gradient tool to add or select points.	Щракнете върху илюстрацията с инструмента Разградка, за да добавите или изберете точки.
+	Click the art with the Gradient tool to add or select points.	Щракнете върху илюстрацията с инструмента Градиент, за да добавите или изберете точки.
 	Click the first point	Щракнете върху първата точка
-	Click the ramp or a type button to apply a gradient.	Щракнете върху спектъра или бутона за тип, за да приложите разградка.
+	Click the ramp or a type button to apply a gradient.	Щракнете върху спектъра или бутона за тип, за да приложите градиент.
 	Click to add a tab stop, drag to move it, drag it off the ruler to delete it	Щракнете за добавяне на таб стоп, плъзнете го за местене, плъзнете го извън линията за изтриване
 	Click to choose a swatch, Shift-click to mix a colour	Щракнете за избор на образец, Shift-щракване за смесване на цвят
 	Click to edit the mask; Alt-click to view only the mask; Shift-click to disable or enable it	Щракнете за редактиране на маската; Alt-щракване за преглед само на маската; Shift-щракване за изключване или включване
@@ -844,7 +844,7 @@
 	Edit Custom Dictionary…	Редактиране на потребителски речник…
 	Edit Envelope	Редактиране на обвивка
 	Edit Freeform Point	Редактиране на свободна опорна точка
-	Edit Gradient	Редактиране на разградка
+	Edit Gradient	Редактиране на градиент
 	Edit Opacity Mask	Редактиране на маска за непрозрачност
 	Edit or Apply Color Group	Редактиране или прилагане на цветова група
 	Edit or Apply Color Group…	Редактиране или прилагане на цветова група…
@@ -1148,18 +1148,18 @@
 	Go To Link	Към връзката
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
-	Gradient	Разградка
-	Gradient (.)	Разградка (.)
-	Gradient across stroke	Разградка напречно на щриха
-	Gradient along stroke	Разградка по дължината на щриха
-	Gradient and Mesh Resolution:	Разделителна способност на разградка и мрежа:
-	Gradient Fill: click to apply, drag onto art	Запълване с разградка: щракнете за прилагане, плъзнете върху платното
-	Gradient Finishes	Краища на разградката
-	Gradient Mesh	Мрежа с разградка
+	Gradient	Градиент
+	Gradient (.)	Градиент (.)
+	Gradient across stroke	Градиент напречно на щриха
+	Gradient along stroke	Градиент по дължината на щриха
+	Gradient and Mesh Resolution:	Разделителна способност на градиент и мрежа:
+	Gradient Fill: click to apply, drag onto art	Запълване с градиент: щракнете за прилагане, плъзнете върху платното
+	Gradient Finishes	Краища на градиента
+	Gradient Mesh	Мрежа с градиент
 	Gradient swatches	Образци на разградкѝ
-	Gradient Tool	Инструмент „Разградка“
-	Gradient Vector	Векторна разградка
-	Gradient within stroke	Разградка в щриха
+	Gradient Tool	Инструмент „Градиент“
+	Gradient Vector	Векторен градиент
+	Gradient within stroke	Градиент в щриха
 	Gradients	Разградкѝ
 	Graph	Диаграма
 	Graph Data	Данни за диаграма
@@ -1320,7 +1320,7 @@
 	In the selected objects	В избраните обекти
 	Inches	Инчове
 	Include Blacks with CMY:	Включване на черни към CMY:
-	Include Bleed	Включване на разкройка
+	Include Bleed	Включване на изтичане
 	Include Cmy Blacks	Включване на CMYK черни
 	Include CMYK PostScript in RGB Files	Включване на CMYK PostScript в RGB файлове
 	Include Document Thumbnails	Включване на миниатюри на документа
@@ -1423,7 +1423,7 @@
 	Knife	Нож
 	Knockout Group	Група с изрязване
 	Lab	Lab
-	Lab Spot Colors:	Плътни цветове по Lab:
+	Lab Spot Colors:	Спот цветове по Lab:
 	Lab Values	Стойности по Lab
 	Landscape	Пейзаж
 	Interface Language	Език на интерфейса
@@ -1552,7 +1552,7 @@
 	Maintain Envelope Shape	Запазване на формата на обвивката
 	Make	Създаване
 	Make a theme on Create and save it.	Създайте тема в Create и я запазете.
-	Make all bleed settings the same	Установяване на еднакви настройки за кървене
+	Make all bleed settings the same	Установяване на еднакви настройки за изтичане
 	Make and Expand	Създаване и разширяване
 	Make Clipping Mask	Създаване на маска за изрязване
 	Make Compound Shape	Създаване на съставна фигура
@@ -1561,7 +1561,7 @@
 	Make Mask	Създаване на маска
 	Make Opacity Mask	Създаване на маска за непрозрачност
 	Make Pixel Perfect	Постигане на пикселна прецизност
-	Make the bleed values differ	Задаване на различни стойности за кървене
+	Make the bleed values differ	Задаване на различни стойности за изтичане
 	Make with Mesh…	Създаване с мрежа…
 	Make with Top Object	Създаване с горен обект
 	Make with Warp…	Създаване с изкривяване…
@@ -1573,8 +1573,8 @@
 	Mark Older Files as [Converted] When Opened	Маркиране на по-стари файлове като [Конвертирани] при отваряне
 	Marker…	Маркер…
 	Marks	Маркери
-	Marks and Bleed	Маркери и разкромяване
-	Marks and Bleeds	Маркери и разкроявания
+	Marks and Bleed	Маркери и изтичане
+	Marks and Bleeds	Маркери и изтичане
 	Match User Interface Brightness	Съгласуване с яркостта на потребителския интерфейс
 	Light Gray	Светлосиво
 	Medium Gray	Средносиво
@@ -2390,7 +2390,7 @@
 	Restored {} recovered document(s): save them to keep them	Възстановени са {} възстановени документ(и): запазете ги, за да ги съхраните
 	Restrict printing, editing and other tasks	Ограничаване на печата, редактирането и други задачи
 	Reverse Front to Back	Обръщане от преден към заден
-	Reverse Gradient	Обръщане на разградка
+	Reverse Gradient	Обръщане на градиент
 	Reverse Order	Обръщане на реда
 	Reverse Path Direction	Обръщане посоката на пътя
 	Reverse Path Direction Off	Изключване на обръщането на посоката на пътя
@@ -2684,8 +2684,8 @@
 	Show Embedded	Показване на вградените
 	Show Find Field	Показване на полето за търсене
 	Show Font Names in English	Показване на имената на шрифтовете на английски
-	Show Gradient Annotator	Показване на анотатора на разградката
-	Show Gradient Swatches	Показване на образци за разградка
+	Show Gradient Annotator	Показване на анотатора на градиента
+	Show Gradient Swatches	Показване на образци за градиент
 	Show Grid	Показване на мрежата
 	Show Grid (⌘')	Показване на мрежата (⌘')
 	Show Guides	Показване на водачите
@@ -2827,9 +2827,9 @@
 	Split Into Grid…	Разделяне на мрежа…
 	Split Path	Разделяне на път
 	spot	петно
-	Spot Color	Петнообразен цвят
-	Spot Colors	Петнообразни цветове
-	Spot Colors…	Петнообразни цветове…
+	Spot Color	Спот цвят
+	Spot Colors	Спот цветове
+	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
 	Square	Квадрат
 	Squeeze…	Свиване…
@@ -3137,7 +3137,7 @@
 	Use Artboards	Използване на работните области
 	Use Black Point Compensation	Използване на компенсация на черната точка
 	Use Compression	Използване на компресия
-	Use document bleed settings	Използване на настройките за кървене на документа
+	Use document bleed settings	Използване на настройките за изтичане на документа
 	Use Even-Odd Fill Rule	Използване на правило за запълване четно-нечетно
 	Use Japanese Crop Marks	Използване на японски марки за изрязване
 	Use Low Resolution Proxy for Linked EPS	Използване на нискорезолютивно прокси за свързани EPS файлове
@@ -3302,7 +3302,7 @@
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} ненаименувани обекта са пропуснати: наименувайте ги или включете „Ненаименувани обекти“ в менюто на панела.
 	{effect} is already applied	{effect} вече е приложен
 	{format} Options	Опции за {format}
-	{kind} Gradient	{kind} разградка
+	{kind} Gradient	{kind} градиент
 	{kind} Style Options…	Опции за стил {kind}…
 	{kind}, {model}	{kind}, {model}
 	{name} (spot)	{name} (спот)
@@ -3363,7 +3363,7 @@ imageTrace	Outline	Контур
 	 an object to copy its attributes  |  	 обект за копиране на неговите атрибути  |  
 	 to apply the selection's to it  |  	 за прилагане на тези от селекцията върху него  |  
 	 to sample a color	 за вземане на проба от цвят
-	 across a selected object to set the gradient direction	 през избран обект за задаване посоката на разградката
+	 across a selected object to set the gradient direction	 през избран обект за задаване посоката на градиента
 	 to select an artboard  |  	 за избор на работна област  |  
 	 on the canvas to create one	 върху платното за създаване на такава
 	 a stroke to add a width point  |  	 щрих за добавяне на точка за дебелина  |  
@@ -3492,7 +3492,7 @@ axis	Both	И двете
 @msg	Downloaded {what}	Изтеглено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разширяване на облика: селекцията има основен облик
 @msg	Expand: no brush strokes selected	Разширяване: няма избрани щрихи на четка
-@msg	Expand: no gradient fills	Разширяване: няма запълвания с разградка
+@msg	Expand: no gradient fills	Разширяване: няма запълвания с градиент
 @msg	Expand: nothing to expand	Разширяване: няма нищо за разширяване
 @msg	Exported {count} file(s) to {folder}	Експортирани са {count} файла в {folder}
 @msg	Exported {path}	Експортирано: {path}
@@ -3585,8 +3585,8 @@ axis	Both	И двете
 @msg	a colour is an index, #rrggbb or a preset name, not {v}	цветът е индекс, #rrggbb или име на предварителна настройка, а не {v}
 @msg	a document needs at least one artboard	документът се нуждае от поне една работна област
 @msg	a document needs at least one layer	документът се нуждае от поне един слой
-@msg	a freeform gradient keeps at least one point	свободно формулираната разградка запазва поне една точка
-@msg	a gradient needs at least two stops	разградката се нуждае от поне две опорни точки
+@msg	a freeform gradient keeps at least one point	свободно формулираният градиент запазва поне една точка
+@msg	a gradient needs at least two stops	градиентът се нуждае от поне две опорни точки
 @msg	a graphic style named `{to}` already exists	графичен стил с име `{to}` вече съществува
 @msg	a page is missing	липсва страница
 @msg	a page out of range	страница извън диапазона
@@ -3714,7 +3714,7 @@ axis	Both	И двете
 @msg	no files to place	няма файлове за поставяне
 @msg	no format to export to	няма формат за експортиране
 @msg	no free recovery area	няма свободна зона за възстановяване
-@msg	no gradient stop or freeform point is selected	няма избран стоп на разградка или свободна точка
+@msg	no gradient stop or freeform point is selected	няма избран стоп на градиент или свободна точка
 @msg	no graphic style `{name}`	няма графичен стил `{name}`
 @msg	no graphic style `{n}`	няма графичен стил `{n}`
 @msg	no interaction in progress	няма текущо взаимодействие
@@ -3726,7 +3726,7 @@ axis	Both	И двете
 @msg	no perspective grid preset named `{name}`	няма предварителна настройка на перспективна мрежа с име `{name}`
 @msg	no plug-in {0} is installed	няма инсталирана приставка {0}
 @msg	no plug-in {id} is installed	няма инсталирана приставка {id}
-@msg	no point {i} (the gradient has {_1})	няма точка {i} (разградката има {_1})
+@msg	no point {i} (the gradient has {_1})	няма точка {i} (градиентът има {_1})
 @msg	no preset editor	няма редактор на предварителни настройки
 @msg	no previous transform	няма предишно трансформиране
 @msg	no print preset named `{base}`	няма предварителна настройка за печат с име „{base}“
@@ -3800,7 +3800,7 @@ axis	Both	И двете
 @msg	pattern missing	липсва мостра
 @msg	patterns nested too deeply are filled with mid-grey	мострите, вложени прекалено дълбоко, се запълват със средно сиво
 @msg	percent must be above 0 and at most 6400, not {p}	процентът трябва да е над 0 и най-много 6400, а не {p}
-@msg	pick a colour, gradient or pattern to save as a swatch	изберете цвят, разградка или мостра за запазване като образец
+@msg	pick a colour, gradient or pattern to save as a swatch	изберете цвят, градиент или мостра за запазване като образец
 @msg	plane must be left, right or ground	равнината трябва да е лява, дясна или земна
 @msg	plug-in ABI: {0}	ABI на плъгин: {0}
 @msg	plug-in exceeded its {0}	плъгинът надвиши своя {0}
@@ -3826,7 +3826,7 @@ axis	Both	И двете
 @msg	select a Live Paint group	изберете група за интерактивно оцветяване (Live Paint)
 @msg	select a blend	изберете преход (blend)
 @msg	select a clip group	изберете група за изрязване
-@msg	select a gradient mesh	изберете мрежа на разградка (gradient mesh)
+@msg	select a gradient mesh	изберете мрежа на градиент (gradient mesh)
 @msg	select a linked image: an embedded one has no file	изберете свързано изображение: вграденото няма файл
 @msg	select a repeat	изберете повторение (repeat)
 @msg	select a stroke with a variable width	изберете щрих с променлива дебелина
@@ -4499,7 +4499,7 @@ lighting	Light	Светлина
 	Keyboard Shortcuts	Клавишни комбинации
 	Kite	Хвърчило
 	LF (macOS, Linux)	LF (macOS, Linux)
-	Lab Spot Colors	Плътни цветове Lab
+	Lab Spot Colors	Спот цветове Lab
 	Landscape (flipped)	Пейзаж (обърнат)
 	Language Level 2	Езиково ниво 2
 	Language Level 3	Езиково ниво 3
