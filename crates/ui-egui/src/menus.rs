@@ -3119,6 +3119,42 @@ pub fn ruler_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Op
     });
 }
 
+/// The menus simple mode shows: File, Edit, View and Help with only the commands it keeps
+/// ([`crate::simple::keeps`]), and Help's Show Everything.
+fn simple_tree(tree: Vec<(&'static str, Vec<Item>)>) -> Vec<(&'static str, Vec<Item>)> {
+    fn keep(items: Vec<Item>) -> Vec<Item> {
+        let mut out: Vec<Item> = Vec::new();
+        for it in items {
+            match it {
+                Item::Cmd(_, id, ref p) if crate::simple::keeps(id, p) => out.push(it),
+                Item::Sub(label, kids) => {
+                    let kids = keep(kids);
+                    if !kids.is_empty() {
+                        out.push(Item::Sub(label, kids));
+                    }
+                }
+                Item::Sep if out.last().is_some_and(|l| !matches!(l, Item::Sep)) => out.push(Item::Sep),
+                _ => {}
+            }
+        }
+        while out.last().is_some_and(|l| matches!(l, Item::Sep)) {
+            out.pop();
+        }
+        out
+    }
+    let mut out: Vec<(&'static str, Vec<Item>)> = tree
+        .into_iter()
+        .filter(|(title, _)| matches!(*title, "File" | "Edit" | "View" | "Help"))
+        .map(|(title, items)| (title, keep(items)))
+        .filter(|(_, items)| !items.is_empty())
+        .collect();
+    if let Some((_, help)) = out.iter_mut().find(|(t, _)| *t == "Help") {
+        help.push(Item::Sep);
+        help.push(cp("Show Everything", "window.experience", json!({ "level": "all" })));
+    }
+    out
+}
+
 /// Render the menu bar.
 /// The in-window menu bar. Returns where its titles end (x): the bar itself takes the full width.
 pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
@@ -3143,6 +3179,8 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     // No application menu in the window (as in Illustrator): the bar starts at File on every
     // platform. The app's menu stays in the tree: the native Mac bar takes it from there.
     let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != crate::native_menu::APP_NAME).collect();
+    // simple mode: the everyday commands of File, Edit, View and Help, nothing more
+    let tree = if crate::simple::active(app) { simple_tree(tree) } else { tree };
     let (end, open) = egui::MenuBar::new()
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());

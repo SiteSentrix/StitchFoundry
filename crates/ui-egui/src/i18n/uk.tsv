@@ -5115,5 +5115,45 @@ machine	Stop	Зупинка
 	Tell us your machine to see its hoops and save in its format.	Вкажіть свою машину, щоб бачити її п’яльця й зберігати в її форматі.
 	Choose My Machine	Вибрати мою машину
 	Saved for your machine:	Збережено для вашої машини:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Фігура з тканини: машина зупиниться, щоб ви поклали тканину, і пришиє її
+	A heart, a star, a flower and more, ready to sew	Серце, зірка, квітка та інше, готове до вишивання
+	A name or a few words, ready to sew	Ім’я або кілька слів, готові до вишивання
+	A photo or drawing to turn into stitches	Фото або малюнок, що стане стібками
+	A picture	Картинка
+	Add Appliqué	Додати аплікацію
+	Add Appliqué…	Додати аплікацію…
+	Add Words	Додати слова
+	Add Words…	Додати слова…
+	Add a Picture…	Додати картинку…
+	Add a Shape	Додати фігуру
+	Add a Shape…	Додати фігуру…
+	Bigger	Більше
+	Choose a shape	Виберіть фігуру
+	Click a part of the design to change how it sews.	Клацніть частину візерунка, щоб змінити, як вона вишивається.
+	Click a part of the design to choose it, drag it to move it	Клацніть частину візерунка, щоб вибрати її, і перетягніть, щоб пересунути
+	Crown	Корона
+	Filled	Заливка
+	How tall	Висота
+	Just the outline	Лише контур
+	Not sewn	Не вишивається
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Поки нічого вишивати. Додайте слова, фігуру або картинку кнопками ліворуч.
+	Paw	Лапка
+	See the design sew on screen, stitch by stitch	Подивіться, як візерунок вишивається на екрані, стібок за стібком
+	Sew it as	Вишити як
+	Smaller	Менше
+	Smooth edge (satin)	Гладкий край (гладь)
+	Start a design from the Home screen.	Почніть візерунок на головному екрані.
+	Take back the last change	Скасувати останню зміну
+	The chosen part	Вибрана частина
+	The chosen parts	Вибрані частини
+	The design is bigger than the hoop: make it smaller before you sew.	Візерунок більший за п’яльця: зменште його перед вишиванням.
+	Thread colours	Кольори ниток
+	Turn Into Stitches	Перетворити на стібки
+	Turn it into stitches in your thread colours.	Перетворіть її на стібки в кольорах ваших ниток.
+	Watch It Sew	Дивитися вишивання
+	What should it say?	Що написати?
+	Write the design for your machine to its USB stick or folder	Записати візерунок для вашої машини на її флешку або в теку
+	Your design	Ваш візерунок
+	Show Everything	Показати все
 @msg	the design has no page	візерунок не має сторінки
 @msg	open or start a design first	спочатку відкрийте або почніть візерунок

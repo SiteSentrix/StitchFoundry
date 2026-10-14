@@ -10,6 +10,7 @@ Everything is a command (`embroidery.*`), so the same features work from the men
 the control channel, the CLI and the MCP server.
 
 - [Quick start](#quick-start)
+- [Simple mode](#simple-mode)
 - [My Machine](#my-machine)
 - [Digitizing basics](#digitizing-basics)
 - [Stitch types](#stitch-types)
@@ -534,10 +535,8 @@ standard threads.
 The Home screen asks **How do you work?** (also **Window › Experience**), and each answer picks a
 workspace and how much the Embroidery panel shows:
 
-- **New to embroidery** (Embroidery Basics workspace): the basic tools, no rulers or control bar,
-  and the Embroidery panel's everyday sections: lettering, monograms, templates, the design
-  library, clipart and Send to Machine. *Show everything* at the top of the panel brings the rest
-  back.
+- **New to embroidery** (simple mode, below): a few large labelled buttons in place of the
+  toolbar, **Your Design** in place of the panels, and short File, Edit, View and Help menus.
 - **I digitize designs** (Digitizing): every digitizing tool with rulers, the control bar and the
   Layers panel; the font creator, team names, buttonholes and exports, but not job orders or batch
   output.
@@ -546,6 +545,31 @@ workspace and how much the Embroidery panel shows:
 
 **Everything** (the start) shows every section in the Essentials workspace. Each is a command too:
 `window.experience {level: beginner|digitizer|business|all}`.
+
+### Simple mode
+
+For someone who would rather not learn a drawing program. The left column has big buttons, each
+with a one-line hint:
+
+- **Select**: click a part of the design to choose it, drag it to move it.
+- **Add Words…**: type a name or a few words and how tall they should be (8–80 mm, inches shown
+  too); they land in the middle of the hoop as smooth satin letters in the current thread
+  (`embroidery.addWords {text, height, color?}`).
+- **Add a Shape…**: a heart, star, flower, leaf, sun, moon, paw, crown or snowflake, ready to sew
+  in the middle of the hoop (`embroidery.addShape {name, size?}`).
+- **Add Appliqué…**: the same shapes as appliqué pieces: the machine stops for you to lay the
+  fabric, then sews it down (`embroidery.addShape {name, applique: true}`).
+- **Add a Picture…**: places a photo or drawing; **Turn Into Stitches** then digitizes it in your
+  thread colours.
+- **Watch It Sew** plays the design stitch by stitch; **Undo** takes back the last change.
+- **Save for My Machine** (below) writes the design for the machine.
+
+**Your Design** on the right shows, with nothing chosen, the design's size (mm and inches),
+stitches, thread colours and sewing time, and warns in red when it is bigger than the hoop. With a
+part chosen it asks how to **Sew it as** (Filled, Smooth edge (satin), Just the outline, Appliqué
+or Not sewn), its thread colour, **Smaller**, **Bigger** and **Delete**. The menus keep only File,
+Edit, View and Help items a beginner needs; **Help › Show Everything** (or the link under the
+buttons) goes back to the full program.
 
 ## Life size on screen
 

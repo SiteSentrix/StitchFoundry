@@ -5131,5 +5131,45 @@ machine	Stop	Остановка
 	Tell us your machine to see its hoops and save in its format.	Укажите свою машину, чтобы видеть её пяльцы и сохранять в её формате.
 	Choose My Machine	Выбрать мою машину
 	Saved for your machine:	Сохранено для вашей машины:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Фигура из ткани: машина остановится, чтобы вы положили ткань, и пришьёт её
+	A heart, a star, a flower and more, ready to sew	Сердце, звезда, цветок и другое, готовое к вышивке
+	A name or a few words, ready to sew	Имя или несколько слов, готовые к вышивке
+	A photo or drawing to turn into stitches	Фото или рисунок, который станет стежками
+	A picture	Картинка
+	Add Appliqué	Добавить аппликацию
+	Add Appliqué…	Добавить аппликацию…
+	Add Words	Добавить слова
+	Add Words…	Добавить слова…
+	Add a Picture…	Добавить картинку…
+	Add a Shape	Добавить фигуру
+	Add a Shape…	Добавить фигуру…
+	Bigger	Больше
+	Choose a shape	Выберите фигуру
+	Click a part of the design to change how it sews.	Щёлкните часть рисунка, чтобы изменить, как она вышивается.
+	Click a part of the design to choose it, drag it to move it	Щёлкните часть рисунка, чтобы выбрать её, и перетащите, чтобы сдвинуть
+	Crown	Корона
+	Filled	Заливка
+	How tall	Высота
+	Just the outline	Только контур
+	Not sewn	Не вышивается
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Пока нечего вышивать. Добавьте слова, фигуру или картинку кнопками слева.
+	Paw	Лапка
+	See the design sew on screen, stitch by stitch	Посмотрите, как рисунок вышивается на экране, стежок за стежком
+	Sew it as	Вышить как
+	Smaller	Меньше
+	Smooth edge (satin)	Гладкий край (гладь)
+	Start a design from the Home screen.	Начните рисунок на главном экране.
+	Take back the last change	Отменить последнее изменение
+	The chosen part	Выбранная часть
+	The chosen parts	Выбранные части
+	The design is bigger than the hoop: make it smaller before you sew.	Рисунок больше пяльцев: уменьшите его перед вышивкой.
+	Thread colours	Цвета ниток
+	Turn Into Stitches	Превратить в стежки
+	Turn it into stitches in your thread colours.	Превратите её в стежки в цветах ваших ниток.
+	Watch It Sew	Смотреть вышивку
+	What should it say?	Что написать?
+	Write the design for your machine to its USB stick or folder	Записать рисунок для вашей машины на её флешку или в папку
+	Your design	Ваш рисунок
+	Show Everything	Показать всё
 @msg	the design has no page	у рисунка нет страницы
 @msg	open or start a design first	сначала откройте или начните рисунок

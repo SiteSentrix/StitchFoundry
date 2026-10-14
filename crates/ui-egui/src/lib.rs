@@ -53,6 +53,7 @@ pub mod state;
 pub mod sysclip;
 pub mod theme;
 pub mod titlebar;
+pub mod simple;
 pub mod toolbar;
 mod touch;
 mod ui_fonts;
@@ -345,6 +346,8 @@ pub struct VectorcraftApp {
     pub canvas: CanvasCache,
     /// Embroidery mode: stitch overlay settings, the stitch player and its mesh.
     pub embroidery: embroidery::EmbroideryUi,
+    /// Simple mode's open windows (Add Words, the shape picker).
+    pub simple: simple::SimpleState,
     pub perf: Perf,
     /// macOS: the room the app bar keeps at its left for the window buttons over it, in points
     /// (0 where the OS draws no buttons over the app bar).
@@ -476,6 +479,7 @@ impl VectorcraftApp {
                 cursors: Default::default(),
             },
             embroidery: embroidery::EmbroideryUi::default(),
+            simple: simple::SimpleState::default(),
             perf: Perf::default(),
             titlebar_inset: 0.0,
             last_effect: None,
@@ -1221,9 +1225,12 @@ impl VectorcraftApp {
         font_menu::end_stale_preview(self, &ctx);
         floating::track(self, &ctx);
         let t = theme::Tokens::get(&ctx);
+        // simple mode (New to Embroidery): large labelled actions and Your Design in place of the
+        // toolbar, the control bar and the panels
+        let simple = simple::active(self);
         if self.ui.screen_mode < 2 {
             chrome::app_bar(self, ui);
-            if self.ui.control_bar {
+            if self.ui.control_bar && !simple {
                 chrome::control_bar(self, ui);
             }
         }
@@ -1231,11 +1238,16 @@ impl VectorcraftApp {
             chrome::status_bar(self, ui);
             chrome::hint_bar(self, ui);
         }
-        if self.ui.toolbar && self.ui.screen_mode < 3 {
-            toolbar::show(self, ui);
-        }
-        if self.ui.dock && self.ui.screen_mode < 3 {
-            dock::show(self, ui);
+        if simple && self.ui.screen_mode < 3 {
+            simple::left_bar(self, ui);
+            simple::right_panel(self, ui);
+        } else {
+            if self.ui.toolbar && self.ui.screen_mode < 3 {
+                toolbar::show(self, ui);
+            }
+            if self.ui.dock && self.ui.screen_mode < 3 {
+                dock::show(self, ui);
+            }
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| {
             if self.ui.screen_mode < 3 {
@@ -1243,8 +1255,12 @@ impl VectorcraftApp {
             }
             canvas::show(self, ui);
         });
-        dock::floating_panel(self, &ctx);
-        floating::show(self, &ctx);
+        if simple {
+            simple::windows(self, &ctx);
+        } else {
+            dock::floating_panel(self, &ctx);
+            floating::show(self, &ctx);
+        }
         panels::library_panel::show_window(self, &ctx);
         dialogs::show(self, &ctx);
         palette::show(self, &ctx);

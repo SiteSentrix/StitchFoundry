@@ -4711,5 +4711,45 @@ machine	Stop	停止
 	Tell us your machine to see its hoops and save in its format.	告诉我们您的机器，即可看到它的绣框并按它的格式保存。
 	Choose My Machine	选择我的机器
 	Saved for your machine:	已为您的机器保存：
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	布片形状：机器会停下让你放好布，然后把它缝上
+	A heart, a star, a flower and more, ready to sew	心形、星星、花朵等，可直接绣
+	A name or a few words, ready to sew	名字或几个字，可直接绣
+	A photo or drawing to turn into stitches	把照片或图画变成针迹
+	A picture	图片
+	Add Appliqué	添加贴布绣
+	Add Appliqué…	添加贴布绣…
+	Add Words	添加文字
+	Add Words…	添加文字…
+	Add a Picture…	添加图片…
+	Add a Shape	添加形状
+	Add a Shape…	添加形状…
+	Bigger	放大
+	Choose a shape	选择一个形状
+	Click a part of the design to change how it sews.	点击图案的某部分，更改它的绣法。
+	Click a part of the design to choose it, drag it to move it	点击图案的某部分选中它，拖动来移动它
+	Crown	皇冠
+	Filled	填满
+	How tall	高度
+	Just the outline	只绣轮廓
+	Not sewn	不绣
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	还没有要绣的内容。用左边的按钮添加文字、形状或图片。
+	Paw	爪印
+	See the design sew on screen, stitch by stitch	在屏幕上一针一针地看图案怎么绣
+	Sew it as	绣法
+	Smaller	缩小
+	Smooth edge (satin)	光滑边（缎面绣）
+	Start a design from the Home screen.	从主屏幕开始一个图案。
+	Take back the last change	撤消上一次更改
+	The chosen part	选中的部分
+	The chosen parts	选中的各部分
+	The design is bigger than the hoop: make it smaller before you sew.	图案比绣框大：绣之前请缩小。
+	Thread colours	线色
+	Turn Into Stitches	变成针迹
+	Turn it into stitches in your thread colours.	用你的线色把它变成针迹。
+	Watch It Sew	观看刺绣
+	What should it say?	要绣什么字？
+	Write the design for your machine to its USB stick or folder	把图案按你的机器格式写到U盘或文件夹
+	Your design	你的图案
+	Show Everything	显示全部
 @msg	the design has no page	图案没有页面
 @msg	open or start a design first	请先打开或开始一个图案
