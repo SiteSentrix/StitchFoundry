@@ -493,7 +493,8 @@ pub fn param_keys(doc: &str) -> Vec<String> {
 /// Parameter-name keys that name filesystem paths: fuzzing these with arbitrary strings could
 /// write files anywhere, so callers substitute a temp path.
 pub fn is_path_key(k: &str) -> bool {
-    k == "path"
+    // a folder too: commands that write files into one (send, sets of files, Keep Safe)
+    k == "path" || k == "folder"
 }
 
 /// A deterministic list of junk param objects for `doc` (the command's params doc): each

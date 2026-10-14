@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Keep Design Safe",
             [],
             None,
-            "{folder?: the My Designs folder (the myDesignsFolder preference, else Documents/StitchFoundry Designs)} save the design if it has changes: in place when it was opened from or saved as a StitchFoundry design, else as a new design in the folder (\"My design 1.stitchfoundry\", the next free number, or the opened file's name) that it then keeps → {saved: path | null}",
+            "{folder?: the folder for new designs (the myDesignsFolder preference when not given; the app gives My Designs: Documents/StitchFoundry Designs)} save the design if it has changes: in place when it was opened from or saved as a StitchFoundry design, else as a new design in the folder (\"My design 1.stitchfoundry\", the next free number, or the opened file's name) that it then keeps → {saved: path | null}",
             has_doc,
             keep_safe
         ),
@@ -71,9 +71,12 @@ fn keep_safe(s: &mut Session, p: &Value) -> Result<Value> {
         s.execute("document.save", &json!({}))?;
         return Ok(json!({ "saved": path }));
     }
+    // the folder is given (the app gives My Designs) or set as a preference: never guessed here,
+    // so a call with no folder writes nowhere it wasn't asked to
     let folder = match str_param(p, "folder") {
         Some(f) => std::path::PathBuf::from(f),
-        None => designs_folder(s).ok_or_else(|| bad(CMD, "no folder for My Designs: set `folder`"))?,
+        None if !s.prefs.my_designs_folder.trim().is_empty() => std::path::PathBuf::from(s.prefs.my_designs_folder.trim()),
+        None => return Err(bad(CMD, "missing `folder`: where to keep new designs (My Designs)")),
     };
     std::fs::create_dir_all(&folder).map_err(|e| bad(CMD, format!("can't make the folder {}: {e}", folder.display())))?;
     // an opened machine file keeps its name; a new design is My design N
