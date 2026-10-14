@@ -106,3 +106,7 @@ sync_github_name = false
 
 [people.giang17]
 real_name = "Giang Nguyen"
+
+[people.Silvertree2010]
+display_name = "Netter"
+sync_github_name = false
