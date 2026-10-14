@@ -308,6 +308,17 @@ pub(crate) fn f64_or(p: &Value, key: &str, default: f64) -> f64 {
 pub(crate) fn f64_req(p: &Value, key: &str, cmd: &str) -> Result<f64> {
     p.get(key).and_then(Value::as_f64).ok_or_else(|| bad(cmd, format!("missing number `{key}`")))
 }
+/// Error unless each of `keys` that `p` gives is a number (or null): an optional number read with
+/// [`f64_or`] would otherwise fall back to its default for a string such as `"60 mm"` (#1952).
+pub(crate) fn check_numbers(p: &Value, keys: &[&str], cmd: &str) -> Result<()> {
+    for key in keys {
+        match p.get(*key) {
+            None | Some(Value::Null) | Some(Value::Number(_)) => {}
+            Some(v) => return Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
+        }
+    }
+    Ok(())
+}
 pub(crate) fn bool_or(p: &Value, key: &str, default: bool) -> bool {
     p.get(key).and_then(Value::as_bool).unwrap_or(default)
 }
