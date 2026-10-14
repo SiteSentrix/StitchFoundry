@@ -1399,3 +1399,174 @@ fn a_filled_pencil_path_keeps_no_stroke() {
     let id = NodeId(s.execute("path.freehand", &json!({"points": pts})).unwrap()["id"].as_u64().unwrap());
     assert!(!s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint().is_none());
 }
+
+#[test]
+fn open_anchor_delete_splits_runs_without_new_connections() {
+    let cases = [
+        (vec![3], vec![vec![0, 1, 2], vec![4, 5, 6]]),
+        (vec![2, 4], vec![vec![0, 1], vec![5, 6]]),
+        (vec![2, 3], vec![vec![0, 1], vec![4, 5, 6]]),
+        (vec![0], vec![vec![1, 2, 3, 4, 5, 6]]),
+        (vec![6], vec![vec![0, 1, 2, 3, 4, 5]]),
+        (vec![0, 6], vec![vec![1, 2, 3, 4, 5]]),
+        (vec![1, 3, 5], vec![]),
+        (vec![0, 1, 2, 3, 4, 5, 6], vec![]),
+    ];
+    for (removed, expected) in cases {
+        let mut s = session();
+        let anchors: Vec<_> = (0..7).map(|i| json!({"x": 100 + 50 * i, "y": 100})).collect();
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        let original = path(&s, id).subpaths[0].clone();
+        let refs: Vec<_> = removed.iter().map(|i| [0, *i]).collect();
+        s.execute("select.anchors", &json!({"id": id.0, "anchors": refs})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let undo = undo_steps(&s);
+        s.execute("edit.clear", &json!({})).unwrap();
+        if expected.is_empty() {
+            assert!(s.doc().unwrap().doc.node(id).is_none(), "only isolated points remain: {removed:?}");
+            assert!(s.doc().unwrap().selection.objects.is_empty());
+        } else {
+            let result = path(&s, id);
+            assert_eq!(result.subpaths.len(), expected.len(), "deleted anchors: {removed:?}");
+            for (sp, indices) in result.subpaths.iter().zip(&expected) {
+                assert!(!sp.closed);
+                assert_eq!(sp.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), indices.iter().map(|&i| original.anchors[i].p).collect::<Vec<_>>());
+                for (segment, pair) in indices.windows(2).enumerate() {
+                    assert_eq!(sp.segment(segment), original.segment(pair[0]));
+                }
+            }
+            assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+        }
+        assert_eq!(undo_steps(&s), undo + 1);
+        assert!(s.doc().unwrap().selection.anchors.is_empty() && s.doc().unwrap().selection.segments.is_empty());
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+    }
+}
+
+#[test]
+fn open_anchor_delete_preserves_curves_appearance_and_history() {
+    let mut s = session();
+    rect(&mut s, 600.0, 300.0, 30.0, 40.0);
+    let data = "M100 100C120 60 180 140 200 100C220 60 280 140 300 100C320 60 380 140 400 100C420 60 480 140 500 100 M100 300L200 300L200 400Z";
+    let id = NodeId(s.execute("path.create", &json!({"d": data})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setStroke", &json!({"color": "#123456"})).unwrap();
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2]]})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let original = path(&s, id);
+    let undo = undo_steps(&s);
+    s.execute("path.deleteAnchors", &json!({})).unwrap();
+    let result = path(&s, id);
+    assert_eq!(result.subpaths.len(), 3, "two surviving runs plus the untouched contour");
+    for (sp, segment) in result.subpaths[..2].iter().zip([0, 3]) {
+        assert!(!sp.closed);
+        assert_eq!(sp.segment_count(), 1);
+        assert_eq!(sp.segment(0), original.subpaths[0].segment(segment));
+        assert!(!sp.anchors.first().unwrap().has_in() && !sp.anchors.last().unwrap().has_out());
+    }
+    assert_eq!(result.subpaths[2], original.subpaths[1]);
+    let after = s.doc().unwrap().doc.clone();
+    let mut restored = after.clone();
+    std::sync::Arc::make_mut(&mut restored).node_mut(id).unwrap().kind = before.node(id).unwrap().kind.clone();
+    assert_eq!(restored, before, "only the edited path geometry changes");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    assert!(s.doc().unwrap().selection.anchors.is_empty() && s.doc().unwrap().selection.segments.is_empty());
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Clear");
+    assert!(s.doc().unwrap().is_dirty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert!(!s.doc().unwrap().is_dirty());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, after);
+    assert!(s.doc().unwrap().is_dirty());
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_none(), "the second Delete removes the remainder");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, after);
+}
+
+#[test]
+fn open_anchor_delete_does_not_change_explicit_remove_anchors() {
+    for command in ["path.removeAnchors", "path.removeAnchor"] {
+        let mut s = session();
+        let anchors: Vec<_> = (0..5).map(|i| json!({"x": 100 + 50 * i, "y": 100})).collect();
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2]]})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let original = path(&s, id);
+        let undo = undo_steps(&s);
+        let params = if command == "path.removeAnchor" { json!({"id": id.0, "subpath": 0, "anchor": 2}) } else { json!({}) };
+        s.execute(command, &params).unwrap();
+        let result = path(&s, id);
+        assert_eq!(result.subpaths.len(), 1, "{command} keeps the path connected");
+        let sp = &result.subpaths[0];
+        assert!(!sp.closed);
+        assert_eq!(sp.segment_count(), 3);
+        assert_eq!(sp.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [0, 1, 3, 4].map(|i| original.subpaths[0].anchors[i].p));
+        assert_eq!(undo_steps(&s), undo + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
+fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
+    use vectorcraft_geom::Affine;
+    for xf in [
+        Affine::IDENTITY,
+        Affine::translate((23.0, -17.0)),
+        Affine::rotate(0.7),
+        Affine::translate((30.0, 40.0)) * Affine::scale_non_uniform(-2.0, 0.5),
+    ] {
+        let mut s = session();
+        let whole = rect(&mut s, 600.0, 100.0, 40.0, 30.0);
+        let untouched = rect(&mut s, 600.0, 300.0, 40.0, 30.0);
+        let id = NodeId(
+            s.execute(
+                "path.create",
+                &json!({"d": "M100 100C120 60 180 140 200 100C220 60 280 140 300 100C320 60 380 140 400 100C420 60 480 140 500 100"}),
+            )
+            .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        // Node::transform bakes coordinates. Deletion must not apply the transform a second time.
+        s.edit("Fixture transform", |d, _| {
+            d.node_mut(id).unwrap().transform(xf, false);
+            Ok(())
+        })
+        .unwrap();
+        let original = path(&s, id);
+        s.execute("select.set", &json!({"ids": [whole.0]})).unwrap();
+        s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2]], "mode": "add"})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let undo = undo_steps(&s);
+        s.execute("edit.clear", &json!({})).unwrap();
+        let st = s.doc().unwrap();
+        assert!(st.doc.node(whole).is_none());
+        assert_eq!(st.doc.node(untouched), before.node(untouched));
+        let result = path(&s, id);
+        assert_eq!(result.subpaths.len(), 2);
+        for (sp, segment) in result.subpaths.iter().zip([0, 3]) {
+            assert_eq!(sp.segment_count(), 1);
+            assert_eq!(sp.segment(0), original.subpaths[0].segment(segment));
+        }
+        assert_eq!(st.selection.objects, vec![id]);
+        assert!(st.selection.anchors.is_empty() && st.selection.segments.is_empty());
+        assert_eq!(undo_steps(&s), undo + 1);
+        let after = st.doc.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, after);
+        assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    }
+}
