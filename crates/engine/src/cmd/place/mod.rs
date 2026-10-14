@@ -222,7 +222,7 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
         // default, as Illustrator places one, it is its art's bounds.
         let framed = matches!(format.id, "svg" | "svgz") && crop && p.get("crop").is_some();
         let frame = doc.artboards.first().map(|a| a.rect).filter(|_| framed);
-        (art_of(layers.iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten())), frame)
+        (art_of(layer_art(&layers)), frame)
     } else {
         // The page placed is a PDF import's only one.
         let index = if pdf { 0 } else { page - 1 };
@@ -240,7 +240,16 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
 /// The placeable art of `layers` that lies on `board`.
 fn on_artboard(layers: &[Arc<Node>], board: Rect) -> Vec<Node> {
     let on_board = |c: &&Arc<Node>| c.visual_bounds().is_some_and(|b| b.intersect(board).area() > 0.0 || board.contains(b.origin()));
-    art_of(layers.iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten()).filter(on_board))
+    art_of(layer_art(layers).filter(on_board))
+}
+
+/// The objects of the placeable `layers`, a clipping layer as itself: its objects alone would lose
+/// their clip, and its clipping path would come in as a loose path.
+fn layer_art(layers: &[Arc<Node>]) -> impl Iterator<Item = &Arc<Node>> {
+    layers.iter().filter(|l| placeable(l)).flat_map(|l| match &l.kind {
+        NodeKind::Layer { clip: true, .. } => std::slice::from_ref(l),
+        _ => l.children().map_or(&[][..], Vec::as_slice),
+    })
 }
 
 /// A clipping path of rectangle `r`, with id `id`.
@@ -257,14 +266,15 @@ fn placeable(l: &Node) -> bool {
     l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })
 }
 
-/// The placeable art among `nodes`: guides left out, visible sublayers as groups.
+/// The placeable art among `nodes`: guides left out, visible sublayers as groups (clip groups for
+/// clipping layers).
 fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
     nodes
         .filter_map(|c| match &c.kind {
             NodeKind::Path { guide: true, .. } => None,
-            NodeKind::Layer { children, .. } => placeable(c).then(|| {
+            NodeKind::Layer { children, clip, .. } => placeable(c).then(|| {
                 let mut g = (**c).clone();
-                g.kind = NodeKind::Group { children: art_of(children.iter()).into_iter().map(Arc::new).collect(), clip: false };
+                g.kind = NodeKind::Group { children: art_of(children.iter()).into_iter().map(Arc::new).collect(), clip: *clip };
                 g
             }),
             _ => Some((**c).clone()),
