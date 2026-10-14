@@ -664,11 +664,19 @@ makes that design:
   **Lines apart** for every block, blocks of any size side by side read as one continuous quilting
   with no lines to match up.
 
-**A block** or **A border strip**: border strips are long and narrow (1 × 4″ to 3 × 10″); every
-pattern fits one, its motifs squeezed to the strip's height when the strip is narrower than they
-are. **Make Every Size…** (`embroidery.quiltBlock.set {folder, pattern, kind?: blocks|borders, sizes?, spacing?, format?}`)
+**A block**, **A border strip** or **A corner**: border strips are long and narrow (1 × 4″ to
+3 × 10″); every pattern fits one, its motifs squeezed to the strip's height when the strip is
+narrower than they are. A corner is the square where two strips meet: the border's row bends round
+a quarter circle, in from the right edge's middle and out through the bottom's, so the border turns
+the corner (made for the quilt's top left corner; turn the hoop, or the design on the machine, for
+the others; `corner: true`).
+
+**In the middle**: words, a shape, or a shape sewn as appliqué in the middle of a block, sewn first;
+the quilting goes round it, `clearance` (4 mm) away: a stipple or spiral leaves its outline out,
+and a row pattern that would cross it follows its outline instead and carries on, so it is still
+one line (`text`, `shape`, `applique`, `clearance`). **Make Every Size…** (`embroidery.quiltBlock.set {folder, pattern, kind?: blocks|borders|corners, sizes?, spacing?, format?}`)
 writes one machine file per block size to a folder or the USB stick, named by size ("Stipple 5x7
-in.vp3", "Border Swirls 7x1.5 in.vp3"): the usual sizes from 2 × 2″ to 9 × 14″, or the ones you list, so you pick the file that
+in.vp3", "Border Swirls 7x1.5 in.vp3", "Corner Swirls 2x2 in.vp3"): the usual sizes from 2 × 2″ to 9 × 14″, or the ones you list, so you pick the file that
 matches the size written on the tile. Sizes no hoop of yours takes are left out and said. The
 design's notes say how to mark and hoop. Patterns and wording are our own.
 

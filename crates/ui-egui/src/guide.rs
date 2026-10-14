@@ -56,6 +56,12 @@ pub struct GuideState {
     pub spacing: f64,
     /// A border strip rather than a block.
     pub border: bool,
+    /// A corner square where two border strips meet.
+    pub corner: bool,
+    /// Words, a shape (as appliqué or not) in the middle for the quilting to go round.
+    pub middle_text: String,
+    pub middle_shape: Option<&'static str>,
+    pub middle_applique: bool,
     /// The last thing that went wrong, shown under the step.
     pub error: Option<String>,
 }
@@ -78,6 +84,10 @@ impl Default for GuideState {
             pattern: "stipple",
             spacing: 6.0,
             border: false,
+            corner: false,
+            middle_text: String::new(),
+            middle_shape: None,
+            middle_applique: false,
             error: None,
         }
     }
@@ -287,11 +297,17 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                     .color(t.text_dim),
             );
             ui.horizontal(|ui| {
-                for (border, label) in [(false, tl!("A block")), (true, tl!("A border strip"))] {
-                    if ui.selectable_label(app.guide.border == border, RichText::new(label).size(15.0)).clicked() && app.guide.border != border {
-                        app.guide.border = border;
+                // (border, corner)
+                for (kind, label) in [((false, false), tl!("A block")), ((true, false), tl!("A border strip")), ((false, true), tl!("A corner"))] {
+                    let on = (app.guide.border, app.guide.corner) == kind;
+                    if ui.selectable_label(on, RichText::new(label).size(15.0)).clicked() && !on {
+                        (app.guide.border, app.guide.corner) = kind;
                         // a sensible size to start from
-                        app.guide.block = if border { (7.0, 1.5) } else { (5.0, 7.0) };
+                        app.guide.block = match kind {
+                            (true, _) => (7.0, 1.5),
+                            (_, true) => (2.0, 2.0),
+                            _ => (5.0, 7.0),
+                        };
                     }
                 }
             });
@@ -313,6 +329,24 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                 ui.label(RichText::new(tl!("Lines apart")).size(15.0));
                 ui.add(egui::Slider::new(&mut app.guide.spacing, 3.0..=12.0).suffix(" mm").fixed_decimals(0));
             });
+            // something in the middle for the quilting to go round (blocks only)
+            if !app.guide.border && !app.guide.corner {
+                ui.label(RichText::new(tl!("In the middle (you can leave this empty)")).size(15.0));
+                ui.add(egui::TextEdit::singleline(&mut app.guide.middle_text).hint_text(tl!("Words")).desired_width(300.0));
+                ui.horizontal_wrapped(|ui| {
+                    if ui.selectable_label(app.guide.middle_shape.is_none(), tl!("No shape")).clicked() {
+                        app.guide.middle_shape = None;
+                    }
+                    for name in vectorcraft_engine::cmd::embroidery_simple::SIMPLE_SHAPES {
+                        if ui.selectable_label(app.guide.middle_shape == Some(name), crate::simple::shape_name(name)).clicked() {
+                            app.guide.middle_shape = Some(name);
+                        }
+                    }
+                });
+                if app.guide.middle_shape.is_some() {
+                    ui.checkbox(&mut app.guide.middle_applique, tl!("Sew the shape as appliqué"));
+                }
+            }
             ui.label(
                 RichText::new(tl!("Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other."))
                     .size(13.0)
@@ -321,7 +355,15 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
             ui.horizontal(|ui| {
                 if crate::widgets::primary_button(ui, tl!("Make It")).clicked() {
                     let (w, h) = app.guide.block;
-                    make = Some(json!({ "what": "quilt", "width": w, "height": h, "pattern": app.guide.pattern, "spacing": app.guide.spacing }));
+                    let g = &app.guide;
+                    let block = !g.border && !g.corner;
+                    let text = g.middle_text.trim();
+                    make = Some(json!({
+                        "what": "quilt", "width": w, "height": h, "pattern": g.pattern, "spacing": g.spacing, "corner": g.corner,
+                        "text": (block && !text.is_empty()).then_some(text),
+                        "shape": if block { g.middle_shape } else { None },
+                        "applique": block && g.middle_applique,
+                    }));
                 }
                 if ui
                     .button(RichText::new(tl!("Make Every Size…")).size(15.0))
@@ -330,7 +372,11 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                 {
                     crate::picks::button(app, |app| {
                         if let Some(folder) = crate::picks::folder(app) {
-                            let kind = if app.guide.border { "borders" } else { "blocks" };
+                            let kind = match (app.guide.border, app.guide.corner) {
+                                (true, _) => "borders",
+                                (_, true) => "corners",
+                                _ => "blocks",
+                            };
                             let q = json!({ "folder": folder, "pattern": app.guide.pattern, "spacing": app.guide.spacing, "kind": kind });
                             match app.run("embroidery.quiltBlock.set", q) {
                                 Ok(r) => {

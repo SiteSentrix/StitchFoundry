@@ -219,7 +219,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Around",
             ["Embroidery"],
             None,
-            "{ids?, gap?: mm between the art and the outline (2; 0–50), width?: mm (satin 3, 0.5–10), kind?: satin|run|triple|knockdown|emboss|echo|stipple (satin), shape?: rectangle|circle (emboss and stipple; rectangle), extend?: mm the emboss or stipple shape reaches beyond (5; 0–200), count?: echo lines (3; 1–30), spacing?: mm between echo lines (3; 0.5–50), color?: \"#rrggbb\" (#1a1a1a)} bubble lettering, sticker and patch borders: one outline round the selected stitched art as it sews (lettering, shapes, lines), its holes left out, `gap` from it, sewn after everything else; knockdown: a light tatami fill of that area sewn first, under the art (towels, fleece); emboss: a rectangle or circle round it filled with light tatami but for the art's area, sewn first; echo quilting: `count` running-stitch outlines, the first `gap` from the art, each `spacing` further out; stipple: background quilting, a rectangle or circle round it filled with a meander but for the art's area, sewn first; a new path, selected → {id, pieces}",
+            "{ids?, gap?: mm between the art and the outline (2; 0–50), width?: mm (satin 3, 0.5–10), kind?: satin|run|triple|knockdown|emboss|echo|stipple (satin), shape?: rectangle|circle (emboss and stipple; rectangle), extend?: mm the emboss or stipple shape reaches beyond (5; 0–200), rect?: [x, y, width, height] mm (emboss and stipple: that rectangle instead), count?: echo lines (3; 1–30), spacing?: mm between echo lines (3; 0.5–50), color?: \"#rrggbb\" (#1a1a1a)} bubble lettering, sticker and patch borders: one outline round the selected stitched art as it sews (lettering, shapes, lines), its holes left out, `gap` from it, sewn after everything else; knockdown: a light tatami fill of that area sewn first, under the art (towels, fleece); emboss: a rectangle or circle round it filled with light tatami but for the art's area, sewn first; echo quilting: `count` running-stitch outlines, the first `gap` from the art, each `spacing` further out; stipple: background quilting, a rectangle or circle round it filled with a meander but for the art's area, sewn first; a new path, selected → {id, pieces}",
             has_selection,
             outline_around
         ),
@@ -2300,6 +2300,37 @@ fn sort_by_color(s: &mut Session, _p: &Value) -> Result<Value> {
     Ok(json!({ "moved": moved }))
 }
 
+/// The outline round the stitched art `ids` (and everything in them), `reach` mm out, pieces close
+/// together sharing one: its outer rings, in mm.
+pub(super) fn art_rings(s: &mut Session, ids: &[NodeId], reach: f64) -> Result<Vec<Vec<(f64, f64)>>> {
+    let mut inside = std::collections::HashSet::new();
+    {
+        let d = &s.doc()?.doc;
+        let mut stack: Vec<NodeId> = ids.to_vec();
+        while let Some(id) = stack.pop() {
+            if inside.insert(id)
+                && let Some(kids) = d.node(id).and_then(|n| n.children())
+            {
+                stack.extend(kids.iter().map(|k| k.id));
+            }
+        }
+    }
+    let plan = s.embroidery_plan().ok_or_else(|| bad("embroidery", "no document"))?;
+    let polys: Vec<sf_core::geom::Polygon> = plan
+        .design
+        .objects
+        .iter()
+        .zip(&plan.nodes)
+        .filter(|(_, n)| inside.contains(*n))
+        .flat_map(|(o, _)| sf_core::engine::object_polygons(o))
+        .filter(|p| p.outer.len() >= 3)
+        .collect();
+    let close = reach.max(1.0);
+    let wide = sf_core::geom::poly::offset(&sf_core::geom::poly::union(&polys), reach + close);
+    let grown = sf_core::geom::poly::offset(&wide, -close);
+    Ok(grown.iter().filter(|g| g.outer.len() >= 3).map(|g| g.outer.iter().map(|q| (q.x, q.y)).collect()).collect())
+}
+
 fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.outlineAround";
     let gap = super::embroidery_lettering::ranged(p, "gap", 0.0..=50.0, CMD, "`gap` is 0 to 50 mm")?.unwrap_or(2.0);
@@ -2392,7 +2423,16 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(CMD, "the art is too small to outline"));
         };
         let c = sf_core::Point::new((b.min.x + b.max.x) / 2.0, (b.min.y + b.max.y) / 2.0);
-        let ring: Vec<sf_core::Point> = if circle {
+        // a rectangle given outright (mm): a quilt block round the art
+        let given: Option<Vec<f64>> = p
+            .get("rect")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_f64).filter(|v| v.is_finite()).collect())
+            .filter(|v: &Vec<f64>| v.len() == 4 && v[2] > 0.0 && v[3] > 0.0 && v[2] < 5000.0 && v[3] < 5000.0);
+        let ring: Vec<sf_core::Point> = if let Some(r) = given {
+            let (x0, y0, x1, y1) = (r[0], r[1], r[0] + r[2], r[1] + r[3]);
+            vec![sf_core::Point::new(x0, y0), sf_core::Point::new(x1, y0), sf_core::Point::new(x1, y1), sf_core::Point::new(x0, y1)]
+        } else if circle {
             let r = (b.width().hypot(b.height())) / 2.0 + extend;
             (0..96).map(|i| f64::from(i) * std::f64::consts::TAU / 96.0).map(|a| sf_core::Point::new(c.x + r * a.cos(), c.y + r * a.sin())).collect()
         } else {

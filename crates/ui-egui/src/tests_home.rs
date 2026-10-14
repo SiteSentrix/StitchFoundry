@@ -295,6 +295,8 @@ fn make_a_design_guide_walks_from_words_to_saving() {
     let s = guide_strings(&mut app);
     has(&s, "What size is the tile?");
     has(&s, "A border strip");
+    has(&s, "A corner");
+    has(&s, "In the middle (you can leave this empty)");
     has(&s, "Pebbles");
     has(&s, "Stipple");
     crate::guide::make_it(&mut app, json!({"what": "quilt", "width": 4, "height": 4, "pattern": "waves"}));
