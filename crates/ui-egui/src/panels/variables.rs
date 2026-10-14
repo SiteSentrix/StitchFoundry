@@ -293,12 +293,37 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         delete_active_dataset(app);
     }
     ui.separator();
+    if widgets::menu_item(ui, tl!("Import Data Sets…"), true, false) {
+        import_datasets(app);
+    }
+    if widgets::menu_item(ui, tl!("Export Data Sets…"), !vars.is_empty(), false) {
+        export_datasets(app);
+    }
+    ui.separator();
     // What the highlighted variable drives, selected — its bindings are left alone.
     if widgets::menu_item(ui, tl!("Select Bound Object"), !highlighted_bound.is_empty(), false) {
         select_bound_object(app);
     }
     if widgets::menu_item(ui, tl!("Select All Bound Objects"), !bound.is_empty(), false) {
         app.run("select.set", json!({"ids": bound})).ok();
+    }
+}
+
+/// Variables panel: Import Data Sets… — pick a CSV and run `dataset.import`.
+fn import_datasets(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick { filters: vec![("CSV", &["csv", "txt"])], ..Default::default() };
+    let Some(path) = crate::picks::open(app, &pick) else { return };
+    if let Err(e) = app.run("dataset.import", json!({"path": path})) {
+        app.status(e);
+    }
+}
+
+/// Variables panel: Export Data Sets… — pick a path and run `dataset.export`.
+fn export_datasets(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick { name: "datasets.csv".into(), filters: vec![("CSV", &["csv"])], ..Default::default() };
+    let Some(path) = crate::picks::save(app, &pick) else { return };
+    if let Err(e) = app.run("dataset.export", json!({"path": path})) {
+        app.status(e);
     }
 }
 
