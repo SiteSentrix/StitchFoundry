@@ -138,7 +138,7 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     };
     let Some(target) = target else { return };
     let zoom = if how == "view.actualSize" {
-        actual_size_zoom(app.session.prefs.display_print_size)
+        actual_size_zoom(app.session.prefs.display_print_size, app.session.prefs.screen_points_per_inch)
     } else {
         let zx = (rect.width() as f64 - 60.0) / target.width().max(1.0);
         let zy = (rect.height() as f64 - 60.0) / target.height().max(1.0);
@@ -759,8 +759,12 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 /// Size at 100% Zoom off, one document point is one screen point. On, one document inch (72 pt)
 /// fills an inch of the screen as the system counts it: 96 screen points, the reference density
 /// that display scaling is set against (a CSS inch), whatever the scale factor.
-pub(crate) fn actual_size_zoom(display_print_size: bool) -> f64 {
-    if display_print_size { 96.0 / 72.0 } else { 1.0 }
+/// The zoom of View › Actual Size: one document point per screen point, or with Display Print
+/// Size at 100% Zoom on, an inch of the document over `points_per_inch` screen points (life size
+/// once View › Calibrate Life Size… has measured the screen; 96 before).
+pub(crate) fn actual_size_zoom(display_print_size: bool, points_per_inch: f64) -> f64 {
+    let ppi = if points_per_inch.is_finite() { points_per_inch.clamp(40.0, 400.0) } else { 96.0 };
+    if display_print_size { ppi / 72.0 } else { 1.0 }
 }
 
 /// Zoom view `vm` of the canvas `rect` to `zoom` (clamped to the zoom range), keeping the document
@@ -3183,6 +3187,15 @@ mod tests {
         app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
         app.run("view.actualSize", json!({})).unwrap();
         assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12, "an inch is 96 screen points");
+        // NEW-33: calibrated, an inch is what the screen measured
+        app.run("ui.calibrateLifeSize", json!({"pointsPerInch": 120})).unwrap();
+        app.run("view.actualSize", json!({})).unwrap();
+        assert!((app.view().unwrap().zoom - 120.0 / 72.0).abs() < 1e-12);
+        assert_eq!(app.session.prefs.screen_points_per_inch, 120.0);
+        assert!(app.run("ui.calibrateLifeSize", json!({"pointsPerInch": 4000})).is_err());
+        // without a value it opens the calibration window
+        app.run("ui.calibrateLifeSize", json!({})).unwrap();
+        assert!(app.ui.life_size.open && app.ui.life_size.ppi == 120.0);
     }
 
     /// Performance › Animated Zoom (#394): the Zoom tool dragged sideways zooms about where it was

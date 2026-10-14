@@ -42,6 +42,7 @@ pub mod help;
 pub mod import_pdf;
 pub mod layer_options;
 pub mod layers_panel_options;
+pub mod life_size;
 pub mod liquify;
 pub mod missing_fonts;
 pub mod missing_links;
@@ -359,6 +360,7 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
     help::show(app, ctx);
+    life_size::show(app, ctx);
     settle(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and
     // its first field is to take the keyboard focus (`focus_id`, until a field takes it).

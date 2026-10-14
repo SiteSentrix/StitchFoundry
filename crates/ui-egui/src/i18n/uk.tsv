@@ -5072,3 +5072,10 @@ machine	Stop	Зупинка
 	Density Map	Карта щільності
 	Density map	Карта щільності
 	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Розфарбувати дизайн за товщиною нитки: синій — один шар, червоний — так щільно, як позначає «Перевірити дизайн»
+	Calibrate Life Size…	Відкалібрувати натуральний розмір…
+	Calibrate Life Size	Відкалібрувати натуральний розмір
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Прикладіть до екрана лінійку або банківську картку й змінюйте розмір, доки поділки не збігатимуться. Тоді «Реальний розмір» показуватиме дизайни в натуральну величину.
+	Bank card	Банківська картка
+	Screen points per inch	Точок екрана на дюйм
+	Use This Size	Використати цей розмір
+	Screen Points per Inch at Life Size	Точок екрана на дюйм у натуральну величину

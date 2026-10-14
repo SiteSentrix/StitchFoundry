@@ -5117,3 +5117,10 @@ machine	Stop	Zastavení
 	Density Map	Mapa hustoty
 	Density map	Mapa hustoty
 	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Obarví motiv podle toho, jak hluboko leží nit: modrá jedna vrstva, červená tak hustá, jak ji označí Kontrola motivu
+	Calibrate Life Size…	Kalibrovat skutečnou velikost…
+	Calibrate Life Size	Kalibrovat skutečnou velikost
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Přiložte k obrazovce pravítko nebo platební kartu a měňte velikost, dokud se značky neshodují. Skutečná velikost pak zobrazí motivy v životní velikosti.
+	Bank card	Platební karta
+	Screen points per inch	Bodů obrazovky na palec
+	Use This Size	Použít tuto velikost
+	Screen Points per Inch at Life Size	Bodů obrazovky na palec ve skutečné velikosti

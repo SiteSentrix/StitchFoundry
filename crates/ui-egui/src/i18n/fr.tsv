@@ -5100,3 +5100,10 @@ machine	Stop	Arrêt
 	Density Map	Carte de densité
 	Density map	Carte de densité
 	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Colore le dessin selon l’épaisseur du fil : bleu une couche, rouge aussi dense que ce que signale Vérifier le dessin
+	Calibrate Life Size…	Calibrer la taille réelle…
+	Calibrate Life Size	Calibrer la taille réelle
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Tenez une règle ou une carte bancaire contre l’écran et changez la taille jusqu’à ce que les repères coïncident. Taille réelle affichera alors les dessins grandeur nature.
+	Bank card	Carte bancaire
+	Screen points per inch	Points d’écran par pouce
+	Use This Size	Utiliser cette taille
+	Screen Points per Inch at Life Size	Points d’écran par pouce en taille réelle

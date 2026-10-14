@@ -5086,3 +5086,10 @@ machine	Stop	停止
 	Density Map	密度マップ
 	Density map	密度マップ
 	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	糸の重なりの深さで色分け：青は 1 層、赤は「デザインをチェック」が密集と判定する深さ
+	Calibrate Life Size…	実寸を校正…
+	Calibrate Life Size	実寸を校正
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	定規またはカードを画面に当て、目盛りが合うまでサイズを調整してください。以後 100% 表示でデザインが実寸で表示されます。
+	Bank card	カード
+	Screen points per inch	画面ポイント/インチ
+	Use This Size	このサイズを使用
+	Screen Points per Inch at Life Size	実寸時の画面ポイント/インチ

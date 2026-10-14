@@ -4451,3 +4451,10 @@ machine	Stop	停止
 	Density Map	密度圖
 	Density map	密度圖
 	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	依繡線疊加的厚度為圖案著色：藍色為一層，紅色為「檢查圖案」標為過密的厚度
+	Calibrate Life Size…	校準實際尺寸…
+	Calibrate Life Size	校準實際尺寸
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	將尺或銀行卡貼在螢幕上，調整大小直到刻度對齊。之後「實際大小」將按實物尺寸顯示圖案。
+	Bank card	銀行卡
+	Screen points per inch	每英寸螢幕點數
+	Use This Size	使用此尺寸
+	Screen Points per Inch at Life Size	實物尺寸時的每英寸螢幕點數

@@ -5090,3 +5090,10 @@ machine	Stop	Parada
 	Density Map	Mapa de densidad
 	Density map	Mapa de densidad
 	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Colorea el diseño según la profundidad del hilo: azul una capa, rojo tan denso como lo marca Comprobar diseño
+	Calibrate Life Size…	Calibrar tamaño real…
+	Calibrate Life Size	Calibrar tamaño real
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Sujete una regla o una tarjeta bancaria contra la pantalla y cambie el tamaño hasta que las marcas coincidan. Tamaño real mostrará entonces los diseños a su tamaño verdadero.
+	Bank card	Tarjeta bancaria
+	Screen points per inch	Puntos de pantalla por pulgada
+	Use This Size	Usar este tamaño
+	Screen Points per Inch at Life Size	Puntos de pantalla por pulgada a tamaño real
