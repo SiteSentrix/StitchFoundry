@@ -490,6 +490,9 @@ pub struct Renderer {
     isolation: Option<(u64, usize, NodeId, Vec<NodeId>)>,
     /// Drawing inside the isolated container or a dimmed object: nothing further dims.
     isolation_settled: bool,
+    /// The art the last frame drew with Overprint Preview or Separations Preview: the next frame
+    /// draws it again for the objects that have not changed ([`proof::prepare`]).
+    proof_art: Option<proof::Prepared>,
 }
 
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
@@ -592,6 +595,7 @@ impl Renderer {
             raster: vello_cpu::RasterizerSettings::default(),
             isolation: None,
             isolation_settled: false,
+            proof_art: None,
         }
     }
 
@@ -616,7 +620,7 @@ impl Renderer {
         }
         // The document's own symbols: proofing rewrites the colors and blend modes of their art.
         self.check_symbols(doc);
-        let prepared = proof::prepare(doc, opts);
+        let prepared = proof::prepare(doc, opts, &mut self.proof_art);
         let doc: &Document = &prepared;
         let w = width.clamp(1, u16::MAX as u32) as u16;
         let h = height.clamp(1, u16::MAX as u32) as u16;

@@ -1136,6 +1136,149 @@ fn rasters_follow_the_view_options() {
     draws_as_new(&mut d, &isolated, &on_white, unchanged);
 }
 
+/// A document for the proof previews: a cyan square, a magenta circle over it whose black stroke
+/// overprints, a white square over the cyan one that overprints, a blurred rectangle in spot color
+/// `Spot`, and an instance of symbol `S`, a group holding a yellow square.
+fn proof_doc() -> Document {
+    use vectorcraft_geom::shapes::{ellipse, rectangle};
+    let mut d = Document::new(200.0, 100.0);
+    let orange = Color::cmyk(0.0, 0.6, 1.0, 0.0);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Spot".into(), paint: Paint::solid(orange), global: true, spot: true });
+    let cyan = filled(&mut d, rectangle(Rect::new(10.0, 10.0, 90.0, 90.0)), Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), vec![]);
+    let black = Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let ring = vectorcraft_doc::Appearance::basic(Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), black, 4.0);
+    let mut circle = Node::path(d.alloc_id(), ellipse(Rect::new(40.0, 20.0, 100.0, 80.0)), ring);
+    circle.appearance.stroke_mut().unwrap().overprint = true;
+    let mut white = filled(&mut d, rectangle(Rect::new(20.0, 30.0, 40.0, 50.0)), Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0)), vec![]);
+    white.appearance.fill_mut().unwrap().overprint = true;
+    let spot = Paint::Solid { color: orange, swatch: Some("Spot".into()), tint: 1.0 };
+    let blur = effect("blur.gaussian", serde_json::json!({"radius": 1.0}));
+    let spot = filled(&mut d, rectangle(Rect::new(110.0, 10.0, 150.0, 50.0)), spot, vec![blur]);
+    let yellow = filled(&mut d, rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), Paint::solid(Color::cmyk(0.0, 0.0, 1.0, 0.0)), vec![]);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(yellow)]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((175.0, 75.0)) });
+    with_art(d, vec![cyan, circle, white, spot, instance])
+}
+
+/// Overprint Preview, and Separations Preview showing `plates`, which turns Overprint Preview on
+/// too (as the canvas draws them).
+fn proof_views(plates: &[&str]) -> (RenderOptions, RenderOptions) {
+    let overprint = RenderOptions { overprint_preview: true, ..Default::default() };
+    let proof = proof::ProofSetup { separations: Some(plates.iter().map(|p| p.to_string()).collect()), ..Default::default() };
+    (overprint.clone(), RenderOptions { proof: Some(proof), ..overprint })
+}
+
+/// [`proof_views`] with every plate of [`proof_doc`].
+fn every_plate() -> (RenderOptions, RenderOptions) {
+    proof_views(&["Cyan", "Magenta", "Yellow", "Black", "Spot"])
+}
+
+/// With Overprint Preview or Separations Preview on, a second frame of an unchanged document draws
+/// the art the first prepared for the preview: it makes no geometry entries. After an object
+/// moves, a frame makes them for the object and its layer only. A frame drawn with neither preview
+/// lets go of the art, and each frame drawn with a preview draws what a new renderer draws.
+#[test]
+fn proof_previews_keep_their_art_between_frames() {
+    let _fonts = fonts_steady();
+    let d = proof_doc();
+    let (overprint, separations) = every_plate();
+    let frame = |r: &mut Renderer, d: &Document, opts: &RenderOptions| r.render(d, 200, 100, Affine::IDENTITY, opts).pixels;
+    let geometry = |r: &Renderer| r.geom.keys().copied().collect::<std::collections::HashSet<_>>();
+    for opts in [&overprint, &separations] {
+        let mut r = Renderer::new();
+        let first = frame(&mut r, &d, opts);
+        let kept = geometry(&r);
+        assert!(frame(&mut r, &d, opts) == first);
+        assert_eq!(geometry(&r), kept, "the second frame makes no geometry entries");
+        // The cyan square moves 5 pt right.
+        let mut moved = d.clone();
+        let square = moved.layers[0].children().unwrap()[0].id;
+        moved.node_mut(square).unwrap().transform(Affine::translate((5.0, 0.0)), false);
+        assert!(frame(&mut r, &moved, opts) == frame(&mut Renderer::new(), &moved, opts));
+        assert_eq!(geometry(&r).difference(&kept).count(), 2, "the square and its layer");
+        frame(&mut r, &moved, &RenderOptions::default());
+        assert!(r.proof_art.is_none(), "drawn without the previews, the renderer keeps no art for them");
+    }
+}
+
+/// With Overprint Preview or Separations Preview on, a renderer draws what a new renderer draws
+/// after a change to the art or to what the previews read: an object recolored, Discard White
+/// Overprint turned off, a symbol's art recolored (its instance shows the plates of the new art),
+/// the spot color redefined, a spot color in a color group redefined, the Spot Colors option set
+/// to CMYK values, a plate hidden, Simulate Paper Color, another proof profile, and one preview
+/// after the other.
+#[test]
+fn proof_previews_draw_changes_as_a_new_renderer_does() {
+    let _fonts = fonts_steady();
+    let (overprint, separations) = every_plate();
+    let unchanged = |_: &mut Document| {};
+    let recolor_square = |d: &mut Document| {
+        let square = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(square).unwrap().appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 1.0, 0.0)));
+    };
+    let recolor_symbol = |d: &mut Document| {
+        let mut art = (*d.symbols[0].art).clone();
+        if let Some(square) = art.children_mut().and_then(|c| c.first_mut()) {
+            Arc::make_mut(square).appearance.set_fill(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)));
+        }
+        d.symbols[0].art = Arc::new(art);
+    };
+    for opts in [&overprint, &separations] {
+        draws_as_new(&mut proof_doc(), opts, opts, recolor_square);
+        draws_as_new(&mut proof_doc(), opts, opts, |d| d.setup.discard_white_overprint = false);
+    }
+    draws_as_new(&mut proof_doc(), &separations, &separations, recolor_symbol);
+    draws_as_new(&mut proof_doc(), &separations, &separations, |d| {
+        if let Some(s) = d.swatch_mut("Spot") {
+            s.paint = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
+        }
+    });
+    // A square in spot color `Lab Spot`, defined in Lab in a color group, on its own plate.
+    let lab_doc = || {
+        let mut d = proof_doc();
+        let lab = Color::lab(50.0, 60.0, 40.0);
+        let swatch = vectorcraft_color::Swatch { name: "Lab Spot".into(), paint: Paint::solid(lab), global: true, spot: true };
+        d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Lab".into(), swatches: vec![swatch] });
+        let fill = Paint::Solid { color: lab, swatch: Some("Lab Spot".into()), tint: 1.0 };
+        let square = filled(&mut d, vectorcraft_geom::shapes::rectangle(Rect::new(115.0, 60.0, 155.0, 95.0)), fill, vec![]);
+        with_art(d, vec![square])
+    };
+    let lab_plate = proof_views(&["Cyan", "Magenta", "Yellow", "Black", "Lab Spot"]).1;
+    draws_as_new(&mut lab_doc(), &lab_plate, &lab_plate, |d| {
+        if let Some(s) = d.swatch_mut("Lab Spot") {
+            s.paint = Paint::solid(Color::lab(70.0, -40.0, 30.0));
+        }
+    });
+    draws_as_new(&mut lab_doc(), &lab_plate, &lab_plate, |d| d.spot_use_lab = false);
+    let hidden = proof_views(&["Magenta", "Yellow", "Black", "Spot"]).1;
+    draws_as_new(&mut proof_doc(), &separations, &hidden, unchanged);
+    let with = |f: fn(&mut proof::ProofSetup)| {
+        let mut opts = separations.clone();
+        if let Some(p) = &mut opts.proof {
+            f(p);
+        }
+        opts
+    };
+    draws_as_new(&mut proof_doc(), &separations, &with(|p| p.simulate_paper = true), unchanged);
+    let device = with(|p| p.target = proof::ProofTarget::Cmyk(vectorcraft_color::cms::DEVICE_CMYK.into()));
+    draws_as_new(&mut proof_doc(), &separations, &device, unchanged);
+    let cyan = proof_views(&["Cyan"]).1;
+    draws_as_new(&mut proof_doc(), &overprint, &cyan, unchanged);
+    draws_as_new(&mut proof_doc(), &cyan, &overprint, unchanged);
+    // On the Yellow plate the instance is solid while its art is yellow, and blank once it is cyan.
+    let yellow = proof_views(&["Yellow"]).1;
+    let mut d = proof_doc();
+    let mut r = Renderer::new();
+    let instance = |r: &mut Renderer, d: &Document| {
+        let pixels = r.render(d, 200, 100, Affine::IDENTITY, &yellow).pixels;
+        Rendered { width: 200, height: 100, pixels }.pixel(175, 75)
+    };
+    assert_eq!(instance(&mut r, &d), [0, 0, 0, 255]);
+    recolor_symbol(&mut d);
+    assert_eq!(instance(&mut r, &d), [255, 255, 255, 255]);
+}
+
 /// A thumbnail of an object under a filter that treats color channels apart (Color Halftone) is
 /// made again when the document's color mode changes: CMYK documents screen ink channels, RGB
 /// documents light ones.
