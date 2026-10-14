@@ -93,11 +93,10 @@ fn size(w: f64, h: f64) -> String {
 
 /// The hoop to make the project in: `hoop` if given, else the smallest of My Machine's hoops (or
 /// the usual ones) whose field holds `need` either way round. → (newDesign's `hoop`, field w, h).
-fn pick_hoop(s: &mut Session, p: &Value, need: (f64, f64)) -> Result<(Value, f64, f64)> {
-    const CMD: &str = "embroidery.ith.make";
+pub(super) fn pick_hoop(s: &mut Session, p: &Value, need: (f64, f64), cmd: &str) -> Result<(Value, f64, f64)> {
     let fits = |w: f64, h: f64| (w >= need.0 && h >= need.1) || (w >= need.1 && h >= need.0);
     if let Some(name) = str_param(p, "hoop") {
-        let hoop = super::embroidery_hoops::find_hoop(s, name).ok_or_else(|| bad(CMD, format!("unknown hoop `{name}`")))?;
+        let hoop = super::embroidery_hoops::find_hoop(s, name).ok_or_else(|| bad(cmd, format!("unknown hoop `{name}`")))?;
         return Ok((json!(hoop.name), hoop.width, hoop.height));
     }
     let mine = s.execute("embroidery.myMachine", &json!({}))?;
@@ -116,7 +115,7 @@ fn pick_hoop(s: &mut Session, p: &Value, need: (f64, f64)) -> Result<(Value, f64
     }
     hoops.sort_by(|a, b| (a.1 * a.2).total_cmp(&(b.1 * b.2)));
     let (name, w, h) =
-        hoops.into_iter().find(|(_, w, h)| fits(*w, *h)).ok_or_else(|| bad(CMD, "none of the hoops is big enough: name a larger `hoop`"))?;
+        hoops.into_iter().find(|(_, w, h)| fits(*w, *h)).ok_or_else(|| bad(cmd, "none of the hoops is big enough: name a larger `hoop`"))?;
     Ok((json!(name), w, h))
 }
 
@@ -154,7 +153,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     sf_core::Rgb::from_hex(&color).ok_or_else(|| bad(CMD, "`color` is \"#rrggbb\""))?;
     // a panel needs a 5×7-class hoop; a finished piece its own size
     let need = if pr.panel { (118.0 + 2.0 * MARGIN, 160.0 + 2.0 * MARGIN) } else { (pr.finished.0 + 2.0 * MARGIN, pr.finished.1 + 2.0 * MARGIN) };
-    let (hoop, fw, fh) = pick_hoop(s, p, need)?;
+    let (hoop, fw, fh) = pick_hoop(s, p, need, CMD)?;
     let (long, short) = (fw.max(fh) - 2.0 * MARGIN, fw.min(fh) - 2.0 * MARGIN);
     // the piece sewn in the hoop: a panel as big as the field allows (no bigger than the front),
     // or the finished piece itself

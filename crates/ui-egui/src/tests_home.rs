@@ -290,6 +290,13 @@ fn make_a_design_guide_walks_from_words_to_saving() {
     has(&s, "Little pillow front, 8″ square");
     crate::guide::make_it(&mut app, json!({"what": "ith", "project": "mug-rug", "text": "Hi"}));
     assert_eq!(app.guide.step, Step::Colours, "{:?}", app.guide.error);
+    // quilting for a tile: the size and pattern, then a block made
+    (app.guide.what, app.guide.step) = (Some("quilt"), Step::Details);
+    let s = guide_strings(&mut app);
+    has(&s, "What size is the tile?");
+    has(&s, "Stipple");
+    crate::guide::make_it(&mut app, json!({"what": "quilt", "width": 4, "height": 4, "pattern": "waves"}));
+    assert_eq!(app.guide.step, Step::Colours, "{:?}", app.guide.error);
     (app.guide.what, app.guide.step) = (Some("words"), Step::Hoop);
     let s = guide_strings(&mut app);
     has(&s, "Which hoop will you use?");
