@@ -54,6 +54,8 @@ pub struct GuideState {
     pub block: (f64, f64),
     pub pattern: &'static str,
     pub spacing: f64,
+    /// A border strip rather than a block.
+    pub border: bool,
     /// The last thing that went wrong, shown under the step.
     pub error: Option<String>,
 }
@@ -75,6 +77,7 @@ impl Default for GuideState {
             block: (5.0, 7.0),
             pattern: "stipple",
             spacing: 6.0,
+            border: false,
             error: None,
         }
     }
@@ -284,6 +287,15 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                     .color(t.text_dim),
             );
             ui.horizontal(|ui| {
+                for (border, label) in [(false, tl!("A block")), (true, tl!("A border strip"))] {
+                    if ui.selectable_label(app.guide.border == border, RichText::new(label).size(15.0)).clicked() && app.guide.border != border {
+                        app.guide.border = border;
+                        // a sensible size to start from
+                        app.guide.block = if border { (7.0, 1.5) } else { (5.0, 7.0) };
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
                 ui.label(RichText::new(tl!("Width")).size(15.0));
                 ui.add(egui::DragValue::new(&mut app.guide.block.0).range(1.0..=14.0).speed(0.25).suffix(" in"));
                 ui.label(RichText::new(tl!("Height")).size(15.0));
@@ -318,7 +330,8 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                 {
                     crate::picks::button(app, |app| {
                         if let Some(folder) = crate::picks::folder(app) {
-                            let q = json!({ "folder": folder, "pattern": app.guide.pattern, "spacing": app.guide.spacing });
+                            let kind = if app.guide.border { "borders" } else { "blocks" };
+                            let q = json!({ "folder": folder, "pattern": app.guide.pattern, "spacing": app.guide.spacing, "kind": kind });
                             match app.run("embroidery.quiltBlock.set", q) {
                                 Ok(r) => {
                                     let n = r["files"].as_array().map_or(0, Vec::len);
@@ -391,6 +404,7 @@ fn pattern_name(name: &str) -> &str {
         "Swirls" => tl!("Swirls"),
         "Loops" => tl!("Loops"),
         "Feathers" => tl!("Feathers"),
+        "Pebbles" => tl!("Pebbles"),
         "Waves" => tl!("Waves"),
         "Squares spiral" => tl!("Squares spiral"),
         "Crosshatch" => tl!("Crosshatch"),
