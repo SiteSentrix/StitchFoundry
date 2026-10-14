@@ -57,6 +57,26 @@
 
 [`docs/embroidery.md`](docs/embroidery.md) covers it all as you use it.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/stitchfoundry-home.png" alt="The Home screen: start a design for your hoop, first steps, samples and tips"><br><sub><b>Home.</b> Start a design the size of your hoop, follow the first steps or open a sample.</sub></td>
+    <td width="50%"><img src="docs/images/stitchfoundry-sample.png" alt="The Sun and Moon sample: a satin-edged sun with a fill centre and a fill crescent moon"><br><sub><b>Stitches on the canvas.</b> The Sun and Moon sample, shown thread by thread as it will sew.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/stitchfoundry-applique-and-print.png" alt="Appliqué pieces in gingham, denim and plain fabric, a foil star, a printed band and coil and square-loop runs"><br><sub><b>Appliqué, foil and print.</b> Fabric pieces with their tack-down and cover stitches, a foil star, a printed band and two motif runs.</sub></td>
+    <td><img src="docs/images/stitchfoundry-sequins-and-beads.png" alt="A heart filled with sequins, a ring of stones, beads, a couched cord, boring holes and star sequins"><br><sub><b>Sequins, stones, beads and cord.</b> Decorations placed along a line or filling a shape, with their holding stitches.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/stitchfoundry-image-to-stitches.png" alt="A placed image with the Embroidery panel previewing it reduced to six thread colours"><br><sub><b>Image to stitches.</b> Choose how many threads a picture becomes and preview it before Auto-Digitize.</sub></td>
+    <td><img src="docs/images/stitchfoundry-cap-preview.png" alt="The heart patch sample previewed life size on the front of a navy cap"><br><sub><b>See it on the product.</b> The design life size on a cap, T-shirt, polo, hoodie, tote or towel before you sew it.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/images/stitchfoundry-help.png" alt="The Help window open at Digitizing basics"><br><sub><b>Help built in.</b> Press F1 for the guide, including Digitizing basics: stitch lengths, density, underlay, pull and push compensation.</sub></td>
+  </tr>
+</table>
+
 ## Built on VectorCraft
 
 StitchFoundry includes the full [VectorCraft](https://github.com/storytold/vectorcraft) editor: pen,
