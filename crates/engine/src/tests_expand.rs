@@ -182,6 +182,19 @@ fn type_with_a_shadow_stays_type_and_type_with_its_own_stroke_is_outlined() {
 }
 
 #[test]
+fn type_with_its_own_stroke_expands_with_its_underline() {
+    let mut s = session();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 20, "y": 160, "text": "Hi", "size": 48}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "text.setFormat", json!({"underline": true}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    // "Hi" has no ink below its baseline (y 160): the pieces reach the bar under it.
+    let b = node(&s, t).geometric_bounds().unwrap();
+    assert!(b.y1 > 162.0, "{b:?}");
+}
+
+#[test]
 fn a_blurred_layer_keeps_its_image_as_its_only_member() {
     let mut s = session();
     square(&mut s);

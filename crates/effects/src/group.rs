@@ -371,4 +371,30 @@ mod tests {
         assert!(pathfinder_children(&g, None).is_none());
         assert!(!has_pathfinder(&sq(1, 0.0, Color::BLACK)));
     }
+
+    #[test]
+    fn a_transform_on_a_group_moves_the_gradients_of_its_type_and_not_those_placed_on_its_paths() {
+        use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+        let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let ramp = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+        // The type's characters fit the gradient to its layout; the square has it placed across itself.
+        let style = vectorcraft_doc::CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(ramp.clone())), ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(5.0, 60.0), "IIII", style);
+        let t = Arc::new(Node::new(NodeId(3), NodeKind::Text(Box::new(text))));
+        let geom = GradientGeom { start: (0.0, 5.0).into(), end: (10.0, 5.0).into(), aspect: 1.0, focal: None };
+        let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+        let square = Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(placed, Paint::None, 0.0)));
+        let start = |n: &Node| match n.appearance.fill_paint() {
+            Paint::Gradient(g) => g.geom.unwrap().start.x,
+            p => panic!("a gradient: {p:?}"),
+        };
+        let before = start(&crate::outline_text(&t).unwrap().children().unwrap()[0]);
+        let mut g = Node::group(NodeId(10), vec![square, t]);
+        g.appearance.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true });
+        let art = evaluate_container(&g).unwrap();
+        let members = art.children().unwrap();
+        let after = start(&members[1].children().unwrap()[0]);
+        assert!((after - before - 30.0).abs() < 1e-6, "the type's gradient starts at {before}, then {after}");
+        assert_eq!(start(&members[0]), 0.0, "the square's gradient stays where it was placed");
+    }
 }

@@ -5,9 +5,10 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
 use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{Appearance, Effect, ImageBlob, ImageObject, Node, NodeKind, Symbol};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, ImageBlob, ImageObject, Node, NodeKind, Symbol};
 use vectorcraft_geom::{Point, shapes};
 
 use super::*;
@@ -315,6 +316,217 @@ fn text_doc(effects: Vec<Effect>) -> Document {
 /// Columns (x) holding any dark pixel.
 fn inked_columns(img: &Rendered) -> Vec<u32> {
     (0..100).filter(|x| (0..100).any(|y| lum(img.pixel(*x, y)) < 300)).collect()
+}
+
+/// "IIII" in `style` with its baseline at (5, 60), its text space scaled or turned there by `xf`.
+fn styled_text_doc(style: CharStyle, xf: Affine) -> Document {
+    let mut t = TextObject::point(Point::new(5.0, 60.0), "IIII", style);
+    t.xf *= xf;
+    doc_with(Document::new(100.0, 100.0), Node::new(NodeId(0), NodeKind::Text(Box::new(t))))
+}
+
+/// Pixels whose color differs by more than 8 levels in a channel between `a` and `b`.
+fn differing(a: &Rendered, b: &Rendered) -> usize {
+    a.pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.pixels.as_chunks::<4>().0)
+        .filter(|(p, q)| p.iter().zip(q.iter()).any(|(x, y)| x.abs_diff(*y) > 8))
+        .count()
+}
+
+/// Pixels that change by more than 8 levels in a channel when the first object of `d` gets Offset
+/// Path at 0 pt, a geometry effect that returns its input: the object is then drawn through its
+/// outlines.
+fn changed_by_outlining(d: &Document) -> usize {
+    let mut outlined = d.clone();
+    let id = outlined.layers[0].children().unwrap()[0].id;
+    outlined.node_mut(id).unwrap().appearance.effects.push(fx("path.offsetPath", json!({"offset": 0})));
+    differing(&render(d), &render(&outlined))
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_underline() {
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), underline: true, ..Default::default() };
+    let d = styled_text_doc(style, Affine::IDENTITY);
+    // "IIII" has no ink below its baseline: the bar is all that is drawn there.
+    let plain = render(&d);
+    let bar = (61..70).flat_map(|y| (0..100).map(move |x| (x, y))).filter(|&(x, y)| lum(plain.pixel(x, y)) < 300).count();
+    assert!(bar > 50, "{bar} pixels of the bar");
+    let changed = changed_by_outlining(&d);
+    assert!(changed < 10, "{changed} pixels changed");
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_stroke_weight_when_scaled() {
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let style = CharStyle { size: 20.0, fill: Paint::solid(Color::BLACK), stroke: red, stroke_width: 2.0, ..Default::default() };
+    // The stroke is 2 pt wide in text space and 4 pt wide in the document.
+    let changed = changed_by_outlining(&styled_text_doc(style, Affine::scale(2.0)));
+    assert!(changed < 10, "{changed} pixels changed");
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_gradients_in_place() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    g.angle = 90.0;
+    let ramp = Paint::Gradient(Box::new(g));
+    // On the characters, the gradient fits the layout box in text space and turns with the type.
+    let characters = |xf| styled_text_doc(CharStyle { size: 40.0, fill: ramp.clone(), ..Default::default() }, xf);
+    // On a fill of the type's own, it fits the bounding box of the layout box in the document.
+    let mut own = styled_text_doc(CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() }, Affine::IDENTITY);
+    let id = own.layers[0].children().unwrap()[0].id;
+    own.node_mut(id).unwrap().appearance.items.push(AppearanceItem::Fill(FillLayer::new(ramp.clone())));
+    let changed: Vec<usize> = [characters(Affine::IDENTITY), characters(Affine::rotate(0.3)), own].iter().map(changed_by_outlining).collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+/// "IIII" at 40 pt with its baseline at (5, 60), its characters filled with a red-to-blue gradient
+/// that runs left to right (0°) or bottom to top (90°).
+fn gradient_text_doc(angle: f64) -> Document {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    g.angle = angle;
+    styled_text_doc(CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(g)), ..Default::default() }, Affine::IDENTITY)
+}
+
+/// The Transform effects the gradient tests apply, each with the transform that does the same to
+/// type `t`: 30 pt right, 20 pt down, and 50 % about the middle of its outlines.
+fn transforms_of(t: &Node) -> [(Value, Affine); 3] {
+    let middle = vectorcraft_effects::outline_text(t).unwrap().geometric_bounds().unwrap().center().to_vec2();
+    [
+        (json!({"moveH": 30}), Affine::translate((30.0, 0.0))),
+        (json!({"moveV": 20}), Affine::translate((0.0, 20.0))),
+        (json!({"scaleH": 50, "scaleV": 50}), Affine::translate(middle) * Affine::scale(0.5) * Affine::translate(-middle)),
+    ]
+}
+
+/// A 100×100 document holding `content` in an envelope that leaves it as it is (an arc with no
+/// bend), with Distort Appearance on or off.
+fn envelope_doc(content: Node, distort_appearance: bool) -> Document {
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+    let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance, ..Default::default() };
+    let envelope = NodeKind::Envelope {
+        content: vec![Arc::new(content)],
+        kind: Box::new(kind),
+        fidelity: 50.0,
+        editing: false,
+        options,
+        frame: Box::new(Affine::IDENTITY),
+    };
+    doc_with(Document::new(100.0, 100.0), Node::new(NodeId(0), envelope))
+}
+
+#[test]
+fn a_transform_effect_moves_and_scales_the_gradients_of_type_with_its_outlines() {
+    let mut changed = vec![];
+    for angle in [0.0, 90.0] {
+        let d = gradient_text_doc(angle);
+        let id = d.layers[0].children().unwrap()[0].id;
+        // The type's own transform does the same as the Transform effect in the document it is
+        // compared with.
+        for (params, xf) in transforms_of(d.node(id).unwrap()) {
+            let (mut effect, mut own) = (d.clone(), d.clone());
+            effect.node_mut(id).unwrap().appearance.effects.push(fx("distort.transform", params));
+            own.node_mut(id).unwrap().transform(xf, false);
+            changed.push(differing(&render(&effect), &render(&own)));
+        }
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn a_transform_effect_that_scales_type_out_of_proportion_scales_its_radial_and_diagonal_gradients() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut changed = vec![];
+    // A radial gradient turns into an ellipse, and a linear one at 45° turns its isolines.
+    for (kind, angle) in [(GradientKind::Radial, 0.0), (GradientKind::Linear, 45.0)] {
+        let mut g = GradientPaint::new(Gradient { kind, stops: stops.clone() });
+        g.angle = angle;
+        let d = styled_text_doc(CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(g)), ..Default::default() }, Affine::IDENTITY);
+        let id = d.layers[0].children().unwrap()[0].id;
+        let middle = vectorcraft_effects::outline_text(d.node(id).unwrap()).unwrap().geometric_bounds().unwrap().center().to_vec2();
+        // 50 % across and 150 % up and down, about the middle of the outlines.
+        let xf = Affine::translate(middle) * Affine::scale_non_uniform(0.5, 1.5) * Affine::translate(-middle);
+        let (mut effect, mut own) = (d.clone(), d.clone());
+        effect.node_mut(id).unwrap().appearance.effects.push(fx("distort.transform", json!({"scaleH": 50, "scaleV": 150})));
+        own.node_mut(id).unwrap().transform(xf, false);
+        changed.push(differing(&render(&effect), &render(&own)));
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn a_transform_effect_on_a_group_symbol_or_envelope_moves_and_scales_the_gradients_of_its_type() {
+    // The gradient runs left to right, so a move to the right goes along it and a move down
+    // across it.
+    let d = gradient_text_doc(0.0);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut t = d.node(id).unwrap().clone();
+    t.id = NodeId(500);
+    // The type in a group, as the art of a symbol, and in an envelope that leaves it as it is.
+    let mut symbols = Document::new(100.0, 100.0);
+    symbols.symbols.push(Symbol { name: "Type".into(), art: Arc::new(t.clone()) });
+    let holders = [
+        doc_with(Document::new(100.0, 100.0), Node::group(NodeId(0), vec![Arc::new(t.clone())])),
+        doc_with(symbols, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Type".into(), xf: Affine::IDENTITY })),
+        envelope_doc(t.clone(), false),
+    ];
+    let mut changed = vec![];
+    // The Transform effect is on the group, the symbol instance or the envelope. The type's own
+    // transform does the same in the document it is compared with.
+    for (params, xf) in transforms_of(&t) {
+        let mut own = d.clone();
+        own.node_mut(id).unwrap().transform(xf, false);
+        let reference = render(&own);
+        for h in &holders {
+            let mut effect = h.clone();
+            let holder = effect.layers[0].children().unwrap()[0].id;
+            effect.node_mut(holder).unwrap().appearance.effects.push(fx("distort.transform", params.clone()));
+            changed.push(differing(&render(&effect), &reference));
+        }
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn type_in_an_envelope_moves_and_scales_its_gradients_with_its_own_transform_effect() {
+    let d = gradient_text_doc(0.0);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut changed = vec![];
+    for (params, xf) in transforms_of(d.node(id).unwrap()) {
+        let mut own = d.clone();
+        own.node_mut(id).unwrap().transform(xf, false);
+        let reference = render(&own);
+        let mut t = d.node(id).unwrap().clone();
+        t.id = NodeId(500);
+        t.appearance.effects.push(fx("distort.transform", params));
+        // The envelope leaves the type as it is, with Distort Appearance off and on.
+        for distort in [false, true] {
+            changed.push(differing(&render(&envelope_doc(t.clone(), distort)), &reference));
+        }
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_pattern_tiles_on_the_type() {
+    // Pattern `Checks` is a red 2 × 2 square in a 4 × 4 tile.
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut def = PatternDef::new("Checks", vec![Arc::new(Node::path(NodeId(900), shapes::rectangle(Rect::new(0.0, 0.0, 2.0, 2.0)), red))]);
+    def.tile = Rect::new(0.0, 0.0, 4.0, 4.0);
+    // The type is 40 pt in the document: 20 pt type scaled 2×, or 40 pt type turned.
+    let changed: Vec<usize> = [Affine::scale(2.0), Affine::rotate(0.3)]
+        .into_iter()
+        .map(|xf| {
+            let mut d = styled_text_doc(CharStyle { size: 40.0 / xf.determinant().sqrt(), fill: pattern_paint("Checks"), ..Default::default() }, xf);
+            d.patterns.push(def.clone());
+            changed_by_outlining(&d)
+        })
+        .collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
 }
 
 #[test]

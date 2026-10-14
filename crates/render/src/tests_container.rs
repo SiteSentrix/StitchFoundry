@@ -85,6 +85,22 @@ fn a_group_fill_paints_every_member_above_or_below_them() {
 }
 
 #[test]
+fn a_group_fill_paints_the_underline_of_its_type() {
+    // The group holds underlined black "IIII" at 40 pt with its baseline at y 60, and has a green fill.
+    let mut d = Document::new(100.0, 100.0);
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), underline: true, ..Default::default() };
+    let t = Arc::new(Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style)))));
+    let mut g = Node::group(d.alloc_id(), vec![t]);
+    green_fill(&mut g);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    // The glyphs have no ink below the baseline: the bar's pixels there are green, none black.
+    let img = render(&d);
+    let bar: Vec<[u8; 4]> = (61..70).flat_map(|y| (0..100).map(move |x| (x, y))).map(|(x, y)| img.pixel(x, y)).filter(|p| p[0] < 160).collect();
+    assert!(bar.len() > 50 && bar.iter().all(|p| p[1] > p[0] + 20 && p[1] > p[2] + 20), "{bar:?}");
+}
+
+#[test]
 fn a_group_fill_with_opacity_composites_as_one_layer() {
     // Two overlapping members under a 50 % group fill: the overlap is as light as the rest.
     let mut d = Document::new(100.0, 100.0);
