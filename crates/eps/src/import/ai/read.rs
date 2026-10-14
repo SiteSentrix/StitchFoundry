@@ -1356,8 +1356,17 @@ impl<'a> Reader<'a> {
         self.frames.iter().all(|f| !matches!(&f.kind, Kind::Layer(a) if !a.visible))
     }
 
-    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`).
+    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), and the
+    /// opacity mask it may carry.
     fn art_dictionary(&mut self, o: &Obj) {
+        // A mask (`/Mask`, keyed `AI9_Mask`): its art is on `X=` … `X+` lines, and drawing the
+        // object without it shows what the mask hides, so it must be named (#2004). A mask that
+        // is disabled changes nothing.
+        if let Some(mask) = o.obj("AI9_Mask").or_else(|| o.obj("Mask"))
+            && mask.nums("Disabled").first().copied() != Some(1.0)
+        {
+            self.unreadable("opacity masks");
+        }
         let name = match o.text("AIArtName") {
             Some(name) => name,
             None => match o.obj("AI10_ArtUID").and_then(Obj::content_text) {

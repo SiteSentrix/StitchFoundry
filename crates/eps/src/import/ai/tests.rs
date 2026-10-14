@@ -667,6 +667,14 @@ fn what_it_doesnt_read_is_an_error_where_it_shows() {
     assert!(e.contains("pattern fills"), "{e}");
     let e = read(stream(&layer("/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")).as_bytes()).unwrap_err();
     assert!(e.contains("symbols"), "{e}");
+    // An opacity mask (#2004): drawing the layer's art whole would show what the mask hides, so
+    // the mask is named and the file is read from its PDF part instead.
+    let mask = "%_/ArtDictionary :\n%_/XMLUID : (M) ; (AI10_ArtUID) ,\n%_/Mask :\n%_1 /Bool (Linked) ,\n%_0 /Bool (Disabled) ,\n%_X=\n\
+                %_0 0 0 1 k\n%_0 0 m\n%_5 0 L\n%_5 5 L\n%_0 5 L\n%_0 0 L\n%_f\n%_X+\n%_ (Art) ,\n%_1 /Bool (Clipping) ,\n%_0 /Bool (Inverted) ,\n%_; (AI9_Mask) ,\n%_;\n";
+    let e = read(stream(&layer(mask)).as_bytes()).unwrap_err();
+    assert!(e.contains("opacity masks"), "{e}");
+    // A mask that is disabled changes nothing: the art reads.
+    read_ok(&layer(&mask.replace("%_0 /Bool (Disabled)", "%_1 /Bool (Disabled)")));
     // On a layer that doesn't show, it is left out of it.
     let hidden = "%AI5_BeginLayer\n0 1 1 1 0 0 0 1 255 79 79 0 50 0 Lb\n(Off) Ln\n1 2 frobnicate\n(J) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\nLB\n%AI5_EndLayer--\n";
     let r = read_ok(hidden);
