@@ -4697,7 +4697,6 @@ machine	Stop	停止
 	Blend layers	渐变混色层
 	My Machine…	我的机器…
 	Save for My Machine	为我的机器保存
-	My Machine	我的机器
 	Which embroidery machine do you have?	您用的是哪台绣花机？
 	Measure in	度量单位
 	Save designs to	图案保存到
@@ -4753,3 +4752,4 @@ machine	Stop	停止
 	Show Everything	显示全部
 @msg	the design has no page	图案没有页面
 @msg	open or start a design first	请先打开或开始一个图案
+	Set My Machine	设置我的机器

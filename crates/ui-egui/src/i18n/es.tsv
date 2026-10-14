@@ -5119,7 +5119,6 @@ machine	Stop	Parada
 	Blend layers	Capas de fusión
 	My Machine…	Mi máquina…
 	Save for My Machine	Guardar para mi máquina
-	My Machine	Mi máquina
 	Which embroidery machine do you have?	¿Qué máquina de bordar tiene?
 	Measure in	Medir en
 	Save designs to	Guardar diseños en
@@ -5175,3 +5174,4 @@ machine	Stop	Parada
 	Show Everything	Mostrar todo
 @msg	the design has no page	el diseño no tiene página
 @msg	open or start a design first	abre o empieza un diseño primero
+	Set My Machine	Elegir mi máquina

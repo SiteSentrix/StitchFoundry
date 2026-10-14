@@ -5121,7 +5121,6 @@ machine	Stop	Arresto
 	Blend layers	Strati di sfumatura
 	My Machine…	La mia macchina…
 	Save for My Machine	Salva per la mia macchina
-	My Machine	La mia macchina
 	Which embroidery machine do you have?	Quale macchina da ricamo hai?
 	Measure in	Misura in
 	Save designs to	Salva i disegni in
@@ -5177,3 +5176,4 @@ machine	Stop	Arresto
 	Show Everything	Mostra tutto
 @msg	the design has no page	il disegno non ha una pagina
 @msg	open or start a design first	apri o inizia prima un disegno
+	Set My Machine	Imposta la mia macchina

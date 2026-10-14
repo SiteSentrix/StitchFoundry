@@ -5101,7 +5101,6 @@ machine	Stop	Зупинка
 	Blend layers	Шари змішування
 	My Machine…	Моя машина…
 	Save for My Machine	Зберегти для моєї машини
-	My Machine	Моя машина
 	Which embroidery machine do you have?	Яка у вас вишивальна машина?
 	Measure in	Одиниці
 	Save designs to	Зберігати дизайни в
@@ -5157,3 +5156,4 @@ machine	Stop	Зупинка
 	Show Everything	Показати все
 @msg	the design has no page	візерунок не має сторінки
 @msg	open or start a design first	спочатку відкрийте або почніть візерунок
+	Set My Machine	Вибрати мою машину

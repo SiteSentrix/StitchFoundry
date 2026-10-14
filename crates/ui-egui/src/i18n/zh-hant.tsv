@@ -4482,7 +4482,6 @@ machine	Stop	停止
 	Blend layers	漸變混色層
 	My Machine…	我的機器…
 	Save for My Machine	為我的機器儲存
-	My Machine	我的機器
 	Which embroidery machine do you have?	您用的是哪台繡花機？
 	Measure in	度量單位
 	Save designs to	圖案儲存到
@@ -4538,3 +4537,4 @@ machine	Stop	停止
 	Show Everything	顯示全部
 @msg	the design has no page	圖案沒有頁面
 @msg	open or start a design first	請先開啟或開始一個圖案
+	Set My Machine	設定我的機器
