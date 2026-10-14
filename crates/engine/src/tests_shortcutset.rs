@@ -113,6 +113,12 @@ fn caps_nesting_entries_and_names() {
     let big = format!("/Menus {{ /E {{ /Key 1 }} {} }}", " ".repeat(4 << 20));
     let set = read_kys(big.as_bytes()).unwrap();
     assert_eq!((set.entries.len(), set.truncated), (1, true));
+    // Long section names repeated for every entry stop at 8 MiB of names, not hundreds of megabytes.
+    let open: String = (0..15).map(|i| format!("/{}{i} {{ ", "s".repeat(1020))).collect();
+    let wide = format!("{open}{}", "/E{/Key 1}".repeat(19_000));
+    let set = read_kys(wide.as_bytes()).unwrap();
+    let kept: usize = set.entries.iter().map(|e| e.name.len() + e.section.iter().map(String::len).sum::<usize>()).sum();
+    assert!(set.truncated && kept <= 8 << 20 && set.entries.len() > 500, "{} entries, {kept} bytes", set.entries.len());
 }
 
 #[test]

@@ -26,6 +26,9 @@ const MAX_DEPTH: usize = 16;
 const MAX_ENTRIES: usize = 20_000;
 /// The longest name kept (bytes).
 const MAX_NAME: usize = 1024;
+/// The most bytes of names kept over all entries, sections included: each entry repeats the names
+/// of the blocks around it, so a small file could otherwise fill hundreds of megabytes.
+const MAX_KEPT: usize = 2 * MAX_BYTES;
 /// The most tokens listed as unread.
 const MAX_UNREAD: usize = 1000;
 /// The longest unread token shown (characters).
@@ -43,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Read Shortcut Set File",
         [],
         None,
-        "{path? | data?: the file's text | dataBase64?, name?: the file's name (default: the path's)} read a shortcut set another app saved as text (.kys, starting \"/Menus {\") without changing anything: each entry is a block that sets /Key, with the names of the blocks around it as its section → {set: the file's name without its extension, entries: [{section: [names], name, key, modifiers, context, represent, line, target?, chord?}] (codes as the file writes them; null where the entry doesn't set one; target: what importMatches says the name stands for; chord: the shortcut its codes stand for, as Edit › Keyboard Shortcuts writes it, when importMatches decodes them, an entry without /Modifiers taking none), codes: {keys: [{value, count, key?}], modifiers: [{value, count, mods?}]} (key and mods from importMatches), unread: [{line, text}] (tokens that aren't read, at most 1000), truncated: true when a cap stopped the reading (4 MiB, 16 open blocks, 20,000 entries; names past 1,024 bytes are cut)}. A file in another form (such as XML) is an error",
+        "{path? | data?: the file's text | dataBase64?, name?: the file's name (default: the path's)} read a shortcut set another app saved as text (.kys, starting \"/Menus {\") without changing anything: each entry is a block that sets /Key, with the names of the blocks around it as its section → {set: the file's name without its extension, entries: [{section: [names], name, key, modifiers, context, represent, line, target?, chord?}] (codes as the file writes them; null where the entry doesn't set one; target: what importMatches says the name stands for; chord: the shortcut its codes stand for, as Edit › Keyboard Shortcuts writes it, when importMatches decodes them, an entry without /Modifiers taking none), codes: {keys: [{value, count, key?}], modifiers: [{value, count, mods?}]} (key and mods from importMatches), unread: [{line, text}] (tokens that aren't read, at most 1000), truncated: true when a cap stopped the reading (4 MiB, 16 open blocks, 20,000 entries, 8 MiB of names over the entries and their sections; names past 1,024 bytes are cut)}. A file in another form (such as XML) is an error",
         always,
         read
     )]
@@ -214,6 +217,8 @@ pub fn read_kys(bytes: &[u8]) -> std::result::Result<KysSet, String> {
     let mut pending: Option<(usize, Vec<u8>)> = None;
     // Blocks past [`MAX_DEPTH`] being skipped.
     let mut skipped = 0usize;
+    // The bytes of names the entries keep so far ([`MAX_KEPT`]).
+    let mut kept = 0usize;
     while let Some((line, token)) = tokens.next_token() {
         if skipped > 0 {
             match token {
@@ -266,7 +271,8 @@ pub fn read_kys(bytes: &[u8]) -> std::result::Result<KysSet, String> {
                 };
                 let [key, modifiers, context, represent] = block.fields;
                 if key.is_some() {
-                    if set.entries.len() >= MAX_ENTRIES {
+                    kept += block.name.len() + stack.iter().map(|b| b.name.len()).sum::<usize>();
+                    if set.entries.len() >= MAX_ENTRIES || kept > MAX_KEPT {
                         set.truncated = true;
                         break;
                     }

@@ -3447,8 +3447,8 @@ Envelope Options.
 that starts with `/Menus {`) without changing the document or the preferences. Each block that sets `/Key` is an
 entry, listed with its `name`, its `section` (the names of the blocks around it), its codes as the file writes them
 (`key`, `modifiers`, `context`, `represent`) and its `line`. `codes` counts the entries that use each key and modifier
-code, and `unread` lists the tokens the reader skipped, with their lines. The reader stops at 4 MiB, 16 open blocks and
-20,000 entries, cuts names at 1,024 bytes, and sets `truncated` when it reaches one of these limits. An XML shortcut
+code, and `unread` lists the tokens the reader skipped, with their lines. The reader stops at 4 MiB, 16 open blocks,
+20,000 entries and 8 MiB of names over the entries and their sections, cuts names at 1,024 bytes, and sets `truncated` when it reaches one of these limits. An XML shortcut
 file fails with "This shortcut file is in a form VectorCraft can't read."
 
 The import matches record what the names and codes in such files stand for in VectorCraft. They are kept with the

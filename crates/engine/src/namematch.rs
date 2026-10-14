@@ -90,25 +90,29 @@ fn pairs(s: &str) -> Vec<(char, char)> {
     c.windows(2).filter_map(|w| Some((*w.first()?, *w.get(1)?))).collect()
 }
 
-/// How many character pairs `a` and `b` share, as a Dice coefficient (0 to 1): for names written
-/// without spaces.
+/// How many character pairs `a` and `b` (each sorted) share, as a Dice coefficient (0 to 1): for
+/// names written without spaces. Linear in their lengths, so long names in a file stay quick.
 fn pair_similarity(a: &[(char, char)], b: &[(char, char)]) -> f64 {
     if a.is_empty() || b.is_empty() {
         return 0.0;
     }
-    let mut rest: Vec<&(char, char)> = b.iter().collect();
-    let mut shared = 0usize;
-    for p in a {
-        if let Some(i) = rest.iter().position(|q| *q == p) {
-            rest.swap_remove(i);
-            shared += 1;
+    let (mut i, mut j, mut shared) = (0usize, 0usize, 0usize);
+    while let (Some(p), Some(q)) = (a.get(i), b.get(j)) {
+        match p.cmp(q) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+            std::cmp::Ordering::Equal => {
+                shared += 1;
+                i += 1;
+                j += 1;
+            }
         }
     }
     (2 * shared) as f64 / (a.len() + b.len()) as f64
 }
 
 /// A name or label as the scores compare it: its letters and digits (lowercased), its words and the
-/// character pairs of the former.
+/// character pairs of the former (sorted).
 struct Text {
     folded: String,
     words: Vec<String>,
@@ -118,7 +122,9 @@ struct Text {
 impl Text {
     fn of(s: &str) -> Self {
         let folded = folded(s);
-        Self { pairs: pairs(&folded), words: words(s), folded }
+        let mut pairs = pairs(&folded);
+        pairs.sort_unstable();
+        Self { pairs, words: words(s), folded }
     }
 }
 
@@ -210,7 +216,8 @@ impl Matcher {
             .get(&text.folded)
             .into_iter()
             .chain(text.words.iter().filter_map(|w| self.by_word.get(w)))
-            .chain(text.pairs.iter().filter_map(|p| self.by_pair.get(p)));
+            // Each pair looked up once (they are sorted).
+            .chain(text.pairs.chunk_by(|a, b| a == b).filter_map(|c| self.by_pair.get(c.first()?)));
         let mut scored: Vec<(usize, f64)> = vec![];
         for &i in lists.flatten() {
             if let Some(s) = seen.get_mut(i)
