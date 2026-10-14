@@ -916,10 +916,14 @@ Thread colour follows the object's paint colour unless set in the panel. **Selec
 Thread Color** and **Stitch Type** select every stitched object like the selected one.
 
 **Check Design** (Embroidery menu, or the button in the panel's Design section) looks for spots
-where thread piles up (very dense), stitches longer than 8 mm, tiny objects, lettering under about
-5 mm, objects that make no stitches and a design larger than its hoop. Click a finding to select
-its objects and bring the spot into view. **Check settings** under the button sets what counts as
-too dense, a long stitch, small lettering and a tiny object for this design.
+where thread piles up (very dense), stitches long enough to catch (from 7 mm on clothing, which
+is worn and washed, or 12.1 mm on bags, towels and other items: **Sewn on clothing** in Check
+settings), objects with many stitches under 0.5 mm (the needle sews in one spot and can break the
+thread), satin narrower than 1 mm (it sinks into the fabric: sew it as a run), tatami fills with
+stitches under 4 mm (short fill stitches ripple after washing), tiny objects, lettering under
+about 5 mm, objects that make no stitches and a design larger than its hoop. Click a finding to
+select its objects and bring the spot into view. **Check settings** under the button sets each
+limit for this design; 0 turns a rule off.
 
 Density is measured as layers of thread over 2 × 2 mm squares: a tatami fill is about 1.2 layers
 with its underlay, a satin column 2.5 to 3.5. Spots over 4.5 layers are flagged: four fills stacked,

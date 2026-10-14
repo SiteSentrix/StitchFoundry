@@ -4433,3 +4433,11 @@ machine	Stop	停止
 	All Tools, Ungrouped	所有工具，不分組
 	Toolbar: All Tools, Ungrouped	工具列：所有工具，不分組
 	Push compensation	推力補償
+	{n} very short stitches can break the thread	{n} 個過短的針跡可能導致斷線
+	Satin only {n} mm wide sinks into the fabric	僅 {n} 公釐寬的緞紋會陷入布料
+	Fill stitches {n} mm long can ripple after washing	{n} 公釐的填充針跡洗後可能起皺
+	Sewn on clothing	繡在衣物上
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	長針跡在衣物上超過 7 公釐、其他物品超過 12.1 公釐會勾掛
+	Short stitches under	短針跡小於
+	Narrow satin under	窄緞紋小於
+	Short fill stitches under	短填充針跡小於

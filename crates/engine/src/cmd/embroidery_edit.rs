@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Check Design",
             [],
             None,
-            "{} look for sewing problems: very dense spots, long stitches, tiny objects, small lettering, objects that make no stitches, a design larger than its hoop → {findings: [{kind: dense|longStitches|tiny|smallLettering|noStitches|hoop, severity: warning|info, message, ids, at?: [x, y] points, value?}], count}",
+            "{} look for sewing problems: very dense spots, long stitches (7 mm on clothing, else 12.1: embroidery.settings checks), many very short stitches, satin too narrow, fill stitches too short, tiny objects, small lettering, objects that make no stitches, a design larger than its hoop → {findings: [{kind: dense|longStitches|shortStitches|narrowSatin|shortFill|tiny|smallLettering|noStitches|hoop, severity: warning|info, message, ids, at?: [x, y] points, value?}], count}",
             has_doc,
             check
         ),
@@ -306,6 +306,8 @@ const THREAD: f64 = 0.4;
 const CELL: f64 = 1.0;
 /// Most findings of one kind reported.
 const MAX_PER_KIND: usize = 20;
+/// Short stitches in one object before they are flagged.
+const SHORT_STITCHES: usize = 10;
 
 fn finding(kind: &str, severity: &str, message: String, ids: &[NodeId], at: Option<sf_core::Point>, value: Option<f64>) -> Value {
     let mut v = json!({ "kind": kind, "severity": severity, "message": message, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() });
@@ -355,8 +357,47 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
         }
     }
 
+    // Satin too narrow to sit up; tatami stitches short enough to ripple after washing.
+    let mut flagged: Vec<(NodeId, &str)> = Vec::new();
+    for (id, obj) in plan.nodes.iter().zip(&plan.design.objects) {
+        match &obj.kind {
+            sf_core::model::ObjectKind::Satin(sat) if lim.narrow_satin > 0.0 => {
+                let w = sat.column.average_width();
+                if w.is_finite() && w < lim.narrow_satin && !flagged.contains(&(*id, "narrowSatin")) {
+                    flagged.push((*id, "narrowSatin"));
+                    let at = sat.column.rungs.get(sat.column.rungs.len() / 2).map(|r| r.center());
+                    findings.push(finding(
+                        "narrowSatin",
+                        "warning",
+                        format!("Satin only {w:.1} mm wide: under about {} mm it sinks into the fabric; use a run or widen it", lim.narrow_satin),
+                        &[*id],
+                        at,
+                        Some(w),
+                    ));
+                }
+            }
+            sf_core::model::ObjectKind::Fill(f)
+                if f.params.kind == sf_core::model::FillKind::Tatami
+                    && f.params.stitch_length < lim.short_fill
+                    && !flagged.contains(&(*id, "shortFill")) =>
+            {
+                flagged.push((*id, "shortFill"));
+                findings.push(finding(
+                    "shortFill",
+                    "info",
+                    format!("Fill stitches {:.1} mm long: under about {} mm a fill can ripple after washing", f.params.stitch_length, lim.short_fill),
+                    &[*id],
+                    Some(f.shape.bbox().center()),
+                    Some(f.params.stitch_length),
+                ));
+            }
+            _ => {}
+        }
+    }
+
     // Stitches: needle to needle while the thread is attached.
     let mut long: BTreeMap<NodeId, (usize, f64, sf_core::Point)> = BTreeMap::new();
+    let mut short: BTreeMap<NodeId, (usize, sf_core::Point)> = BTreeMap::new();
     let b = pat.bounds();
     let (gw, gh) = (((b.width() / CELL).ceil() as usize + 1).min(2000), ((b.height() / CELL).ceil() as usize + 1).min(2000));
     let mut grid = vec![0.0f32; gw * gh];
@@ -371,6 +412,11 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
                 let q = rec.pos();
                 if let Some(p) = last_needle {
                     let len = p.distance(q);
+                    if len < lim.short_stitch
+                        && let Some(id) = plan.node_at_record(i)
+                    {
+                        short.entry(id).or_insert((0, q)).0 += 1;
+                    }
                     if len > long_stitch
                         && let Some(id) = plan.node_at_record(i)
                     {
@@ -394,6 +440,17 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
             Cmd::Trim | Cmd::ColorChange | Cmd::End => last_needle = None,
             Cmd::Jump | Cmd::Stop => {}
         }
+    }
+    // a few short stitches (ties, the ends of rows) are harmless; many in one object aren't
+    for (id, (count, at)) in short.into_iter().filter(|(_, (n, _))| *n >= SHORT_STITCHES).take(MAX_PER_KIND) {
+        findings.push(finding(
+            "shortStitches",
+            "warning",
+            format!("{count} stitches shorter than {} mm: the needle sews in one spot and can break the thread", lim.short_stitch),
+            &[id],
+            Some(at),
+            Some(count as f64),
+        ));
     }
     for (id, (count, max, at)) in long.into_iter().take(MAX_PER_KIND) {
         findings.push(finding(

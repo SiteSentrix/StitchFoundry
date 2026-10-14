@@ -5068,3 +5068,11 @@ machine	Stop	停止
 	All Tools, Ungrouped	すべてのツール（グループなし）
 	Toolbar: All Tools, Ungrouped	ツールバー：すべてのツール（グループなし）
 	Push compensation	プッシュ補正
+	{n} very short stitches can break the thread	{n} 個のとても短い針目は糸切れの原因になります
+	Satin only {n} mm wide sinks into the fabric	幅 {n} mm しかないサテンは生地に沈みます
+	Fill stitches {n} mm long can ripple after washing	{n} mm のフィル針目は洗濯後に波打つことがあります
+	Sewn on clothing	衣類に刺繍
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	長い針目は衣類で 7 mm、その他で 12.1 mm から引っかかります
+	Short stitches under	短い針目の基準
+	Narrow satin under	細いサテンの基準
+	Short fill stitches under	短いフィル針目の基準
