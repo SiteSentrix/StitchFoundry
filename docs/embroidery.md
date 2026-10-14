@@ -245,7 +245,9 @@ Editing:
   line, drag a line's ends to move them, click a line and press Delete to remove it.
 - The **green bead** (where sewing starts) and the **red bead** (where it stops) of the selected
   object can be dragged too. **Reset Start and Stop** in the panel restores the automatic closest
-  joins.
+  joins. A fill honours both: its underlay runs out from the start and back to it, then the top
+  stitching begins at the start and sews towards the stop, the piece of the shape that can end
+  nearest the stop sewn last, so it finishes there instead of travelling back over sewn rows.
 - **Embroidery › Auto Direction** places the automatic lines again; **Embroidery › Clear
   Inclination Lines** goes back to the automatic direction.
 - Inclination lines, beads and fill angles move, rotate, scale and mirror with their object.
