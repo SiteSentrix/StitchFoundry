@@ -69,10 +69,10 @@ use vectorcraft_geom::{Affine, AnchorKind, BezPath, FillRule, PathData, Point, R
 
 use crate::{latin, ps};
 
-/// How deep symbols and live objects may nest in one another (deeper art is left out).
+/// How deep symbols and live objects may nest in one another (deeper art is left out). Groups and
+/// layers need no limit of their own: a document is never deeper than
+/// [`vectorcraft_doc::MAX_DEPTH`].
 const MAX_NEST: u32 = 8;
-/// Deepest nesting of groups and layers written (deeper art is left out).
-const MAX_DEPTH: u32 = 256;
 /// Largest image written (pixels).
 const MAX_IMAGE_PIXELS: u64 = 1 << 26;
 /// Hex digits on a line of image data.
@@ -93,7 +93,6 @@ const STROKES: &str =
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
 const LIVE: &str = "symbols, blends, envelopes, meshes, repeats and placed documents are written as their art";
 const UNREADABLE_IMAGE: &str = "an image that can't be decoded or is too large was left out";
-const DEEP: &str = "art nested too deeply was left out";
 const ELLIPTICAL: &str = "elliptical radial gradients are written circular";
 
 /// What to write in the header, and how to write what the format can't hold.
@@ -407,8 +406,6 @@ struct Writer<'a> {
     locked: bool,
     /// Symbols and live objects being written inside one another.
     nest: u32,
-    /// Groups and layers open.
-    depth: u32,
     /// What to do with hidden objects.
     hidden: HiddenObjects,
     /// Type as outlines.
@@ -434,7 +431,6 @@ impl<'a> Writer<'a> {
             warnings: vec![],
             locked: false,
             nest: 0,
-            depth: 0,
             hidden: o.hidden,
             outline_text: o.outline_text,
             hidden_art: vec![],
@@ -559,10 +555,6 @@ impl<'a> Writer<'a> {
                 HiddenObjects::Visible => self.warn(HIDDEN_SHOWN),
             }
         }
-        if self.depth >= MAX_DEPTH {
-            self.warn(DEEP);
-            return;
-        }
         if n.opacity < 1.0 || n.blend != BlendMode::Normal || n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
             self.warn(TRANSPARENCY);
         }
@@ -633,7 +625,6 @@ impl<'a> Writer<'a> {
             return;
         }
         self.lock(locked);
-        self.depth += 1;
         if clip {
             self.clip_group(children, locked);
         } else {
@@ -642,7 +633,6 @@ impl<'a> Writer<'a> {
             self.lock(locked);
             self.line("U");
         }
-        self.depth -= 1;
     }
 
     /// A clipping group: its first member's outline clips the others (`h W n`). That member's fills
@@ -725,13 +715,11 @@ impl<'a> Writer<'a> {
             }
             [one] => self.item(path, rule, one),
             items => {
-                self.depth += 1;
                 self.line("u");
                 for i in items {
                     self.item(path, rule, i);
                 }
                 self.line("U");
-                self.depth -= 1;
             }
         }
     }
@@ -1180,7 +1168,6 @@ impl<'a> Writer<'a> {
     fn outlines(&mut self, t: &TextObject) {
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         let scale = t.xf.determinant().abs().sqrt();
-        self.depth += 1;
         self.line("u");
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
@@ -1205,7 +1192,6 @@ impl<'a> Writer<'a> {
             self.shape(&n, &path, FillRule::NonZero);
         }
         self.line("U");
-        self.depth -= 1;
     }
 
     // ---------- images ----------
