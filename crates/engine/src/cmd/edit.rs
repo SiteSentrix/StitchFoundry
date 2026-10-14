@@ -259,16 +259,23 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn undo(s: &mut Session, _: &Value) -> Result<Value> {
-    // What is still in progress (typing, a drag) is the step to undo: keep it first, so Undo takes
-    // back only that and Redo brings it back, instead of dropping it and undoing the step before.
-    // A typing session also ends in the Type tool, whose caret and marked text (IME) must follow
-    // the document.
+/// What is still in progress (typing, a drag) is a step of its own: keep it before the history
+/// moves, so Undo takes back only that and Redo brings it back, instead of dropping it and undoing
+/// the step before. As any new edit it ends the steps to redo, so Redo never swaps the document
+/// under an interaction that would then preview on, or cancel to, the document from before (#1719).
+/// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
+/// document.
+fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
     s.commit_interaction()?;
     if typing {
         s.set_tool_option("endTyping", &Value::Bool(true));
     }
+    Ok(())
+}
+
+fn undo(s: &mut Session, _: &Value) -> Result<Value> {
+    settle_interaction(s)?;
     let st = s.doc_mut()?;
     let e = st.history.undo.pop().ok_or_else(|| EngineError::Other("nothing to undo".into()))?;
     let label = e.label.clone();
@@ -286,6 +293,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn redo(s: &mut Session, _: &Value) -> Result<Value> {
+    settle_interaction(s)?;
     let st = s.doc_mut()?;
     let e = st.history.redo.pop().ok_or_else(|| EngineError::Other("nothing to redo".into()))?;
     let label = e.label.clone();
