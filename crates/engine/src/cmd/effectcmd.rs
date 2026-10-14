@@ -841,6 +841,29 @@ mod tests {
     }
 
     #[test]
+    fn pathfinder_effect_on_a_group_with_type_cuts_the_glyphs_out() {
+        let (mut s, a) = session_with_rect();
+        let t = NodeId(s.execute("text.create", &json!({"x": 110, "y": 180, "text": "H", "size": 100})).unwrap()["id"].as_u64().unwrap());
+        let glyphs = effects::outline_text(&node(&s, t)).unwrap();
+        let b = glyphs.geometric_bounds().unwrap();
+        assert!(b.x0 > 105.0 && b.y0 > 105.0 && b.x1 < 195.0 && b.y1 < 195.0, "the type lies inside the square: {b:?}");
+        let area = |n: &vectorcraft_doc::Node| effects::member_shapes(n).iter().map(|(p, r)| vectorcraft_pathops::area(p, *r)).sum::<f64>();
+        let glyph_area = area(&glyphs);
+        s.execute("select.set", &json!({"ids": [a.0, t.0]})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect": "pathfinder.subtract"})).unwrap();
+        // Live: the renderer leaves the glyph's place in the square empty.
+        let doc = s.doc().unwrap().doc.clone();
+        let img = vectorcraft_render::Renderer::new().render(&doc, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+        let empty = (105..195).flat_map(|y| (105..195).map(move |x| (x, y))).filter(|&(x, y)| img.pixel(x, y)[3] == 0).count();
+        assert!(empty as f64 > glyph_area / 2.0, "{empty} empty pixels for a glyph area of {glyph_area}");
+        // Expanded: the group holds the square minus the glyph.
+        s.execute("effect.expandAppearance", &json!({})).unwrap();
+        let left = area(&node(&s, g));
+        assert!((left - (10_000.0 - glyph_area)).abs() < 0.5, "{left} left of the square for a glyph area of {glyph_area}");
+    }
+
+    #[test]
     fn pathfinder_effect_on_a_group_renders_live_and_expands() {
         let (mut s, a) = session_with_rect();
         let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
