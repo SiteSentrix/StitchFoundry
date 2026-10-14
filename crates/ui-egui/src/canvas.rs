@@ -1893,6 +1893,10 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         (tl!("Watch it sew with the stitch player and check it."), "stitch-sequence-and-the-stitch-player"),
         (tl!("Export the file for your machine."), "machine-files"),
     ];
+    if ui.link(tl!("New to digitizing? Read the basics")).clicked() {
+        app.run("help.show", json!({ "topic": "digitizing-basics" })).ok();
+    }
+    ui.add_space(4.0);
     for (i, (step, topic)) in steps.iter().enumerate() {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(format!("{}", i + 1)).font(theme::semibold(14.0)).color(t.accent));
