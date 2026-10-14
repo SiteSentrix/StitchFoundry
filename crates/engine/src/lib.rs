@@ -1108,6 +1108,8 @@ pub struct Session {
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
+    /// While [`Session::preview`] runs its command: its edits are the interaction's own.
+    previewing: bool,
     /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
     /// (`None`: the reference app's defaults, fidelity 50); not saved.
     pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
@@ -1183,6 +1185,7 @@ impl Session {
             batch_stash: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            previewing: false,
             envelope_defaults: None,
             liquify_stroke: None,
             plane_widget_press: false,
@@ -1479,6 +1482,11 @@ impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
     /// undo step labelled `label`; inside one it just mutates (the interaction commits later).
     pub fn edit<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+        // An edit made while typing (the Transform panel) is a step of its own: inside the typing
+        // session, the next keystroke's preview would start again from before it (#1881).
+        if !self.previewing && cmd::typing_in_progress(self) {
+            cmd::settle_interaction(self)?;
+        }
         let st = self.doc_mut()?;
         let before = st.doc.clone();
         let before_sel = st.selection.clone();
@@ -1579,6 +1587,11 @@ impl Session {
     // ---------- interactions (live drags) ----------
 
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
+        // Typing in progress is kept first: a drag or a dialog's preview would otherwise start
+        // from the snapshot taken before the typing, and drop it (#1881).
+        if label != "Typing" && cmd::typing_in_progress(self) {
+            cmd::settle_interaction(self)?;
+        }
         let st = self.doc_mut()?;
         if st.interaction.is_some() {
             return Ok(());
@@ -1618,7 +1631,9 @@ impl Session {
         self.pending_paint = None;
         let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params);
         let (cmd, params) = rw.as_ref().map_or((cmd, params), |(c, p)| (c.as_str(), p));
+        let outer = std::mem::replace(&mut self.previewing, true);
         let r = self.execute(cmd, params);
+        self.previewing = outer;
         let params = self.noted(params);
         let st = self.doc_mut()?;
         if let Some(it) = &mut st.interaction {
