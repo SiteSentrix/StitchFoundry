@@ -4271,6 +4271,15 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+	Basic	Basis
+	Fill and Stroke Controls	Steuerelemente für Fläche und Kontur
+	Coloring Controls	Steuerelemente für Farbe
+	Draw Mode Controls	Steuerelemente für Zeichenmodus
+	Screen Mode Controls	Steuerelemente für Bildschirmmodus
+	Drawer menu	Menü der Werkzeugschublade
+	Toolbar: Show Controls	Werkzeugleiste: Steuerelemente einblenden
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control muss fillStroke, coloring, drawMode oder screenMode sein
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	unbekanntes Steuerelement `{name}`: fillStroke, coloring, drawMode oder screenMode
 @msg	give a fraction `t` from 0 to 1	geben Sie einen Wert `t` von 0 bis 1 an
 @msg	give the path `id`	geben Sie die `id` des Pfads an
 @msg	invalid stroke widths	ungültige Konturbreiten

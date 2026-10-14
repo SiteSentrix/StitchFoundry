@@ -182,12 +182,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
         // A group torn off into a floating flyout is raised instead of opening its flyout.
         let mut raise: Option<&'static str> = None;
+        let labels = app.session.prefs.tool_group_labels;
         let mut i = 0;
         while i < all.len() {
-            if all[i].0.is_some() && !app.session.prefs.tool_group_labels {
-                // User Interface › Show Tool Group Labels off: a faint dash between the groups.
-                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
-                ui.painter().line_segment([r.center() - vec2(6.0, 0.0), r.center() + vec2(6.0, 0.0)], egui::Stroke::new(1.0, t.divider));
+            if all[i].0.is_some() && !labels {
+                // User Interface › Show Tool Group Labels off: the tools run on from group to group,
+                // in one column or two (as the reference's Basic toolbar in two), with nothing
+                // between the groups.
             } else if let Some(cat) = all[i].0 {
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
                 // A long name is cut to its first four characters in the single column.
@@ -196,9 +197,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     if cols == 1 && cat.chars().count() > 6 { format!("{}...", cat.chars().take(4).collect::<String>()) } else { cat.to_string() };
                 ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
             }
-            // One row = `cols` slots (a category label always starts a new row).
+            // One row = `cols` slots (a category label always starts a new row; without labels,
+            // nothing does).
             let mut row = vec![i];
-            while row.len() < cols && i + row.len() < all.len() && all[i + row.len()].0.is_none() {
+            while row.len() < cols && i + row.len() < all.len() && (all[i + row.len()].0.is_none() || !labels) {
                 row.push(i + row.len());
             }
             ui.horizontal(|ui| {
@@ -443,38 +445,44 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes, screen mode and Edit Toolbar, as
 /// large as the toolbar's `cols` (one or two) leave room for (#1129): in two columns the proxy and
 /// buttons grow and the three drawing modes show side by side.
+/// The All Tools drawer's Show section hides any of them but Edit Toolbar.
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usize) {
     let two = cols == 2;
-    ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
-    ui.add_space(5.0);
+    let show = app.ui.toolbar_show;
+    if show.fill_stroke {
+        ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
+        ui.add_space(5.0);
+    }
     // Color (the last solid colour), Gradient (the last gradient) and None, as commands.
     let (chip, gap) = if two { (17.0, 4.0) } else { (11.0, 2.0) };
-    ui.horizontal(|ui| {
-        ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
-        ui.spacing_mut().item_spacing.x = gap;
-        let mut clicked = None;
-        for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
-            let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
-            match cmd {
-                "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
-                "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
-                _ => widgets::paint_chip(ui, r, &Paint::None),
+    if show.coloring {
+        ui.horizontal(|ui| {
+            ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
+            ui.spacing_mut().item_spacing.x = gap;
+            let mut clicked = None;
+            for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
+                let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
+                match cmd {
+                    "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
+                    "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
+                    _ => widgets::paint_chip(ui, r, &Paint::None),
+                }
+                if resp.on_hover_text(tl!(tip)).clicked() {
+                    clicked = Some(cmd);
+                }
             }
-            if resp.on_hover_text(tl!(tip)).clicked() {
-                clicked = Some(cmd);
+            if let Some(cmd) = clicked {
+                app.run(cmd, json!({})).ok();
             }
-        }
-        if let Some(cmd) = clicked {
-            app.run(cmd, json!({})).ok();
-        }
-    });
-    ui.add_space(6.0);
+        });
+        ui.add_space(6.0);
+    }
     let modes = [
         (vectorcraft_engine::DrawMode::Normal, "dc-draw-normal", "Draw Normal", "normal"),
         (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
         (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
     ];
-    if two {
+    if two && show.draw_mode {
         // Side by side, each one a click away.
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 3.0 * 22.0) / 2.0);
@@ -488,12 +496,13 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
     ui.vertical_centered(|ui| {
         // One column: the current mode's button, which cycles them.
         if !two
+            && show.draw_mode
             && let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
             && widgets::icon_button(ui, icon, &format!("{} (Shift+D)", tl!(name)), mode != vectorcraft_engine::DrawMode::Normal, 26.0).clicked()
         {
             app.run("view.drawMode", json!({})).ok();
         }
-        if widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
+        if show.screen_mode && widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
             app.run("view.screenMode", json!({})).ok();
         }
         // Edit Toolbar: the All Tools drawer opens beside the toolbar, by this button.
@@ -1252,6 +1261,42 @@ pub(crate) mod tests {
         lefts.len()
     }
 
+    /// Rows of tool buttons by their tops: how many buttons each row holds, top to bottom.
+    fn row_sizes(rects: &[egui::Rect]) -> Vec<usize> {
+        let mut rows: Vec<(i32, usize)> = vec![];
+        for r in rects {
+            let top = r.top().round() as i32;
+            match rows.last_mut() {
+                Some((t, n)) if *t == top => *n += 1,
+                _ => rows.push((top, 1)),
+            }
+        }
+        rows.into_iter().map(|(_, n)| n).collect()
+    }
+
+    /// #1736: without group labels (as it ships), the tools run on from group to group: one column
+    /// evenly spaced, with nothing between the groups; two columns with every row full but maybe
+    /// the last. With the labels, each group starts its own row under its name.
+    #[test]
+    fn the_tools_run_on_without_group_labels() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        let one = frame_in(&mut app, &ctx, 0.0, vec![], 1600.0);
+        assert_eq!(one.len(), slots(&app).len());
+        let steps: Vec<f32> = one.windows(2).map(|w| w[1].top() - w[0].top()).collect();
+        assert!(steps.iter().all(|d| (d - steps[0]).abs() < 0.5), "evenly spaced: {steps:?}");
+        app.ui.toolbar_double = true;
+        let rows = row_sizes(&frame_in(&mut app, &ctx, 0.5, vec![], 1600.0));
+        let slots = slots(&app).len();
+        assert_eq!(rows.iter().sum::<usize>(), slots);
+        assert!(rows[..rows.len() - 1].iter().all(|n| *n == 2), "{rows:?}");
+        assert_eq!(rows.len(), slots.div_ceil(2));
+        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
+        let labelled = row_sizes(&frame_in(&mut app, &ctx, 1.0, vec![], 1600.0));
+        assert!(labelled.len() > rows.len() && labelled.contains(&1), "{labelled:?}");
+    }
+
     #[test]
     fn the_double_arrow_toggles_one_and_two_columns_in_a_short_window() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -1433,8 +1478,8 @@ pub(crate) mod tests {
         assert!(r.min.x.is_finite() && r.min.y.is_finite() && r.left() >= 0.0, "on screen: {r:?}");
     }
 
-    /// User Interface › Show Tool Group Labels (#663): on, the toolbar names its groups; off, it
-    /// shows none of the names, a faint dash between the groups instead.
+    /// User Interface › Show Tool Group Labels (#663): off as it ships (#1736), the toolbar shows
+    /// none of its groups' names and nothing between the groups; on, it names them.
     #[test]
     fn tool_group_labels_can_be_hidden() {
         fn texts(s: &egui::Shape, out: &mut Vec<String>) {
@@ -1455,11 +1500,11 @@ pub(crate) mod tests {
             out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
             shown
         };
-        let with = draw(&mut app);
-        assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
-        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": false})).unwrap();
         let without = draw(&mut app);
         assert!(!without.iter().any(|t| ["Select", "Shapes", "Draw", "Modify", "Type"].contains(&t.as_str())), "{without:?}");
+        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
+        let with = draw(&mut app);
+        assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
     }
 
     /// Hover `at` for two seconds, coming from elsewhere: the texts painted meanwhile.

@@ -4298,6 +4298,15 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
+	Basic	Cơ bản
+	Fill and Stroke Controls	Điều khiển tô và nét
+	Coloring Controls	Điều khiển màu
+	Draw Mode Controls	Điều khiển chế độ vẽ
+	Screen Mode Controls	Điều khiển chế độ màn hình
+	Drawer menu	Menu ngăn kéo
+	Toolbar: Show Controls	Thanh công cụ: Hiện điều khiển
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control phải là fillStroke, coloring, drawMode hoặc screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	điều khiển không xác định `{name}`: fillStroke, coloring, drawMode hoặc screenMode
 @msg	give a fraction `t` from 0 to 1	hãy cung cấp giá trị `t` từ 0 đến 1
 @msg	give the path `id`	hãy cung cấp `id` đường dẫn
 @msg	invalid stroke widths	chiều rộng nét không hợp lệ

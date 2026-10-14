@@ -263,6 +263,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{tool: id, floating?: bool} float the toolbar group holding `tool` (in the current Basic or Advanced layout) as its own strip of tool buttons (true), put it back in the toolbar (false) or toggle (omitted), as dragging or clicking a flyout's tear-off bar and the strip's × do; returns the new state",
     ),
     (
+        "toolbar.show",
+        "Toolbar: Show Controls",
+        "",
+        "{control?: \"fillStroke\"|\"coloring\"|\"drawMode\"|\"screenMode\", on?: bool} show (true), hide (false) or toggle (omitted) one of the controls under the toolbar's tools (Fill and Stroke, Coloring, Draw Mode, Screen Mode), as the All Tools drawer's Show section does; saved with the preferences; returns every control's state",
+    ),
+    (
         "window.editToolbar",
         "Edit Toolbar",
         "",

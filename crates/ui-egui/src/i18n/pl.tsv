@@ -4589,6 +4589,15 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
+	Basic	Podstawowy
+	Fill and Stroke Controls	Elementy sterujące wypełnieniem i obrysem
+	Coloring Controls	Elementy sterujące kolorem
+	Draw Mode Controls	Elementy sterujące trybem rysowania
+	Screen Mode Controls	Elementy sterujące trybem ekranu
+	Drawer menu	Menu szuflady
+	Toolbar: Show Controls	Pasek narzędzi: Pokaż elementy sterujące
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control musi mieć wartość fillStroke, coloring, drawMode lub screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	nieznany element sterujący `{name}`: fillStroke, coloring, drawMode lub screenMode
 @msg	give a fraction `t` from 0 to 1	podaj wartość `t` od 0 do 1
 @msg	give the path `id`	podaj `id` ścieżki
 @msg	invalid stroke widths	nieprawidłowe szerokości obrysu
