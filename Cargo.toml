@@ -11,6 +11,7 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "c3487320b2d1de657b860b3c8abb44e1f2b32bd8", default-features = false, features = ["write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "d991bf6792f8ade99c51358bf3c1d902c8cd96b5" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
 # internal
@@ -61,7 +62,6 @@ wat = "1.228"
 vello_cpu = { version = "0.2", features = ["f32_pipeline"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp"] }
 usvg = "0.48"
-krilla = "0.8"
 skrifa = "0.47"
 harfrust = "0.13"
 linesweeper = "0.5"
@@ -109,3 +109,6 @@ opt-level = 1
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+[patch.crates-io]
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "c3487320b2d1de657b860b3c8abb44e1f2b32bd8" }

@@ -676,6 +676,7 @@ fn remote_does_not_send_on_a_connection_with_a_stray_line() {
     let addr = listener.local_addr().unwrap().to_string();
     let mut remote = Remote::connect(&addr).unwrap();
     let (mut stale, _) = listener.accept().unwrap();
+    stale.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
     writeln!(stale, "{}", json!({"ok": false, "error": "idle"})).unwrap();
     let probe = remote.connection_probe();
     probe.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
@@ -693,7 +694,6 @@ fn remote_does_not_send_on_a_connection_with_a_stray_line() {
     assert_eq!(remote.call("document.inspect", json!({})), Ok(json!(7)));
     h.join().unwrap();
     // Nothing was written to the stale connection: it ends (or is reset, its line unread) without a byte.
-    stale.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
     let mut rest = String::new();
     assert_eq!(BufReader::new(stale).read_line(&mut rest).unwrap_or(0), 0, "{rest}");
 }

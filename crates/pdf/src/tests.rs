@@ -734,3 +734,22 @@ fn opacity_mask_exports_as_luminosity_soft_mask() {
     assert!(text.contains("/SMask"), "soft mask in an ExtGState");
     assert!(text.contains("/Luminosity"));
 }
+
+#[test]
+fn empty_and_populated_file_info_preserve_key_presence() {
+    let mut d = doc(100.0, 100.0);
+    d.title.clear();
+    let s = uncompressed(&d);
+    for key in ["/Title", "/Author", "/Keywords", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
+        assert!(!s.contains(key), "unexpected empty metadata {key}");
+    }
+    d.title = "Synthetic title".into();
+    d.metadata.author = " Test author ".into();
+    d.metadata.keywords = vec!["test keyword".into()];
+    let bytes = export(&d, &PdfOptions { created: Some(1_700_000_000), ..PdfOptions::uncompressed() }).unwrap();
+    let s = String::from_utf8_lossy(&bytes);
+    for key in ["/Title", "/Author", "/Keywords", "/CreationDate", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
+        assert!(s.contains(key), "missing populated metadata {key}");
+    }
+    assert!(s.contains("Synthetic title") && s.contains("Test author") && s.contains("test keyword"));
+}

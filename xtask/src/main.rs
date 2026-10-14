@@ -9,6 +9,7 @@ mod brands;
 mod bundle;
 mod ico;
 mod layers;
+mod pdf_deps;
 mod pngsuite;
 mod sha256;
 mod stats;
@@ -24,9 +25,10 @@ usage: cargo xtask <command>
 commands:
   assets          check that every icon/image/font/asset is attributed in ASSETS.md
   brands          check that user-visible text (labels, params docs, MCP, docs, packaging) names no other vendor's products
+  pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates
-  ci              fmt --check, clippy -D warnings, test, assets, brands, layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, pdf-deps, assets, brands, layers, wasm (stops at first failure)
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
                   --affinity the pinned public Affinity documents into corpus/affinity
@@ -45,6 +47,7 @@ fn main() -> ExitCode {
         Some("assets") => assets::run(&root()),
         Some("brands") => brands::run(&root()),
         Some("layers") => cmd_layers(),
+        Some("pdf-deps") => pdf_deps::run(&root()),
         Some("wasm") => cmd_wasm(),
         Some("ci") => cmd_ci(),
         Some("corpus") if rest.contains(&"--affinity") => affinity_corpus::fetch(),
@@ -200,6 +203,7 @@ fn cmd_ci() -> Result<(), String> {
                 run(c, "cargo test --workspace")
             }),
         ),
+        ("pdf-deps", Box::new(|| pdf_deps::run(&root()))),
         ("assets", Box::new(|| assets::run(&root()))),
         ("brands", Box::new(|| brands::run(&root()))),
         ("layers", Box::new(cmd_layers)),

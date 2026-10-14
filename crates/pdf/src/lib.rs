@@ -219,6 +219,12 @@ pub enum PdfError {
     PlaceholderOnly,
 }
 
+impl From<craft_pdf::write::WriteError> for PdfError {
+    fn from(error: craft_pdf::write::WriteError) -> Self {
+        Self::Write(error.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

@@ -5,6 +5,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use craft_pdf::write::backend as krilla;
 use hayro_syntax::Pdf;
 use hayro_syntax::object::{Array, Dict, Object, ObjectIdentifier, Stream, String as PdfString};
 use krilla::embed::{AssociationKind, EmbeddedFile, MimeType};
