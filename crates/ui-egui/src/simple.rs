@@ -33,6 +33,8 @@ pub struct SimpleState {
     pub start_over: bool,
     /// Where Keep Safe last saved the design.
     pub kept: Option<String>,
+    /// Smaller or Bigger (percent) waiting for a yes: the design has stops for fabric.
+    pub resize: Option<f64>,
 }
 
 /// The text sizes simple mode offers (UI scaling).
@@ -236,14 +238,26 @@ fn part_actions(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.label(RichText::new(tl!("Size")).size(14.0));
         if ui.button(RichText::new(tl!("Smaller")).size(14.0)).clicked() {
-            app.run("object.scale", json!({ "sx": 90 })).ok();
+            resize(app, 90.0);
         }
         if ui.button(RichText::new(tl!("Bigger")).size(14.0)).clicked() {
-            app.run("object.scale", json!({ "sx": 110 })).ok();
+            resize(app, 110.0);
         }
     });
     if ui.button(RichText::new(tl!("Delete")).size(14.0)).clicked() {
         app.run("edit.clear", json!({})).ok();
+    }
+}
+
+/// Smaller or Bigger: at once, unless the design stops for fabric (appliqué, in-the-hoop pieces)
+/// or carries a project's cut sizes, which a new size would no longer match: then it asks first.
+fn resize(app: &mut VectorcraftApp, percent: f64) {
+    let info = app.session.execute("embroidery.info", &json!({})).unwrap_or_default();
+    let careful = info["stops"].as_u64().unwrap_or(0) > 0 || !info["notes"].as_str().unwrap_or("").trim().is_empty();
+    if careful {
+        app.simple.resize = Some(percent);
+    } else {
+        app.run("object.scale", json!({ "sx": percent })).ok();
     }
 }
 
@@ -275,16 +289,31 @@ fn design_summary(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         if info["fits"].as_bool() == Some(false) {
             ui.label(RichText::new(tl!("The design is bigger than the hoop: make it smaller before you sew.")).size(13.0).color(t.error));
         }
-        // swatches of the thread colours, in sewing order
-        ui.horizontal_wrapped(|ui| {
-            for c in info["colors"].as_array().map(Vec::as_slice).unwrap_or_default() {
-                let hex = c["color"].as_str().unwrap_or("#000000");
-                let rgb = vectorcraft_embroidery::sf_core::Rgb::from_hex(hex).unwrap_or_default();
-                let (r, resp) = ui.allocate_exact_size(vec2(22.0, 22.0), egui::Sense::hover());
+        // the steps: each thread in sewing order, named as the design names it (an in-the-hoop
+        // design's threads say what to do)
+        ui.add_space(6.0);
+        ui.label(RichText::new(tl!("Steps")).font(theme::semibold(14.0)).color(t.text));
+        for (i, c) in info["colors"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
+            let hex = c["color"].as_str().unwrap_or("#000000");
+            let rgb = vectorcraft_embroidery::sf_core::Rgb::from_hex(hex).unwrap_or_default();
+            ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(vec2(18.0, 18.0), egui::Sense::hover());
                 ui.painter().rect_filled(r, 4.0, Color32::from_rgb(rgb.r, rgb.g, rgb.b));
-                resp.on_hover_text(c["name"].as_str().unwrap_or(hex));
+                let name = c["name"].as_str().filter(|n| !n.trim().is_empty()).unwrap_or(hex);
+                ui.add(egui::Label::new(RichText::new(format!("{}. {name}", i + 1)).size(13.0).color(t.text)).wrap());
+            });
+        }
+        if info["stops"].as_u64().unwrap_or(0) > 0 {
+            ui.label(RichText::new(tl!("The machine also stops where you lay or trim fabric.")).size(12.0).color(t.text_dim));
+        }
+        // a project's supplies and steps, printed with its picture
+        if !info["notes"].as_str().unwrap_or("").trim().is_empty() && ui.button(RichText::new(tl!("Print the Steps…")).size(14.0)).clicked() {
+            if let Err(e) = app.run("embroidery.worksheet", json!({ "kind": "production" })) {
+                app.status(e);
+            } else {
+                app.run("file.print", json!({})).ok();
             }
-        });
+        }
     }
     ui.add_space(8.0);
     ui.label(RichText::new(tl!("Click a part of the design to change how it sews.")).size(13.0).color(t.text_dim));
@@ -306,8 +335,35 @@ fn sew_label(label: &str) -> &str {
     }
 }
 
-/// Add Words, the shape picker and Start Over's question, while open.
+/// Add Words, the shape picker and the questions (Start Over, resizing), while open.
 pub fn windows(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if let Some(percent) = app.simple.resize {
+        let mut answer: Option<bool> = None;
+        egui::Window::new(tl!("Change the Size?")).collapsible(false).resizable(false).show(ctx, |ui| {
+            ui.set_width(380.0);
+            ui.label(
+                RichText::new(tl!("This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.")).size(14.0),
+            );
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if crate::widgets::primary_button(ui, tl!("Keep the Size")).clicked() {
+                    answer = Some(false);
+                }
+                if ui.button(tl!("Change It Anyway")).clicked() {
+                    answer = Some(true);
+                }
+            });
+        });
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            answer = Some(false);
+        }
+        if let Some(yes) = answer {
+            if yes {
+                app.run("object.scale", json!({ "sx": percent })).ok();
+            }
+            app.simple.resize = None;
+        }
+    }
     if app.simple.start_over {
         let mut answer: Option<bool> = None;
         egui::Window::new(tl!("Start Over")).collapsible(false).resizable(false).show(ctx, |ui| {
