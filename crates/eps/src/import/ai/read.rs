@@ -1560,8 +1560,10 @@ impl<'a> Reader<'a> {
         // A style read here: the object, painted as it says.
         if let Some(appearance) = self.styles.get(&style).and_then(|st| styled(object, st)) {
             let Some(mut object) = f.children.pop() else { return };
-            f.children.pop();
+            let Some(look) = f.children.pop() else { return };
             object.appearance = appearance.into();
+            // The object's transparency is written on its look, after the look's group ends.
+            (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
             // Now the object itself, not a copy an enclosing look's `strip` would remove.
             self.hidden_ids.remove(&object.id);
             f.children.push(object);
