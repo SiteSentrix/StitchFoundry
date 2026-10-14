@@ -5295,3 +5295,54 @@ fn check_design_follows_the_stitch_length_rules_for_clothing_and_other_items() {
     let k = kinds(&mut s);
     assert!(!k.iter().any(|k| k == "shortStitches" || k == "narrowSatin" || k == "shortFill"), "{k:?}");
 }
+
+#[test]
+fn fabric_recipes_set_underlay_types_push_compensation_and_clothing() {
+    use sf_core::model::ObjectKind;
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    s.execute("path.create", &json!({"d": format!("M {} {} L {} {}", 10.0 * PT, 10.0 * PT, 60.0 * PT, 10.0 * PT)})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"width": 4}})).unwrap();
+    rect(&mut s, 10.0 * PT, 30.0 * PT, 30.0 * PT, 30.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let planned = |s: &Session| {
+        let plan = s.embroidery_plan().unwrap();
+        let mut satin = None;
+        let mut fill = None;
+        for o in &plan.design.objects {
+            match &o.kind {
+                ObjectKind::Satin(x) => satin = Some(x.params.clone()),
+                ObjectKind::Fill(x) => fill = Some(x.params.clone()),
+                _ => {}
+            }
+        }
+        (satin.unwrap(), fill.unwrap())
+    };
+    // a T-shirt: an edge run and a zigzag under satin, push compensation, clothing
+    s.execute("embroidery.applyFabric", &json!({"name": "Jersey knit (T-shirt)"})).unwrap();
+    let (sat, fill) = planned(&s);
+    assert!(!sat.underlay.auto && sat.underlay.edge_run && sat.underlay.zigzag && !sat.underlay.center_run);
+    assert!((sat.push_comp - 0.2).abs() < 1e-9 && (fill.push_comp - 0.2).abs() < 1e-9);
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["settings"]["checks"]["garment"], true);
+    // a towel isn't worn: long stitches from 12.1 mm
+    s.execute("embroidery.applyFabric", &json!({"name": "Towel / terry"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!((info["settings"]["checks"]["garment"].as_bool(), info["settings"]["checks"]["longStitch"].as_f64()), (Some(false), Some(12.1)));
+    // leather: a centre run under satin, no edge run under fills (fewer holes)
+    s.execute("embroidery.applyFabric", &json!({"name": "Leather / vinyl"})).unwrap();
+    let (sat, fill) = planned(&s);
+    assert!(sat.underlay.center_run && !sat.underlay.edge_run && !sat.underlay.zigzag);
+    assert!(!fill.underlay.edge_run);
+    // a fabric of one's own takes them too
+    s.execute(
+        "embroidery.fabric.save",
+        &json!({"name": "Bag canvas", "pushComp": 0.3, "satinUnderlay": "zigzag", "fillEdgeRun": false, "garment": false}),
+    )
+    .unwrap();
+    s.execute("embroidery.applyFabric", &json!({"name": "Bag canvas"})).unwrap();
+    let (sat, fill) = planned(&s);
+    assert!(sat.underlay.zigzag && !sat.underlay.edge_run && (sat.push_comp - 0.3).abs() < 1e-9 && !fill.underlay.edge_run);
+    assert!(s.execute("embroidery.fabric.save", &json!({"name": "X", "satinUnderlay": "lots"})).is_err());
+}

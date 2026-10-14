@@ -128,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Fabric",
             [],
             None,
-            "{name, description?, satinSpacing?, fillSpacing?, fillStitchLength?, pullComp?, fillUnderlay?, underlaySpacing?, topping?, stabilizer?: tear-away|cut-away|no-show-mesh|wash-away, from?} make or change a fabric of the design (mm); values not given come from the fabric `from`, else the one of that name, else the standard woven settings → {name}",
+            "{name, description?, satinSpacing?, fillSpacing?, fillStitchLength?, pullComp?, pushComp?, fillUnderlay?, fillEdgeRun?, underlaySpacing?, satinUnderlay?: auto|center-run|edge-run|zigzag|edge-zigzag, garment?: bool|null (sewn on clothing: Check Design's long stitches from 7 mm, else 12.1 mm), topping?, stabilizer?: tear-away|cut-away|no-show-mesh|wash-away, from?} make or change a fabric of the design (mm); values not given come from the fabric `from`, else the one of that name, else the standard woven settings → {name}",
             has_doc,
             fabric_save
         ),
@@ -438,6 +438,7 @@ pub(crate) fn fabric_json(f: &Fabric, custom: bool) -> Value {
         "satinSpacing": f.satin_spacing, "fillSpacing": f.fill_spacing, "fillStitchLength": f.fill_stitch_length,
         "pullComp": f.pull_comp, "fillUnderlay": f.fill_underlay, "underlaySpacing": f.underlay_spacing, "topping": f.topping,
         "stabilizer": f.stabilizer.id(), "advice": sf_core::fabrics::stabilizer_advice(f),
+        "pushComp": f.push_comp, "satinUnderlay": f.satin_underlay.id(), "fillEdgeRun": f.fill_edge_run, "garment": f.garment,
     })
 }
 
@@ -468,13 +469,25 @@ fn fabric_save(s: &mut Session, p: &Value) -> Result<Value> {
     num("fillStitchLength", &mut f.fill_stitch_length, 0.5, 12.0)?;
     num("pullComp", &mut f.pull_comp, 0.0, 2.0)?;
     num("underlaySpacing", &mut f.underlay_spacing, 0.3, 10.0)?;
+    num("pushComp", &mut f.push_comp, 0.0, 5.0)?;
+    if let Some(v) = p.get("satinUnderlay") {
+        f.satin_underlay = v
+            .as_str()
+            .and_then(sf_core::fabrics::SatinUnderlayRecipe::from_id)
+            .ok_or_else(|| bad(CMD, "`satinUnderlay` is auto, center-run, edge-run, zigzag or edge-zigzag"))?;
+    }
+    match p.get("garment") {
+        None => {}
+        Some(Value::Null) => f.garment = None,
+        Some(v) => f.garment = Some(v.as_bool().ok_or_else(|| bad(CMD, "`garment` is true, false or null"))?),
+    }
     if let Some(v) = p.get("stabilizer") {
         f.stabilizer = v
             .as_str()
             .and_then(sf_core::fabrics::Stabilizer::from_id)
             .ok_or_else(|| bad(CMD, "`stabilizer` is tear-away, cut-away, no-show-mesh or wash-away"))?;
     }
-    for (key, slot) in [("fillUnderlay", &mut f.fill_underlay), ("topping", &mut f.topping)] {
+    for (key, slot) in [("fillUnderlay", &mut f.fill_underlay), ("topping", &mut f.topping), ("fillEdgeRun", &mut f.fill_edge_run)] {
         if let Some(v) = p.get(key) {
             *slot = v.as_bool().ok_or_else(|| bad(CMD, format!("`{key}` is true or false")))?;
         }
