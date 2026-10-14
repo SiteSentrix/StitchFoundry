@@ -261,6 +261,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if claimed || (k == Key::Enter && !busy) {
                 crate::canvas::apply_requests(app, r);
             }
+            if claimed {
+                ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
+            }
             if k == Key::Escape && !busy && !claimed {
                 // Escape leaves Presentation Mode first: it hides the menus and panels.
                 if app.ui.screen_mode == 3 {
