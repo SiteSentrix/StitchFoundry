@@ -25,6 +25,8 @@ const MAX_STOPS: usize = 6;
 const MIN_SPACING: f64 = 0.08;
 /// How far (levels) the stops may be from the colours along the gradient.
 const STOP_TOLERANCE: f64 = 2.0;
+/// How far (levels) a pixel beside a gradient may be from the gradient's colour there and join it.
+const GROW: f64 = 10.0;
 
 /// A linear gradient a traced path is filled with.
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +52,12 @@ impl TracedGradient {
         let (a, b) = (color(before), color(after));
         [0, 1, 2].map(|c| a[c] + (b[c] - a[c]) * k)
     }
+}
+
+/// The pixels beside pixel `i` of a `w` × `h` image.
+fn beside(i: usize, w: usize, h: usize) -> impl Iterator<Item = usize> {
+    let (x, y) = (i % w, i / w);
+    [(x > 0).then(|| i - 1), (x + 1 < w).then(|| i + 1), (y > 0).then(|| i - w), (y + 1 < h).then(|| i + w)].into_iter().flatten()
 }
 
 /// The gradients of `img`: for each pixel the gradient it is part of (an index into the list, or
@@ -103,11 +111,8 @@ pub(crate) fn detect(img: &Raster) -> (Vec<u32>, Vec<TracedGradient>) {
     let mut depth = vec![0u16; w * h];
     let mut found = vec![];
     let (mut members, mut stack) = (vec![], vec![]);
-    for seed in 0..w * h {
-        if seen.get(seed).copied().unwrap_or(true) || !smooth.get(seed).copied().unwrap_or(false) {
-            continue;
-        }
-        // The connected smooth pixels from here.
+    // The connected smooth pixels from `seed` that `seen` has not: into `members`.
+    let mut flood = |seed: usize, seen: &mut [bool], members: &mut Vec<usize>| {
         members.clear();
         stack.push(seed);
         if let Some(s) = seen.get_mut(seed) {
@@ -115,8 +120,7 @@ pub(crate) fn detect(img: &Raster) -> (Vec<u32>, Vec<TracedGradient>) {
         }
         while let Some(i) = stack.pop() {
             members.push(i);
-            let (x, y) = (i % w, i / w);
-            for j in [(x > 0).then(|| i - 1), (x + 1 < w).then(|| i + 1), (y > 0).then(|| i - w), (y + 1 < h).then(|| i + w)].into_iter().flatten() {
+            for j in beside(i, w, h) {
                 if smooth.get(j).copied().unwrap_or(false) && !seen.get(j).copied().unwrap_or(true) {
                     if let Some(s) = seen.get_mut(j) {
                         *s = true;
@@ -125,7 +129,26 @@ pub(crate) fn detect(img: &Raster) -> (Vec<u32>, Vec<TracedGradient>) {
                 }
             }
         }
-        if members.len() < MIN_PIXELS || found.len() >= 1000 {
+    };
+    // The areas, largest first: a gradient that noise or a soft rim broke into several is found in
+    // its largest piece and grown over the rest.
+    let mut areas: Vec<(usize, usize)> = vec![];
+    for seed in 0..w * h {
+        if !seen.get(seed).copied().unwrap_or(true) && smooth.get(seed).copied().unwrap_or(false) {
+            flood(seed, &mut seen, &mut members);
+            if members.len() >= MIN_PIXELS {
+                areas.push((members.len(), seed));
+            }
+        }
+    }
+    areas.sort_unstable_by(|a, b| b.cmp(a));
+    seen.fill(false);
+    for (_, seed) in areas {
+        if seen.get(seed).copied().unwrap_or(true) || found.len() >= 1000 {
+            continue;
+        }
+        flood(seed, &mut seen, &mut members);
+        if members.len() < MIN_PIXELS {
             continue;
         }
         // The gradient is read from the area's inside, where there is one: the pixels at its rim
@@ -135,16 +158,12 @@ pub(crate) fn detect(img: &Raster) -> (Vec<u32>, Vec<TracedGradient>) {
         let rim = far as usize + 2;
         let unknown = u16::MAX;
         members.iter().for_each(|&i| depth[i] = unknown);
-        let beside = |i: usize| {
-            let (x, y) = (i % w, i / w);
-            [(x > 0).then(|| i - 1), (x + 1 < w).then(|| i + 1), (y > 0).then(|| i - w), (y + 1 < h).then(|| i + w)].into_iter().flatten()
-        };
-        let mut front: Vec<usize> = members.iter().copied().filter(|&i| beside(i).any(|j| depth.get(j).copied() == Some(0))).collect();
+        let mut front: Vec<usize> = members.iter().copied().filter(|&i| beside(i, w, h).any(|j| depth.get(j).copied() == Some(0))).collect();
         front.iter().for_each(|&i| depth[i] = 1);
         for d in 2..=rim as u16 {
             let mut next = vec![];
             for &i in &front {
-                for j in beside(i) {
+                for j in beside(i, w, h) {
                     if let Some(slot) = depth.get_mut(j).filter(|s| **s == unknown) {
                         *slot = d;
                         next.push(j);
@@ -156,10 +175,25 @@ pub(crate) fn detect(img: &Raster) -> (Vec<u32>, Vec<TracedGradient>) {
         let inside: Vec<usize> = members.iter().copied().filter(|&i| depth.get(i).copied() == Some(unknown)).collect();
         let fitted = fit(img, w, if inside.len() >= MIN_PIXELS { &inside } else { &members }, &members, rim);
         members.iter().for_each(|&i| depth[i] = 0);
-        if let Some((g, part)) = fitted {
+        if let Some((g, mut part)) = fitted {
             for &i in &part {
                 if let Some(o) = of.get_mut(i) {
                     *o = found.len() as u32;
+                }
+            }
+            // Grown over every pixel next to it that has its colour there: the pixels noise put a
+            // little off, a soft rim, the pieces noise cut off it.
+            while let Some(i) = part.pop() {
+                for j in beside(i, w, h) {
+                    let near = px(j).is_some_and(|c| {
+                        let own = g.color_at(Point::new((j % w) as f64 + 0.5, (j / w) as f64 + 0.5));
+                        (0..3).all(|k| (f64::from(c[k]) - own[k]).abs() <= GROW)
+                    });
+                    if near && of.get(j).copied() == Some(u32::MAX) {
+                        of[j] = found.len() as u32;
+                        seen[j] = true;
+                        part.push(j);
+                    }
                 }
             }
             found.push(g);
