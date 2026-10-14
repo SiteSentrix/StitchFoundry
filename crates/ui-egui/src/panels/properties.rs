@@ -163,7 +163,7 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The one selected Image Trace object: its preset (choosing another traces it again with that
-/// one), view, Expand and Release.
+/// one), view, a button to reveal the tracing controls, Expand and Release.
 fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vectorcraft_doc::TraceView) {
     section_header(ui, tl!("Image Trace"));
     ui.horizontal(|ui| {
@@ -171,6 +171,9 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
     ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
+    if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
+        crate::panels::image_trace::open_settings(app);
+    }
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
         for (label, id) in [(tl!("Expand"), "imageTrace.expand"), (tl!("Release"), "imageTrace.release")] {
