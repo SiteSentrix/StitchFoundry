@@ -153,6 +153,11 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let full = ui.available_rect_before_wrap();
+    // `hidden_chars` holds the marks Show Hidden Characters kept and the text nodes they were laid
+    // out from. Only the assignment right before the overlay call below puts them back. A frame
+    // that does not draw the overlay drops them, for example with the option off, with the edges
+    // hidden, on the Home screen or with no document open.
+    let hidden_chars = std::mem::take(&mut app.canvas.hidden_chars);
     // A document that opened, closed or became active since Home was chosen replaces it.
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
@@ -438,6 +443,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             thread_overlay(app, &painter, &xf);
         }
         if app.ui.view.hidden_chars {
+            app.canvas.hidden_chars = hidden_chars;
             hidden_chars_overlay(app, &painter, &xf);
         }
     }
@@ -1530,8 +1536,8 @@ fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let color = Color32::from_rgb(0x4f, 0x9d, 0xff);
     let font = egui::FontId::proportional(((10.0 * xf.zoom) as f32).clamp(7.0, 18.0));
     let kept = &mut app.canvas.hidden_chars;
-    // `last` holds the marks of the last frame that showed them. The marks of the objects this
-    // frame doesn't draw are dropped at the end.
+    // `last` holds the marks of the last frame. The marks of the objects this frame doesn't draw
+    // are dropped at the end.
     let mut last = std::mem::take(&mut kept.marks);
     // The inputs are read before any layout: when fonts load during this frame, the next frame
     // lays all type out again.
@@ -1569,7 +1575,7 @@ fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     });
 }
 
-/// The Show Hidden Characters marks of the text objects drawn in the last frame that showed them
+/// The Show Hidden Characters marks of the text objects drawn in the last frame
 /// ([`crate::CanvasCache::hidden_chars`]). Each is kept with the object it was laid out from: an
 /// edited object is a new `Arc` and is laid out again, and all type is laid out again when the
 /// fonts or the hyphenation exceptions change.
@@ -3761,6 +3767,66 @@ mod tests {
         assert_ne!(zoomed, edited, "zoomed in");
         assert!(vectorcraft_text::FontDb::global().add_font(vectorcraft_testkit::fonts::renamed(".Hidden Marks")) > 0, "the family is new");
         assert_ne!(drawn(&mut app, &xf), zoomed, "set in the family that arrived");
+    }
+
+    /// The shapes Type → Show Hidden Characters draws in one canvas frame ([`show`]).
+    fn hidden_char_marks(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
+        let blue = Color32::from_rgb(0x4f, 0x9d, 0xff);
+        shapes(app, ctx)
+            .into_iter()
+            .filter(|s| matches!(s, Shape::Circle(c) if c.fill == blue) || matches!(s, Shape::Text(t) if t.fallback_color == blue))
+            .collect()
+    }
+
+    /// While Show Hidden Characters is on, a canvas frame keeps the marks of the frame before.
+    /// Turning it off drops the marks with their text nodes, and turning it on again draws the
+    /// same marks.
+    #[test]
+    fn show_hidden_characters_off_releases_the_text_nodes() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let text = json!({"x": 20, "y": 60, "text": "one two\nthree four"});
+        let id = vectorcraft_doc::NodeId(app.session.execute("text.create", &text).unwrap()["id"].as_u64().unwrap());
+        let ctx = egui::Context::default();
+        app.run("type.hiddenCharacters", json!({})).unwrap();
+        let on = hidden_char_marks(&mut app, &ctx);
+        assert!(on.len() > 2, "{on:?}");
+        // Tests running alongside add fonts and set hyphenation exceptions, which lays all type out
+        // again: frames are drawn until neither changed between two of them.
+        let kept = (0..100).any(|_| {
+            let (inputs, marks) = (app.canvas.hidden_chars.inputs.clone(), app.canvas.hidden_chars.marks[&id].1.clone());
+            hidden_char_marks(&mut app, &ctx);
+            let after = &app.canvas.hidden_chars;
+            after.inputs == inputs && std::sync::Arc::ptr_eq(&after.marks[&id].1, &marks)
+        });
+        assert!(kept, "a frame keeps the marks of the frame before");
+        app.run("type.hiddenCharacters", json!({})).unwrap();
+        assert!(hidden_char_marks(&mut app, &ctx).is_empty(), "off");
+        assert!(app.canvas.hidden_chars.marks.is_empty(), "no node is kept");
+        app.run("type.hiddenCharacters", json!({})).unwrap();
+        assert_eq!(hidden_char_marks(&mut app, &ctx), on, "on again: the same marks");
+    }
+
+    /// Closing the document drops the marks Show Hidden Characters kept with its text nodes, and
+    /// the same type in a new document shows the same marks.
+    #[test]
+    fn show_hidden_characters_releases_the_text_nodes_of_a_closed_document() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("type.hiddenCharacters", json!({})).unwrap();
+        let open = |app: &mut VectorcraftApp| {
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.session.execute("text.create", &json!({"x": 20, "y": 60, "text": "one two\nthree four"})).unwrap();
+            hidden_char_marks(app, &ctx)
+        };
+        let first = open(&mut app);
+        assert!(first.len() > 2, "{first:?}");
+        assert_eq!(app.canvas.hidden_chars.marks.len(), 1, "the marks are kept with the text object's node");
+        app.session.execute("file.close", &json!({})).unwrap();
+        assert!(hidden_char_marks(&mut app, &ctx).is_empty(), "the Home screen");
+        assert!(app.canvas.hidden_chars.marks.is_empty(), "no node of the closed document is kept");
+        assert_eq!(open(&mut app), first, "the same type in a new document");
     }
 
     /// General › Zoom with Mouse Wheel (#394), through the control channel's `ui.wheel`: off,

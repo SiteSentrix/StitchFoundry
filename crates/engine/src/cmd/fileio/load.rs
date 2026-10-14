@@ -273,12 +273,17 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
 /// own): rasters stay linked, SVG files become art, missing ones placeholders (see
 /// [`vectorcraft_svg::ImportOptions`]).
 pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    // The importer reads on a thread of its own (for its stack): what may be read is what may be
+    // read here.
+    let scope = crate::file_access::ScopeHandle::capture();
     let read = |path: &str| {
-        // Only files (not folders or devices) are read.
-        file_stamp(path)?;
-        let bytes = read_file(path).ok()?;
-        let link = crate::cmd::links::link_info(path, &bytes);
-        Some((bytes, link))
+        scope.clone().run(|| {
+            // Only files (not folders or devices) are read.
+            file_stamp(path)?;
+            let bytes = read_file(path).ok()?;
+            let link = crate::cmd::links::link_info(path, &bytes);
+            Some((bytes, link))
+        })
     };
     vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)
 }
@@ -419,7 +424,7 @@ pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
 /// The most memory decoding one image may take: a 60 in print sheet at 300 ppi (18000 × 6600 px)
 /// is ~475 MB as RGBA, past the decoder's 512 MB default once it is converted. The web app keeps
 /// that default: wasm32 has 4 GB to address and aborts when an allocation fails.
-pub(crate) const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else { 2 << 30 };
+pub(crate) use vectorcraft_doc::MAX_RASTER_ALLOC;
 
 /// What to say of encoded image `bytes` that need more than [`MAX_RASTER_ALLOC`] to decode (its
 /// header says so; the pixels aren't read): the renderer, which has the same allowance, draws

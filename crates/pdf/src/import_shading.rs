@@ -34,7 +34,7 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>) -> 
     let space = colors.shading_space(cs, at(0.0)?.len());
     // RGB to decide which samples are stops; the stops keep the shading's model.
     let sample = |t: f32| -> Option<Color> {
-        let [r, g, b, _] = cs.to_rgba(&at(t)?, 1.0, false).components();
+        let [r, g, b, _] = cs.to_rgba(&at(t)?, 1.0).components();
         Some(Color::rgb(round3(r), round3(g), round3(b)))
     };
     // Sample densely, then drop samples that linear interpolation reproduces.
@@ -147,7 +147,7 @@ fn mesh_color(v: &[f32], function: Option<&ShadingFunction>, sp: &ShadingPattern
     };
     let space = colors.shading_space(&sp.shading.color_space, comps.len());
     colors.native(space, &comps).map(|n| n.color).unwrap_or_else(|| {
-        let [r, g, b, _] = sp.shading.color_space.to_rgba(&comps, 1.0, false).components();
+        let [r, g, b, _] = sp.shading.color_space.to_rgba(&comps, 1.0).components();
         Color::rgb(round3(r), round3(g), round3(b))
     })
 }

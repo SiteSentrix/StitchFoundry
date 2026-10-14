@@ -2124,7 +2124,9 @@ the Actions panel leaves the date out: playing it later dates the document then)
 command records the date it used (and any value it takes from the preferences) in its step of the batch's journal entry.
 A batch may open, switch, close or revert documents: each document it edits gets one undo step, the batch is
 journaled whichever document it ends in, and an error rolls every document back (the ones it opened close, the ones
-it closed or reverted come back).
+it closed or reverted come back). The rollback puts the documents back, not the disk: files its steps wrote (a save, a
+Save As, an export) stay written, new files included, as Undo leaves a saved file on disk. A caller that wants nothing
+written unless the whole batch succeeds puts the saves and exports last, or runs them after the batch.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.info","params":{"author":"Ada","keywords":"poster, fair","rating":4,"copyrightStatus":"copyrighted","copyrightNotice":"© 2026 Ada"}}}

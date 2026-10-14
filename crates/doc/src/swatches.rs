@@ -226,7 +226,7 @@ fn item_paint_mut(it: &mut AppearanceItem) -> &mut Paint {
 }
 
 /// The paints a node holds itself (not its children): appearance items, then text runs.
-pub(crate) fn node_paints(n: &Node) -> impl Iterator<Item = &Paint> {
+pub fn node_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     let runs = match &n.kind {
         NodeKind::Text(t) => t.runs.as_slice(),
         _ => &[],
@@ -235,7 +235,7 @@ pub(crate) fn node_paints(n: &Node) -> impl Iterator<Item = &Paint> {
 }
 
 /// Mutable [`node_paints`], in the same order.
-pub(crate) fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
+pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
     let runs = match &mut n.kind {
         NodeKind::Text(t) => t.runs.as_mut_slice(),
         _ => &mut [],

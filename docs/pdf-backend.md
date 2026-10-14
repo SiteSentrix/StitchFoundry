@@ -1,9 +1,11 @@
 # PDF writer backend
 
 PDF writing uses `craft-pdf` from `storytold/craft-libs`, pinned to
-`c3487320b2d1de657b860b3c8abb44e1f2b32bd8`. Its `write` feature supplies Krilla configuration,
+`f39922b214dc429bcf6551ef71ed3631337b2acf`. Its `write` feature supplies Krilla configuration,
 metadata construction, fallible font preparation and serialization, and native unwind guards.
 The dependency disables default features and enables only `write`.
+The production writer retains Krilla’s raster-image support without its optional text shaper.
+PDF test fixtures enable `simple-text` through a dev dependency.
 
 VectorCraft owns document traversal, drawing, font selection and embedding policy, colour
 conversion, presets, page boxes, layers, editing data, postprocessing and print composition.

@@ -3,12 +3,12 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-use hayro_interpret::font::Glyph;
+use hayro_interpret::font::{Glyph, GlyphRun as ShownGlyphs};
 use hayro_interpret::hayro_cmap::BfString;
 use hayro_interpret::pattern::{Pattern, TilingPattern};
 use hayro_interpret::{
-    CacheKey, ClipPath, Context, Device, GlyphDrawMode, Image, ImageData, InterpreterCache, InterpreterSettings, InterpreterWarning, LumaData,
-    MaskType, PathDrawMode, SoftMask, StrokeProps, interpret_page,
+    CacheKey, ClipPath, Context, Device, DrawMode, DrawProps, Image, ImageData, ImageDrawProps, InterpreterCache, InterpreterSettings,
+    InterpreterWarning, LumaData, MaskType, SoftMask, StrokeProps, interpret_page,
 };
 use hayro_syntax::object::Name;
 use kurbo::{Affine, BezPath, PathEl, Rect, Shape};
@@ -147,9 +147,15 @@ pub const PAST_PAGE_NOTE: &str = "art reaching past the page was clipped to it, 
 
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
+    // The interpreter draws forms, patterns, glyphs and masks inside one another by recursion, in
+    // large stack frames: it caps that (50 deep), and gets room for the cap whatever thread asks.
+    vectorcraft_doc::depth::with_deep_stack(|| read(bytes, opts))
+}
+
+/// [`import_with_report`] on the thread that asks.
+pub(crate) fn read(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open(bytes, opts.password.as_deref())?;
     let picked = crate::pages::picked(opts, original.pages().len())?;
-    picked.iter().filter_map(|&n| original.pages().get(n)).try_for_each(crate::pages::content_too_deep)?;
     let mut ocgs = Ocgs::read(&original);
     let route = opts.layers && !ocgs.list.is_empty();
     // Content that is off imports as hidden layers: an update of the file turns every group on
@@ -167,7 +173,6 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let all_on = turned_on.is_some();
     let pdf = turned_on.unwrap_or(original);
     let pages = pdf.pages();
-    picked.iter().filter_map(|&n| pages.get(n)).try_for_each(crate::pages::content_too_deep)?;
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink2 = sink.clone();
@@ -176,6 +181,9 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             let msg = match w {
                 InterpreterWarning::UnsupportedFont => "a font could not be read; its text was skipped",
                 InterpreterWarning::ImageDecodeFailure => "an image could not be decoded and was skipped",
+                // Annotations aren't drawn (`render_annotations` below), and a kind of warning
+                // added later has no message yet.
+                _ => return,
             };
             if let Ok(mut v) = sink2.lock()
                 && !v.iter().any(|x| x == msg)
@@ -1262,8 +1270,8 @@ impl<'p> Builder<'p> {
     /// before it on the open line was stroked so too, is held with the line instead of ending it
     /// (an editor writes type on a path glyph by glyph, each followed by the stroke added to the
     /// type). `false`: it isn't one.
-    fn hold_glyph_stroke(&mut self, path: &BezPath, transform: Affine, paint: &hayro_interpret::Paint<'_>, draw_mode: &PathDrawMode) -> bool {
-        let PathDrawMode::Stroke(props) = draw_mode else { return false };
+    fn hold_glyph_stroke(&mut self, path: &BezPath, transform: Affine, paint: &hayro_interpret::Paint<'_>, draw_mode: &DrawMode) -> bool {
+        let DrawMode::Stroke(props) = draw_mode else { return false };
         if self.mask.is_some() || self.blend != BlendMode::Normal || matches!(paint, hayro_interpret::Paint::Pattern(_)) {
             return false;
         }
@@ -1355,7 +1363,11 @@ impl<'p> Builder<'p> {
             Some(art) => {
                 let [r, g, b, _] = m.background_color().to_rgba().components();
                 let backdrop = luminance(&Color::rgb(r, g, b));
-                let inverted = m.transfer_function().is_some_and(|tf| tf.apply(0.0) > tf.apply(1.0));
+                let inverted = m.transfer_function().is_some_and(|tf| {
+                    let mut ends = [0, 255];
+                    tf.apply_to(&mut ends);
+                    ends[0] > ends[1]
+                });
                 let id = self.id();
                 mask_spec(art, m.mask_type() == MaskType::Alpha, backdrop, inverted, page, |all| Node::group(id, all))
             }
@@ -1684,7 +1696,14 @@ fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
     }
 }
 
-impl<'a> Device<'a> for Builder<'_> {
+/// What the interpreter draws, as the device below gets it.
+impl<'a> Builder<'_> {
+    /// The soft mask and blend mode of what is drawn next.
+    fn set_state(&mut self, mask: Option<SoftMask<'a>>, blend_mode: hayro_interpret::BlendMode) {
+        self.set_soft_mask(mask);
+        self.set_blend_mode(blend_mode);
+    }
+
     fn set_soft_mask(&mut self, mask: Option<SoftMask<'a>>) {
         let spec = mask.map(|m| self.soft_mask(&m));
         let same = match (&spec, &self.mask) {
@@ -1707,7 +1726,7 @@ impl<'a> Device<'a> for Builder<'_> {
         }
     }
 
-    fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &hayro_interpret::Paint<'a>, draw_mode: &PathDrawMode) {
+    fn path(&mut self, path: &BezPath, transform: Affine, paint: &hayro_interpret::Paint<'a>, draw_mode: &DrawMode) {
         self.flush_glyphs();
         if self.hold_glyph_stroke(path, transform, paint, draw_mode) {
             self.pending = false;
@@ -1729,19 +1748,19 @@ impl<'a> Device<'a> for Builder<'_> {
             hayro_interpret::Paint::Color(_) => None,
         };
         // Patch and triangle meshes are gradient meshes.
-        if let (PathDrawMode::Fill(_), Some(sp)) = (draw_mode, shading)
+        if let (DrawMode::Fill(_), Some(sp)) = (draw_mode, shading)
             && let Some(meshes) = mesh_shading(sp, &mut self.colors)
         {
             self.draw_meshes(meshes, &bp, sp.opacity);
             return;
         }
         let pd = PathData::from_bezpath(&bp);
-        let stroke = matches!(draw_mode, PathDrawMode::Stroke(_));
+        let stroke = matches!(draw_mode, DrawMode::Stroke(_));
         let (paint, opacity) = self.paint(paint, stroke);
         // A gradient that doesn't extend past its ends paints only between them.
         let width = match draw_mode {
-            PathDrawMode::Stroke(p) => p.line_width as f64 * mean_scale(transform),
-            PathDrawMode::Fill(_) => 0.0,
+            DrawMode::Stroke(p) => p.line_width as f64 * mean_scale(transform),
+            _ => 0.0,
         };
         let band = shading.and_then(|sp| extend_clip(sp, bp.bounding_box().inflate(width, width)));
         let wrap = |b: &mut Self, n: Node| match &band {
@@ -1753,7 +1772,7 @@ impl<'a> Device<'a> for Builder<'_> {
             None => n,
         };
         match draw_mode {
-            PathDrawMode::Fill(rule) => {
+            DrawMode::Fill(rule) => {
                 let mut f = FillLayer::new(paint);
                 (f.opacity, f.overprint) = (opacity, overprint);
                 let mut n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Fill(f)], ..Default::default() });
@@ -1764,7 +1783,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 let n = wrap(self, n);
                 self.push_node(n);
             }
-            PathDrawMode::Stroke(props) => {
+            DrawMode::Stroke(props) => {
                 let mut st = stroke_layer(paint, opacity, props, mean_scale(transform));
                 st.overprint = overprint;
                 // Fill-then-stroke of the same path (the `B` operator, or a fill and then a stroke
@@ -1799,6 +1818,71 @@ impl<'a> Device<'a> for Builder<'_> {
                 let n = wrap(self, n);
                 self.push_node(n);
             }
+            // (`draw_path` gives a fill and a stroke one after the other, and no path is invisible.)
+            DrawMode::FillAndStroke(..) | DrawMode::Invisible => {}
+        }
+    }
+
+    /// One glyph: filled, or stroked with `stroke`.
+    fn glyph(
+        &mut self,
+        glyph: &Glyph<'a>,
+        transform: Affine,
+        glyph_transform: Affine,
+        paint: &hayro_interpret::Paint<'a>,
+        stroke: Option<&StrokeProps>,
+    ) {
+        self.pending = false;
+        match glyph {
+            Glyph::Outline(o) => {
+                let scale = mean_scale(transform);
+                let overprint = self.glyph_overprint(stroke.is_some());
+                if self.type_glyph(o, transform * glyph_transform, scale, paint, stroke, overprint) {
+                    return;
+                }
+                self.flush_text();
+                let mut bp = o.outline();
+                bp.apply_affine(transform * glyph_transform);
+                let (paint, opacity) = self.paint(paint, stroke.is_some());
+                let same = self.glyphs.as_ref().is_some_and(|r| {
+                    r.paint == paint
+                        && r.opacity == opacity
+                        && r.overprint == overprint
+                        && r.stroke.as_ref().map(|s| s.line_width) == stroke.map(|s| s.line_width)
+                        && (r.scale - scale).abs() < 1e-9
+                });
+                if !same {
+                    self.flush_glyphs();
+                    self.glyphs = Some(GlyphRun { path: BezPath::new(), paint, opacity, stroke: stroke.cloned(), scale, overprint });
+                }
+                if let Some(r) = &mut self.glyphs {
+                    r.path.extend(bp.iter());
+                }
+                self.warn("text was converted to outlines");
+            }
+            Glyph::Type3(t3) => {
+                if self.nested >= MAX_NESTED {
+                    return;
+                }
+                self.flush();
+                self.nested += 1;
+                t3.interpret(self, transform, glyph_transform, paint);
+                self.nested -= 1;
+            }
+        }
+    }
+}
+
+impl<'a> Device<'a> for Builder<'_> {
+    fn draw_path(&mut self, path: &BezPath, props: DrawProps<'a>, draw_mode: &DrawMode) {
+        self.set_state(props.soft_mask, props.blend_mode);
+        match draw_mode {
+            DrawMode::Invisible => {}
+            DrawMode::FillAndStroke(rule, stroke) => {
+                self.path(path, props.transform, &props.paint, &DrawMode::Fill(*rule));
+                self.path(path, props.transform, &props.paint, &DrawMode::Stroke(stroke.clone()));
+            }
+            one => self.path(path, props.transform, &props.paint, one),
         }
     }
 
@@ -1834,60 +1918,22 @@ impl<'a> Device<'a> for Builder<'_> {
         self.blend = BlendMode::Normal;
     }
 
-    fn draw_glyph(
-        &mut self,
-        glyph: &Glyph<'a>,
-        transform: Affine,
-        glyph_transform: Affine,
-        paint: &hayro_interpret::Paint<'a>,
-        draw_mode: &GlyphDrawMode,
-    ) {
-        self.pending = false;
+    fn draw_glyph_run(&mut self, glyph_run: &ShownGlyphs<'_, 'a>, props: DrawProps<'a>, draw_mode: &DrawMode) {
+        // (A run is filled or stroked: one filled and stroked is given twice.)
         let stroke = match draw_mode {
-            GlyphDrawMode::Invisible => return,
-            GlyphDrawMode::Fill => None,
-            GlyphDrawMode::Stroke(p) => Some(p.clone()),
+            DrawMode::Invisible => return,
+            DrawMode::Fill(_) => None,
+            DrawMode::Stroke(p) | DrawMode::FillAndStroke(_, p) => Some(p),
         };
-        match glyph {
-            Glyph::Outline(o) => {
-                let scale = mean_scale(transform);
-                let overprint = self.glyph_overprint(stroke.is_some());
-                if self.type_glyph(o, transform * glyph_transform, scale, paint, stroke.as_ref(), overprint) {
-                    return;
-                }
-                self.flush_text();
-                let mut bp = o.outline();
-                bp.apply_affine(transform * glyph_transform);
-                let (paint, opacity) = self.paint(paint, stroke.is_some());
-                let same = self.glyphs.as_ref().is_some_and(|r| {
-                    r.paint == paint
-                        && r.opacity == opacity
-                        && r.overprint == overprint
-                        && r.stroke.as_ref().map(|s| s.line_width) == stroke.as_ref().map(|s| s.line_width)
-                        && (r.scale - scale).abs() < 1e-9
-                });
-                if !same {
-                    self.flush_glyphs();
-                    self.glyphs = Some(GlyphRun { path: BezPath::new(), paint, opacity, stroke, scale, overprint });
-                }
-                if let Some(r) = &mut self.glyphs {
-                    r.path.extend(bp.iter());
-                }
-                self.warn("text was converted to outlines");
-            }
-            Glyph::Type3(t3) => {
-                if self.nested >= MAX_NESTED {
-                    return;
-                }
-                self.flush();
-                self.nested += 1;
-                t3.interpret(self, transform, glyph_transform, paint);
-                self.nested -= 1;
-            }
+        for g in glyph_run.glyphs() {
+            self.set_state(props.soft_mask.clone(), props.blend_mode);
+            self.glyph(g, props.transform, g.transform(), &props.paint, stroke);
         }
     }
 
-    fn draw_image(&mut self, image: Image<'a, '_>, transform: Affine) {
+    fn draw_image(&mut self, image: Image<'a, '_>, props: ImageDrawProps<'a>) {
+        self.set_state(props.soft_mask, props.blend_mode);
+        let transform = props.transform;
         self.flush_glyphs();
         self.flush_text();
         self.pending = false;
@@ -1975,7 +2021,7 @@ impl<'a> Device<'a> for Builder<'_> {
         }
     }
 
-    fn pop_clip_path(&mut self) {
+    fn pop_clip(&mut self) {
         self.flush();
         self.pending = false;
         self.pop_frame();

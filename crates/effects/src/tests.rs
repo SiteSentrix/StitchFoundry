@@ -206,6 +206,24 @@ fn random_transform_is_stable_per_object_and_within_the_values() {
     assert!(close(r.width(), 50.0, 1e-9) && close(r.center().x, 90.0, 1e-9), "{r:?}");
 }
 
+/// #1705: stacked Transform effects multiply their copies; the anchors they make are bounded,
+/// whatever each one's count.
+#[test]
+fn stacked_transform_copies_stay_within_the_anchor_budget() {
+    let p = json!({"copies": 1000});
+    let b = square().bounds().unwrap();
+    let mut path = square();
+    let mut counts = vec![];
+    for _ in 0..3 {
+        path = crate::distort::transform_within(&path, b, &p, 0, 100);
+        counts.push(path.anchor_count());
+    }
+    assert_eq!(counts, [100, 100, 100], "25 squares, then no room for a copy of them");
+    // Within the budget every copy is made, and the effect's own budget takes a thousand copies.
+    assert_eq!(crate::distort::transform_within(&square(), b, &json!({"copies": 24}), 0, 100).subpaths.len(), 25);
+    assert_eq!(run("distort.transform", p, &square()).subpaths.len(), 1001);
+}
+
 #[test]
 fn transform_copies_stop_before_they_overflow() {
     let out = run("distort.transform", json!({"scaleH": 100000, "scaleV": 100000, "copies": 1000}), &square());

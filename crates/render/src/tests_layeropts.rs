@@ -67,13 +67,37 @@ fn dim_images_fades_only_the_images() {
     assert_eq!(render(&d, true).pixel(65, 25), [255, 0, 0, 255], "exports are not dimmed");
 }
 
+/// #1683: a template layer dims its images by its Dim Images percentage and nothing else: with
+/// the option off they show at full strength, and the layer's paths are never faded.
+#[test]
+fn a_template_layer_dims_its_images_by_dim_images() {
+    let template = |dim: Option<u8>| {
+        let d = doc(|k| {
+            if let NodeKind::Layer { template, dim_images, .. } = k {
+                (*template, *dim_images) = (true, dim);
+            }
+        });
+        let img = render(&d, false);
+        (img.pixel(65, 25), img.pixel(25, 25))
+    };
+    let red = [255, 0, 0, 255];
+    assert_eq!(template(None), (red, red), "Dim Images off: as it is");
+    let (image, path) = template(Some(50));
+    assert!(image[0] == 255 && (120..=135).contains(&image[1]) && image[1] == image[2], "half way to white: {image:?}");
+    assert_eq!(path, red, "vector art stays");
+    let (image, _) = template(Some(20));
+    assert!((198..=210).contains(&image[1]) && image[1] == image[2], "a fifth of its strength: {image:?}");
+    assert_eq!(template(Some(100)), (red, red));
+}
+
 /// In Outline view a template layer still draws in Preview, dimmed, so its picture can be traced;
 /// the layer above it draws in outline (#1486).
 #[test]
 fn a_template_layer_stays_in_preview_in_outline_view() {
     let mut d = doc(|k| {
-        if let NodeKind::Layer { template, preview, .. } = k {
-            *template = true;
+        if let NodeKind::Layer { template, preview, dim_images, .. } = k {
+            // As Layer Options makes a template: its images dimmed to 50 %.
+            (*template, *dim_images) = (true, Some(50));
             // Preview off doesn't put a template in outline either.
             *preview = false;
         }

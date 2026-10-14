@@ -122,6 +122,11 @@ impl<'a> Unpacked<'a> {
     /// data (entries sharing bytes, only in hand-made files, would copy them once each). Entries
     /// are read in the order of their offsets, each straight into its own buffer.
     pub(crate) fn entries(self, wanted: &[[u64; 2]]) -> Result<Vec<Option<Vec<u8>>>, FormatError> {
+        self.entries_within(wanted, MAX_WORK)
+    }
+
+    /// [`Self::entries`], unpacking at most `work` bytes of a streamed file to find them.
+    fn entries_within(self, wanted: &[[u64; 2]], work: u64) -> Result<Vec<Option<Vec<u8>>>, FormatError> {
         let mut out: Vec<Option<Vec<u8>>> = vec![None; wanted.len()];
         let in_memory = |tail: &[u8], out: &mut Vec<Option<Vec<u8>>>| {
             for (slot, &[offset, len]) in out.iter_mut().zip(wanted) {
@@ -147,7 +152,7 @@ impl<'a> Unpacked<'a> {
                 drop(self.json);
                 let mut order: Vec<usize> = (0..wanted.len()).collect();
                 order.sort_by_key(|&i| wanted.get(i).map_or(0, |w| w[0]));
-                let mut s = Stream { r: Box::new(io::Cursor::new(read).chain(rest)), pos: 0, file, at };
+                let mut s = Stream { r: Box::new(io::Cursor::new(read).chain(rest)), pos: 0, file, at, left: work };
                 for i in order {
                     let Some(&[offset, len]) = wanted.get(i) else { continue };
                     if let Some(slot) = out.get_mut(i) {
@@ -155,6 +160,7 @@ impl<'a> Unpacked<'a> {
                     }
                 }
                 // To the end, so the stream's checksum is verified as before.
+                s.left = MAX_BLOBS;
                 s.skip(MAX_BLOBS)?;
             }
         }
@@ -188,12 +194,29 @@ struct Stream<'a> {
     file: &'a [u8],
     /// Where the data after the JSON starts in the unpacked stream.
     at: u64,
+    /// Bytes that may still be unpacked ([`MAX_WORK`] in all): the entries' own, the gaps before
+    /// them, and the stream from its start again for each entry behind the one before.
+    left: u64,
 }
 
+/// Most bytes unpacked to read a streamed file's entries: the entries and the gaps between them
+/// ([`MAX_BLOBS`] in a file a writer made, where they follow each other), and the JSON once more.
+/// The entries' lengths alone don't bound it: one byte asked for at a far offset unpacks all
+/// that lies before it, and each entry behind the last one starts the stream over (#1699).
+const MAX_WORK: u64 = MAX_BLOBS + MAX_JSON;
+
 impl Stream<'_> {
+    /// Count `n` bytes unpacked against the budget.
+    fn spend(&mut self, n: u64) -> Result<(), FormatError> {
+        self.left = self.left.checked_sub(n).ok_or(FormatError::TooBig)?;
+        Ok(())
+    }
+
     /// Unpack and drop up to `n` bytes → how many there were.
     fn skip(&mut self, n: u64) -> Result<u64, FormatError> {
-        let skipped = io::copy(&mut (&mut self.r).take(n), &mut io::sink()).map_err(damaged)?;
+        // One byte past the budget at most, so going over it is seen without doing the work.
+        let skipped = io::copy(&mut (&mut self.r).take(n.min(self.left.saturating_add(1))), &mut io::sink()).map_err(damaged)?;
+        self.spend(skipped)?;
         self.pos += skipped;
         Ok(skipped)
     }
@@ -204,7 +227,8 @@ impl Stream<'_> {
             // Entries out of order or overlapping (only hand-made files): unpack again from the
             // start.
             let mut dec = GzDecoder::new(self.file);
-            let skipped = io::copy(&mut (&mut dec).take(self.at), &mut io::sink()).map_err(damaged)?;
+            let skipped = io::copy(&mut (&mut dec).take(self.at.min(self.left.saturating_add(1))), &mut io::sink()).map_err(damaged)?;
+            self.spend(skipped)?;
             if skipped < self.at {
                 return Ok(None);
             }
@@ -219,7 +243,8 @@ impl Stream<'_> {
         let n = usize::try_from(len).map_err(|_| FormatError::TooBig)?;
         // The length is the file's word: reserve up to a bound, and let real data grow the rest.
         bytes.try_reserve_exact(n.min(RESERVE_MAX)).map_err(|_| FormatError::TooBig)?;
-        let got = (&mut self.r).take(len).read_to_end(&mut bytes).map_err(damaged)?;
+        let got = (&mut self.r).take(len.min(self.left.saturating_add(1))).read_to_end(&mut bytes).map_err(damaged)?;
+        self.spend(got as u64)?;
         self.pos += got as u64;
         Ok((got as u64 == len).then_some(bytes))
     }
@@ -235,6 +260,35 @@ mod tests {
         let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         gz.write_all(bytes).unwrap();
         gz.finish().unwrap()
+    }
+
+    /// #1699: reading a streamed file's entries unpacks a bounded number of bytes, whatever
+    /// their offsets: a far offset and entries behind one another are refused past the budget.
+    #[test]
+    fn a_streamed_files_entries_are_found_within_a_work_budget() {
+        let tail: Vec<u8> = (0..4096u32).map(|i| (i % 251) as u8).collect();
+        let mut file = b"{}".to_vec();
+        file.extend(crate::BLOB_MAGIC);
+        file.extend(&tail);
+        let file = gzip(&file);
+        let read = |wanted: &[[u64; 2]], work: u64| {
+            let u = Unpacked::new(&file).unwrap();
+            assert!(matches!(u.tail, Tail::Stream { .. }), "read as a stream");
+            u.entries_within(wanted, work)
+        };
+        // Entries one after the other: the tail is unpacked once.
+        let parts = read(&[[0, 1000], [1000, 3096]], 4096).unwrap();
+        assert_eq!(parts, vec![Some(tail[..1000].to_vec()), Some(tail[1000..].to_vec())]);
+        // One byte at the far end is the whole tail's work.
+        assert_eq!(read(&[[4095, 1]], 4096).unwrap(), vec![Some(vec![tail[4095]])]);
+        assert!(matches!(read(&[[4095, 1]], 4000), Err(FormatError::TooBig)));
+        // Entries over the same bytes start the stream again each time: counted, then refused.
+        let same = vec![[4000, 96]; 50];
+        assert!(read(&same, 50 * (4096 + 64)).is_ok());
+        assert!(matches!(read(&same, 3 * 4096), Err(FormatError::TooBig)));
+        // An offset past the data is still just missing, and the default budget reads all of it.
+        assert_eq!(read(&[[1 << 40, 1]], 1 << 20).unwrap(), vec![None]);
+        assert_eq!(Unpacked::new(&file).unwrap().entries(&[[0, 4096]]).unwrap(), vec![Some(tail.clone())]);
     }
 
     #[test]

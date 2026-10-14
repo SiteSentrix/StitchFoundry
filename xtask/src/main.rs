@@ -27,7 +27,7 @@ commands:
   brands          check that user-visible text (labels, params docs, MCP, docs, packaging) names no other vendor's products
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
-  wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates
+  wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
   ci              fmt --check, clippy -D warnings, test, pdf-deps, assets, brands, layers, wasm (stops at first failure)
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
@@ -144,8 +144,8 @@ fn cmd_layers() -> Result<(), String> {
     }
 }
 
-/// Workspace packages that must build for wasm32: all L0–L5 crates plus
-/// the egui shell.
+/// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
+/// shell, and the web app (its wasm-only code is compiled by nothing else).
 fn wasm_set() -> Result<Vec<String>, String> {
     let crates = layers::from_metadata(&metadata()?)?;
     Ok(crates
@@ -153,7 +153,7 @@ fn wasm_set() -> Result<Vec<String>, String> {
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
-            _ => false,
+            _ => layers::short_name(&c.name) == "web",
         })
         .map(|c| c.name)
         .collect())

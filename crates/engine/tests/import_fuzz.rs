@@ -538,17 +538,29 @@ proptest! {
 // ---------- PDF ----------
 
 fn handmade_pdf(content: &str, resources: &str, media: &str) -> Vec<u8> {
-    let objs = [
+    handmade_pdf_with(content, resources, media, &[])
+}
+
+/// The same, followed by the objects `more` (numbered from 5).
+fn handmade_pdf_with(content: &str, resources: &str, media: &str, more: &[Vec<u8>]) -> Vec<u8> {
+    let page = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         format!("<< /Type /Page /Parent 2 0 R /MediaBox {media} /Contents 4 0 R /Resources {resources} >>"),
         format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1),
     ];
+    pdf_of(&page.into_iter().map(String::into_bytes).chain(more.iter().cloned()).collect::<Vec<_>>())
+}
+
+/// The PDF of the objects `objs` (numbered from 1, the catalog first).
+fn pdf_of(objs: &[Vec<u8>]) -> Vec<u8> {
     let mut out = b"%PDF-1.7\n".to_vec();
     let mut offsets = vec![];
     for (i, o) in objs.iter().enumerate() {
         offsets.push(out.len());
-        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
     }
     let xref = out.len();
     out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
@@ -2157,10 +2169,15 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
 
 /// The testkit's sample editing data, compressed as older `.ai` files compress it.
 fn ai_sample_compressed() -> Vec<u8> {
+    [&b"%AI12_CompressedData"[..], &deflated(&vectorcraft_testkit::ai::sample_data())].concat()
+}
+
+/// `data` compressed (zlib).
+fn deflated(data: &[u8]) -> Vec<u8> {
     use std::io::Write as _;
     let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
-    e.write_all(&vectorcraft_testkit::ai::sample_data()).unwrap();
-    [&b"%AI12_CompressedData"[..], &e.finish().unwrap()].concat()
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
 }
 
 proptest! {
@@ -2533,6 +2550,333 @@ fn deep_pdf(content: &str, resources: &str) -> Vec<u8> {
     handmade_pdf(content, resources, "[0 0 100 100]")
 }
 
+/// A stream object with the entries `dict`, its `data` compressed.
+fn packed(dict: &str, data: &str) -> Vec<u8> {
+    packed_as_is(dict, &deflated(data.as_bytes()))
+}
+
+/// A stream object with the entries `dict`, its data `z` compressed already.
+fn packed_as_is(dict: &str, z: &[u8]) -> Vec<u8> {
+    // (A length the test gives stands.)
+    let length = if dict.contains("/Length") { String::new() } else { format!(" /Length {}", z.len()) };
+    [format!("<< {dict} /Filter /FlateDecode{length} >>\nstream\n").as_bytes(), z, b"\nendstream"].concat()
+}
+
+/// A page whose content is `content`, with `resources` and the objects `more` (numbered from 5).
+fn pdf_with(content: &str, resources: &str, more: &[Vec<u8>]) -> Vec<u8> {
+    handmade_pdf_with(content, resources, "[0 0 100 100]", more)
+}
+
+/// Arrays in arrays, and dictionaries in dictionaries, far deeper than any reader goes: as the
+/// operands of content.
+fn nested_operands() -> [String; 2] {
+    let (n, d) = (100_000, 50_000);
+    [format!("BT {}{} TJ ET 0 0 5 5 re f", "[".repeat(n), "]".repeat(n)), format!("/P {}{} DP 0 0 5 5 re f", "<< /A ".repeat(d), ">> ".repeat(d))]
+}
+
+/// A page drawing through the compressed stream that `container` makes of each of
+/// [`nested_operands`] (object 5), one file each.
+fn nested_in(content: &str, resources: &str, container: impl Fn(&str) -> Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    nested_operands().iter().map(|deep| pdf_with(content, resources, &container(deep))).collect()
+}
+
+const FORM: &str = "/Type /XObject /Subtype /Form /BBox [0 0 100 100]";
+
+/// A Type 3 font (object 5) whose glyph `a` is object 6.
+fn type3_font(resources: &str) -> Vec<u8> {
+    format!(
+        "<< /Type /Font /Subtype /Type3 /FontBBox [0 0 10 10] /FontMatrix [0.1 0 0 0.1 0 0] /CharProcs << /a 6 0 R >> \
+         /Encoding << /Type /Encoding /Differences [97 /a] >> /FirstChar 97 /LastChar 97 /Widths [10] /Resources {resources} >>"
+    )
+    .into_bytes()
+}
+
+/// A page whose box is object 6, kept with object 7 (a number) in a compressed object stream
+/// (object 5, with the entries `stream`): a file with a cross-reference stream, as it must be.
+fn pdf_with_object_stream(boxed: &str, stream: &str) -> Vec<u8> {
+    let content = "0 0 5 5 re f";
+    let inside = format!("{boxed} 77");
+    let index = format!("6 0 7 {} ", boxed.len() + 1);
+    let objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox 6 0 R /Contents 4 0 R /Resources << >> >>".to_vec(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1).into_bytes(),
+        packed(&format!("/Type /ObjStm /N 2 /First {} {stream}", index.len()), &format!("{index}{inside}")),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    // One entry an object: its kind, then where it is (an offset, or the stream it is in and its
+    // place there).
+    let mut entries = vec![[0u8, 0, 0, 0, 0, 255, 255]];
+    let at = |kind: u8, a: usize, b: u16| {
+        let (a, b) = ((a as u32).to_be_bytes(), b.to_be_bytes());
+        [kind, a[0], a[1], a[2], a[3], b[0], b[1]]
+    };
+    for (i, o) in objs.iter().enumerate() {
+        entries.push(at(1, out.len(), 0));
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    entries.extend([at(2, 5, 0), at(2, 5, 1), at(1, out.len(), 0)]);
+    let xref = out.len();
+    out.extend_from_slice(format!("8 0 obj\n<< /Type /XRef /Size 9 /Root 1 0 R /W [1 4 2] /Length {} >>\nstream\n", entries.len() * 7).as_bytes());
+    out.extend_from_slice(&entries.concat());
+    out.extend_from_slice(format!("\nendstream\nendobj\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+    out
+}
+
+/// `n` objects from object 5 on, each made by `link` of the number of the next, then `last`.
+fn chain(n: usize, link: impl Fn(usize) -> String, last: &str) -> Vec<Vec<u8>> {
+    (0..n).map(|i| link(i + 6).into_bytes()).chain([last.as_bytes().to_vec()]).collect()
+}
+
+/// A page painting with the shading whose function is object 5.
+fn pdf_with_function(more: &[Vec<u8>]) -> Vec<u8> {
+    let shading = "/Shading << /S << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function 5 0 R >> >>";
+    pdf_with("/S sh", &format!("<< {shading} >>"), more)
+}
+
+/// A page filling in the colour space that is object 5.
+fn pdf_with_color_space(more: &[Vec<u8>]) -> Vec<u8> {
+    pdf_with("/C cs 0 sc 0 0 5 5 re f /C CS 0 SC 0 0 5 5 re S", "<< /ColorSpace << /C 5 0 R >> >>", more)
+}
+
+/// Every hostile PDF here opens as an error or as a document within the cap, on a small stack.
+fn open_each(name: &str, files: impl IntoIterator<Item = Vec<u8>> + Send + 'static) {
+    let name = name.to_string();
+    on_a_small_stack(move || {
+        for (i, bytes) in files.into_iter().enumerate() {
+            open_deep(&format!("{name}-{i}.pdf"), &bytes);
+            // As `.ai` (the PDF part of one) and placed, too.
+            open_deep(&format!("{name}-{i}.ai"), &bytes);
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+            let _ = no_panic(s.execute("file.place", &json!({"name": "deep.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes)})));
+            assert!(!s.doc().unwrap().doc.too_deep(None));
+        }
+    });
+}
+
+// Nesting where only the reader of the decoded data sees it: inside each kind of compressed
+// stream a page draws through.
+
+#[test]
+fn pdf_nesting_inside_a_compressed_form() {
+    open_each("form", nested_in("/F Do", "<< /XObject << /F 5 0 R >> >>", |deep| vec![packed(FORM, deep)]));
+}
+
+#[test]
+fn pdf_nesting_inside_a_compressed_pattern() {
+    let tile = "/PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 10 10] /XStep 10 /YStep 10 /Resources << >>";
+    open_each("pattern", nested_in("/Pattern cs /P scn 0 0 50 50 re f", "<< /Pattern << /P 5 0 R >> >>", |deep| vec![packed(tile, deep)]));
+}
+
+#[test]
+fn pdf_nesting_inside_a_compressed_glyph() {
+    let glyph = |deep: &str| vec![type3_font("<< >>"), packed("", &format!("10 0 d0 {deep}"))];
+    open_each("glyph", nested_in("BT /F1 12 Tf 10 10 Td (aa) Tj ET", "<< /Font << /F1 5 0 R >> >>", glyph));
+}
+
+#[test]
+fn pdf_nesting_inside_a_compressed_soft_mask() {
+    let group = format!("{FORM} /Group << /S /Transparency /CS /DeviceGray >>");
+    let state = "<< /ExtGState << /G << /Type /ExtGState /SMask << /S /Luminosity /G 5 0 R >> >> >> >>";
+    open_each("mask", nested_in("/G gs 0 0 50 50 re f", state, move |deep| vec![packed(&group, deep)]));
+}
+
+#[test]
+fn pdf_nesting_inside_a_compressed_annotation() {
+    let annots = "<< >> /Annots [<< /Type /Annot /Subtype /Square /Rect [0 0 50 50] /AP << /N 5 0 R >> >>]";
+    open_each("annotation", nested_in("0 0 5 5 re f", annots, |deep| vec![packed(FORM, deep)]));
+}
+
+#[test]
+fn pdf_nesting_inside_compressed_page_content() {
+    let files = nested_operands().map(|deep| {
+        let mut objs: Vec<Vec<u8>> = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"].map(Vec::from).into();
+        objs.push(b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents [4 0 R 4 0 R] /Resources << >> >>".to_vec());
+        objs.push(packed("", &deep));
+        pdf_of(&objs)
+    });
+    open_each("content", files);
+}
+
+#[test]
+fn pdf_nesting_inside_an_object_stream() {
+    let (n, d) = (100_000, 50_000);
+    open_each(
+        "objects",
+        [
+            // A plain one first: the file is read as it should be.
+            pdf_with_object_stream("[0 0 100 100]", ""),
+            pdf_with_object_stream(&format!("{}0 0 100 100{}", "[".repeat(n), "]".repeat(n)), ""),
+            pdf_with_object_stream(&format!("{}{}", "<< /A ".repeat(d), ">> ".repeat(d)), ""),
+            // Its length is an object kept in the stream itself.
+            pdf_with_object_stream("[0 0 100 100]", "/Length 7 0 R"),
+            // It extends itself.
+            pdf_with_object_stream("[0 0 100 100]", "/Extends 5 0 R"),
+        ],
+    );
+    let plain = vectorcraft_engine::cmd::fileio::load("plain.pdf", &pdf_with_object_stream("[0 0 120 80]", "")).expect("an object stream is read");
+    assert_eq!(plain.doc.artboards[0].rect.width(), 120.0);
+}
+
+// What refers to itself, or to the next of its kind without end.
+
+#[test]
+fn pdf_page_trees_that_hold_themselves() {
+    let page = |parent: usize| format!("<< /Type /Page /Parent {parent} 0 R /MediaBox [0 0 100 100] /Contents 4 0 R /Resources << >> >>");
+    let content = "<< /Length 13 >>\nstream\n0 0 5 5 re f\nendstream";
+    let own = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [2 0 R 3 0 R 2 0 R] /Count 1 >>".to_string(),
+        page(2),
+        content.to_string(),
+    ];
+    // Thousands of nodes, each holding the next; the page is the last.
+    let n = 30_000;
+    let mut deep = vec!["<< /Type /Catalog /Pages 5 0 R >>".to_string(), "null".to_string(), "null".to_string(), content.to_string()];
+    deep.extend((0..n).map(|i| format!("<< /Type /Pages /Kids [{} 0 R] /Count 1 >>", i + 6)));
+    deep.push(page(n + 4));
+    // Two nodes holding each other.
+    let pair = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [5 0 R] /Count 1 >>".to_string(),
+        page(5),
+        content.to_string(),
+        "<< /Type /Pages /Kids [2 0 R 3 0 R] /Count 1 >>".to_string(),
+    ];
+    let bytes = |objs: &[String]| pdf_of(&objs.iter().map(|o| o.clone().into_bytes()).collect::<Vec<_>>());
+    open_each("pages", [bytes(&own), bytes(&deep), bytes(&pair)]);
+}
+
+#[test]
+fn pdf_functions_that_hold_themselves() {
+    let stitch = |next: usize| format!("<< /FunctionType 3 /Domain [0 1] /Functions [{next} 0 R] /Bounds [] /Encode [0 1] >>");
+    let ramp = "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >>";
+    let calculator = "/FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1]";
+    let n = 100_000;
+    open_each(
+        "functions",
+        [
+            pdf_with_function(&[stitch(5).into_bytes()]),
+            pdf_with_function(&[stitch(6).into_bytes(), stitch(5).into_bytes()]),
+            pdf_with_function(&chain(20_000, stitch, ramp)),
+            // A calculator function of procedures in procedures.
+            pdf_with_function(&[packed(calculator, &format!("{}{}", "{".repeat(n), "}".repeat(n)))]),
+            pdf_with_function(&[packed(calculator, &format!("{{ {} 0 0 0 {} }}", "true {".repeat(n), "} if ".repeat(n)))]),
+        ],
+    );
+}
+
+#[test]
+fn pdf_color_spaces_that_hold_themselves() {
+    let indexed = |next: usize| format!("[/Indexed {next} 0 R 1 <000000ffffff>]");
+    let tint = "<< /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [0 0 0] /N 1 >>";
+    let profile = |alternate: &str| format!("<< /N 3 /Alternate {alternate} /Length 4 >>\nstream\njunk\nendstream").into_bytes();
+    open_each(
+        "spaces",
+        [
+            pdf_with_color_space(&[indexed(5).into_bytes()]),
+            pdf_with_color_space(&[indexed(6).into_bytes(), indexed(5).into_bytes()]),
+            pdf_with_color_space(&chain(20_000, indexed, "/DeviceRGB")),
+            pdf_with_color_space(&[b"[/Separation /Ink 5 0 R 6 0 R]".to_vec(), tint.as_bytes().to_vec()]),
+            pdf_with_color_space(&[b"[/DeviceN [/Ink] 5 0 R 6 0 R]".to_vec(), tint.as_bytes().to_vec()]),
+            pdf_with_color_space(&[b"[/Pattern 5 0 R]".to_vec()]),
+            pdf_with_color_space(&[b"[/ICCBased 6 0 R]".to_vec(), profile("5 0 R")]),
+            pdf_with_color_space(&[b"[/ICCBased 6 0 R]".to_vec(), profile("[/ICCBased 6 0 R]")]),
+            // As the space of a shading and of an image.
+            pdf_with(
+                "/S sh",
+                "<< /Shading << /S << /ShadingType 2 /ColorSpace 5 0 R /Coords [0 0 9 0] /Function 6 0 R >> >> >>",
+                &[indexed(5).into_bytes(), tint.as_bytes().to_vec()],
+            ),
+            pdf_with(
+                "q 50 0 0 50 0 0 cm /I Do Q",
+                "<< /XObject << /I 6 0 R >> >>",
+                &[
+                    indexed(5).into_bytes(),
+                    b"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace 5 0 R /Length 1 >>\nstream\n0\nendstream"
+                        .to_vec(),
+                ],
+            ),
+        ],
+    );
+}
+
+/// Spaces past what a stream may decode to (256 MB), compressed (about 260 kB).
+fn spaces_past_the_cap() -> Vec<u8> {
+    use std::io::Write as _;
+    let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+    for _ in 0..257 {
+        e.write_all(&[b' '; 1 << 20]).unwrap();
+    }
+    e.finish().unwrap()
+}
+
+// Streams the reader would fail on (#1700, #1701): it applies a predictor before checking its
+// parameters (`Columns 0` divides by zero, a huge `Columns` allocates a row that large), and
+// inflates without a ceiling.
+
+#[test]
+fn pdf_streams_the_reader_would_fail_on_are_refused() {
+    let zero = "/DecodeParms << /Predictor 2 /Columns 0 >>";
+    let huge = "/DecodeParms << /Predictor 12 /Colors 4 /Columns 99999999999 >>";
+    // An inline image whose data is deflated, written in hexadecimal so the content stays text.
+    let inline = |dp: &str| {
+        let data: String = deflated(&[0; 8]).iter().map(|b| format!("{b:02x}")).collect();
+        format!("q 10 0 0 10 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 /F [/AHx /Fl] /DP [null {dp}] ID {data}> EI Q")
+    };
+    let form = |dict: &str, content: &str| pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed(&format!("{FORM} {dict}"), content)]);
+    let files = [
+        ("a form with Columns 0", form(zero, "0 0 5 5 re f")),
+        ("a form with a huge Columns", form(huge, "0 0 5 5 re f")),
+        ("an inline image with Columns 0", deep_pdf(&inline("<< /Predictor 2 /Columns 0 >>"), "<< >>")),
+        ("an inline image with a huge Columns", deep_pdf(&inline("<< /Predictor 15 /Columns 99999999999 >>"), "<< >>")),
+        ("an inline image in a compressed form", form("", &inline("<< /Predictor 2 /Columns 0 >>"))),
+        ("an object stream with Columns 0", pdf_with_object_stream("[0 0 100 100]", zero)),
+        ("a form of spaces past the cap", pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed_as_is(FORM, &spaces_past_the_cap())])),
+    ];
+    on_a_small_stack(move || {
+        for (what, bytes) in &files {
+            for name in ["hostile.pdf", "hostile.ai"] {
+                let e = vectorcraft_engine::cmd::fileio::load(name, bytes).err().map(|e| e.to_string());
+                assert!(e.as_deref().is_some_and(|e| e.contains("would decode to more than 256 MB")), "{what} as {name}: {e:?}");
+            }
+        }
+    });
+    // Within range, the same files open.
+    let fine = "/DecodeParms << /Predictor 1 /Columns 0 >>";
+    for bytes in [form(fine, "0 0 5 5 re f"), deep_pdf(&inline("<< /Predictor 1 >>"), "<< >>")] {
+        vectorcraft_engine::cmd::fileio::load("fine.pdf", &bytes).expect("opens");
+    }
+}
+
+#[test]
+fn pdf_art_that_draws_itself() {
+    let own = "<< /XObject << /F 5 0 R >> /Pattern << /P 5 0 R >> /Font << /F1 5 0 R >> /ExtGState << /G << /SMask << /S /Alpha /G 5 0 R >> >> >> >>";
+    let tile = format!("/PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 10 10] /XStep 10 /YStep 10 /Resources {own}");
+    let group = format!("{FORM} /Group << /S /Transparency >> /Resources {own}");
+    open_each(
+        "itself",
+        [
+            // A form drawing itself twice, a pattern painting its own tile, a glyph showing
+            // itself, and a mask masked by itself.
+            pdf_with("/F Do", own, &[packed(&format!("{FORM} /Resources {own}"), "0 0 5 5 re f /F Do 1 0 0 1 3 3 cm /F Do")]),
+            pdf_with("/Pattern cs /P scn 0 0 50 50 re f", own, &[packed(&tile, "/Pattern cs /P scn 0 0 5 5 re f")]),
+            pdf_with("BT /F1 12 Tf (a) Tj ET", own, &[type3_font(own), packed("", "10 0 d0 0 0 5 5 re f BT /F1 1 Tf (a) Tj ET")]),
+            pdf_with("/G gs 0 0 50 50 re f", own, &[packed(&group, "/G gs 0 0 5 5 re f")]),
+            // An image that is its own mask, and objects that are only a reference to each other.
+            pdf_with("q 50 0 0 50 0 0 cm /F Do Q", own, &[
+                b"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray /SMask 5 0 R /Length 1 >>\nstream\n0\nendstream".to_vec(),
+            ]),
+            handmade_pdf_with("0 0 5 5 re f", "5 0 R", "6 0 R", &[b"6 0 R".to_vec(), b"5 0 R".to_vec()]),
+            handmade_pdf_with("0 0 5 5 re f", "<< >>", "[0 0 9 9]", &[b"<< /Length 5 0 R >>\nstream\nx\nendstream".to_vec()]),
+        ],
+    );
+}
+
 /// An EPS whose program is `body`.
 fn deep_eps(body: &str) -> Vec<u8> {
     format!("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n{body}\nshowpage\n%%EOF\n").into_bytes()
@@ -2586,6 +2930,188 @@ fn deeply_nested_dxf_blocks_are_read_within_the_cap() {
         pairs.extend([pair(0, "ENDSEC"), pair(0, "SECTION"), pair(2, "ENTITIES"), pair(0, "INSERT"), pair(2, "B0"), pair(10, "0"), pair(20, "0")]);
         pairs.extend([pair(0, "LINE"), pair(10, "0"), pair(20, "0"), pair(11, "9"), pair(21, "9"), pair(0, "ENDSEC"), pair(0, "EOF")]);
         open_deep("blocks.dxf", dxf_text(&pairs).as_bytes()).expect("opens");
+    });
+}
+
+#[test]
+fn dxf_blocks_inserting_themselves_are_left_out() {
+    on_a_small_stack(|| {
+        let pair = |c: i32, v: &str| (c, v.to_string());
+        // A line, then an insert of `inserts`.
+        let block = |name: &str, inserts: &str| {
+            let line = [pair(0, "LINE"), pair(10, "0"), pair(20, "0"), pair(11, "5"), pair(21, "5")];
+            let insert = [pair(0, "INSERT"), pair(2, inserts), pair(10, "1"), pair(20, "1"), pair(0, "ENDBLK")];
+            [pair(0, "BLOCK"), pair(2, name), pair(10, "0"), pair(20, "0")].into_iter().chain(line).chain(insert).collect::<Vec<_>>()
+        };
+        let mut pairs = vec![pair(0, "SECTION"), pair(2, "BLOCKS")];
+        pairs.extend([block("SELF", "SELF"), block("A", "B"), block("B", "A")].concat());
+        pairs.extend([pair(0, "ENDSEC"), pair(0, "SECTION"), pair(2, "ENTITIES")]);
+        for name in ["SELF", "A"] {
+            pairs.extend([pair(0, "INSERT"), pair(2, name), pair(10, "0"), pair(20, "0")]);
+        }
+        pairs.extend([pair(0, "ENDSEC"), pair(0, "EOF")]);
+        let (_, warnings) = open_deep("self.dxf", dxf_text(&pairs).as_bytes()).expect("opens");
+        assert!(warnings.iter().any(|w| w.contains("inside themselves")), "{warnings:?}");
+    });
+}
+
+#[test]
+fn deeply_nested_affinity_groups_are_read_within_the_cap() {
+    use vectorcraft_affinity::synth::{self, F, Method, tag};
+    // Groups in groups: within what the reader takes, past its cap on layers (128), past its cap
+    // on the stream's own nesting (384), and far past both.
+    let files: Vec<Vec<u8>> = [20u32, 120, 180, 370, 2000]
+        .into_iter()
+        .map(|levels| {
+            let group = |id: u32, fields| F::Def(id, vec![tag(b"Grup")], fields);
+            let inner = (0..levels).fold(group(10, vec![]), |inner, i| group(11 + i, vec![(tag(b"Chld"), F::Shared(vec![inner]))]));
+            let spread = F::Def(2, vec![tag(b"Sprd")], vec![(tag(b"Chld"), F::Shared(vec![inner]))]);
+            let stream = synth::stream(&[(tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))]))]);
+            affinity_native(&stream, Method::Stored)
+        })
+        .collect();
+    on_a_small_stack(move || {
+        for bytes in &files {
+            open_deep("deep.afdesign", bytes);
+        }
+    });
+}
+
+#[test]
+fn metafiles_saving_states_without_end_are_read_within_the_cap() {
+    on_a_small_stack(|| {
+        // A saved state, a clip and a rectangle, over and over (nothing is ever restored).
+        let longs = |v: [i32; 4]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+        let emf: Vec<(u32, Vec<u8>)> = (0..50_000).flat_map(|_| [(33, vec![]), (30, longs([0, 0, 500, 500])), (43, longs([0, 0, 50, 50]))]).collect();
+        open_deep("deep.emf", &emf_of(&emf));
+        let shorts = |v: [i16; 4]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+        let wmf: Vec<(u16, Vec<u8>)> =
+            (0..20_000).flat_map(|_| [(0x001E, vec![]), (0x0416, shorts([500, 500, 0, 0])), (0x041B, shorts([50, 50, 0, 0]))]).collect();
+        open_deep("deep.wmf", &wmf_of(&wmf));
+    });
+}
+
+#[test]
+fn deeply_nested_plugin_manifests_and_output_are_errors() {
+    on_a_small_stack(|| {
+        // (A manifest may be 64 kB.)
+        let deep = |n: usize| format!("{}{}", "[".repeat(n), "]".repeat(n));
+        assert!(vectorcraft_plugins::Manifest::parse(deep(30_000).as_bytes()).is_err());
+        assert!(vectorcraft_plugins::Manifest::parse(format!("{{\"params\": {}}}", deep(30_000)).as_bytes()).is_err());
+        let deep = deep(100_000);
+        for output in [deep.clone(), format!("{{\"objects\": {deep}}}"), format!("{{\"objects\": [{{\"kind\": \"path\", \"path\": {deep}}}]}}")] {
+            assert!(vectorcraft_plugins::objects::decode(output.as_bytes()).is_err());
+        }
+    });
+}
+
+/// A document whose symbol `s0` and pattern `p0` are each a line stroked with the brush `loop`,
+/// with an instance of the symbol and a square painted with the pattern on the layer. The brush
+/// is the `kind`th of those that hold art (art, scatter, pattern), and its art is the `art`th of:
+/// an instance of the symbol; that instance inside as many groups as a file holds; a square
+/// painted with the pattern. So what the brush draws is drawn with the brush.
+fn brushed_document(kind: usize, art: usize) -> Document {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, PatternBrush, Scatter};
+    use vectorcraft_color::Paint;
+    use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeKind, PatternDef, Symbol};
+    let mut doc = nested_document(1);
+    let square = || vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 60.0, 20.0));
+    let brushed = |doc: &mut Document| {
+        let mut look = Appearance::basic(Paint::None, Paint::solid(vectorcraft_color::Color::rgb8(0, 0, 0)), 4.0);
+        for item in &mut look.items {
+            if let AppearanceItem::Stroke(s) = item {
+                s.brush = Some("loop".into());
+            }
+        }
+        Node::path(doc.alloc_id(), square(), look)
+    };
+    let instance =
+        |doc: &mut Document| Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "s0".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let painted = |doc: &mut Document| {
+        let fill = Paint::Pattern { pattern: "p0".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+        Node::path(doc.alloc_id(), square(), Appearance::basic(fill, Paint::None, 0.0))
+    };
+    let (in_symbol, in_pattern) = (brushed(&mut doc), brushed(&mut doc));
+    doc.symbols.push(Symbol { name: "s0".into(), art: std::sync::Arc::new(in_symbol) });
+    doc.patterns.push(PatternDef::new("p0", vec![std::sync::Arc::new(in_pattern)]));
+    let art = match art {
+        0 => instance(&mut doc),
+        1 => (0..MAX_DEPTH + 4).fold(instance(&mut doc), |inner, _| Node::group(doc.alloc_id(), vec![std::sync::Arc::new(inner)])),
+        _ => painted(&mut doc),
+    };
+    let kind = match kind {
+        0 => BrushKind::Art(ArtBrush { art, ..Default::default() }),
+        1 => BrushKind::Scatter(Scatter { art, ..Default::default() }),
+        _ => BrushKind::Pattern(PatternBrush { side: art.clone(), start: Some(art), ..Default::default() }),
+    };
+    vectorcraft_brush::store(&mut doc, &[Brush { name: "loop".into(), kind }]);
+    let layer = doc.layers[0].id;
+    for on_layer in [instance(&mut doc), painted(&mut doc), brushed(&mut doc)] {
+        doc.insert(Some(layer), usize::MAX, on_layer).unwrap();
+    }
+    doc
+}
+
+/// `doc` saved, opened again, drawn, exported and edited: nothing overflows.
+fn art_by_name_survives(what: &str, doc: Document) {
+    let (back, _) = open_deep("named.vectorcraft", &vectorcraft_format::save_file(&doc)).expect("opens");
+    let mut s = vectorcraft_engine::Session::new();
+    s.add_document(back, None);
+    for (cmd, p) in [
+        ("select.all", json!({})),
+        ("document.inspect", json!({})),
+        ("brush.expand", json!({})),
+        ("edit.undo", json!({})),
+        ("object.expand", json!({})),
+        ("edit.undo", json!({})),
+        ("object.outlineStroke", json!({})),
+        ("edit.undo", json!({})),
+        ("graph.design", json!({"paste": "deep"})),
+        ("graph.create", json!({"type": "line", "x": 10, "y": 10, "width": 80, "height": 60})),
+        ("graph.marker", json!({"design": "deep"})),
+        ("graph.design", json!({"new": "again"})),
+        ("edit.copy", json!({})),
+        ("edit.paste", json!({})),
+    ] {
+        let _ = no_panic(s.execute(cmd, &p));
+        assert!(!s.doc().unwrap().doc.too_deep(None), "{what}: {cmd}");
+    }
+    for format in ["svg", "pdf", "eps", "png", "dxf", "emf"] {
+        let _ = no_panic(s.execute("document.export", &json!({"format": format})));
+    }
+}
+
+/// A test for each brush whose art is drawn with the brush itself ([`brushed_document`]).
+macro_rules! brushes_drawn_with_themselves {
+    ($($test:ident: $kind:literal, $art:literal;)*) => {$(
+        #[test]
+        fn $test() {
+            on_a_small_stack(|| art_by_name_survives(stringify!($test), brushed_document($kind, $art)));
+        }
+    )*};
+}
+
+brushes_drawn_with_themselves! {
+    an_art_brush_of_its_own_symbol: 0, 0;
+    an_art_brush_of_its_own_symbol_in_deep_art: 0, 1;
+    an_art_brush_painted_with_its_own_pattern: 0, 2;
+    a_scatter_brush_of_its_own_symbol: 1, 0;
+    a_scatter_brush_of_its_own_symbol_in_deep_art: 1, 1;
+    a_scatter_brush_painted_with_its_own_pattern: 1, 2;
+    a_pattern_brush_of_its_own_symbol: 2, 0;
+    a_pattern_brush_of_its_own_symbol_in_deep_art: 2, 1;
+    a_pattern_brush_painted_with_its_own_pattern: 2, 2;
+}
+
+#[test]
+fn a_graph_design_of_deep_art_and_of_a_symbol_holding_itself_is_drawn() {
+    use vectorcraft_doc::{GraphDesign, Node, NodeKind};
+    on_a_small_stack(|| {
+        let mut doc = symbols_document(1, 1, "s0");
+        let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "s0".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+        let art = (0..MAX_DEPTH + 4).fold(instance, |inner, _| Node::group(doc.alloc_id(), vec![std::sync::Arc::new(inner)]));
+        doc.graph_designs.push(GraphDesign { name: "deep".into(), art: std::sync::Arc::new(art) });
+        art_by_name_survives("a graph design of deep art", doc);
     });
 }
 

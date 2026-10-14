@@ -1,12 +1,16 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use hayro_syntax::object::{Dict, Stream};
+use std::collections::HashMap;
+
+use hayro_syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
 use hayro_syntax::page::Page;
+use hayro_syntax::xref::XRef;
 use hayro_syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
+use crate::import_color::direct;
 use crate::{Choice, CropTo, ImportOptions, PdfError};
 
 /// What `info` tells about one page.
@@ -33,62 +37,114 @@ pub fn is_postscript(bytes: &[u8]) -> bool {
     bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
 }
 
-/// The deepest a file's arrays and dictionaries may nest. The PDF reader (hayro) reads them by
-/// recursion, without a cap of its own: a file nested deeply enough overflows the stack, which is
-/// an abort, not an error. Far beyond what a PDF writer makes.
-const MAX_OBJECT_NESTING: usize = 256;
+/// The most functions and colour spaces that may be built on one another (a function stitching
+/// functions together, an indexed space on a space with an alternate). The interpreter (hayro)
+/// builds them by recursion, without a cap of its own: one built on itself, or thousands in a
+/// chain, overflows the stack, which is an abort, not an error. Files have two or three.
+const MAX_LINKS: usize = 16;
 
-fn too_deep() -> PdfError {
-    PdfError::Parse(format!("its arrays and dictionaries are nested more than {MAX_OBJECT_NESTING} deep"))
+/// The deepest the procedures of a calculator function may nest: read by recursion, too.
+const MAX_PROCEDURES: usize = 64;
+
+/// What the function or colour space `o` is built on: the functions a stitching function joins;
+/// the base, alternate and tint of a colour space; the alternate of a colour profile. Nothing for
+/// any other object.
+fn links<'a>(o: &Object<'a>, xref: &'a XRef) -> Vec<MaybeRef<Object<'a>>> {
+    const SPACES: [&[u8]; 6] = [b"Indexed", b"I", b"Separation", b"DeviceN", b"Pattern", b"ICCBased"];
+    if let Object::Array(a) = o {
+        let mut items = a.raw_iter();
+        let kind = match items.next() {
+            Some(MaybeRef::NotRef(Object::Name(n))) => Some(n),
+            Some(MaybeRef::Ref(r)) => xref.get::<Name<'a>>(r.into()),
+            _ => None,
+        };
+        return if kind.is_some_and(|n| SPACES.contains(&n.as_ref())) { items.collect() } else { vec![] };
+    }
+    let Some((d, _)) = dict_or_stream(o) else { return vec![] };
+    let functions = d.get::<Array<'a>>(b"Functions").map(|a| a.raw_iter().collect::<Vec<_>>()).unwrap_or_default();
+    functions.into_iter().chain(d.get_raw::<Object<'a>>(b"Alternate")).collect()
 }
 
-/// Do the arrays and dictionaries in the text of `pdf` nest deeper than [`MAX_OBJECT_NESTING`]?
-/// Read as tokens (strings and comments hold none), an object at a time. The data of a stream
-/// with a filter is skipped: it isn't PDF text until decoded, which this doesn't do, so nesting
-/// inside compressed streams is not seen here.
-fn nests_too_deep(pdf: &[u8]) -> bool {
-    let after =
-        |from: usize, what: &[u8]| pdf.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at + what.len());
-    let word = |at: usize, w: &[u8]| pdf.get(at..).is_some_and(|rest| rest.starts_with(w));
-    let (mut depth, mut filtered) = (0usize, false);
-    let mut i = 0;
-    while let Some(&c) = pdf.get(i) {
-        i += 1;
+/// How many of its kind the function or colour space `o` is built on, one on the next (0 for any
+/// other object); `None` past `room`, or when it is built on itself. `known`: the objects looked
+/// at so far (`None` while one is being looked at, too). One `None` refuses the file, so that an
+/// object is `None` only for the room there was where it was first met doesn't matter.
+fn built_on<'a>(o: MaybeRef<Object<'a>>, xref: &'a XRef, known: &mut HashMap<ObjectIdentifier, Option<usize>>, room: usize) -> Option<usize> {
+    let (id, o) = match o {
+        MaybeRef::Ref(r) => {
+            let id = ObjectIdentifier::from(r);
+            if let Some(found) = known.get(&id) {
+                return *found;
+            }
+            let Some(o) = xref.get::<Object<'a>>(id) else { return Some(0) };
+            known.insert(id, None);
+            (Some(id), o)
+        }
+        MaybeRef::NotRef(o) => (None, o),
+    };
+    let links = links(&o, xref);
+    let most = match room.checked_sub(1) {
+        _ if links.is_empty() => Some(0),
+        Some(room) => links.into_iter().try_fold(0, |most, on| built_on(on, xref, known, room).map(|n| most.max(n + 1))),
+        None => None,
+    };
+    // (What it is built on may be known already, and deeper than there is room for here.)
+    let most = most.filter(|n| *n <= room);
+    if let Some(id) = id {
+        known.insert(id, most);
+    }
+    most
+}
+
+/// Is `o` a calculator function whose procedures nest deeper than [`MAX_PROCEDURES`]?
+fn procedures_too_deep(o: &Object<'_>) -> bool {
+    let Object::Stream(s) = o else { return false };
+    if s.dict().get::<u8>(b"FunctionType") != Some(4) {
+        return false;
+    }
+    let Ok(program) = s.decoded() else { return false };
+    let mut depth = 0usize;
+    program.iter().any(|c| {
         match c {
-            b'%' => i += pdf.get(i..).and_then(|rest| rest.iter().position(|c| matches!(c, b'\n' | b'\r'))).unwrap_or(pdf.len()),
-            b'(' => {
-                // A string: parentheses nest in it, a backslash takes the next byte.
-                let mut open = 1usize;
-                while open > 0 {
-                    match pdf.get(i) {
-                        None => return false,
-                        Some(b'\\') => i += 1,
-                        Some(b'(') => open += 1,
-                        Some(b')') => open -= 1,
-                        Some(_) => {}
-                    }
-                    i += 1;
-                }
-            }
-            b'[' => depth += 1,
-            b']' => depth = depth.saturating_sub(1),
-            b'<' if pdf.get(i) == Some(&b'<') => (depth, i) = (depth + 1, i + 1),
-            b'>' if pdf.get(i) == Some(&b'>') => (depth, i) = (depth.saturating_sub(1), i + 1),
-            // A string in hexadecimal.
-            b'<' => i = after(i, b">").unwrap_or(pdf.len()),
-            b'/' if word(i - 1, b"/Filter") => filtered = true,
-            b'e' if word(i - 1, b"endobj") => (depth, filtered) = (0, false),
-            b'e' if word(i - 1, b"endstream") => i += 8,
-            b's' if word(i - 1, b"stream") => {
-                depth = 0;
-                if std::mem::take(&mut filtered) {
-                    i = after(i, b"endstream").unwrap_or(pdf.len());
-                }
-            }
+            b'{' => depth += 1,
+            b'}' => depth = depth.saturating_sub(1),
             _ => {}
         }
-        if depth > MAX_OBJECT_NESTING {
+        depth > MAX_PROCEDURES
+    })
+}
+
+/// The error of a file with a stream the reader would fail on ([`crate::streams`]).
+const STREAM_NOTE: &str = "a stream in it would decode to more than 256 MB, or its decode parameters can't be applied";
+
+/// The error of a file [`nests_without_end`].
+const NESTED_NOTE: &str = "its functions or colour spaces are built on one another without end";
+
+/// Why `pdf` is refused, if it is: a stream the reader would fail on (its own checks come first:
+/// the calculator functions are decoded below), or [`nests_without_end`].
+fn hostile(pdf: &Pdf) -> Option<&'static str> {
+    if pdf.objects().into_iter().any(|o| matches!(&o, Object::Stream(s) if crate::streams::unsafe_stream(s))) {
+        return Some(STREAM_NOTE);
+    }
+    nests_without_end(pdf).then_some(NESTED_NOTE)
+}
+
+/// Does `pdf` hold functions or colour spaces built on one another past [`MAX_LINKS`] (or on
+/// themselves), or a calculator function nested past [`MAX_PROCEDURES`]? Every object is looked
+/// at, wherever it is used from: the interpreter builds them from resources, shadings, images,
+/// patterns, masks and graphics states alike.
+fn nests_without_end(pdf: &Pdf) -> bool {
+    let xref = pdf.xref();
+    let mut known = HashMap::new();
+    // The objects of the file, then what each holds directly (64 deep at most: the reader's cap).
+    let mut pending: Vec<Object<'_>> = pdf.objects().into_iter().collect();
+    while let Some(o) = pending.pop() {
+        if procedures_too_deep(&o) || built_on(MaybeRef::NotRef(o.clone()), xref, &mut known, MAX_LINKS).is_none() {
             return true;
+        }
+        match &o {
+            Object::Array(a) => pending.extend(a.raw_iter().filter_map(direct)),
+            _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| d.entries()).filter_map(|(_, v)| direct(v))),
         }
     }
     false
@@ -96,12 +152,19 @@ fn nests_too_deep(pdf: &[u8]) -> bool {
 
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
 /// password opens a file too.
+///
+/// What a hostile file nests or loops is the reader's to refuse (hayro 0.8 reads arrays and
+/// dictionaries 64 deep and no deeper, wherever they are: the file's text, an object stream, the
+/// content of a page, form, pattern or glyph; and follows a page tree or a chain of object streams
+/// once). What it reads beyond that is left out, as an object it can't read. What the interpreter
+/// builds by recursion with no cap, and streams it would decode without a ceiling or with a
+/// predictor it can't apply, are refused here ([`hostile`], [`crate::streams`]).
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
     }
-    if nests_too_deep(bytes) {
-        return Err(too_deep());
+    if crate::streams::unsafe_file_streams(bytes) {
+        return Err(PdfError::Parse(STREAM_NOTE.into()));
     }
     let password = password.unwrap_or_default();
     let read = |pw: &str| Pdf::new_with_password(bytes.to_vec(), pw);
@@ -119,12 +182,12 @@ pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError
             LoadPdfError::Decryption(DecryptionError::PasswordProtected) => PdfError::WrongPassword,
             e => PdfError::Parse(format!("{e:?}")),
         })
-}
-
-/// The error of a page whose content, decoded, nests arrays and dictionaries too deep (see
-/// [`MAX_OBJECT_NESTING`]): its operands are read the same way as the file's objects.
-pub(crate) fn content_too_deep(page: &Page<'_>) -> Result<(), PdfError> {
-    if page.page_stream().is_some_and(nests_too_deep) { Err(too_deep()) } else { Ok(()) }
+        // Twice: looking at every object makes the reader repair a damaged table of objects (once
+        // only), and the objects are other ones after that.
+        .and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
+            Some(why) => Err(PdfError::Parse(why.into())),
+            None => Ok(pdf),
+        })
 }
 
 /// The pages and their boxes. An encrypted PDF needs its `password`

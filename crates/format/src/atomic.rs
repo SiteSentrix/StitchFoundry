@@ -4,7 +4,10 @@
 //!
 //! Where a folder refuses the temporary file or the rename (some network shares, a file another
 //! program holds open), the new content is first written and flushed elsewhere and only then copied
-//! into the file itself; if that copy fails, the temporary file stays and the error names it.
+//! into the file itself. That copy isn't atomic, so the file as it was is copied and flushed beside
+//! the temporary file first (#1695): if the copy into the file fails or is cut short, both versions
+//! are on disk, and the error names them. Where that copy of the old file can't be made, the file
+//! is left as it was and the save fails.
 //!
 //! On macOS `File::sync_all` is a full flush (`F_FULLFSYNC`), which SMB shares refuse with
 //! `ENOTSUP` while a plain `fsync` works: [`sync_file`] falls back to the plain one there (#1620).
@@ -78,8 +81,10 @@ fn write_atomic_stepping(
 
 /// The content of `tmp`, which is whole and flushed, copied into `target` itself, and `tmp`
 /// removed: for a folder that `refused` the atomic replacement. When `target` can't be opened for
-/// writing it is untouched: `tmp` is removed and `refused` returned. When the copy fails `target`
-/// is damaged: `tmp` stays and the error says where it is.
+/// writing it is untouched: `tmp` is removed and `refused` returned. When what it holds can't be
+/// copied aside first ([`keep_old`]) it is untouched too: `tmp` stays and the error names it. When
+/// the copy into `target` fails it is damaged: `tmp` and the copy of the old content stay and the
+/// error says where they are.
 fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
     let opened = File::open(tmp).and_then(|from| Ok((from, OpenOptions::new().write(true).create(true).truncate(false).open(target)?)));
     let Ok((mut from, mut to)) = opened else {
@@ -87,16 +92,40 @@ fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
         let _ = std::fs::remove_file(tmp);
         return Err(refused);
     };
+    // Nothing to keep of a file that is new or empty.
+    let old = to.metadata().map_or(true, |m| m.len() > 0).then(|| tmp.with_extension("old"));
+    if let Some(old) = &old
+        && let Err(e) = keep_old(target, old)
+    {
+        // Best effort: a partial copy is of no use.
+        let _ = std::fs::remove_file(old);
+        let why =
+            format!("{refused}, and the file can't be copied aside before it is overwritten ({e}); the new content is kept in {}", tmp.display());
+        return Err(io::Error::new(refused.kind(), why));
+    }
     let copied = to.set_len(0).and_then(|()| io::copy(&mut from, &mut to)).and_then(|_| sync_file(&to));
     drop((from, to));
-    match copied {
-        Ok(()) => {
-            // Best effort: the file is saved, so the copy is no longer needed.
+    match (copied, old) {
+        (Ok(()), old) => {
+            // Best effort: the file is saved, so the copies are no longer needed.
             let _ = std::fs::remove_file(tmp);
+            if let Some(old) = old {
+                let _ = std::fs::remove_file(old);
+            }
             Ok(())
         }
-        Err(e) => Err(io::Error::new(e.kind(), format!("{e} (the new content is kept in {})", tmp.display()))),
+        (Err(e), Some(old)) => {
+            Err(io::Error::new(e.kind(), format!("{e} (the new content is kept in {}, the file as it was in {})", tmp.display(), old.display())))
+        }
+        (Err(e), None) => Err(io::Error::new(e.kind(), format!("{e} (the new content is kept in {})", tmp.display()))),
     }
+}
+
+/// A flushed copy of `target` as it is, at `old` (for its owner only).
+fn keep_old(target: &Path, old: &Path) -> io::Result<()> {
+    let mut to = create_private(old)?;
+    io::copy(&mut File::open(target)?, &mut to)?;
+    sync_file(&to)
 }
 
 /// A new file for its owner only (Unix): the system's temporary folder is shared.
@@ -185,8 +214,15 @@ fn plain_fsync(file: &File) -> io::Result<()> {
 
 fn full_sync(file: &File) -> io::Result<()> {
     #[cfg(test)]
-    if REFUSE_FULL_SYNC.with(std::cell::Cell::get) {
-        return Err(io::Error::from_raw_os_error(ENOTSUP));
+    {
+        if REFUSE_FULL_SYNC.with(std::cell::Cell::get) {
+            return Err(io::Error::from_raw_os_error(ENOTSUP));
+        }
+        match FLUSHES_LEFT.with(std::cell::Cell::get) {
+            Some(0) => return Err(io::Error::other("the connection was lost")),
+            Some(n) => FLUSHES_LEFT.with(|c| c.set(Some(n - 1))),
+            None => {}
+        }
     }
     file.sync_all()
 }
@@ -203,6 +239,8 @@ thread_local! {
     static REFUSE_FULL_SYNC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: the plain `fsync` fallback fails too, with this OS error.
     static PLAIN_FSYNC_FAILS: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+    /// Tests: after this many more flushes on this thread, every flush fails.
+    static FLUSHES_LEFT: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
     /// Tests: how many plain `fsync` fallbacks were made on this thread.
     static PLAIN_FSYNCS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
@@ -363,8 +401,46 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
-    /// A refused rename and a copy into the file that fails (here: its flush): the file is damaged,
-    /// so the temporary file with the whole new content stays and the error names it.
+    /// #1695: a refused rename and a copy into the file that fails (here: its flush, after the copy
+    /// of the old content was flushed): the file is damaged, so the temporary file with the whole
+    /// new content and the copy of the old one stay, and the error names both.
+    #[test]
+    fn a_failed_copy_into_the_file_keeps_the_old_content_and_the_new() {
+        let d = dir("no-rename-copy-fails-late");
+        let path = d.join("doc.vectorcraft");
+        std::fs::write(&path, b"original").unwrap();
+        let r = write_atomic_stepping(
+            &path,
+            |f| f.write_all(b"new"),
+            create_new,
+            |_, _| {
+                // One more flush works (the copy of the old content), the next doesn't.
+                FLUSHES_LEFT.with(|c| c.set(Some(1)));
+                denied()
+            },
+        );
+        FLUSHES_LEFT.with(|c| c.set(None));
+        let message = r.unwrap_err().to_string();
+        let mut left = leftovers(&d, "doc.vectorcraft");
+        left.sort();
+        let [old, tmp] = left.as_slice() else { panic!("the old content and the new: {left:?}") };
+        assert!(old.ends_with(".old") && tmp.ends_with(".tmp"), "{left:?}");
+        assert!(message.contains(tmp.as_str()) && message.contains(old.as_str()), "{message}");
+        assert_eq!((std::fs::read(d.join(old)).unwrap(), std::fs::read(d.join(tmp)).unwrap()), (b"original".to_vec(), b"new".to_vec()));
+        // A new file has nothing to keep, and a save that works leaves neither copy.
+        std::fs::remove_file(d.join(old)).unwrap();
+        std::fs::remove_file(d.join(tmp)).unwrap();
+        let fresh = d.join("fresh.vectorcraft");
+        write_atomic_stepping(&fresh, |f| f.write_all(b"new"), create_new, |_, _| denied()).unwrap();
+        write_atomic_stepping(&fresh, |f| f.write_all(b"newer"), create_new, |_, _| denied()).unwrap();
+        assert_eq!(std::fs::read(&fresh).unwrap(), b"newer");
+        assert_eq!(leftovers(&d, "doc.vectorcraft"), ["fresh.vectorcraft"]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A refused rename where the old content can't be copied aside (here: no flush works): the
+    /// file is left as it was, the temporary file with the whole new content stays and the error
+    /// names it.
     #[test]
     fn a_failed_copy_into_the_file_keeps_the_temporary_file() {
         let d = dir("no-rename-copy-fails");
@@ -388,6 +464,7 @@ mod tests {
         let [tmp] = left.as_slice() else { panic!("one temporary file: {left:?}") };
         assert!(message.contains(tmp.as_str()), "{message}");
         assert_eq!(std::fs::read(d.join(tmp)).unwrap(), b"new");
+        assert_eq!(std::fs::read(&path).unwrap(), b"original", "not overwritten without a copy of it");
         let _ = std::fs::remove_dir_all(&d);
     }
 

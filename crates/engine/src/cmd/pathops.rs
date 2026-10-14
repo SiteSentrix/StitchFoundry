@@ -594,7 +594,7 @@ pub(crate) fn outlined_stroke(
     st: &StrokeLayer,
 ) -> Option<Node> {
     if let Some(b) = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) {
-        let mut pieces = vectorcraft_brush::stroke_pieces(b, &path.to_bezpath(), st);
+        let mut pieces = vectorcraft_brush::stroke_pieces(d, b, &path.to_bezpath(), st);
         let art = match pieces.len() {
             0 => return None,
             1 => pieces.remove(0),
