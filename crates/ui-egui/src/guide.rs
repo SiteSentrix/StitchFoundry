@@ -278,7 +278,11 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         }
         "quilt" => {
             ui.label(RichText::new(tl!("What size is the tile?")).font(theme::semibold(18.0)).color(t.text));
-            ui.label(RichText::new(tl!("Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.")).size(13.0).color(t.text_dim));
+            ui.label(
+                RichText::new(tl!("Read the size in the tile's window. The block is quilted edge to edge, the size of the tile."))
+                    .size(13.0)
+                    .color(t.text_dim),
+            );
             ui.horizontal(|ui| {
                 ui.label(RichText::new(tl!("Width")).size(15.0));
                 ui.add(egui::DragValue::new(&mut app.guide.block.0).range(1.0..=14.0).speed(0.25).suffix(" in"));
@@ -297,13 +301,21 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                 ui.label(RichText::new(tl!("Lines apart")).size(15.0));
                 ui.add(egui::Slider::new(&mut app.guide.spacing, 3.0..=12.0).suffix(" mm").fixed_decimals(0));
             });
-            ui.label(RichText::new(tl!("Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.")).size(13.0).color(t.text_dim));
+            ui.label(
+                RichText::new(tl!("Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other."))
+                    .size(13.0)
+                    .color(t.text_dim),
+            );
             ui.horizontal(|ui| {
                 if crate::widgets::primary_button(ui, tl!("Make It")).clicked() {
                     let (w, h) = app.guide.block;
                     make = Some(json!({ "what": "quilt", "width": w, "height": h, "pattern": app.guide.pattern, "spacing": app.guide.spacing }));
                 }
-                if ui.button(RichText::new(tl!("Make Every Size…")).size(15.0)).on_hover_text(tl!("One file for each usual tile size, in a folder or on the USB stick")).clicked() {
+                if ui
+                    .button(RichText::new(tl!("Make Every Size…")).size(15.0))
+                    .on_hover_text(tl!("One file for each usual tile size, in a folder or on the USB stick"))
+                    .clicked()
+                {
                     crate::picks::button(app, |app| {
                         if let Some(folder) = crate::picks::folder(app) {
                             let q = json!({ "folder": folder, "pattern": app.guide.pattern, "spacing": app.guide.spacing });
