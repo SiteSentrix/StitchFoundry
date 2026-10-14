@@ -68,7 +68,7 @@ fn keep_safe(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // a design file of ours: saved where it is
     if let Some(path) = path.as_deref().filter(|_| format == "vectorcraft" && !asks) {
-        s.execute("file.save", &json!({}))?;
+        s.execute("document.save", &json!({}))?;
         return Ok(json!({ "saved": path }));
     }
     let folder = match str_param(p, "folder") {
