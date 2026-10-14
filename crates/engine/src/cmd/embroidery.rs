@@ -941,7 +941,8 @@ pub(super) fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.export";
     // the design's machine reads this format, unless another is asked for
     let machine = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.machine_file_format(&s.prefs.embroidery_machines));
-    let key = str_param(p, "format").map(str::to_string).or(machine).unwrap_or_else(|| "dst".to_string());
+    let mine = super::embroidery_my_machine::mine(s).map(|m| m.format.to_string());
+    let key = str_param(p, "format").map(str::to_string).or(machine).or(mine).unwrap_or_else(|| "dst".to_string());
     let key = key.trim_start_matches('.').to_ascii_lowercase();
     let key = key.as_str();
     let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;

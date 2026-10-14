@@ -5117,3 +5117,21 @@ machine	Stop	Parada
 	Background Quilting	Acolchado de fondo
 	Remove Blend	Quitar fusión
 	Blend layers	Capas de fusión
+	My Machine…	Mi máquina…
+	Save for My Machine	Guardar para mi máquina
+	My Machine	Mi máquina
+	Which embroidery machine do you have?	¿Qué máquina de bordar tiene?
+	Measure in	Medir en
+	Save designs to	Guardar diseños en
+	No folder chosen yet	Aún no se ha elegido carpeta
+	Plug in the USB stick you take to your machine, then choose it here.	Conecte el USB que lleva a su máquina y elíjalo aquí.
+	Husqvarna Viking (other models)	Husqvarna Viking (otros modelos)
+	Brother or Baby Lock	Brother o Baby Lock
+	Janome or Elna	Janome o Elna
+	Another machine (DST)	Otra máquina (DST)
+	My machine:	Mi máquina:
+	Tell us your machine to see its hoops and save in its format.	Indique su máquina para ver sus bastidores y guardar en su formato.
+	Choose My Machine	Elegir mi máquina
+	Saved for your machine:	Guardado para su máquina:
+@msg	the design has no page	el diseño no tiene página
+@msg	open or start a design first	abre o empieza un diseño primero

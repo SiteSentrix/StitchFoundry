@@ -5144,3 +5144,21 @@ machine	Stop	Zastavení
 	Background Quilting	Prošívání pozadí
 	Remove Blend	Odebrat prolínání
 	Blend layers	Vrstvy prolínání
+	My Machine…	Můj stroj…
+	Save for My Machine	Uložit pro můj stroj
+	My Machine	Můj stroj
+	Which embroidery machine do you have?	Jaký vyšívací stroj máte?
+	Measure in	Měřit v
+	Save designs to	Ukládat návrhy do
+	No folder chosen yet	Zatím není vybraná složka
+	Plug in the USB stick you take to your machine, then choose it here.	Připojte USB klíč, který nosíte ke stroji, a pak ho zde vyberte.
+	Husqvarna Viking (other models)	Husqvarna Viking (jiné modely)
+	Brother or Baby Lock	Brother nebo Baby Lock
+	Janome or Elna	Janome nebo Elna
+	Another machine (DST)	Jiný stroj (DST)
+	My machine:	Můj stroj:
+	Tell us your machine to see its hoops and save in its format.	Řekněte nám, jaký máte stroj, a uvidíte jeho rámečky a budete ukládat v jeho formátu.
+	Choose My Machine	Vybrat můj stroj
+	Saved for your machine:	Uloženo pro váš stroj:
+@msg	the design has no page	vzor nemá stránku
+@msg	open or start a design first	nejprve otevřete nebo začněte vzor

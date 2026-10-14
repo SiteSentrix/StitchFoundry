@@ -4480,3 +4480,21 @@ machine	Stop	停止
 	Background Quilting	背景絎縫
 	Remove Blend	移除漸變混色
 	Blend layers	漸變混色層
+	My Machine…	我的機器…
+	Save for My Machine	為我的機器儲存
+	My Machine	我的機器
+	Which embroidery machine do you have?	您用的是哪台繡花機？
+	Measure in	度量單位
+	Save designs to	圖案儲存到
+	No folder chosen yet	尚未選擇資料夾
+	Plug in the USB stick you take to your machine, then choose it here.	插入您帶到繡花機上的隨身碟，然後在這裡選擇它。
+	Husqvarna Viking (other models)	Husqvarna Viking（其他型號）
+	Brother or Baby Lock	Brother 或 Baby Lock
+	Janome or Elna	Janome 或 Elna
+	Another machine (DST)	其他機器 (DST)
+	My machine:	我的機器：
+	Tell us your machine to see its hoops and save in its format.	告訴我們您的機器，即可看到它的繡框並按它的格式儲存。
+	Choose My Machine	選擇我的機器
+	Saved for your machine:	已為您的機器儲存：
+@msg	the design has no page	圖案沒有頁面
+@msg	open or start a design first	請先開啟或開始一個圖案

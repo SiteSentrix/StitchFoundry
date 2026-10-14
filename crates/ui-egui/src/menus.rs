@@ -71,6 +71,9 @@ fn machine_file_items() -> Vec<Item> {
 fn embroidery_menu() -> Vec<Item> {
     let ty = |label: &'static str, ty: &'static str| cp(label, "embroidery.set", json!({ "type": ty }));
     vec![
+        c("My Machine…", "ui.myMachine"),
+        c("Save for My Machine", "ui.saveForMyMachine"),
+        Sep,
         c("Digitizing Widget", "ui.embroideryWidget"),
         Sep,
         c("Convert Artwork to Embroidery", "embroidery.convert"),
@@ -574,6 +577,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing; viewAfterSaving opens the file) → {path, bytes, warnings}",
     ),
     ("help.about", "About StitchFoundry", "", "{}"),
+    (
+        "ui.myMachine",
+        "My Machine…",
+        "",
+        "{} choose your embroidery machine once (embroidery.myMachine.set): its hoops, its file format, inches or millimetres, and the folder or USB stick designs are saved to → {open}",
+    ),
+    (
+        "ui.saveForMyMachine",
+        "Save for My Machine",
+        "",
+        "{folder?} write the design in My Machine's format to its folder or USB stick (embroidery.send); with no machine chosen the My Machine window opens, with no folder (or the USB stick out) one is picked first → {path, format, bytes, stitches}",
+    ),
     (
         "ui.calibrateLifeSize",
         "Calibrate Life Size…",
@@ -1531,6 +1546,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "help.show" => crate::dialogs::help::open(app, p),
         "ui.calibrateLifeSize" => crate::dialogs::life_size::run(app, p),
+        "ui.myMachine" => crate::dialogs::my_machine::open(app),
+        "ui.saveForMyMachine" => crate::dialogs::my_machine::save(app, p),
         "help.commandPalette" => {
             app.ui.palette_open = !app.ui.palette_open;
             app.ui.palette_query.clear();
@@ -2247,7 +2264,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
-        "ui.embroideryWidget" | "ui.embroideryCheck" => app.session.active().is_some(),
+        "ui.embroideryWidget" | "ui.embroideryCheck" | "ui.saveForMyMachine" => app.session.active().is_some(),
         "ui.designFromPrompt" => app.session.active().is_some() && crate::embroidery::prompt::available(app),
         "ui.redrawImage" => crate::embroidery::prompt::available(app) && crate::embroidery::prompt::selected_image(app).is_some(),
         "file.export.embroidery" => app.session.embroidery_plan().is_some_and(|p| !p.is_empty()),
@@ -2319,6 +2336,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Close All", "file.closeAll"),
                 c("Save", "file.save"),
                 c("Save As…", "file.saveAs"),
+                c("Save for My Machine", "ui.saveForMyMachine"),
                 c("Save a Copy…", "file.saveCopy"),
                 c("Save as Template…", "file.saveAsTemplate"),
                 c("Save as PDF…", "file.export.pdf"),

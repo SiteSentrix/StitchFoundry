@@ -5119,3 +5119,21 @@ machine	Stop	Arresto
 	Background Quilting	Trapuntatura di sfondo
 	Remove Blend	Rimuovi sfumatura
 	Blend layers	Strati di sfumatura
+	My Machine…	La mia macchina…
+	Save for My Machine	Salva per la mia macchina
+	My Machine	La mia macchina
+	Which embroidery machine do you have?	Quale macchina da ricamo hai?
+	Measure in	Misura in
+	Save designs to	Salva i disegni in
+	No folder chosen yet	Nessuna cartella scelta
+	Plug in the USB stick you take to your machine, then choose it here.	Collega la chiavetta USB che porti alla macchina, poi sceglila qui.
+	Husqvarna Viking (other models)	Husqvarna Viking (altri modelli)
+	Brother or Baby Lock	Brother o Baby Lock
+	Janome or Elna	Janome o Elna
+	Another machine (DST)	Altra macchina (DST)
+	My machine:	La mia macchina:
+	Tell us your machine to see its hoops and save in its format.	Indica la tua macchina per vedere i suoi telai e salvare nel suo formato.
+	Choose My Machine	Scegli la mia macchina
+	Saved for your machine:	Salvato per la tua macchina:
+@msg	the design has no page	il disegno non ha una pagina
+@msg	open or start a design first	apri o inizia prima un disegno

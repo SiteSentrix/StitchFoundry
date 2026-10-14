@@ -5099,3 +5099,21 @@ machine	Stop	Зупинка
 	Background Quilting	Фонове стьобання
 	Remove Blend	Прибрати змішування
 	Blend layers	Шари змішування
+	My Machine…	Моя машина…
+	Save for My Machine	Зберегти для моєї машини
+	My Machine	Моя машина
+	Which embroidery machine do you have?	Яка у вас вишивальна машина?
+	Measure in	Одиниці
+	Save designs to	Зберігати дизайни в
+	No folder chosen yet	Папку ще не вибрано
+	Plug in the USB stick you take to your machine, then choose it here.	Вставте флешку, яку носите до машини, і виберіть її тут.
+	Husqvarna Viking (other models)	Husqvarna Viking (інші моделі)
+	Brother or Baby Lock	Brother або Baby Lock
+	Janome or Elna	Janome або Elna
+	Another machine (DST)	Інша машина (DST)
+	My machine:	Моя машина:
+	Tell us your machine to see its hoops and save in its format.	Вкажіть свою машину, щоб бачити її п’яльця й зберігати в її форматі.
+	Choose My Machine	Вибрати мою машину
+	Saved for your machine:	Збережено для вашої машини:
+@msg	the design has no page	візерунок не має сторінки
+@msg	open or start a design first	спочатку відкрийте або почніть візерунок

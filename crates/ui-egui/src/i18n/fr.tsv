@@ -5127,3 +5127,21 @@ machine	Stop	Arrêt
 	Background Quilting	Matelassage de fond
 	Remove Blend	Retirer le fondu
 	Blend layers	Couches de fondu
+	My Machine…	Ma machine…
+	Save for My Machine	Enregistrer pour ma machine
+	My Machine	Ma machine
+	Which embroidery machine do you have?	Quelle machine à broder avez-vous ?
+	Measure in	Mesurer en
+	Save designs to	Enregistrer les motifs dans
+	No folder chosen yet	Aucun dossier choisi
+	Plug in the USB stick you take to your machine, then choose it here.	Branchez la clé USB que vous apportez à votre machine, puis choisissez-la ici.
+	Husqvarna Viking (other models)	Husqvarna Viking (autres modèles)
+	Brother or Baby Lock	Brother ou Baby Lock
+	Janome or Elna	Janome ou Elna
+	Another machine (DST)	Autre machine (DST)
+	My machine:	Ma machine :
+	Tell us your machine to see its hoops and save in its format.	Indiquez votre machine pour voir ses cadres et enregistrer dans son format.
+	Choose My Machine	Choisir ma machine
+	Saved for your machine:	Enregistré pour votre machine :
+@msg	the design has no page	le motif n’a pas de page
+@msg	open or start a design first	ouvrez ou commencez d’abord un motif

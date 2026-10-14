@@ -384,6 +384,9 @@ pub struct UiState {
     /// View › Calibrate Life Size….
     #[serde(skip)]
     pub life_size: crate::dialogs::life_size::LifeSizeState,
+    /// Embroidery › My Machine….
+    #[serde(skip)]
+    pub my_machine: crate::dialogs::my_machine::MyMachineState,
     /// Recorded actions (Actions panel), persisted with the UI preferences.
     #[serde(default = "crate::panels::actions::default_sets")]
     pub action_sets: Vec<crate::panels::actions::ActionSet>,
@@ -694,6 +697,7 @@ impl Default for UiState {
             about: false,
             help: Default::default(),
             life_size: Default::default(),
+            my_machine: Default::default(),
             action_sets: crate::panels::actions::default_sets(),
             recording: None,
             shortcut_overrides: Default::default(),

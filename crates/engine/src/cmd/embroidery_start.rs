@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Design for Hoop",
             [],
             None,
-            "{hoop: a hoop's name (embroidery.hoops) | {width, height, shape?: rect|oval} (mm)} a new document whose page is the hoop's sewing field, the hoop set → {hoop, width, height} (mm)",
+            "{hoop?: a hoop's name (embroidery.hoops) | {width, height, shape?: rect|oval} (mm) (default: My Machine's everyday hoop)} a new document whose page is the hoop's sewing field, the hoop set, and My Machine's settings when one is chosen → {hoop, width, height} (mm)",
             always,
             new_design
         ),
@@ -39,7 +39,11 @@ pub fn specs() -> Vec<CommandSpec> {
 
 fn new_design(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.newDesign";
-    let (name, w, h) = match p.get("hoop") {
+    // no hoop: My Machine's everyday one
+    let mine = super::embroidery_my_machine::mine(s);
+    let fallback = mine.and_then(|m| m.hoops.first()).map(|h| Value::String((*h).to_string()));
+    let hoop_param = p.get("hoop").cloned().or(fallback);
+    let (name, w, h) = match &hoop_param {
         Some(Value::String(name)) => {
             let hoop = super::embroidery_hoops::find_hoop(s, name).ok_or_else(|| bad(CMD, format!("unknown hoop `{name}`")))?;
             (hoop.name.clone(), hoop.width, hoop.height)
@@ -49,10 +53,13 @@ fn new_design(s: &mut Session, p: &Value) -> Result<Value> {
             let (Some(w), Some(ht)) = (dim("width"), dim("height")) else { return Err(bad(CMD, "a hoop's width and height are 10 to 2000 mm")) };
             (str_param(h, "name").unwrap_or("Custom").to_string(), w, ht)
         }
-        _ => return Err(bad(CMD, "`hoop` is a hoop's name or {width, height, shape?}")),
+        _ => return Err(bad(CMD, "`hoop` is a hoop's name or {width, height, shape?} (or choose My Machine)")),
     };
     s.execute("file.new", &json!({ "width": w * PT_PER_MM, "height": h * PT_PER_MM }))?;
-    s.execute("embroidery.settings", &json!({ "hoop": p.get("hoop") }))?;
+    s.execute("embroidery.settings", &json!({ "hoop": hoop_param }))?;
+    if let Some(m) = mine {
+        s.execute("embroidery.settings", &json!({ "machine": m.format }))?;
+    }
     Ok(json!({ "hoop": name, "width": w, "height": h }))
 }
 

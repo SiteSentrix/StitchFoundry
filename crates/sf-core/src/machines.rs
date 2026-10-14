@@ -285,3 +285,60 @@ mod tests {
         assert_eq!((old.speed, old.max_stitch, old.advanced), (900.0, 12.1, None));
     }
 }
+
+/// A home embroidery machine someone can pick as theirs (My Machine): the file format it reads
+/// and the hoops it takes, the everyday ones first (names from [`crate::hoops::standard_hoops`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HomeMachine {
+    pub name: &'static str,
+    pub format: &'static str,
+    pub hoops: &'static [&'static str],
+}
+
+const HUSQVARNA_HOOPS: &[&str] = &["Husqvarna 240 × 150", "Husqvarna 260 × 200", "Husqvarna 120 × 120", "Husqvarna 360 × 200", "Husqvarna 360 × 350"];
+const BROTHER_HOOPS: &[&str] =
+    &["Brother 130 × 180 (5×7)", "Brother 100 × 100 (4×4)", "Brother 160 × 260 (6×10)", "Brother 200 × 200 (8×8)", "Brother 200 × 300 (8×12)"];
+
+/// The machines My Machine offers.
+pub const HOME_MACHINES: &[HomeMachine] = &[
+    HomeMachine { name: "Husqvarna Viking Designer Diamond deLuxe", format: "vp3", hoops: HUSQVARNA_HOOPS },
+    HomeMachine { name: "Husqvarna Viking (other models)", format: "vp3", hoops: HUSQVARNA_HOOPS },
+    HomeMachine { name: "Brother or Baby Lock", format: "pes", hoops: BROTHER_HOOPS },
+    HomeMachine {
+        name: "Janome or Elna",
+        format: "jef",
+        hoops: &["Janome RE20b 140 × 200", "Janome SQ14 140 × 140", "Janome SQ20b 200 × 200", "Janome RE28b 200 × 280"],
+    },
+    HomeMachine { name: "Bernina", format: "exp", hoops: &["Bernina Medium 130 × 100", "Bernina Large Oval 145 × 255"] },
+    HomeMachine { name: "Singer", format: "xxx", hoops: BROTHER_HOOPS },
+    HomeMachine {
+        name: "Another machine (DST)",
+        format: "dst",
+        hoops: &["Magnetic frame 130 × 180", "Magnetic frame 100 × 100", "Magnetic frame 200 × 200", "Magnetic frame 200 × 300"],
+    },
+];
+
+/// A machine of [`HOME_MACHINES`] by name (any case).
+pub fn home_machine(name: &str) -> Option<&'static HomeMachine> {
+    HOME_MACHINES.iter().find(|m| m.name.eq_ignore_ascii_case(name.trim()))
+}
+
+#[cfg(test)]
+mod home_machine_tests {
+    use super::*;
+
+    /// Every home machine's hoops are built-in hoops, its format a standard profile's.
+    #[test]
+    fn home_machines_name_real_hoops_and_formats() {
+        let hoops = crate::hoops::standard_hoops();
+        let formats: Vec<String> = standard_profiles().into_iter().map(|p| p.format).collect();
+        for m in HOME_MACHINES {
+            assert!(!m.hoops.is_empty(), "{}", m.name);
+            for h in m.hoops {
+                assert!(hoops.iter().any(|x| x.name == *h), "{}: {h}", m.name);
+            }
+            assert!(formats.iter().any(|f| f == m.format), "{}: {}", m.name, m.format);
+        }
+        assert_eq!(home_machine("husqvarna viking designer diamond deluxe").map(|m| m.format), Some("vp3"));
+    }
+}
