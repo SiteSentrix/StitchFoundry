@@ -7,8 +7,8 @@
 # дръжка…) and Adobe Illustrator's Bulgarian UI conventions; no other application's Bulgarian
 # localisation was consulted or copied. Drafted with AI assistance (Gemini) from the English
 # meaning; not yet reviewed by a native speaker.
-	Glowing Edges…	Сяящи ръбове…
-	Glowing Edges	Сяящи ръбове
+	Glowing Edges…	Сияйни ръбове…
+	Glowing Edges	Сияйни ръбове
 	Edge Width	Ширина на ръба
 	Edge Brightness	Яркост на ръба
 	Smoothness	Гладкост
@@ -661,8 +661,8 @@
 	Default Printer	Принтер по подразбиране
 	Default Swatches	Образци по подразбиране
 	Define Grid…	Дефиниране на мрежа…
-	Define Perspective Grid	Дефиниране на перспектива мрежа
-	Define Perspective Grid…	Дефиниране на перспектива мрежа…
+	Define Perspective Grid	Дефиниране на перспективна мрежа
+	Define Perspective Grid…	Дефиниране на перспективна мрежа…
 	Delete	Изтриване
 	Delete All	Изтриване на всички
 	Delete Anchor Point	Изтриване на опорна точка
@@ -681,7 +681,7 @@
 	Delete Paragraph Style	Изтриване на стил за абзаци
 	Delete Pattern	Изтриване на мостра
 	Delete PDF Preset	Изтриване на PDF предварителна настройка
-	Delete Perspective Grid Preset	Изтриване на предварителна настройка за перспектива мрежа
+	Delete Perspective Grid Preset	Изтриване на предварителна настройка за перспективна мрежа
 	Delete Point	Изтриване на точка
 	Delete Preset	Изтриване на предварителна настройка
 	Delete Print Preset	Изтриване на предварителна настройка за печат
@@ -974,7 +974,7 @@
 	Export Option	Опция за експортиране
 	Export PDF	Експортиране в PDF
 	Export PDF Presets	Предварителни настройки за PDF
-	Export Perspective Grid Presets	Експортиране на предварителни настройки за перспективено поле
+	Export Perspective Grid Presets	Експортиране на предварителни настройки за перспективна мрежа
 	Export Print Presets	Експортиране на предварителни настройки за печат
 	Export Selected Art Only	Експортиране само на избраната графика
 	Export Selected CSS…	Експортиране на избран CSS…
@@ -1020,7 +1020,7 @@
 	Files of a PDF standard can't be password-protected.	Файлове от PDF стандарт не могат да бъдат защитени с парола.
 	Files of this standard tag their colours with ICC profiles.	Файловете от този стандарт етикетират цветовете си с ICC профили.
 	Fill	Запълване
-	Fill & Stroke	Запълване и щарих
+	Fill & Stroke	Запълване и щрих
 	Fill (X), double-click for the Color Picker	Запълване (X), щракнете двукратно за избор на цвят
 	Fill and Stroke	Запълване и щрих
 	Fill new strokes	Запълване на нови щрихове
@@ -1308,14 +1308,14 @@
 	Image Trace Presets	Предварителни настройки за трасиране на изображения
 	Image:	Изображение:
 	Images:	Изображения:
-	Import Keyboard Shortcuts…	Имртиране на клавишни комбинации…
-	Import PDF	Имртиране на PDF
-	Import PDF Presets	Имртиране на PDF предварителни настройки
-	Import Perspective Grid Presets	Имртиране на предварителни настройки за перспективна мрежа
-	Import Print Presets	Имртиране на предварителни настройки за печат
+	Import Keyboard Shortcuts…	Импортиране на клавишни комбинации…
+	Import PDF	Импортиране на PDF
+	Import PDF Presets	Импортиране на PDF предварителни настройки
+	Import Perspective Grid Presets	Импортиране на предварителни настройки за перспективна мрежа
+	Import Print Presets	Импортиране на предварителни настройки за печат
 	Import Transparency Flattener Presets	Импортиране на предварителни настройки за сплескване на прозрачност
-	Imported {what}: {}	Имртирани {what}: {}
-	Import…	Имртиране…
+	Imported {what}: {}	Импортирани {what}: {}
+	Import…	Импортиране…
 	In Tangent Handles	Входящи управляващи точки
 	In the selected objects	В избраните обекти
 	Inches	Инчове
@@ -1370,7 +1370,7 @@
 	Justify all lines	Двустранно подравняване на всички редове
 	Justify with last line aligned center	Двустранно подравняване с центриран последен ред
 	Justify with last line aligned left	Двустранно подравняване с ляво подравнен последен ред
-	Justify with last line aligned right	Дравнопосочване с последен ред, подравнен вдясно
+	Justify with last line aligned right	Двустранно подравняване с дясно подравнен последен ред
 	Keep a link to an image file instead of only embedding it	Запазване на връзка към файл с изображение вместо само вграждането му
 	Keep both sides the same width	Запазване на еднаква ширина от двете страни
 	Keep Formatting	Запазване на форматирането
@@ -1452,7 +1452,7 @@
 	Layers Panel Options	Опции за панела „Слоеве“
 	Layout:	Оформление:
 	Leader:	Запълващ знак:
-	Leading	Междуредрие
+	Leading	Междуредие
 	Left	Ляво
 	Left Grid:	Лява мрежа:
 	Left in Front	Ляво отпред
@@ -1484,7 +1484,7 @@
 	Line Color	Цвят на линията
 	Line Cut	Рязане с линия
 	Line Cut Tool	Инструмент „Рязане с линия“
-	Line Endings:	Кращания на редове:
+	Line Endings:	Краища на редове:
 	Line Graph Tool	Инструмент „Линейна диаграма“
 	Line Segment	Линеен сегмент
 	Line Segment Tool	Инструмент „Линеен сегмент“
@@ -1545,7 +1545,7 @@
 	LZW Compression	LZW компресия
 	Mac	Mac
 	Magenta	Магента
-	Magic Wand	Вястна пръчка
+	Magic Wand	Вълшебна пръчица
 	Magic Wand Options	Опции за вълшебната пръчка
 	Magic Wand Settings	Настройки на вълшебната пръчка
 	Magic Wand Tool	Инструмент „Вълшебна пръчка“
@@ -1867,7 +1867,7 @@
 	Opacity: 50% Multiply	Непрозрачност: 50% Умножение
 	Opacity: Default	Непрозрачност: По подразбиране
 	Opacity: {value}	Непрозрачност: {value}
-	Opaque	Плътнo
+	Opaque	Плътно
 	Open	Отваряне
 	Open a document to edit its patterns.	Отворете документ за редактиране на неговите мостри.
 	Open a document to navigate it.	Отворете документ за навигация в него.
@@ -2469,7 +2469,7 @@
 	Save PDF	Запази PDF
 	Save PDF Dialog	Диалогов прозорец „Запази PDF“
 	Save PDF Preset	Запази PDF предварителна настройка
-	Save Perspective Grid Preset	Запази предварителна настройка на перспективената мрежа
+	Save Perspective Grid Preset	Запази предварителна настройка на перспективната мрежа
 	Save Preset	Запази предварителна настройка
 	Save Preset…	Запази предварителна настройка…
 	Save Print Preset	Запази предварителна настройка за печат
@@ -2598,7 +2598,7 @@
 	Select Guides	Избиране на водачи
 	Select Objects	Избиране на обекти
 	Select objects to see their CSS, or Generate CSS for the whole document.	Изберете обекти, за да видите техния CSS, или генерирайте CSS за целия документ.
-	Select Same Tint %	Избиране по същия процент нюанс
+	Select Same Tint %	Избиране по същия % нюанс
 	Select Slices	Избиране на отрязъци
 	Select styled art and click New Graphic Style.	Изберете стилизирана графика и щракнете върху „Нов графичен стил“.
 	Select text	Избиране на текст
@@ -2707,7 +2707,7 @@
 	Show Package	Показване на пакет
 	Show Panel	Показване на панел
 	Show Pattern Swatches	Показване на образци за мостра
-	Show Perspective Grid	Показване на перспективена мрежа
+	Show Perspective Grid	Показване на перспективна мрежа
 	Show Pixel Grid (Above 600% Zoom)	Показване на пикселна мрежа (при увеличение над 600%)
 	Show Print Tiling	Показване на плочките за печат
 	Show Rulers	Показване на линийките
@@ -2796,7 +2796,7 @@
 	Snap to Glyph	Прилепване към глиф
 	Snap to Grid	Прилепване към мрежа
 	Snap to Pixel	Прилепване към пиксел
-	Precise Cursors	Превъртане на курсорите|Превъртане на курсорите -> Прецизни курсори
+	Precise Cursors	Прецизни курсори
 	Snap to Point	Прилепване към точка
 	Snapping Tolerance	Толеранс на прилепване
 	Social Square Post 1080×1080	Публикация за квадрат в социални мрежи 1080×1080
@@ -2959,7 +2959,7 @@
 	Target	Цел
 	Target Contents	Целево съдържание
 	Target:	Цел:
-	Tate-chu-yoko	Татe-чу-йоко
+	Tate-chu-yoko	Тате-чу-йоко
 	Temperature	Температура
 	Temperature/Tint…	Температура/Нюанс…
 	Template	Шаблон
@@ -3536,7 +3536,7 @@ axis	Both	И двете
 @msg	Split Into Grid: select paths large enough for the grid	Разделяне на мрежа: изберете пътища, достатъчно големи за мрежата
 @msg	Targa files are RGB: colorModel rgb	Файловете Targa са RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обгръщане на текст: изберете обгръщащ обект
-@msg	This shortcut file is in a form VectorCraft can't read.	[@msg] Този файл с преки пътища е във формат, който VectorCraft не може да прочете.
+@msg	This shortcut file is in a form VectorCraft can't read.	 Този файл с преки пътища е във формат, който VectorCraft не може да прочете.
 @msg	`aspect` must be a number (%)	`aspect` трябва да бъде число (%)
 @msg	`at` must be [x, y]	`at` трябва да бъде [x, y]
 @msg	`color` must be a colour	`color` трябва да бъде цвят
@@ -3770,7 +3770,7 @@ axis	Both	И двете
 @msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не е набор от клавишни комбинации на VectorCraft (липсват `overrides`)
 @msg	not a graphic style library (format `{_1}`)	не е библиотека със стилове на графики (формат `{_1}`)
-@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	[@msg] не е набор от преки пътища: текстът не започва с име със слъш и отваряща скоба
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	 не е набор от преки пътища: текстът не започва с име със слъш и отваряща скоба
 @msg	not a stored central record	не е съхранен централен запис
 @msg	not a valid plug-in module: {0}	не е валиден модул за плъгин: {0}
 @msg	not an EMF or WMF file	не е EMF или WMF файл
@@ -3818,8 +3818,8 @@ axis	Both	И двете
 @msg	recovery copy `{file}`: {e}	възстановяване на копие `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	резолюциите трябва да бъдат между 1 и 2400 ppi
 @msg	result would exceed the canvas (coordinates out of range)	резултатът ще надвиши платното (координатите са извън обхвата)
-@msg	objects can't be nested more than 32 deep	[@msg] обектите не могат да бъдат вложени на повече от 32 нива
-@msg	the SVG's elements are nested more than {0} deep	[@msg] елементите на SVG са вложени на повече от {0} нива
+@msg	objects can't be nested more than 32 deep	 обектите не могат да бъдат вложени на повече от 32 нива
+@msg	the SVG's elements are nested more than {0} deep	 елементите на SVG са вложени на повече от {0} нива
 @msg	scale must be a number from {_1} to {_2}, not {_3}	мащабът трябва да е число от {_1} до {_2}, а не {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	мащабът трябва да е число от {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	изберете (или насочете към) обекти, чийто изглед не е основен
@@ -4111,8 +4111,8 @@ axis	Both	И двете
 @msg	the PSD file's header is damaged	заглавната част (header) на PSD файла е повредена
 @msg	the PSD file's image data can't be read: {e}	образните данни на PSD файла не могат да бъдат прочетени: {e}
 	Video	Видео
-	De-Interlace…	Премахване на презредадеността…
-	De-Interlace	Премахване на презредадеността
+	De-Interlace…	Премахване на преплитането…
+	De-Interlace	Премахване на преплитането
 	NTSC Colors	NTSC цветове
 	Eliminate	Премахване
 	Create New Fields by	Създаване на нови полета чрез
@@ -4763,12 +4763,12 @@ theme	Appearance	Външен вид
 	Screen Mode Controls	Контроли за режим на екран
 	Drawer menu	Меню на чекмеджето
 	Toolbar: Show Controls	Лента с инструменти: Показване на контроли
-@msg	control must be fillStroke, coloring, drawMode or screenMode	[@msg] контролът трябва да бъде fillStroke, coloring, drawMode или screenMode
-@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	[@msg] неизвестен контрол `{name}`: fillStroke, coloring, drawMode или screenMode
-@msg	give a fraction `t` from 0 to 1	[@msg] въведете дробно число `t` от 0 до 1
-@msg	give the path `id`	[@msg] въведете `id` на пътя
-@msg	invalid stroke widths	[@msg] невалидни ширини на щриха
-@msg	object has no weighted stroke	[@msg] обектът няма претеглен щрих
+@msg	control must be fillStroke, coloring, drawMode or screenMode	 контролът трябва да бъде fillStroke, coloring, drawMode или screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	 неизвестен контрол `{name}`: fillStroke, coloring, drawMode или screenMode
+@msg	give a fraction `t` from 0 to 1	 въведете дробно число `t` от 0 до 1
+@msg	give the path `id`	 въведете `id` на пътя
+@msg	invalid stroke widths	 невалидни ширини на щриха
+@msg	object has no weighted stroke	 обектът няма претеглен щрих
 	Single Corner Radius	Радиус на единичен ъгъл
 	Top Left:	Горно ляво:
 	Top Right:	Горно дясно:
