@@ -61,7 +61,9 @@ wat = "1.228"
 vello_cpu = { version = "0.2", features = ["f32_pipeline"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp"] }
 usvg = "0.48"
-krilla = "0.8"
+# Without `simple-text` (its text shaping, the only user of rustybuzz and ttf-parser, which are
+# unmaintained, #1730): the PDF writer places glyphs itself. A test of the PDF crate turns it on.
+krilla = { version = "0.8", default-features = false, features = ["raster-images"] }
 skrifa = "0.47"
 harfrust = "0.13"
 linesweeper = "0.5"
