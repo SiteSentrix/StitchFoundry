@@ -4456,6 +4456,7 @@ machine	Stop	Arrêt
 	Pull comp., side 2	Comp. de traction, côté 2
 	Remove Holes	Supprimer les trous
 	Reverse Stitch Direction	Inverser le sens de broderie
+	Swap Satin Sides	Permuter les côtés du point satin
 	Stem Stitch	Point de tige
 	Stem stitch	Point de tige
 	Stitches up to {n} mm long can snag	Les points jusqu’à {n} mm peuvent s’accrocher

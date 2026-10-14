@@ -134,6 +134,7 @@ fn embroidery_menu() -> Vec<Item> {
             ],
         ),
         c("Reverse Stitch Direction", "embroidery.reverse"),
+        c("Swap Satin Sides", "embroidery.swapSides"),
         c("Make Properties Current", "embroidery.makeCurrent"),
         Sep,
         c("Remove Holes", "embroidery.removeHoles"),

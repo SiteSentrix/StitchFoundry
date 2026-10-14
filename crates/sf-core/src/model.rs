@@ -1058,6 +1058,9 @@ pub struct SatinParams {
     /// Push compensation: the column ends this much short at each open end (mm), where the
     /// stitches push the fabric out along the column.
     pub push_comp: f64,
+    /// Start the zigzag on side 2 instead of side 1, so the column ends on the other side
+    /// (for a shorter way on to what is sewn next). Each side keeps its own settings.
+    pub swap_sides: bool,
     /// Tighten spacing on narrow columns and open it on wide ones.
     pub auto_spacing: bool,
     /// Split stitches longer than this (mm) into staggered shorter ones; 0 = never.
@@ -1271,6 +1274,7 @@ impl Default for SatinParams {
             pull_comp: 0.15,
             pull_comp_2: None,
             push_comp: 0.0,
+            swap_sides: false,
             auto_spacing: true,
             split_length: 8.0,
             short_stitches: true,
