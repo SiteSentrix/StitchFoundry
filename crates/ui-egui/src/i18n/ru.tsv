@@ -5067,3 +5067,5 @@ machine	Stop	Остановка
 	Clear Default	Сбросить умолчания
 	Every new design starts with these properties	Каждый новый дизайн начинается с этих свойств
 	New designs take the built-in properties again	Новые дизайны снова получают встроенные свойства
+	All Tools, Ungrouped	Все инструменты, без групп
+	Toolbar: All Tools, Ungrouped	Панель инструментов: все, без групп

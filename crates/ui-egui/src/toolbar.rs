@@ -77,6 +77,16 @@ pub(crate) fn tip(t: &ToolInfo) -> String {
 /// Slots of the current layout, as Edit Toolbar left it: (category label for the first slot of a
 /// category, tool ids).
 pub(crate) fn slots(app: &VectorcraftApp) -> Vec<(Option<&'static str>, Vec<&'static str>)> {
+    let grouped = grouped_slots(app);
+    if !app.ui.toolbar_ungrouped {
+        return grouped;
+    }
+    // every tool its own slot, in the same order, a category's label on its first
+    grouped.into_iter().flat_map(|(cat, tools)| tools.into_iter().enumerate().map(move |(i, t)| (if i == 0 { cat } else { None }, vec![t]))).collect()
+}
+
+/// The slots before All Tools, Ungrouped splits them.
+fn grouped_slots(app: &VectorcraftApp) -> Vec<(Option<&'static str>, Vec<&'static str>)> {
     if let Some(edited) = crate::edit_toolbar::edited_slots(app) {
         edited
     } else if app.ui.toolbar_advanced {
@@ -811,6 +821,23 @@ pub(crate) mod tests {
     use vectorcraft_engine::Session;
 
     use super::*;
+
+    /// R6: All Tools, Ungrouped gives every tool a button of its own, none hidden in a flyout.
+    #[test]
+    fn ungrouped_toolbar_shows_every_tool_in_its_own_slot() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let grouped = slots(&app);
+        let tools: usize = grouped.iter().map(|(_, t)| t.len()).sum();
+        assert!(grouped.iter().any(|(_, t)| t.len() > 1), "the Basic toolbar has flyouts");
+        app.run("window.toolbarUngrouped", serde_json::json!({})).unwrap();
+        let flat = slots(&app);
+        assert!(flat.iter().all(|(_, t)| t.len() == 1));
+        assert_eq!(flat.len(), tools, "every tool, once");
+        // categories keep their labels on their first tool
+        assert_eq!(flat.iter().filter(|(c, _)| c.is_some()).count(), grouped.iter().filter(|(c, _)| c.is_some()).count());
+        app.run("window.toolbarUngrouped", serde_json::json!({})).unwrap();
+        assert_eq!(slots(&app).len(), grouped.len());
+    }
 
     /// One headless frame of the toolbar; returns the tool buttons' rects, top to bottom.
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Rect> {

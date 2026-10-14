@@ -5069,3 +5069,5 @@ machine	Stop	Parada
 	Clear Default	Quitar predeterminado
 	Every new design starts with these properties	Cada diseño nuevo empieza con estas propiedades
 	New designs take the built-in properties again	Los diseños nuevos vuelven a tomar las propiedades integradas
+	All Tools, Ungrouped	Todas las herramientas, sin agrupar
+	Toolbar: All Tools, Ungrouped	Barra de herramientas: todas, sin agrupar
