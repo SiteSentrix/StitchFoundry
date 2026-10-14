@@ -1027,6 +1027,13 @@ one line.
 
 ## Machine files
 
+Designs save as `.stitchfoundry` files, which keep everything. Saved as SVG instead, a design
+with stitched objects carries its native document inside the SVG (`preserveEditing`, on by
+default for them), so it reopens with every stitch type and setting and File › Save keeps
+writing the same SVG; only with `preserveEditing: false` is the SVG plain art. A machine file
+opened (DST, PES…) asks for a name on the first Save, so the machine file isn't overwritten with
+a design; export machine files with **Export Machine File**.
+
 | Format | Extension | Colours | Open | Export |
 |---|---|---|---|---|
 | Tajima | .dst | no (colour changes only) | yes | yes |

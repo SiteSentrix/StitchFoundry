@@ -412,6 +412,13 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
     if is_svg(plan.format) {
         // A save keeps hidden layers (not displayed) unless told otherwise; exports leave them out.
         params.entry("hiddenLayers").or_insert(Value::Bool(true));
+        // SVG has no place for stitch types and their settings: a design with stitched objects
+        // carries its native document too, unless told otherwise, so Save loses none of them.
+        let mut stitched = false;
+        doc.walk(|n| stitched |= n.embroidery.is_some());
+        if stitched {
+            params.entry("preserveEditing").or_insert(Value::Bool(true));
+        }
     }
     let mut params = Value::Object(params);
     if matches!(plan.format.id, "vectorcraft" | "template") {

@@ -5229,3 +5229,29 @@ fn default_properties_saved_for_every_design() {
     s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
     assert!((satin_pull(&s, c) - 0.7).abs() > 1e-6);
 }
+
+#[test]
+fn saving_a_stitched_design_as_svg_keeps_its_stitches() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 10.0 * PT, 10.0 * PT, 30.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"pullComp": 0.7}})).unwrap();
+    let path = std::env::temp_dir().join(format!("sf-svg-save-{}.svg", std::process::id()));
+    let path = path.to_string_lossy().to_string();
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    // Ctrl+S again: the SVG path, written in place
+    let again = s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(again["path"].as_str(), Some(path.as_str()), "{again}");
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    let mut pulls = Vec::new();
+    s.doc().unwrap().doc.walk(|n| {
+        if let Some(e) = n.embroidery.as_deref()
+            && let sf_core::attr::StitchType::Satin(p) = &e.stitch
+        {
+            pulls.push(p.pull_comp);
+        }
+    });
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(pulls, vec![0.7], "the stitch settings come back from the SVG");
+}
