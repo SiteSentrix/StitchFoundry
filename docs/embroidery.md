@@ -1005,6 +1005,11 @@ with its underlay, a satin column 2.5 to 3.5. Spots over 4.5 layers are flagged:
 satin columns crossing, or a column piling thread up inside a corner. Lettering, borders over fills
 and two overlapping fills stay under it.
 
+**Density Map** (Embroidery menu, or *Density map* with the panel's display options) colours the
+whole design by the same measure, square millimetre by square millimetre: blue where the thread
+lies one layer deep, green and yellow deeper, red as deep as Check Design calls dense (its limit
+in Check settings). `embroidery.densityMap {cell?}` returns the layers cell by cell.
+
 ## Properties for new objects and styles
 
 With nothing selected, the Embroidery panel shows **Properties for New Objects**: pick a stitch

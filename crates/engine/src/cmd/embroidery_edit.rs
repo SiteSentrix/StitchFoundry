@@ -88,7 +88,40 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             check
         ),
+        cmd!(
+            query "embroidery.densityMap",
+            "Density Map",
+            [],
+            None,
+            "{cell?: mm (1; 0.5–10, larger on a big design so the map stays within 250000 cells)} how deep the thread lies over the design: the layers of thread on each square cell (a layer is the fabric covered once: a tatami fill about 1.2, a satin column 2.5 to 3.5), what View › Density Map colours, and the depth Check Design calls dense → {origin: [x, y] points (the first cell's top left), cell: mm, columns, rows, layers: [row by row from the top, to 0.1], max, limit}",
+            has_doc,
+            density_map
+        ),
     ]
+}
+
+/// Most cells `embroidery.densityMap` returns.
+const MAX_MAP_CELLS: f64 = 250_000.0;
+
+fn density_map(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.densityMap";
+    let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
+    let pat = plan.pattern();
+    let limit = s.doc()?.doc.embroidery.as_deref().map(|e| e.checks.dense_layers).unwrap_or_else(|| sf_core::attr::CheckLimits::default().dense_layers);
+    let b = pat.bounds();
+    let area = if b.width().is_finite() && b.height().is_finite() { b.width().max(0.0) * b.height().max(0.0) } else { 0.0 };
+    let cell = p.get("cell").and_then(Value::as_f64).filter(|c| c.is_finite()).unwrap_or(CELL).clamp(0.5, 10.0).max((area / MAX_MAP_CELLS).sqrt());
+    let g = sf_core::density::LayerGrid::of(pat, cell);
+    let round = |v: f32| (f64::from(v) * 10.0).round() / 10.0;
+    Ok(json!({
+        "origin": [g.origin.x * PT_PER_MM, g.origin.y * PT_PER_MM],
+        "cell": (g.cell * 1000.0).round() / 1000.0,
+        "columns": g.columns,
+        "rows": g.rows,
+        "layers": g.layers.iter().map(|v| round(*v)).collect::<Vec<_>>(),
+        "max": round(g.max()),
+        "limit": limit,
+    }))
 }
 
 // ---------- reverse ----------
@@ -334,8 +367,6 @@ fn fill_holes(s: &mut Session, p: &Value) -> Result<Value> {
 // it, and four stacked fills, crossing columns or a column piling thread up inside a
 // sharp turn go over it.
 
-/// Width of a thread lying on the fabric (mm), for density.
-const THREAD: f64 = 0.4;
 /// Density grid cell (mm).
 const CELL: f64 = 1.0;
 /// Most findings of one kind reported.
@@ -432,13 +463,8 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
     // Stitches: needle to needle while the thread is attached.
     let mut long: BTreeMap<NodeId, (usize, f64, sf_core::Point)> = BTreeMap::new();
     let mut short: BTreeMap<NodeId, (usize, sf_core::Point)> = BTreeMap::new();
-    let b = pat.bounds();
-    let (gw, gh) = (((b.width() / CELL).ceil() as usize + 1).min(2000), ((b.height() / CELL).ceil() as usize + 1).min(2000));
-    let mut grid = vec![0.0f32; gw * gh];
-    let cell = |p: sf_core::Point| -> Option<usize> {
-        let (x, y) = ((p.x - b.min.x) / CELL, (p.y - b.min.y) / CELL);
-        (x >= 0.0 && y >= 0.0 && (x as usize) < gw && (y as usize) < gh).then(|| y as usize * gw + x as usize)
-    };
+    let layers = sf_core::density::LayerGrid::of(pat, CELL);
+    let (gw, gh, grid, cell_mm, origin) = (layers.columns, layers.rows, &layers.layers, layers.cell, layers.origin);
     let mut last_needle: Option<sf_core::Point> = None;
     for (i, rec) in pat.stitches.iter().enumerate() {
         match rec.cmd {
@@ -458,14 +484,6 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
                         e.0 += 1;
                         if len > e.1 {
                             *e = (e.0, len, p.midpoint(q));
-                        }
-                    }
-                    // Thread laid along the stitch, sampled every 0.2 mm into the grid.
-                    let k = ((len / 0.2).ceil() as usize).clamp(1, 1000);
-                    let w = (len / k as f64 * THREAD / (CELL * CELL)) as f32;
-                    for m in 0..k {
-                        if let Some(c) = cell(p.lerp(q, (m as f64 + 0.5) / k as f64)) {
-                            grid[c] += w;
                         }
                     }
                 }
@@ -532,7 +550,7 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
             }
         }
         // a window's centre is the corner its four cells share
-        let centre = sf_core::Point::new(b.min.x + ((at % ww) as f64 + 1.0) * CELL, b.min.y + ((at / ww) as f64 + 1.0) * CELL);
+        let centre = sf_core::Point::new(origin.x + ((at % ww) as f64 + 1.0) * cell_mm, origin.y + ((at / ww) as f64 + 1.0) * cell_mm);
         clusters.push((best, centre));
     }
     clusters.sort_by(|a, b| b.0.total_cmp(&a.0));

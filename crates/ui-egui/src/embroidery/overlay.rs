@@ -6,6 +6,7 @@ use std::sync::Arc;
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Painter, Pos2, Shape, Stroke};
 use vectorcraft_embroidery::sf_core::decor::{DecorKind, DecorShape};
+use vectorcraft_embroidery::sf_core::density::LayerGrid;
 use vectorcraft_embroidery::sf_core::geom::FLATTEN_TOLERANCE;
 use vectorcraft_embroidery::sf_core::model::ObjectKind;
 use vectorcraft_embroidery::sf_core::pattern::{Cmd, Pattern};
@@ -305,6 +306,10 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
     decorations(&plan, painter, xf, false);
     painter.add(Shape::mesh(cache.mesh.clone()));
     decorations(&plan, painter, xf, true);
+    if app.embroidery.density_map {
+        let limit = st.doc.embroidery.as_deref().map_or(4.5, |e| e.checks.dense_layers);
+        density_map(&mut app.embroidery.density, &plan, painter, xf, limit);
+    }
     if connectors {
         for [a, b] in &cache.jumps {
             painter.add(Shape::dashed_line(&[*a, *b], Stroke::new(1.0, Color32::from_rgba_unmultiplied(120, 60, 200, 200)), 4.0, 3.0));
@@ -366,6 +371,45 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
         painter.circle_stroke(p, 7.0, Stroke::new(2.0, Color32::from_rgb(255, 170, 40)));
         painter.line_segment([p - egui::vec2(0.0, 14.0), p + egui::vec2(0.0, 14.0)], Stroke::new(1.0, Color32::from_rgb(255, 170, 40)));
     }
+}
+
+/// The colour of a cell `layers` deep, against the depth Check Design calls dense: nothing
+/// under half a layer, then blue (one layer), green, yellow and red (as deep as `limit`).
+fn density_color(layers: f32, limit: f64) -> Option<Color32> {
+    if layers < 0.5 || limit <= 0.0 {
+        return None;
+    }
+    let t = (f64::from(layers) / limit).clamp(0.0, 1.0) as f32;
+    let stops = [(0.0, Color32::from_rgb(40, 110, 230)), (0.4, Color32::from_rgb(40, 190, 90)), (0.7, Color32::from_rgb(240, 200, 30)), (1.0, Color32::from_rgb(230, 40, 40))];
+    let c = stops.windows(2).find(|w| t <= w[1].0).map_or(Color32::from_rgb(230, 40, 40), |w| lerp(w[0].1, w[1].1, (t - w[0].0) / (w[1].0 - w[0].0)));
+    Some(Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 120))
+}
+
+/// The density map over the stitches: each cell coloured by how deep the thread lies there,
+/// measured once per plan.
+fn density_map(cache: &mut Option<(usize, Arc<LayerGrid>)>, plan: &Arc<StitchPlan>, painter: &Painter, xf: &Xf, limit: f64) {
+    let key = Arc::as_ptr(plan) as usize;
+    let grid = match cache {
+        Some((k, g)) if *k == key => g.clone(),
+        _ => {
+            let g = Arc::new(LayerGrid::of(plan.pattern(), 1.0));
+            *cache = Some((key, g.clone()));
+            g
+        }
+    };
+    let mut mesh = Mesh::default();
+    let screen = |x: f64, y: f64| xf.to_screen(vectorcraft_geom::Point::new(x * PT_PER_MM, y * PT_PER_MM));
+    for row in 0..grid.rows {
+        for col in 0..grid.columns {
+            let Some(c) = density_color(grid.get(col, row), limit) else { continue };
+            let (x, y) = (grid.origin.x + col as f64 * grid.cell, grid.origin.y + row as f64 * grid.cell);
+            let corners = [screen(x, y), screen(x + grid.cell, y), screen(x + grid.cell, y + grid.cell), screen(x, y + grid.cell)];
+            let base = mesh.vertices.len() as u32;
+            mesh.vertices.extend(corners.map(|pos| Vertex { pos, uv: WHITE_UV, color: c }));
+            mesh.indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
+    }
+    painter.add(Shape::mesh(mesh));
 }
 
 /// Each appliqué's fabric under its stitches, in its colour and pattern.

@@ -5082,3 +5082,6 @@ machine	Stop	停止
 	Satin underlay	サテンの下縫い
 	Edge run under fills	フィルの下にエッジラン
 	New to digitizing? Read the basics	デジタイズは初めて？基本を読む
+	Density Map	密度マップ
+	Density map	密度マップ
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	糸の重なりの深さで色分け：青は 1 層、赤は「デザインをチェック」が密集と判定する深さ

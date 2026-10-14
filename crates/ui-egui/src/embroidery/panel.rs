@@ -2860,6 +2860,8 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         ui.checkbox(&mut app.embroidery.needle_points, tl!("Needle points"));
         ui.checkbox(&mut app.embroidery.beads, tl!("Start and stop"));
         ui.checkbox(&mut app.embroidery.guides, tl!("Inclination lines"));
+        ui.checkbox(&mut app.embroidery.density_map, tl!("Density map"))
+            .on_hover_text(tl!("Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags"));
         let mut fabric = app.embroidery.fabric;
         if egui::color_picker::color_edit_button_srgba(ui, &mut fabric, egui::color_picker::Alpha::Opaque)
             .on_hover_text(tl!("Fabric color"))
