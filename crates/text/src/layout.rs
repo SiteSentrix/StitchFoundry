@@ -571,6 +571,8 @@ const QUARTER_TURN: Affine = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
 /// forms come from the font's `vert` feature); Latin letters, digits and other characters lie on
 /// their side. Brackets, the long vowel mark and similar marks that need a vertical form lie on
 /// their side when the font has none (Unicode's Vertical_Orientation Tr).
+/// Fullwidth !/? instead keep the nominal glyph upright (Tu fallback, UAX #50 §3.1):
+/// <https://www.unicode.org/reports/tr50/#vo>.
 fn stands_upright(g: &SGlyph) -> bool {
     let c = g.ch as u32;
     let upright = matches!(c,
@@ -587,7 +589,7 @@ fn stands_upright(g: &SGlyph) -> bool {
     }
     let needs_vertical_form = matches!(c,
         0x3001 | 0x3002 | 0x3008..=0x3011 | 0x3013..=0x301F | 0x3030 | 0x30A0 | 0x30FC
-        | 0xFE50..=0xFE52 | 0xFE59..=0xFE5E | 0xFF01 | 0xFF08 | 0xFF09 | 0xFF0C | 0xFF0E | 0xFF1A | 0xFF1B | 0xFF1F
+        | 0xFE50..=0xFE52 | 0xFE59..=0xFE5E | 0xFF08 | 0xFF09 | 0xFF0C | 0xFF0E | 0xFF1A | 0xFF1B
         | 0xFF3B | 0xFF3D | 0xFF3F | 0xFF5B..=0xFF60 | 0xFFE3);
     // Without a vertical alternate the shaped glyph is the nominal one.
     !needs_vertical_form || g.gid != g.face.glyph_for(g.ch)
