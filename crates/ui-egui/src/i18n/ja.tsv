@@ -5129,5 +5129,45 @@ machine	Stop	停止
 	Tell us your machine to see its hoops and save in its format.	ミシンを選ぶと、その枠が表示され、その形式で保存できます。
 	Choose My Machine	マイマシンを選ぶ
 	Saved for your machine:	ミシン用に保存しました：
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	布のかたち：ミシンが止まるので布を置くと、そのまま縫い付けます
+	A heart, a star, a flower and more, ready to sew	ハート、星、花など、すぐ縫えるかたち
+	A name or a few words, ready to sew	名前や短いことば、すぐ縫えます
+	A photo or drawing to turn into stitches	写真や絵をステッチに変えます
+	A picture	画像
+	Add Appliqué	アップリケを追加
+	Add Appliqué…	アップリケを追加…
+	Add Words	文字を追加
+	Add Words…	文字を追加…
+	Add a Picture…	画像を追加…
+	Add a Shape	かたちを追加
+	Add a Shape…	かたちを追加…
+	Bigger	大きく
+	Choose a shape	かたちを選んでください
+	Click a part of the design to change how it sews.	デザインの一部をクリックすると、縫い方を変えられます。
+	Click a part of the design to choose it, drag it to move it	デザインの一部をクリックして選び、ドラッグで動かします
+	Crown	王冠
+	Filled	塗りつぶし
+	How tall	高さ
+	Just the outline	輪郭だけ
+	Not sewn	縫わない
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	まだ縫うものがありません。左のボタンで文字、かたち、画像を追加してください。
+	Paw	肉球
+	See the design sew on screen, stitch by stitch	デザインが縫われる様子を画面で一針ずつ見られます
+	Sew it as	縫い方
+	Smaller	小さく
+	Smooth edge (satin)	なめらかな縁（サテン）
+	Start a design from the Home screen.	ホーム画面からデザインを始めてください。
+	Take back the last change	最後の変更を取り消します
+	The chosen part	選んだ部分
+	The chosen parts	選んだ部分（複数）
+	The design is bigger than the hoop: make it smaller before you sew.	デザインが枠より大きいです。縫う前に小さくしてください。
+	Thread colours	糸の色
+	Turn Into Stitches	ステッチに変える
+	Turn it into stitches in your thread colours.	お使いの糸の色でステッチに変えます。
+	Watch It Sew	縫う様子を見る
+	What should it say?	何と縫いますか？
+	Write the design for your machine to its USB stick or folder	ミシン用にデザインをUSBメモリーやフォルダーへ書き出します
+	Your design	あなたのデザイン
+	Show Everything	すべて表示
 @msg	the design has no page	デザインにページがありません
 @msg	open or start a design first	先にデザインを開くか始めてください

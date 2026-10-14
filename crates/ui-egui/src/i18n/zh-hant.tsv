@@ -4496,5 +4496,45 @@ machine	Stop	停止
 	Tell us your machine to see its hoops and save in its format.	告訴我們您的機器，即可看到它的繡框並按它的格式儲存。
 	Choose My Machine	選擇我的機器
 	Saved for your machine:	已為您的機器儲存：
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	布片形狀：機器會停下讓你放好布，然後把它縫上
+	A heart, a star, a flower and more, ready to sew	心形、星星、花朵等，可直接繡
+	A name or a few words, ready to sew	名字或幾個字，可直接繡
+	A photo or drawing to turn into stitches	把照片或圖畫變成針跡
+	A picture	圖片
+	Add Appliqué	新增貼布繡
+	Add Appliqué…	新增貼布繡…
+	Add Words	新增文字
+	Add Words…	新增文字…
+	Add a Picture…	新增圖片…
+	Add a Shape	新增形狀
+	Add a Shape…	新增形狀…
+	Bigger	放大
+	Choose a shape	選擇一個形狀
+	Click a part of the design to change how it sews.	點擊圖案的某部分，變更它的繡法。
+	Click a part of the design to choose it, drag it to move it	點擊圖案的某部分選取它，拖曳來移動它
+	Crown	皇冠
+	Filled	填滿
+	How tall	高度
+	Just the outline	只繡輪廓
+	Not sewn	不繡
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	還沒有要繡的內容。用左邊的按鈕新增文字、形狀或圖片。
+	Paw	爪印
+	See the design sew on screen, stitch by stitch	在螢幕上一針一針地看圖案怎麼繡
+	Sew it as	繡法
+	Smaller	縮小
+	Smooth edge (satin)	光滑邊（緞面繡）
+	Start a design from the Home screen.	從主畫面開始一個圖案。
+	Take back the last change	復原上一次變更
+	The chosen part	選取的部分
+	The chosen parts	選取的各部分
+	The design is bigger than the hoop: make it smaller before you sew.	圖案比繡框大：繡之前請縮小。
+	Thread colours	線色
+	Turn Into Stitches	變成針跡
+	Turn it into stitches in your thread colours.	用你的線色把它變成針跡。
+	Watch It Sew	觀看刺繡
+	What should it say?	要繡什麼字？
+	Write the design for your machine to its USB stick or folder	把圖案按你的機器格式寫到隨身碟或資料夾
+	Your design	你的圖案
+	Show Everything	顯示全部
 @msg	the design has no page	圖案沒有頁面
 @msg	open or start a design first	請先開啟或開始一個圖案
