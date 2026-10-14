@@ -22,11 +22,10 @@ const THREAD_WIDTH_MM: f64 = 0.36;
 /// keeps the canvas responsive (copies beyond it are left out).
 const MAX_REPEAT_VERTICES: usize = 6_000_000;
 
+/// What the base mesh is built from: the plan and how it is shown, not where the view is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Key {
     plan: usize,
-    /// Centre, zoom, rotation and the canvas rect: a window resize moves where the centre lands.
-    view: [i64; 8],
     mode: StitchView,
     upto: usize,
     points: bool,
@@ -34,10 +33,24 @@ struct Key {
     gap: i64,
 }
 
-/// The overlay mesh for the last view; rebuilt only when the plan or view changes.
+/// Zooming this far from the base mesh's zoom (either way) builds it again, so thread widths and
+/// needle points, set in screen pixels, stay about the size they should be.
+const REBUILD_ZOOM: f64 = 1.25;
+
+/// The overlay mesh. Building it (every stitch a shaded quad) is the costly part, so it is built
+/// once per plan and zoom range, for the whole design (`base`, laid out at `base_zoom` with no
+/// rotation round the canvas centre `base_c`), and a pan, a rotation or a small zoom only moves
+/// its vertices to where the view puts them (`mesh`).
 #[derive(Default)]
 pub struct MeshCache {
     key: Option<Key>,
+    base: Mesh,
+    base_jumps: Vec<[Pos2; 2]>,
+    base_zoom: f64,
+    base_c: Pos2,
+    /// Centre, zoom, rotation and the canvas rect `mesh` was placed for: a window resize moves
+    /// where the centre lands.
+    view: Option<[i64; 8]>,
     mesh: Arc<Mesh>,
     jumps: Vec<[Pos2; 2]>,
 }
@@ -153,36 +166,66 @@ fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool
 impl MeshCache {
     fn update(&mut self, plan: &Arc<StitchPlan>, xf: &Xf, (mode, upto, points): (StitchView, usize, bool), (repeats, gap): ([u32; 2], f64)) {
         let q = |v: f64| (v * 1000.0).round() as i64;
-        let key = Key {
-            plan: Arc::as_ptr(plan) as usize,
-            view: [
-                q(xf.center.x),
-                q(xf.center.y),
-                q(xf.zoom),
-                q(xf.rot),
-                q(xf.rect.min.x as f64),
-                q(xf.rect.min.y as f64),
-                q(xf.rect.max.x as f64),
-                q(xf.rect.max.y as f64),
-            ],
-            mode,
-            upto,
-            points,
-            repeats,
-            gap: q(gap),
-        };
-        if self.key == Some(key) {
+        let key = Key { plan: Arc::as_ptr(plan) as usize, mode, upto, points, repeats, gap: q(gap) };
+        let view = [
+            q(xf.center.x),
+            q(xf.center.y),
+            q(xf.zoom),
+            q(xf.rot),
+            q(xf.rect.min.x as f64),
+            q(xf.rect.min.y as f64),
+            q(xf.rect.max.x as f64),
+            q(xf.rect.max.y as f64),
+        ];
+        let ratio = if self.base_zoom > 0.0 { xf.zoom / self.base_zoom } else { 0.0 };
+        let rebuild = self.key != Some(key) || !(1.0 / REBUILD_ZOOM..=REBUILD_ZOOM).contains(&ratio);
+        if !rebuild && self.view == Some(view) {
             return;
         }
-        // Stitches off screen are left out, unless a copy of them shows.
-        let step = repeat_step(plan.pattern(), xf, gap);
-        let visible = xf.rect.expand(40.0);
-        let [cols, rows] = repeats.map(|n| n.clamp(1, 10) as f32 - 1.0);
-        let cull = [step[0] * cols, step[1] * rows, step[0] * cols + step[1] * rows].into_iter().fold(visible, |r, d| r.union(visible.translate(-d)));
-        let (mesh, jumps) = build(plan.pattern(), xf, mode, upto, points, cull);
-        self.mesh = Arc::new(tiled(mesh, repeats, step));
-        self.jumps = jumps;
-        self.key = Some(key);
+        if rebuild {
+            // the whole design, at this zoom, unrotated, centred on the document's origin
+            let bx = Xf { rect: xf.rect, zoom: xf.zoom, center: vectorcraft_geom::Point::new(0.0, 0.0), rot: 0.0 };
+            let step = repeat_step(plan.pattern(), &bx, gap);
+            let (mesh, jumps) = build(plan.pattern(), &bx, mode, upto, points, egui::Rect::EVERYTHING);
+            self.base = tiled(mesh, repeats, step);
+            self.base_jumps = jumps;
+            self.base_zoom = xf.zoom;
+            self.base_c = xf.rect.center();
+            self.key = Some(key);
+        }
+        let place = Placement::new(self.base_c, self.base_zoom, xf);
+        let mut mesh = self.base.clone();
+        for v in &mut mesh.vertices {
+            v.pos = place.at(v.pos);
+        }
+        self.mesh = Arc::new(mesh);
+        self.jumps = self.base_jumps.iter().map(|[a, b]| [place.at(*a), place.at(*b)]).collect();
+        self.view = Some(view);
+    }
+}
+
+/// Moves a point of the base mesh (laid out at zoom `z0`, unrotated, the document's origin at
+/// `c0`) to where the view `xf` draws it: screen = c + R(rot) · ((v − c0) · z/z0 − centre · z).
+struct Placement {
+    c0: Pos2,
+    k: f32,
+    off: egui::Vec2,
+    sin: f32,
+    cos: f32,
+    c: Pos2,
+}
+
+impl Placement {
+    fn new(c0: Pos2, z0: f64, xf: &Xf) -> Self {
+        let k = if z0 > 0.0 { (xf.zoom / z0) as f32 } else { 1.0 };
+        let (sin, cos) = xf.rot.sin_cos();
+        let off = egui::vec2(-(xf.center.x * xf.zoom) as f32, -(xf.center.y * xf.zoom) as f32);
+        Placement { c0, k, off, sin: sin as f32, cos: cos as f32, c: xf.rect.center() }
+    }
+
+    fn at(&self, v: Pos2) -> Pos2 {
+        let u = (v - self.c0) * self.k + self.off;
+        self.c + egui::vec2(u.x * self.cos - u.y * self.sin, u.x * self.sin + u.y * self.cos)
     }
 }
 
@@ -599,6 +642,40 @@ mod tests {
         assert!(last.iter().zip(&mesh.vertices).all(|(a, b)| a.pos == b.pos + egui::vec2(40.0, 15.0)));
         // more than ten each way is ten
         assert_eq!(tiled(mesh, [50, 1], step).vertices.len(), n * 10);
+    }
+
+    #[test]
+    fn panning_rotating_and_zooming_move_the_mesh_without_building_it_again() {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &serde_json::json!({"width": 200, "height": 200})).unwrap();
+        s.execute("shape.rectangle", &serde_json::json!({"x": 20, "y": 20, "width": 60, "height": 40})).unwrap();
+        s.execute("embroidery.set", &serde_json::json!({"type": "fill"})).unwrap();
+        let plan = s.embroidery_plan().unwrap();
+        let rect = egui::Rect::from_min_size(Pos2::new(10.0, 20.0), egui::vec2(800.0, 600.0));
+        let view = |cx: f64, zoom: f64, rot: f64| Xf { rect, zoom, center: vectorcraft_geom::Point::new(cx, 60.0), rot };
+        let opts = (StitchView::Lines, usize::MAX, false);
+        let mut cache = MeshCache::default();
+        cache.update(&plan, &view(50.0, 2.0, 0.0), opts, ([1, 1], 0.0));
+        let base_len = cache.base.vertices.len();
+        // pan, rotate and zoom a little: placed from the same base, where a fresh build puts it
+        for (cx, zoom, rot) in [(80.0, 2.0, 0.0), (80.0, 2.2, 0.3), (10.0, 1.7, -1.0)] {
+            cache.update(&plan, &view(cx, zoom, rot), opts, ([1, 1], 0.0));
+            assert_eq!(cache.base_zoom, 2.0, "not built again");
+            let (fresh, _) = build(plan.pattern(), &view(cx, zoom, rot), StitchView::Lines, usize::MAX, false, egui::Rect::EVERYTHING);
+            // the same stitches; a stitch's quad keeps its width in pixels, so compare its middle
+            let mid = |m: &Mesh, i: usize| {
+                let v = &m.vertices[i * 4..i * 4 + 4];
+                v.iter().fold(egui::Vec2::ZERO, |a, x| a + x.pos.to_vec2()) / 4.0
+            };
+            assert_eq!(cache.mesh.vertices.len(), base_len);
+            for i in [0, base_len / 8, base_len / 4 - 1] {
+                let (a, b) = (mid(&cache.mesh, i), mid(&fresh, i));
+                assert!((a - b).length() < 0.05, "{cx} {zoom} {rot}: {a:?} {b:?}");
+            }
+        }
+        // a big zoom builds it again
+        cache.update(&plan, &view(10.0, 5.0, 0.0), opts, ([1, 1], 0.0));
+        assert_eq!(cache.base_zoom, 5.0);
     }
 
     #[test]
