@@ -734,3 +734,46 @@ fn opacity_mask_exports_as_luminosity_soft_mask() {
     assert!(text.contains("/SMask"), "soft mask in an ExtGState");
     assert!(text.contains("/Luminosity"));
 }
+
+/// A function or colour space built on itself is refused before the interpreter builds it (by
+/// recursion, with no cap: a stack overflow), and those of real files are read.
+#[test]
+fn functions_and_colour_spaces_built_on_themselves_are_refused() {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with};
+    let first = first_extra(1);
+    let (me, next) = (format!("{first} 0 R"), format!("{} 0 R", first + 1));
+    let shaded = PdfPage {
+        resources: format!("/Shading << /S << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function {me} >> >>"),
+        ..PdfPage::new(100.0, 100.0, "/S sh")
+    };
+    let filled = PdfPage { resources: format!("/ColorSpace << /C {me} >>"), ..PdfPage::new(100.0, 100.0, "/C cs 0 sc 0 0 50 50 re f") };
+    let stitch = |on: &str| format!("<< /FunctionType 3 /Domain [0 1] /Functions [{on}] /Bounds [] /Encode [0 1] >>");
+    let indexed = |on: &str| format!("[/Indexed {on} 1 <000000ffffff>]");
+    let ramp = "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >>";
+    // `n` functions, each stitching the next, then a plain one.
+    let chain = |n: usize| (1..=n).map(|i| stitch(&format!("{} 0 R", first + i))).chain([ramp.to_string()]).collect::<Vec<_>>();
+    let calculator =
+        |program: &str| format!("<< /FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1] /Length {} >>\nstream\n{program}\nendstream", program.len());
+    for (what, page, objects) in [
+        ("a function stitching itself", &shaded, vec![stitch(&me)]),
+        ("two functions stitching each other", &shaded, vec![stitch(&next), stitch(&me)]),
+        ("twenty functions, each stitching the next", &shaded, chain(20)),
+        ("procedures in procedures", &shaded, vec![calculator(&format!("{}{}", "{".repeat(100), "}".repeat(100)))]),
+        ("a colour space on itself", &filled, vec![indexed(&me)]),
+        ("two colour spaces on each other", &filled, vec![indexed(&next), indexed(&me)]),
+    ] {
+        let objects: Vec<&str> = objects.iter().map(String::as_str).collect();
+        let e = import(&pdf_with(std::slice::from_ref(page), &objects, None)).err().map(|e| e.to_string());
+        assert!(e.as_deref().is_some_and(|e| e.contains("built on one another without end")), "{what}: {e:?}");
+    }
+    for (what, page, objects) in [
+        ("a function stitching one", &shaded, vec![stitch(&next), ramp.to_string()]),
+        ("three functions, each stitching the next", &shaded, chain(3)),
+        ("a calculator function", &shaded, vec![calculator("{ dup 1 exch sub 0 }")]),
+        ("an indexed colour space", &filled, vec![indexed("/DeviceRGB")]),
+    ] {
+        let objects: Vec<&str> = objects.iter().map(String::as_str).collect();
+        let d = import(&pdf_with(std::slice::from_ref(page), &objects, None)).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert!(d.layers.iter().any(|l| l.children().is_some_and(|c| !c.is_empty())), "{what}: its art is read");
+    }
+}

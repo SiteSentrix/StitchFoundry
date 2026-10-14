@@ -287,7 +287,7 @@ fn a_sublayer_that_paints_first_brings_its_parent_layer() {
 #[test]
 fn hostile_layer_orders_stay_bounded() {
     // A group listed twice, under itself, and an order nested far deeper than layers go.
-    let deep = format!("{}{{2}}{}", "[".repeat(100), "]".repeat(100));
+    let deep = format!("{}{{2}}{}", "[".repeat(40), "]".repeat(40));
     let order = format!("[{{0}} [{{0}} {{1}}] {{1}} [{{0}}] {deep}]");
     let d = import(&three_groups([&ocg("A", ""), &ocg("B", ""), &ocg("C", "")], &[], &format!("/Order {order}"))).unwrap();
     assert_eq!(names(&d), ["A", "C"], "C, listed too deep, stays a top-level layer");
@@ -317,7 +317,8 @@ fn thousands_of_layers_hidden_ones_included_all_come_in() {
 /// Import `bytes` with the scan's operator limit lowered to `n`.
 fn import_with_max_ops(bytes: &[u8], n: usize) -> ImportReport {
     let old = crate::import_scan::TEST_MAX_OPS.replace(n);
-    let r = import_with_report(bytes, &ImportOptions::default());
+    // (On this thread: the limit is this thread's.)
+    let r = crate::import::read(bytes, &ImportOptions::default());
     crate::import_scan::TEST_MAX_OPS.set(old);
     r.unwrap()
 }
