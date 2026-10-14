@@ -139,12 +139,15 @@ fn by_rows(w: f64, h: f64, m: f64, pitch: f64, amp: f64, row: impl Fn(f64, f64, 
     pts.into_iter().map(|(x, y)| (x.clamp(m, w - m), y.clamp(m, h - m))).collect()
 }
 
+/// One row of a motif from `x0` to `x1` along the line `y` (mm) → its points.
+type Row = Box<dyn Fn(f64, f64, f64) -> Vec<(f64, f64)>>;
+
 /// A row motif: how far it reaches either side of its row line, how far apart its rows go, and
-/// one row from `x0` to `x1` along the line `y` (mm).
+/// how to draw one row.
 struct Motif {
     amp: f64,
     pitch: f64,
-    row: Box<dyn Fn(f64, f64, f64) -> Vec<(f64, f64)>>,
+    row: Row,
 }
 
 /// A cubic Bézier's points from `a` to `d`.
@@ -709,7 +712,7 @@ mod tests {
         }
         // the detour itself: a straight line across a square ring goes round it
         let ring = vec![(40.0, 40.0), (60.0, 40.0), (60.0, 60.0), (40.0, 60.0)];
-        let out = detour(&[(0.0, 50.0), (100.0, 50.0)], &[ring.clone()]);
+        let out = detour(&[(0.0, 50.0), (100.0, 50.0)], std::slice::from_ref(&ring));
         assert!(out.iter().all(|&p| !inside(&ring, (p.0 + 0.0, p.1)) || [40.0, 60.0].contains(&p.0) || [40.0, 60.0].contains(&p.1)), "{out:?}");
         assert!(out.iter().any(|&p| (p.1 - 40.0).abs() < 1e-9 || (p.1 - 60.0).abs() < 1e-9), "goes round the edge: {out:?}");
         assert!((out[out.len() - 1].0 - 100.0).abs() < 1e-9, "and carries on to the end");
