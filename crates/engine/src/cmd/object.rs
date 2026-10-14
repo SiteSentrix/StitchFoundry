@@ -348,14 +348,14 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
-/// Returns the copies of `roots` for a transform with `copy` in an interaction whose document is
-/// still its snapshot, as in a preview ([`Session::preview`] puts the snapshot back first). These
-/// are the copies the interaction keeps when they were made of that snapshot for the same `roots`;
-/// otherwise this copies `roots` with [`duplicate_in`] in a clone of the snapshot, untransformed,
-/// and the interaction keeps that clone. It returns `None` outside an interaction, and when the
-/// document is no longer the snapshot, as for a command run in a typing session or a script batch
-/// after an earlier edit there: the transform then copies the current document.
-fn preview_copies(s: &mut Session, roots: &[NodeId]) -> Result<Option<Arc<crate::PreviewCopies>>> {
+/// Returns the copies of `roots` for a transform or a perspective edit with `copy` in an interaction
+/// whose document is still its snapshot, as in a preview ([`Session::preview`] puts the snapshot
+/// back first). These are the copies the interaction keeps when they were made of that snapshot for
+/// the same `roots`; otherwise this copies `roots` with [`duplicate_in`] in a clone of the snapshot,
+/// untransformed, and the interaction keeps that clone. It returns `None` outside an interaction,
+/// and when the document is no longer the snapshot, as for a command run in a typing session or a
+/// script batch after an earlier edit there: the command then copies the current document.
+pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId]) -> Result<Option<Arc<crate::PreviewCopies>>> {
     let st = s.doc_mut()?;
     let Some(it) = &mut st.interaction else { return Ok(None) };
     if !Arc::ptr_eq(&st.doc, &it.doc) {

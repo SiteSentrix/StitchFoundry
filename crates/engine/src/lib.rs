@@ -219,7 +219,8 @@ pub struct Interaction {
     /// The perspective transform the previews make (`perspective.transform` params): Transform
     /// Again repeats it once the drag is committed.
     pub perspective_again: Option<Value>,
-    /// A transform with `copy` keeps the copies it made of the snapshot here ([`PreviewCopies`]).
+    /// A transform or a perspective edit with `copy` keeps the copies it made of the snapshot here
+    /// ([`PreviewCopies`]).
     pub(crate) copies: Option<Arc<PreviewCopies>>,
 }
 
@@ -233,14 +234,15 @@ pub enum LastTransform {
     Each(Value),
 }
 
-/// This holds the copies that a transform with `copy` made of an interaction's snapshot
-/// ([`cmd::object::apply_transform`]). A later transform with `copy` of the same objects, while
-/// the document is still that snapshot, starts from `doc` and transforms only the copies.
+/// This holds the copies that a transform or a perspective edit with `copy` made of an
+/// interaction's snapshot ([`cmd::object::apply_transform`]; `persp_edit` and `plane_move` in
+/// `cmd::distortcmds`). A later transform or perspective edit with `copy` of the same objects,
+/// while the document is still that snapshot, starts from `doc` and transforms only the copies.
 #[derive(Debug)]
 pub(crate) struct PreviewCopies {
     /// The copies were made from this snapshot.
     pub(crate) from: Arc<Document>,
-    /// The transform copied these objects.
+    /// The transform or perspective edit copied these objects.
     pub(crate) roots: Vec<NodeId>,
     /// This is `from` with the copies added, untransformed.
     pub(crate) doc: Arc<Document>,
