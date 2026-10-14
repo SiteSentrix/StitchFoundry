@@ -562,7 +562,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-29 | Appliqué cover choice (satin, blanket, zigzag or one's own) and printed mirrored cutting templates | Done | Covers: satin, blanket, zigzag, triple run or none; cutting templates from Cut File, mirrored if asked, printed life size | 0 |
 | NEW-30 | Catalogue print of a design folder (thumbnail sheets, lists) | Done | `embroidery.library.catalogue`: thumbnail sheets of a folder's designs in their colours with name, size, stitches, colours and format | 0 |
 | NEW-31 | Fabric presets that recommend a stabiliser | Done | Each fabric names a stabiliser (tear-away, cut-away, no-show mesh, wash-away) and a topping where it wants one; shown under Fabric settings and printed on worksheets | 0 |
-| NEW-32 | Help in place: F1 on a tool opens its help, a hints panel with short tips | Missing | Docs sections linked from tools | 7 |
+| NEW-32 | Help in place: F1 on a tool opens its help, a hints panel with short tips | Done | Help › StitchFoundry Help… (F1): the user guide compiled in, with topics, search and links, opened on the active tool's topic; a Tips tab with hints for the tool in hand; the Home screen starts designs by hoop, opens samples and walks through a first design | 0 |
 | NEW-33 | True-size zoom (calibrate the screen so 100 % is life size) | Missing | A preference with a ruler to match | 7 |
 | NEW-34 | A simple workspace and a start screen by experience (beginner, digitizer, business) | Missing | Panels shown by level (KI-01) | 7 |
 | NEW-35 | Send to machine: hot folder, USB stick or network share, with a connection check | Done | Embroidery › Send to Machine (`embroidery.send`): the machine file written to a remembered folder, checked first | – |
@@ -579,8 +579,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 226 done,
-8 partial, 10 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 227 done,
+8 partial, 9 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

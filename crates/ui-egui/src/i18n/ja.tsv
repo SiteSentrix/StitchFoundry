@@ -2082,7 +2082,6 @@
 	Quality {quality}	画質 {quality}
 	Quality:	画質:
 	Quick Actions	クイックアクション
-	Quickly start a new file	新規ファイルをすばやく作成
 	RECENT	最近使用したもの
 	Radar Graph Tool	レーダーチャートツール
 	Radial Gradient	円形グラデーション
@@ -5025,3 +5024,40 @@ machine	Stop	停止
 	Square loop	四角ループ
 	Foil	箔
 	Shown with the design, not sewn	デザインと一緒に表示され、縫われません
+	StitchFoundry Help	StitchFoundry ヘルプ
+	Guide	ガイド
+	Tips	ヒント
+	Search help	ヘルプを検索
+	Nothing found	見つかりません
+	Help Topics	ヘルプトピック
+	Help Topic	ヘルプトピック
+	Help for Tool	ツールのヘルプ
+	New Design for Hoop	フープ用の新規デザイン
+	Sample Designs	サンプルデザイン
+	Open Sample Design	サンプルデザインを開く
+	Start a design for your hoop	フープに合わせてデザインを始める
+	Your first design	初めてのデザイン
+	Draw shapes, place a picture or type text.	図形を描く、画像を配置する、または文字を入力します。
+	Choose how each part is stitched: satin, fill, run and more.	各部分の縫い方を選びます：サテン、フィル、ランなど。
+	Watch it sew with the stitch player and check it.	ステッチプレーヤーで縫う様子を見て確認します。
+	Export the file for your machine.	ミシン用のファイルを書き出します。
+	Learn how	方法を見る
+	Try a sample	サンプルを試す
+	Heart patch	ハートのワッペン
+	Sun and moon	太陽と月
+	Appliqué star	アップリケの星
+	Tip:	ヒント：
+	More tips	ほかのヒント
+	A new design the size of this hoop's sewing field	このフープの刺繍範囲と同じ大きさの新規デザイン
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	図形を横切る傾斜線を引くと縫い角度が決まり、2本以上で縫い目が回ります。
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	配置した画像の領域をクリックすると刺繍になります。許容値を上げるとより多くの色合いを含みます。
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	選んだ針落ち点をドラッグで移動、Altクリックで追加、Deleteで削除します。
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	コラムの片側と反対側を交互にクリックし、Enter または Esc で終えます。
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	左下のダイヤルでブラシ、幅、密度、長さ、形を設定します。
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	文字を入力し、レタリングパネルで刺繍フォントを選ぶときれいに縫えます。
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	アートを選び、刺繍 › アートワークを刺繍に変換 で一度にデジタイズします。
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	サテンは幅約7mmまでの形に向きます。それより広い部分はタタミフィルがきれいです。
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	刺繍パネルでフープを選ぶと、デザインの周りに刺繍範囲が表示されます。
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	刺繍メニューの「デザインをチェック」で、密な重なり、長い針目、小さすぎる文字が見つかります。
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	送る前に、ステッチ順序のステッチプレーヤーで縫う様子を見ましょう。
+	Export with Embroidery › Export Machine File and pick your machine's format.	刺繍 › ミシンファイルを書き出し で、ミシンの形式を選んで書き出します。

@@ -555,6 +555,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing; viewAfterSaving opens the file) → {path, bytes, warnings}",
     ),
     ("help.about", "About StitchFoundry", "", "{}"),
+    ("help.show", "StitchFoundry Help…", "F1", "{topic?: a guide topic (help.topics), tips?: bool} the user guide, on the active tool's topic"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     ("app.quit", "Quit StitchFoundry", "Cmd+Q", "{}"),
     (
@@ -1497,6 +1498,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.ui.about = true;
             Ok(Value::Null)
         }
+        "help.show" => crate::dialogs::help::open(app, p),
         "help.commandPalette" => {
             app.ui.palette_open = !app.ui.palette_open;
             app.ui.palette_query.clear();
@@ -2883,7 +2885,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("StitchFoundry on GitHub", "help.github"),
                 Sep,
                 c("Search Commands…", "help.commandPalette"),
-                todos("StitchFoundry Help…", "F1"),
+                c("StitchFoundry Help…", "help.show"),
+                cp("Tips", "help.show", json!({ "tips": true })),
                 Sep,
                 c("About StitchFoundry", "help.about"),
             ],

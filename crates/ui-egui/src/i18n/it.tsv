@@ -2061,7 +2061,6 @@
 	Quality:	Qualità:
 	Quarter Space	Quarto di spazio
 	Quick Actions	Azioni rapide
-	Quickly start a new file	Inizia rapidamente un nuovo file
 	Radar Graph Tool	Strumento Grafico radar
 	Radial	Radiale
 	Radial Glows	Bagliori radiali
@@ -5031,3 +5030,40 @@ machine	Stop	Arresto
 	Square loop	Anello quadrato
 	Foil	Lamina
 	Shown with the design, not sewn	Mostrato con il disegno, non cucito
+	StitchFoundry Help	Guida di StitchFoundry
+	Guide	Guida
+	Tips	Suggerimenti
+	Search help	Cerca nella guida
+	Nothing found	Nessun risultato
+	Help Topics	Argomenti della guida
+	Help Topic	Argomento della guida
+	Help for Tool	Guida dello strumento
+	New Design for Hoop	Nuovo disegno per il telaio
+	Sample Designs	Disegni di esempio
+	Open Sample Design	Apri disegno di esempio
+	Start a design for your hoop	Inizia un disegno per il tuo telaio
+	Your first design	Il tuo primo disegno
+	Draw shapes, place a picture or type text.	Disegna forme, inserisci un’immagine o scrivi del testo.
+	Choose how each part is stitched: satin, fill, run and more.	Scegli come ricamare ogni parte: raso, riempimento, punto filza e altro.
+	Watch it sew with the stitch player and check it.	Guardalo cucire con il lettore dei punti e controllalo.
+	Export the file for your machine.	Esporta il file per la tua macchina.
+	Learn how	Come fare
+	Try a sample	Prova un esempio
+	Heart patch	Toppa a cuore
+	Sun and moon	Sole e luna
+	Appliqué star	Stella in applicazione
+	Tip:	Suggerimento:
+	More tips	Altri suggerimenti
+	A new design the size of this hoop's sewing field	Un nuovo disegno grande quanto il campo di ricamo di questo telaio
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Traccia una linea di inclinazione sulla forma per impostare l’angolo dei punti; due o più linee fanno girare i punti.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Fai clic su un’area di un’immagine inserita per ricamarla; alza la Tolleranza per includere più sfumature.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Trascina i punti d’ago scelti per spostarli, Alt-clic su un punto ne aggiunge uno, Canc li elimina.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Fai clic alternando su un lato della colonna e sull’altro; Invio o Esc la terminano.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	La ghiera in basso a sinistra imposta pennello, larghezza, densità, lunghezza e forma.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Scrivi il testo, poi scegli un font da ricamo nel pannello Scritte perché si ricami in modo pulito.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Seleziona la grafica e scegli Ricamo › Converti grafica in ricamo per digitalizzarla in un passo.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Il raso va bene fino a circa 7 mm di larghezza; le aree più larghe vengono meglio con riempimento tatami.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Scegli un telaio nel pannello Ricamo per vedere il campo di ricamo attorno al disegno.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Controlla disegno nel menu Ricamo trova strati densi, punti lunghi e testo troppo piccolo.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Guarda il disegno cucire con il lettore in Sequenza punti prima di inviarlo.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Esporta con Ricamo › Esporta file macchina e scegli il formato della tua macchina.

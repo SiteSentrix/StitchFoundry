@@ -2039,7 +2039,6 @@
 	Quality:	品質：
 	Quarter Space	四分之一空格
 	Quick Actions	快速動作
-	Quickly start a new file	快速開始新檔案
 	Radar Graph Tool	雷達圖工具
 	Radial	放射狀
 	Radial Glows	放射狀光暈
@@ -4390,3 +4389,40 @@ machine	Stop	停止
 	Square loop	方形線圈
 	Foil	燙金箔
 	Shown with the design, not sewn	與設計一起顯示，不縫製
+	StitchFoundry Help	StitchFoundry 說明
+	Guide	指南
+	Tips	提示
+	Search help	搜尋說明
+	Nothing found	找不到
+	Help Topics	說明主題
+	Help Topic	說明主題
+	Help for Tool	工具說明
+	New Design for Hoop	依繡框新增設計
+	Sample Designs	範例設計
+	Open Sample Design	開啟範例設計
+	Start a design for your hoop	為你的繡框開始設計
+	Your first design	你的第一個設計
+	Draw shapes, place a picture or type text.	繪製形狀、置入圖片或輸入文字。
+	Choose how each part is stitched: satin, fill, run and more.	選擇每個部分的繡法：緞紋、填充、平針等。
+	Watch it sew with the stitch player and check it.	用針跡播放器觀看縫製過程並檢查。
+	Export the file for your machine.	匯出適合你的機器的檔案。
+	Learn how	了解方法
+	Try a sample	試試範例
+	Heart patch	愛心貼布
+	Sun and moon	太陽和月亮
+	Appliqué star	貼布繡星星
+	Tip:	提示：
+	More tips	更多提示
+	A new design the size of this hoop's sewing field	與此繡框縫製區域同樣大小的新設計
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	在形狀上畫一條傾斜線來設定針跡角度；兩條或更多會讓針跡轉向。
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	點按置入影像的區域即可繡製；提高容差可包含更多色調。
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	拖曳選取的落針點可移動，Alt+點按針跡可新增，Delete 鍵刪除。
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	交替點按柱形的一側和另一側；按 Enter 或 Esc 結束。
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	左下角的轉盤可設定筆刷、寬度、密度、長度和形狀。
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	輸入文字，然後在字體面板中選擇刺繡字體，使其繡得乾淨。
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	選取圖稿，然後選擇 刺繡 › 將圖稿轉換為刺繡，一步完成數位化。
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	緞紋適合寬約 7 公釐以內的形狀；更寬的區域用榻榻米填充效果更好。
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	在刺繡面板中選擇繡框，即可看到設計周圍的縫製區域。
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	刺繡選單中的「檢查設計」可找出過密的層、過長的針跡和太小的文字。
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	傳送之前，用針跡順序中的針跡播放器觀看設計的縫製過程。
+	Export with Embroidery › Export Machine File and pick your machine's format.	透過 刺繡 › 匯出機器檔案 匯出，並選擇你的機器格式。
