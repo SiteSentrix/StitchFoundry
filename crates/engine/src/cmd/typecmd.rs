@@ -124,6 +124,15 @@ fn auto_height_frame(t: &TextObject) -> Option<vectorcraft_geom::Rect> {
     (finite && b.height() > 1e-6 && b.width() > 1e-6 && (area - b.area()).abs() <= b.area() * 1e-6).then_some(b)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`auto_height`] laid out text in its columns on this thread.
+    pub(crate) static COLUMN_LAYOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: when set, [`auto_height`] lays out the columns at every step of its bisection on
+    /// this thread.
+    pub(crate) static FULL_SEARCH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Auto Size: move the bottom of a rectangular area type frame to just below its last line (plus
 /// the inset), so the frame's height follows the text. Text in several columns gets the least
 /// height (to 0.01 pt) at which it fits. True when the frame changed.
@@ -158,21 +167,30 @@ fn auto_height(t: &mut TextObject) -> bool {
         // The least height (to 0.01 pt) at which the columns hold the text.
         probe.area.columns = cols;
         let fits = |probe: &mut TextObject, h: f64| {
+            #[cfg(test)]
+            COLUMN_LAYOUTS.with(|c| c.set(c.get() + 1));
             with_size(probe, b.width(), h);
             !vectorcraft_text::layout(db, probe).overflow
         };
-        if !fits(&mut probe, h) {
-            return false;
-        }
-        let (mut lo, mut hi) = (1.0, h);
-        for _ in 0..24 {
-            if hi - lo <= 0.01 {
-                break;
+        // The bisection runs on the one column's lines as `columns_hold` places them in the columns.
+        // The columns are then laid out at the upper height it ends on and, when they hold the text
+        // there, at the lower one, unless that is the 1 pt it starts from. When the one column
+        // overflows, when text wraps around other objects, or when the columns don't hold the text
+        // at the upper height or do hold it at the lower one, the columns are laid out at every step
+        // of the bisection.
+        let quick = !lay.overflow && t.wrap.is_empty();
+        #[cfg(test)]
+        let quick = quick && !FULL_SEARCH.with(std::cell::Cell::get);
+        let ends = quick.then(|| least_height(1.0, h, |x| columns_hold(&lay.lines, cols, b.y0, inset, x)));
+        h = match ends {
+            Some((lo, hi)) if fits(&mut probe, hi) && (lo <= 1.0 || !fits(&mut probe, lo)) => hi,
+            _ => {
+                if !fits(&mut probe, h) {
+                    return false;
+                }
+                least_height(1.0, h, |x| fits(&mut probe, x)).1
             }
-            let mid = (lo + hi) * 0.5;
-            if fits(&mut probe, mid) { hi = mid } else { lo = mid }
-        }
-        h = hi;
+        };
     }
     if (h - b.height()).abs() <= 1e-6 {
         return false;
@@ -187,6 +205,38 @@ fn auto_height(t: &mut TextObject) -> bool {
     }
     *frame = next;
     true
+}
+
+/// The bisection [`auto_height`] runs for text in columns, from `lo` (taken not to fit) and `hi`
+/// (where it fits): at most 24 halvings, until they are at most 0.01 pt apart → (lo, hi).
+fn least_height(mut lo: f64, mut hi: f64, mut fits: impl FnMut(f64) -> bool) -> (f64, f64) {
+    for _ in 0..24 {
+        if hi - lo <= 0.01 {
+            break;
+        }
+        let mid = (lo + hi) * 0.5;
+        if fits(mid) { hi = mid } else { lo = mid }
+    }
+    (lo, hi)
+}
+
+/// Do `cols` columns of a frame `h` tall (its top at `y0`, the text `inset` inside it) hold
+/// `lines`, the text's lines laid out in one column as wide as each of them from the same top?
+/// Each column takes the next lines while they end within its bottom, as layout tests them
+/// (`baseline + descent <= bottom + 0.01`). A column's first line sits its
+/// [`first_baseline`](vectorcraft_text::LineInfo::first_baseline) below `y0 + inset`, and the
+/// lines after it keep their distances from it. A last line with no characters (after a return
+/// that ends the text) may be left out, as layout leaves it out without overflowing.
+fn columns_hold(lines: &[vectorcraft_text::LineInfo], cols: usize, y0: f64, inset: f64, h: f64) -> bool {
+    let Some(first) = lines.first() else { return true };
+    let bottom = y0 + h - inset + 0.01;
+    let mut next = 0;
+    for _ in 0..cols {
+        let Some(start) = lines.get(next) else { break };
+        let up = (start.baseline - start.first_baseline) - (first.baseline - first.first_baseline);
+        next += lines.iter().skip(next).take_while(|l| l.baseline + l.descent - up <= bottom).count();
+    }
+    next >= lines.len() || (next + 1 == lines.len() && lines.last().is_some_and(|l| l.start == l.end))
 }
 
 /// Recompute the layout bounds cache for the text among `ids` (and their descendants) that lacks

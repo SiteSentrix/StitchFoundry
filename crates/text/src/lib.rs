@@ -128,6 +128,14 @@ pub struct LineInfo {
     pub x1: f64,
     pub ascent: f64,
     pub descent: f64,
+    /// Area type: how far the line's baseline sits below the top of its frame cell (inside the
+    /// inset, with the lines aligned to the top) when the line starts the cell: the metric of the
+    /// line that Area Type Options › First Baseline picks (the em box top with top-to-top leading),
+    /// at least the First Baseline minimum. When layout moves a line on from the cell before and
+    /// the line's first character has smaller metrics than the rest of it, or moves the line down
+    /// to where it has room (in a frame that is not a rectangle, or beside wrap objects), the line
+    /// can sit elsewhere. It is 0 for type on a path.
+    pub first_baseline: f64,
     /// Byte range of the line in the plain text (excludes the paragraph's `\n`).
     pub start: usize,
     pub end: usize,
