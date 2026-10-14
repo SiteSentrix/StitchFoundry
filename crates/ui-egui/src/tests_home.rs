@@ -294,6 +294,8 @@ fn make_a_design_guide_walks_from_words_to_saving() {
     (app.guide.what, app.guide.step) = (Some("quilt"), Step::Details);
     let s = guide_strings(&mut app);
     has(&s, "What size is the tile?");
+    has(&s, "A border strip");
+    has(&s, "Pebbles");
     has(&s, "Stipple");
     crate::guide::make_it(&mut app, json!({"what": "quilt", "width": 4, "height": 4, "pattern": "waves"}));
     assert_eq!(app.guide.step, Step::Colours, "{:?}", app.guide.error);

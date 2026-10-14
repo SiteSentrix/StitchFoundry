@@ -21,6 +21,7 @@ pub const PATTERNS: &[(&str, &str)] = &[
     ("swirls", "Swirls"),
     ("loops", "Loops"),
     ("feathers", "Feathers"),
+    ("pebbles", "Pebbles"),
     ("waves", "Waves"),
     ("spiral", "Squares spiral"),
     ("crosshatch", "Crosshatch"),
@@ -44,6 +45,22 @@ pub const SIZES: &[(f64, f64)] = &[
     (9.0, 14.0),
 ];
 
+/// Border strip sizes (inches, long side across): narrow strips from 1 × 4″ to 3 × 10″.
+pub const BORDER_SIZES: &[(f64, f64)] = &[
+    (4.0, 1.0),
+    (6.0, 1.0),
+    (5.0, 1.5),
+    (7.0, 1.5),
+    (4.0, 2.0),
+    (5.0, 2.0),
+    (6.0, 2.0),
+    (7.0, 2.0),
+    (8.0, 2.0),
+    (10.0, 2.0),
+    (7.0, 3.0),
+    (10.0, 3.0),
+];
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -51,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Quilt Block Patterns",
             [],
             None,
-            "{} the background quilting patterns and the usual block sizes → {patterns: [{id, name}], sizes: [{width, height}] (inches)}",
+            "{} the background quilting patterns and the usual block and border strip sizes → {patterns: [{id, name}], sizes: [{width, height}], borders: [{width, height}] (inches)}",
             always,
             patterns
         ),
@@ -60,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Quilt Block",
             [],
             None,
-            "{width, height: the block (tile) size, unit?: in|mm (in), pattern?: stipple|swirls|loops|feathers|waves|spiral|crosshatch (stipple), spacing?: mm between lines (6; 2–25; keep it the same for every block of a quilt), stitch?: mm (3; 1.5–5), color?: \"#rrggbb\", hoop?: a hoop's name (else the smallest of My Machine's, or the usual ones, it fits)} a new design: the block's rectangle quilted edge to edge in one running-stitch thread, centred in the hoop, top up → {pattern, widthMm, heightMm, hoop, stitches}",
+            "{width, height: the block (tile) size, unit?: in|mm (in), pattern?: stipple|swirls|loops|feathers|pebbles|waves|spiral|crosshatch (stipple), spacing?: mm between lines (6; 2–25; keep it the same for every block of a quilt), stitch?: mm (3; 1.5–5), color?: \"#rrggbb\", hoop?: a hoop's name (else the smallest of My Machine's, or the usual ones, it fits)} a new design: the block's rectangle quilted edge to edge in one running-stitch thread, centred in the hoop, top up → {pattern, widthMm, heightMm, hoop, stitches}",
             always,
             quilt_block
         ),
@@ -69,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Quilt Block Set",
             [],
             None,
-            "{folder, pattern?, sizes?: [{width, height}] (inches; the usual sizes), spacing?, stitch?, color?, format?: dst|exp|jef|pes|vp3|xxx (My Machine's)} one machine file per block size in the folder, named \"<Pattern> <w>x<h> in.<ext>\"; sizes no hoop fits are left out and said → {files: [path], skipped: [{width, height, reason}]}",
+            "{folder, pattern?, kind?: blocks|borders (blocks), sizes?: [{width, height}] (inches; the usual block or border strip sizes), spacing?, stitch?, color?, format?: dst|exp|jef|pes|vp3|xxx (My Machine's)} one machine file per block size in the folder, named \"<Pattern> <w>x<h> in.<ext>\" (borders: \"Border <Pattern> …\"); sizes no hoop fits are left out and said → {files: [path], skipped: [{width, height, reason}]}",
             always,
             quilt_set
         ),
@@ -80,6 +97,7 @@ fn patterns(_s: &mut Session, _p: &Value) -> Result<Value> {
     Ok(json!({
         "patterns": PATTERNS.iter().map(|(id, name)| json!({ "id": id, "name": name })).collect::<Vec<_>>(),
         "sizes": SIZES.iter().map(|(w, h)| json!({ "width": w, "height": h })).collect::<Vec<_>>(),
+        "borders": BORDER_SIZES.iter().map(|(w, h)| json!({ "width": w, "height": h })).collect::<Vec<_>>(),
     }))
 }
 
@@ -107,9 +125,11 @@ fn rows(h: f64, pitch: f64, amp: f64, m: f64) -> Vec<f64> {
 /// block `m` from its edges.
 fn by_rows(w: f64, h: f64, m: f64, pitch: f64, amp: f64, row: impl Fn(f64, f64, f64) -> Vec<(f64, f64)>) -> Vec<(f64, f64)> {
     let (x0, x1) = (m, w - m);
+    // a strip narrower than the motif: the motif squeezed to the strip's height
+    let squeeze = if 2.0 * amp > h - 2.0 * m && amp > 0.0 { ((h - 2.0 * m) / (2.0 * amp)).max(0.05) } else { 1.0 };
     let mut pts = Vec::new();
-    for (i, y) in rows(h, pitch, amp, m).into_iter().enumerate() {
-        let mut r = row(x0, x1, y);
+    for (i, y) in rows(h, pitch, amp * squeeze, m).into_iter().enumerate() {
+        let mut r: Vec<(f64, f64)> = row(x0, x1, y).into_iter().map(|(x, v)| (x, y + (v - y) * squeeze)).collect();
         // odd rows come back right to left: the row mirrored, so it starts at the right edge
         if i % 2 == 1 {
             r = r.into_iter().map(|(x, y)| (x0 + x1 - x, y)).collect();
@@ -207,6 +227,40 @@ fn feathers(w: f64, h: f64, gap: f64) -> Vec<(f64, f64)> {
     })
 }
 
+/// Pebbles: round pebbles of mixed sizes along each row, each sewn once round and half round
+/// again to the next, which it touches, so the row is one line.
+fn pebbles(w: f64, h: f64, gap: f64) -> Vec<(f64, f64)> {
+    let big = gap * 1.1;
+    by_rows(w, h, gap / 2.0, 2.0 * big + gap * 0.3, big, |x0, x1, y| {
+        // sizes from a fixed sequence, so the same block always sews the same
+        let mut seed: u64 = 0x9E37_79B9_7F4A_7C15 ^ (y * 100.0) as u64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed >> 11) as f64 / (1u64 << 53) as f64
+        };
+        let mut pts = vec![(x0, y)];
+        let mut x = x0;
+        let mut up = true;
+        while x < x1 - gap * 0.6 {
+            let r = (gap * (0.55 + 0.55 * next())).min((x1 - x) / 2.0);
+            let cx = x + r;
+            let s = if up { -1.0 } else { 1.0 };
+            let steps = ((r * 1.5 * std::f64::consts::TAU / 0.8).ceil() as usize).clamp(24, 400);
+            // once round from the left, then half round again (over the top or the bottom) to the right
+            for i in 0..=steps {
+                let a = std::f64::consts::PI + 1.5 * std::f64::consts::TAU * i as f64 / steps as f64;
+                pts.push((cx + r * a.cos(), y + s * r * a.sin()));
+            }
+            x = cx + r;
+            up = !up;
+        }
+        pts.push((x1, y));
+        pts
+    })
+}
+
 /// Waves: rows `gap` apart across the block, each a gentle wave, joined end to end at the sides
 /// into one line (points in mm, the block's top left at 0, 0).
 fn waves(w: f64, h: f64, gap: f64) -> Vec<(f64, f64)> {
@@ -290,7 +344,7 @@ fn quilt_block(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let pattern = str_param(p, "pattern").unwrap_or("stipple");
     if !PATTERNS.iter().any(|(id, _)| *id == pattern) {
-        return Err(bad(CMD, "`pattern` is stipple, swirls, loops, feathers, waves, spiral or crosshatch"));
+        return Err(bad(CMD, "`pattern` is stipple, swirls, loops, feathers, pebbles, waves, spiral or crosshatch"));
     }
     let gap = match p.get("spacing") {
         None | Some(Value::Null) => 6.0,
@@ -334,6 +388,7 @@ fn quilt_block(s: &mut Session, p: &Value) -> Result<Value> {
                 "swirls" => swirls(w, h, gap),
                 "loops" => loops(w, h, gap),
                 "feathers" => feathers(w, h, gap),
+                "pebbles" => pebbles(w, h, gap),
                 "waves" => waves(w, h, gap),
                 _ => crosshatch(w, h, gap),
             };
@@ -366,9 +421,15 @@ fn quilt_set(s: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .find(|(i, _)| *i == pattern)
         .map(|(_, n)| *n)
-        .ok_or_else(|| bad(CMD, "`pattern` is stipple, swirls, loops, feathers, waves, spiral or crosshatch"))?;
+        .ok_or_else(|| bad(CMD, "`pattern` is stipple, swirls, loops, feathers, pebbles, waves, spiral or crosshatch"))?;
+    let borders = match str_param(p, "kind").unwrap_or("blocks") {
+        "blocks" => false,
+        "borders" => true,
+        _ => return Err(bad(CMD, "`kind` is blocks or borders")),
+    };
     let sizes: Vec<(f64, f64)> = match p.get("sizes").and_then(Value::as_array) {
         Some(a) => a.iter().take(60).filter_map(|v| Some((v["width"].as_f64()?, v["height"].as_f64()?))).collect(),
+        None if borders => BORDER_SIZES.to_vec(),
         None => SIZES.to_vec(),
     };
     if sizes.is_empty() {
@@ -385,7 +446,8 @@ fn quilt_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
         match s.execute("embroidery.quiltBlock", &q) {
             Ok(_) => {
-                let mut send = json!({ "folder": folder, "name": format!("{name} {}x{} in", num(w), num(h)) });
+                let mut send =
+                    json!({ "folder": folder, "name": format!("{}{name} {}x{} in", if borders { "Border " } else { "" }, num(w), num(h)) });
                 if let Some(f) = p.get("format").filter(|v| !v.is_null()) {
                     send["format"] = f.clone();
                 }
@@ -459,6 +521,17 @@ mod tests {
         assert!(files.iter().any(|f| f.ends_with("Waves 4x4 in.vp3")) && files.iter().any(|f| f.ends_with("Waves 5x7 in.vp3")), "{files:?}");
         assert!(files.iter().all(|f| std::fs::metadata(f).unwrap().len() > 100));
         assert_eq!(r["skipped"].as_array().unwrap().len(), 1, "{r}");
+        // border strips: their own sizes and names, every pattern squeezed into a narrow strip
+        let b = s.execute("embroidery.quiltBlock.set", &json!({"folder": dir.to_string_lossy(), "pattern": "swirls", "kind": "borders"})).unwrap();
+        let files: Vec<&str> = b["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect();
+        assert_eq!(files.len(), BORDER_SIZES.len(), "{b}");
+        assert!(files.iter().any(|f| f.ends_with("Border Swirls 7x1.5 in.vp3")), "{files:?}");
+        for (pattern, _) in PATTERNS {
+            s.execute("embroidery.quiltBlock", &json!({"width": 7, "height": 1, "pattern": pattern})).unwrap_or_else(|e| panic!("{pattern}: {e}"));
+            let info = s.execute("embroidery.info", &json!({})).unwrap();
+            assert!(info["heightMm"].as_f64().unwrap() <= IN + 0.5, "{pattern}: {info}");
+            assert!(info["stitches"].as_u64().unwrap() > 50, "{pattern}: {info}");
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 }
