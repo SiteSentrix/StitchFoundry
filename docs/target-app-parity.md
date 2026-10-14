@@ -168,9 +168,11 @@ The discounts, with the evidence:
 - **Stability on real machines (×0.92).** The code never panics by design, and the main platform (macOS) starts
   reliably, but 26 issues mention a crash, freeze or failed launch (8 open: #858, #964 fixed the day of this
   review, #620, #818, #905 on Windows 7, #834). There is no field record and no real-world file corpus yet.
-- **Performance unverified.** Budgets (`vectorcraft-cli perf`) haven't been run on an idle machine since
-  2026-10-01; the last loaded run missed the 16 ms frame budget at 50k paths. Not discounted separately: no
-  user has reported slowness in mainstream work beyond #575 (Linux AppImage) and #758 (`.ai` open time).
+- **Performance unverified.** Budgets (`vectorcraft-cli perf`) were all met at 25k paths on 2026-10-11; runs of
+  0.10.0 on Linux with 4 logical CPUs, reported in #1172 on 2026-10-13, missed all three render budgets at 20k
+  paths. Performance is not discounted separately. Open user reports of slowness in mainstream work include #575
+  (Linux AppImage), #758 (`.ai` open time), #1097 (zoom and pan in 0.9.0) and #1731 (a drag that stutters as it
+  starts).
 - **Missing subsystems** a minority need daily (3D, the Effect Gallery, CJK vertical composition, scripting)
   pull the full number below the mainstream one.
 

@@ -218,8 +218,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G15 Performance budgets and a GPU renderer
 
 - **Improved (#1257):** Craquelure, Mosaic Tiles and Stained Glass reuse squared distances during nearest-cell searches, with the original distance ordering retained near rounding/tie boundaries. A brute-force boundary regression and full-viewport pixel comparisons agree with the old result. `texture_drag_perf` reproduces a moved CMYK rounded rectangle at 190.07% and DPI 1.5; timings from a busy development machine are supporting evidence, with idle Windows drag QA still pending.
-- **Missing:** an idle-machine run of `vectorcraft-cli perf` at 50k paths (last: 2026-10-11 at 25k paths, every
-  budget met, 400% zoom 12.3 ms against 16 ms, measured), a spatial index for zoomed-in frames, dirty-region
+- **Missing:** an idle-machine run of `vectorcraft-cli perf` at 50k paths (2026-10-11 at 25k paths, every budget
+  met, 400% zoom 12.3 ms against 16 ms, measured; runs of 0.10.0 on Linux with 4 logical CPUs, reported in #1172
+  on 2026-10-13, missed all three render budgets at 20k paths), a spatial index for zoomed-in frames, dirty-region
   rendering, the GPU backend spike (M5). Large-selection edits, cached live effects and Pathfinder Trim, Merge,
   Crop and Outline landed in #1173.
 - **Not redrawn:** the canvas keeps drawing these objects as they were:
