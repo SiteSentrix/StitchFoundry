@@ -1884,19 +1884,17 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     ui.add_space(6.0);
     // My Machine: its name, and its hoops in place of the general ones
     let mine = app.session.execute("embroidery.myMachine", &json!({})).unwrap_or_default();
-    ui.horizontal_wrapped(|ui| {
-        match mine["machine"].as_str() {
-            Some(m) => {
-                ui.label(egui::RichText::new(format!("{} {}", tl!("My machine:"), crate::dialogs::my_machine::machine_name(m))).color(t.text_dim));
-                if ui.link(tl!("Change")).clicked() {
-                    app.run("ui.myMachine", json!({})).ok();
-                }
+    ui.horizontal_wrapped(|ui| match mine["machine"].as_str() {
+        Some(m) => {
+            ui.label(egui::RichText::new(format!("{} {}", tl!("My machine:"), crate::dialogs::my_machine::machine_name(m))).color(t.text_dim));
+            if ui.link(tl!("Change")).clicked() {
+                app.run("ui.myMachine", json!({})).ok();
             }
-            None => {
-                ui.label(egui::RichText::new(tl!("Tell us your machine to see its hoops and save in its format.")).color(t.text_dim));
-                if ui.link(tl!("Choose My Machine")).clicked() {
-                    app.run("ui.myMachine", json!({})).ok();
-                }
+        }
+        None => {
+            ui.label(egui::RichText::new(tl!("Tell us your machine to see its hoops and save in its format.")).color(t.text_dim));
+            if ui.link(tl!("Choose My Machine")).clicked() {
+                app.run("ui.myMachine", json!({})).ok();
             }
         }
     });
