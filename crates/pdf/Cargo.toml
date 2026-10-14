@@ -23,8 +23,8 @@ image = { workspace = true }
 # CMYK JPEGs (the image crate writes RGB and grey ones only).
 jpeg-encoder = { workspace = true }
 krilla = { workspace = true }
-hayro-syntax = "0.7.2"
-hayro-interpret = { version = "0.7.0", default-features = false, features = ["embed-fonts", "embed-cmaps"] }
+hayro-syntax = "0.8.0"
+hayro-interpret = { version = "0.8.0", default-features = false, features = ["embed-fonts", "embed-cmaps"] }
 log = { workspace = true }
 smallvec = "1"
 serde = { workspace = true }
