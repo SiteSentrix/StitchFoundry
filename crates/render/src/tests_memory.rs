@@ -545,6 +545,68 @@ fn art_evaluated_again_in_every_frame_keeps_one_outline_per_stroke() {
     }
 }
 
+/// The instances of a symbol and the copies of a repeat replace each other's brush art, so their
+/// brush art is made again in every frame. A brushed path gets new brush art each time its brush
+/// changes. The renderer keeps no outline or gradient slices for the squares' strokes, and each
+/// frame draws what a new renderer draws.
+#[test]
+fn strokes_of_brush_art_made_again_draw_as_a_new_renderer_does() {
+    let _fonts = fonts_steady();
+    use vectorcraft_brush::{Brush, BrushKind, Scatter};
+    use vectorcraft_doc::{Appearance, StrokeGradientMode};
+    let mut d = Document::new(200.0, 140.0);
+    // Brush `Squares` scatters 8 × 8 squares stroked 2 pt with a gradient along the stroke and
+    // 0.5 pt in black over it, with a spacing of `spacing` percent of the square's width.
+    let squares = |d: &mut Document, spacing: f64| {
+        let mut st = StrokeLayer::new(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(Default::default()))), 2.0);
+        st.gradient_mode = StrokeGradientMode::Along;
+        let black = StrokeLayer::new(Paint::solid(Color::BLACK), 0.5);
+        let square = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 8.0, 8.0));
+        let strokes = Appearance { items: vec![AppearanceItem::Stroke(st), AppearanceItem::Stroke(black)], ..Default::default() };
+        let art = Node::path(NodeId(0), square, strokes);
+        let mut lib = vectorcraft_brush::library(d);
+        lib.retain(|b| b.name != "Squares");
+        lib.push(Brush { name: "Squares".into(), kind: BrushKind::Scatter(Scatter { art, spacing: (spacing, spacing), ..Default::default() }) });
+        vectorcraft_brush::store(d, &lib);
+    };
+    // A wave around `at`, brushed with `Squares`.
+    let wave = |d: &mut Document, at: (f64, f64)| {
+        let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        if let Some(s) = ap.stroke_mut() {
+            s.brush = Some("Squares".into());
+        }
+        let (x, y) = at;
+        let mut wave = BezPath::new();
+        wave.move_to((x - 40.0, y));
+        wave.curve_to((x - 15.0, y - 20.0), (x + 15.0, y + 20.0), (x + 40.0, y));
+        Node::path(d.alloc_id(), vectorcraft_geom::PathData::from_bezpath(&wave), ap)
+    };
+    // Three instances show symbol `B`, a group of a wave. A fourth wave is a path of the document,
+    // and a Mirror repeat draws a fifth wave and its reflection.
+    let art = Node::group(d.alloc_id(), vec![Arc::new(wave(&mut d, (0.0, 0.0)))]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "B".into(), art: Arc::new(art) });
+    let l = d.layers[0].id;
+    for at in [(50.0, 30.0), (150.0, 30.0), (50.0, 70.0)] {
+        let id = d.alloc_id();
+        d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "B".into(), xf: Affine::translate(at) })).unwrap();
+    }
+    let path = wave(&mut d, (150.0, 70.0));
+    d.insert(Some(l), usize::MAX, path).unwrap();
+    let source = wave(&mut d, (50.0, 110.0));
+    let mirror = vectorcraft_doc::pattern::RepeatSpec::mirror(vec![Arc::new(source)], 90.0, 10.0);
+    let id = d.alloc_id();
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::Repeat(mirror))).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    // Six frames of the same document, then a frame after each change of the brush's spacing.
+    for (frame, spacing) in [150.0, 150.0, 150.0, 150.0, 150.0, 150.0, 120.0, 150.0, 90.0, 150.0, 120.0, 135.0].into_iter().enumerate() {
+        squares(&mut d, spacing);
+        let want = Renderer::new().render(&d, 200, 140, Affine::IDENTITY, &opts).pixels;
+        assert!(r.render(&d, 200, 140, Affine::IDENTITY, &opts).pixels == want, "frame {frame}");
+    }
+    assert_eq!((r.strokes.len(), r.stroke_slices.len()), (0, 0), "no outline or slices kept for the strokes of brush art");
+}
+
 /// Moving an instance places its art again, and editing a symbol's art places the art of its
 /// instances again: the other instances keep theirs, and each frame draws what a new renderer
 /// draws.
