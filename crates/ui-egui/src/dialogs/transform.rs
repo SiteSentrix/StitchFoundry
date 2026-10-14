@@ -22,7 +22,13 @@ fn title(kind: &str) -> &'static str {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    if d.kind == "move" {
+        link_distance_and_angle(d);
+    }
     form::grid(ui, d, app.session.general_unit());
+    if d.kind == "move" {
+        link_distance_and_angle(d);
+    }
     ui.add_space(6.0);
     if d.kind == "scale" {
         form::check(ui, d, "uniform", tl!("Uniform"));
@@ -36,6 +42,31 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     form::preview(app, ui, d, title(&d.kind), cmd, params);
     false
+}
+
+/// Move's Distance and Angle (fields `distance`, `angle`) and Horizontal and Vertical (`dx`, `dy`)
+/// are the same offset: the pair edited since the last call (`__polar` holds the values then)
+/// sets the other. The angle is counter-clockwise on the page and y points down, so 90° moves up.
+fn link_distance_and_angle(d: &mut Dialog) {
+    let [dx, dy, distance, angle] = ["dx", "dy", "distance", "angle"].map(|k| d.f64(k, 0.0));
+    let last: Option<Vec<f64>> = d.fields.get("__polar").and_then(|v| serde_json::from_value(v.clone()).ok());
+    let polar_edited = last.as_deref().is_some_and(|l| l.get(2..) != Some(&[distance, angle][..]));
+    let [dx, dy, distance, angle] = if polar_edited {
+        let a = angle.to_radians();
+        [distance * a.cos(), -distance * a.sin(), distance, angle].map(clean)
+    } else {
+        [dx, dy, dx.hypot(dy), (-dy).atan2(dx).to_degrees()].map(clean)
+    };
+    for (k, v) in [("dx", dx), ("dy", dy), ("distance", distance), ("angle", angle)] {
+        d.fields.insert(k.into(), json!(v));
+    }
+    d.fields.insert("__polar".into(), json!([dx, dy, distance, angle]));
+}
+
+/// `v` without the float noise of the trigonometry (cos 90° is not quite 0). Adding 0 turns -0
+/// into 0.
+fn clean(v: f64) -> f64 {
+    (v * 1e6).round() / 1e6 + 0.0
 }
 
 /// Transform Patterns: the dialog's field, else General › Transform Pattern Tiles.
@@ -259,6 +290,44 @@ mod tests {
             let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
             assert_eq!((b.width().round(), b.height().round()), size);
         }
+    }
+
+    /// #1915: Move's Distance and Angle follow Horizontal and Vertical, and they follow them back.
+    /// The angle is counter-clockwise on the page and Vertical is down = +, so 90° moves up.
+    #[test]
+    fn move_takes_a_distance_and_an_angle() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let frame = |app: &mut VectorcraftApp| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+        };
+        let set = |app: &mut VectorcraftApp, values: [(&str, f64); 2]| {
+            app.ui.dialog.as_mut().unwrap().fields.extend(values.map(|(k, v)| (k.to_string(), json!(v))));
+        };
+        let fields = |app: &VectorcraftApp| {
+            let d = app.ui.dialog.as_ref().unwrap();
+            ["dx", "dy", "distance", "angle"].map(|k| d.f64(k, f64::NAN))
+        };
+        crate::menus::invoke(&mut app, "object.move", json!({}));
+        frame(&mut app);
+        assert_eq!(fields(&app), [0.0, 0.0, 0.0, 0.0]);
+        set(&mut app, [("distance", 10.0), ("angle", 90.0)]);
+        frame(&mut app);
+        assert_eq!(fields(&app), [0.0, -10.0, 10.0, 90.0]);
+        set(&mut app, [("dx", 3.0), ("dy", 4.0)]);
+        frame(&mut app);
+        assert_eq!(fields(&app), [3.0, 4.0, 5.0, -53.130102]);
+        set(&mut app, [("distance", 10.0), ("angle", 90.0)]);
+        frame(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let (cmd, p) = app.session.journal.last().unwrap();
+        assert_eq!((cmd.as_str(), &p["dx"], &p["dy"]), ("object.move", &json!(0.0), &json!(-10.0)));
+        let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+        assert_eq!((b.x0, b.y0), (100.0, 90.0));
     }
 
     /// Transform Patterns starts from General › Transform Pattern Tiles (#394) and goes with the
