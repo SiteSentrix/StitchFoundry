@@ -1,6 +1,6 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
 //! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
-//! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
+//! (`.vcflattener`) libraries, shortcut sets other apps save as text (`.kys`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
@@ -1008,6 +1008,74 @@ proptest! {
             bytes.truncate(cut);
         }
         swatch_exchange("mutated saved swatch exchange file", &bytes)?;
+    }
+}
+
+// ---------- shortcut sets ----------
+
+/// Shortcut set `bytes` read with `shortcutSet.read`, with import matches saved to annotate it: an
+/// error, or a set within the caps.
+fn shortcut_set(bytes: &[u8]) -> Result<(), TestCaseError> {
+    let mut s = vectorcraft_engine::Session::new();
+    let matches = json!([
+        {"kind": "name", "name": "A", "target": "edit.undo"},
+        {"kind": "key", "name": "1", "target": "K"},
+        {"kind": "modifiers", "name": "-1", "target": "Cmd"},
+    ]);
+    s.execute("importMatches.set", &json!({ "matches": matches })).unwrap();
+    let read = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": "fuzz.kys"});
+    if let Ok(r) = no_panic(s.execute("shortcutSet.read", &read)) {
+        prop_assert!(r["entries"].as_array().map_or(0, Vec::len) <= 20_000);
+        prop_assert!(r["unread"].as_array().map_or(0, Vec::len) <= 1000);
+    }
+    Ok(())
+}
+
+/// A token of a text shortcut set: a name (escaped spaces), a field, an integer of any size and sign,
+/// a brace, a lone backslash, a line end, NUL or bytes that aren't UTF-8.
+fn arb_kys_token() -> impl Strategy<Value = Vec<u8>> {
+    prop_oneof![
+        "[A-Za-z ]{0,12}".prop_map(|n| format!("/{}", n.replace(' ', "\\ ")).into_bytes()),
+        prop::sample::select(vec!["/Key", "/Modifiers", "/Context", "/Represent"]).prop_map(|f| f.as_bytes().to_vec()),
+        any::<i64>().prop_map(|n| n.to_string().into_bytes()),
+        Just(b"99999999999999999999999".to_vec()),
+        prop::sample::select(vec!["{", "}", "\\", "\r\n", "\r", "\n"]).prop_map(|t| t.as_bytes().to_vec()),
+        prop::sample::select(vec![vec![0u8], vec![0xFF, 0xFE], vec![0xC3]]),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn shortcut_set_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..600), head in any::<bool>()) {
+        let mut data = if head { b"/Menus {".to_vec() } else { vec![] };
+        data.extend(bytes);
+        shortcut_set(&data)?;
+    }
+
+    #[test]
+    fn hostile_shortcut_sets_never_panic(tokens in prop::collection::vec(arb_kys_token(), 0..200), sep in prop::sample::select(vec![" ", "", "\t"])) {
+        let mut data = b"/Menus {".to_vec();
+        for t in tokens {
+            data.extend(sep.as_bytes());
+            data.extend(t);
+        }
+        shortcut_set(&data)?;
+    }
+}
+
+/// A shortcut set past any cap (nesting, entries, name length, file size) is read up to it and
+/// marked truncated.
+#[test]
+fn shortcut_sets_past_the_caps_are_truncated() {
+    let read = |text: String| vectorcraft_engine::Session::new().execute("shortcutSet.read", &json!({ "data": text })).unwrap();
+    let deep = format!("/Menus {{ {} /K {{ /Key 1 }} }}", "/A { ".repeat(40));
+    let many = format!("/Menus {{ {} }}", "/E { /Key 1 } ".repeat(20_001));
+    let long = format!("/Menus {{ /{} {{ /Key 1 }} }}", "n".repeat(2000));
+    let big = format!("/Menus {{ /E {{ /Key 1 }} {} }}", " ".repeat(4 << 20));
+    for text in [deep, many, long, big] {
+        assert_eq!(read(text)["truncated"], true);
     }
 }
 

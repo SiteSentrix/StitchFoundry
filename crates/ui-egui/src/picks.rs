@@ -66,6 +66,7 @@ const DOCUMENT_FREE: &[&str] = &[
     "window.graphicStyleLibrary.other",
     "shortcuts.import",
     "shortcuts.export",
+    "ui.shortcutImportDialog",
 ];
 
 impl Entry {

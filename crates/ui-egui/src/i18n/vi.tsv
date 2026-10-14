@@ -1515,6 +1515,44 @@
 	Import PDF Presets	Nhập thiết lập sẵn PDF
 	Import Perspective Grid Presets	Nhập thiết lập sẵn lưới phối cảnh
 	Import Print Presets	Nhập thiết lập sẵn in
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Nhập bộ phím tắt
+	Import Shortcut Set…	Nhập bộ phím tắt…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Mỗi mục trong tệp được ghép với một công cụ, lệnh hoặc bảng của VectorCraft. Hãy kiểm tra các cặp ghép và trả lời những mục còn lại.
+	Keys	Phím
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Tệp ghi phím và phím bổ trợ dưới dạng mã. Hãy kiểm tra các nghĩa được đề xuất và trả lời những mã chưa biết.
+	Click, then press the key this code stands for (Esc cancels)	Bấm, rồi nhấn phím mà mã này biểu thị (Esc để hủy)
+	Press a key…	Nhấn một phím…
+	from your earlier imports	từ các lần nhập trước của bạn
+	from the format's public description	từ mô tả công khai của định dạng
+	not known yet	chưa biết
+	Shortcuts	Phím tắt
+	Shortcut	Phím tắt
+	In the File	Trong tệp
+	In VectorCraft	Trong VectorCraft
+	Needs Attention Only	Chỉ mục cần chú ý
+	Ready	Sẵn sàng
+	Needs a choice	Cần chọn
+	Needs a key	Cần một phím
+	No equivalent	Không có tương đương
+	Tools take a single key (optionally with Shift)	Công cụ chỉ nhận một phím đơn (tùy chọn với Shift)
+	A later row takes this shortcut	Một hàng phía sau dùng phím tắt này
+	Same item as a later row	Cùng mục với một hàng phía sau
+	Start from VectorCraft Defaults	Bắt đầu từ mặc định VectorCraft
+	Add to the Current Shortcuts	Thêm vào phím tắt hiện tại
+	Remember My Choices	Ghi nhớ lựa chọn của tôi
+	{ready} of {total} ready	Sẵn sàng {ready} trong {total}
+	The file is too large to read in full, so only its first part is listed.	Tệp quá lớn để đọc hết, nên chỉ phần đầu được liệt kê.
+	Report copied	Đã sao chép báo cáo
+	Line {line}	Dòng {line}
+	Line {line}: {name}: {status}	Dòng {line}: {name}: {status}
+	Imported. Press OK to keep the imported set.	Đã nhập. Nhấn OK để giữ bộ đã nhập.
+	Read Shortcut Set File	Đọc tệp bộ phím tắt
+	Import Matches	Cặp ghép khi nhập
+	Remember Import Matches	Ghi nhớ cặp ghép khi nhập
+	Forget Import Matches	Quên cặp ghép khi nhập
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	khớp với {n} phím tắt mặc định
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} phần của tệp chưa được đọc
 	Import Transparency Flattener Presets	Nhập thiết lập sẵn làm phẳng trong suốt
 	Imported {what}: {}	Đã nhập {what}: {}
 	Import…	Nhập…
@@ -4002,6 +4040,8 @@ theme	Appearance	Giao diện
 @msg	not a valid plug-in module: {0}	không phải mô-đun plug-in hợp lệ: {0}
 @msg	not a VectorCraft file: {0}	không phải tệp VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	không phải bộ phím tắt VectorCraft (thiếu `overrides`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	không phải bộ phím tắt: văn bản không bắt đầu bằng một tên có dấu gạch chéo và một dấu ngoặc nhọn mở
+@msg	This shortcut file is in a form VectorCraft can't read.	Tệp phím tắt này có dạng mà VectorCraft không đọc được.
 @msg	not an EMF or WMF file	không phải tệp EMF hoặc WMF
 @msg	not found	không tìm thấy
 @msg	not in pattern editing mode	không ở chế độ chỉnh sửa họa tiết

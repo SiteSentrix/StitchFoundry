@@ -1396,6 +1396,42 @@
 	Keyboard Shortcut Conflicts	Conflits de raccourcis clavier
 	Keyboard Shortcut Set	Jeu de raccourcis clavier
 	Keyboard Shortcuts…	Raccourcis clavier…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Importer un jeu de raccourcis
+	Import Shortcut Set…	Importer un jeu de raccourcis…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Chaque entrée du fichier est mise en correspondance avec un outil, une commande ou un panneau de VectorCraft. Vérifiez les correspondances et répondez à ce qui reste.
+	Keys	Touches
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Le fichier enregistre les touches et les modificateurs sous forme de codes. Vérifiez les significations proposées et indiquez les codes encore inconnus.
+	Click, then press the key this code stands for (Esc cancels)	Cliquez, puis appuyez sur la touche que ce code représente (Échap pour annuler)
+	Press a key…	Appuyez sur une touche…
+	from your earlier imports	d’après vos importations précédentes
+	from the format's public description	d’après la description publique du format
+	not known yet	encore inconnu
+	Shortcuts	Raccourcis
+	In the File	Dans le fichier
+	In VectorCraft	Dans VectorCraft
+	Needs Attention Only	À vérifier uniquement
+	Ready	Prêt
+	Needs a choice	Choix nécessaire
+	Needs a key	Touche nécessaire
+	No equivalent	Aucun équivalent
+	Tools take a single key (optionally with Shift)	Les outils prennent une seule touche (éventuellement avec Maj)
+	A later row takes this shortcut	Une ligne suivante prend ce raccourci
+	Same item as a later row	Même élément qu’une ligne suivante
+	Start from VectorCraft Defaults	Partir des valeurs par défaut de VectorCraft
+	Add to the Current Shortcuts	Ajouter aux raccourcis actuels
+	Remember My Choices	Mémoriser mes choix
+	{ready} of {total} ready	{ready} sur {total} prêts
+	The file is too large to read in full, so only its first part is listed.	Le fichier est trop volumineux pour être lu en entier, seule sa première partie est donc listée.
+	Report copied	Rapport copié
+	Line {line}	Ligne {line}
+	Line {line}: {name}: {status}	Ligne {line}, {name}, {status}
+	Read Shortcut Set File	Lire un fichier de jeu de raccourcis
+	Import Matches	Correspondances d’importation
+	Remember Import Matches	Mémoriser les correspondances d’importation
+	Forget Import Matches	Oublier les correspondances d’importation
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	concorde avec {n} raccourci par défaut|concorde avec {n} raccourcis par défaut
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} partie du fichier n’a pas été lue|{n} parties du fichier n’ont pas été lues
 	Keywords:	Mots-clés :
 	Knife	Cutter
 	Knockout Group	Groupe perçant
@@ -3523,6 +3559,7 @@ axis	Both	Les deux
 @msg	Split Into Grid: select paths large enough for the grid	Découper en grille : sélectionnez des tracés assez grands pour la grille
 @msg	Targa files are RGB: colorModel rgb	Les fichiers Targa sont en RVB : colorModel rgb
 @msg	Text Wrap: select a wrap object	Habillage de texte : sélectionnez un objet d’habillage
+@msg	This shortcut file is in a form VectorCraft can't read.	Ce fichier de raccourcis est dans un format que VectorCraft ne sait pas lire.
 @msg	`aspect` must be a number (%)	`aspect` doit être un nombre (%)
 @msg	`at` must be [x, y]	`at` doit être [x, y]
 @msg	`color` must be a colour	`color` doit être une couleur
@@ -3756,6 +3793,7 @@ axis	Both	Les deux
 @msg	not a VectorCraft file: {0}	ce n’est pas un fichier VectorCraft : {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	ce n’est pas un jeu de raccourcis VectorCraft (`overrides` manquant)
 @msg	not a graphic style library (format `{_1}`)	ce n’est pas une bibliothèque de styles graphiques (format `{_1}`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	ce n’est pas un jeu de raccourcis, car le texte ne commence pas par un nom précédé d’une barre oblique et une accolade ouvrante
 @msg	not a stored central record	ce n’est pas un enregistrement central stocké
 @msg	not a valid plug-in module: {0}	ce n’est pas un module de plug-in valide : {0}
 @msg	not an EMF or WMF file	ce n’est pas un fichier EMF ou WMF

@@ -211,6 +211,26 @@ fn a_dropped_libraries_panel_file_is_added_as_a_new_library() {
     assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
 }
 
+/// A shortcut set dropped on the window while a document is open opens Import Shortcut Set, as
+/// File → Open opens it: from its path (desktop) and from its bytes dropped on the canvas (web).
+#[test]
+fn a_dropped_shortcut_set_opens_import_shortcut_set() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let rect = laid_out(&mut app, &ctx);
+    let set = "/Menus {\n /Acme\\ Undo { /Modifiers 11 /Key 902 }\n}\n";
+    let path = temp_file("dropped.kys", set.as_bytes());
+    frame(&mut app, &ctx, vec![], &[&path], false);
+    let kind = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.kind.clone());
+    assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::shortcut_import::KIND), "{}", app.ui.status);
+    app.ui.dialog = None;
+    let target = app.drop_target("sent.kys", Some(rect.center()), false);
+    assert_eq!(target, DropTarget::Open);
+    crate::place::drop_files(&mut app, vec![(target, ("sent.kys".into(), None, set.as_bytes().to_vec()))]);
+    assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::shortcut_import::KIND), "{}", app.ui.status);
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
+}
+
 #[test]
 fn a_dropped_png_is_placed_in_the_middle_of_the_view() {
     let mut app = app();

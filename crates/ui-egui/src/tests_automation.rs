@@ -77,6 +77,34 @@ fn control_requests_stay_inside_the_roots() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A shortcut set another app saved (`.kys`) is read only from inside the read root, whichever way a
+/// control request names it: `shortcutSet.read`, Import Shortcut Set, Keyboard Shortcuts' Import…
+/// and File › Open.
+#[test]
+fn shortcut_sets_are_read_only_inside_the_read_root() {
+    let (mut app, tx, base) = confined("kys");
+    let set = "/Menus {\n /Acme\\ Undo { /Modifiers 0 /Key 48 }\n}\n";
+    std::fs::write(base.join("in/a.kys"), set).unwrap();
+    std::fs::write(base.join("outside/b.kys"), set).unwrap();
+    let execute = |command: &str, path: PathBuf| json!({"command": command, "params": {"path": s(path)}});
+    let r = request(&mut app, &tx, "engine.execute", execute("shortcutSet.read", base.join("in/a.kys")));
+    assert_eq!(r["result"]["entries"][0]["name"], "Acme Undo", "{r}");
+    for (method, params) in [
+        ("engine.execute", execute("shortcutSet.read", base.join("outside/b.kys"))),
+        ("engine.execute", execute("ui.shortcutImportDialog", base.join("outside/b.kys"))),
+        ("engine.execute", execute("shortcuts.import", base.join("outside/b.kys"))),
+        ("app.open", json!({"path": s(base.join("outside/b.kys"))})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("outside the read root")), "{method} {params}: {r}");
+        assert!(app.ui.dialog.is_none(), "{method} {params}: no dialog opens");
+    }
+    let r = request(&mut app, &tx, "engine.execute", execute("ui.shortcutImportDialog", base.join("in/a.kys")));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::shortcut_import::KIND));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn frames_with_injected_input_are_confined() {
     let (mut app, tx, base) = confined("synthetic");

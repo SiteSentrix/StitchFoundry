@@ -494,9 +494,20 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             let data = if let Some(v) = p.get("data") {
                 Ok(v.clone())
             } else {
-                let path = s("path").or_else(|| crate::picks::open(app, &crate::FilePick::default()));
+                let pick = crate::FilePick { filters: vec![("Shortcut sets", crate::dialogs::shortcut_import::IMPORT_EXTS)], ..Default::default() };
+                let path = s("path").or_else(|| crate::picks::open(app, &pick));
+                // A `.kys` file is read by Import Shortcut Set, up to its reader's cap.
+                if let Some(path) = path.as_deref().filter(|p| crate::dialogs::shortcut_import::is_kys(p)) {
+                    return Some(crate::dialogs::shortcut_import::command(app, &json!({ "path": path })));
+                }
                 match (path, app.services.read.as_ref()) {
-                    (Some(path), Some(r)) => r(&path).and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string())),
+                    (Some(path), Some(r)) => match r(&path) {
+                        // A set another app saved as text opens Import Shortcut Set.
+                        Ok(b) if crate::dialogs::shortcut_import::is_text_set(&path, &b) => {
+                            return Some(crate::dialogs::shortcut_import::open(app, &path, &b));
+                        }
+                        b => b.and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string())),
+                    },
                     (None, _) => Err("cancelled".into()),
                     (_, None) => Err("no file reader".into()),
                 }
@@ -518,9 +529,13 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
     Some(r)
 }
 
-/// While recording, Escape cancels the recording instead of closing the dialog.
+/// While recording (here or in Import Shortcut Set), Escape cancels the recording instead of closing
+/// the dialog.
 pub fn is_recording(app: &VectorcraftApp) -> bool {
-    app.ui.dialog.as_ref().is_some_and(|d| d.kind == "shortcuts" && !d.str("__recording").is_empty())
+    app.ui
+        .dialog
+        .as_ref()
+        .is_some_and(|d| (d.kind == "shortcuts" || d.kind == crate::dialogs::shortcut_import::KIND) && !d.str("__recording").is_empty())
 }
 
 // ---------- dialog ----------
@@ -748,7 +763,7 @@ fn import_into_dialog(app: &mut VectorcraftApp) {
             let (o, s) = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
             (app.ui.shortcut_overrides, app.ui.shortcut_set) = saved;
             sync(&app.ui);
-            if let Some(d) = app.ui.dialog.as_mut() {
+            if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "shortcuts") {
                 d.fields.insert("overrides".into(), serde_json::to_value(&o).unwrap_or(json!({})));
                 d.fields.insert("set".into(), json!(s));
                 d.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
