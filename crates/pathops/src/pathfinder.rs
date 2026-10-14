@@ -3,11 +3,13 @@
 
 use std::collections::HashMap;
 
-use kurbo::{BezPath, ParamCurve, ParamCurveNearest, Point, Shape as _};
+use kurbo::{BezPath, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Shape as _};
 use linesweeper::topology::ContourIdx;
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::boolean::{Arrangement, Multi, Seg, all_contours_to_path, contours_to_path, fill_bezpath, normalize_bez, segs_to_subpath, unite_all};
+use crate::boolean::{
+    Arrangement, Multi, Seg, Tidy, all_contours_to_path, contours_to_path, eps_for, fill_bezpath, normalize_bez, segs_to_subpath, to_seg, unite_all,
+};
 
 /// A filled shape in a Pathfinder stack. `key` identifies its paint (e.g. a hashed fill colour);
 /// results carry the key of the object whose paint they keep.
@@ -294,7 +296,9 @@ pub fn merge_regions(regions: &[&Region]) -> PathData {
 
 /// Merges faces of the planar arrangement of a set of shapes (as [`regions`] gives them) into one
 /// path, from the arrangement itself, made once for every merge of the set: the faces' contours
-/// share their edges exactly, so the edges between merged faces vanish. Uniting the faces' tidied
+/// share their edges, so the edges between merged faces vanish (when two faces' copies of an edge
+/// differ in the first merge to unite contours, every point within 16 eps of a point kept before
+/// it moves onto that point first, in that merge and every later one). Uniting the faces' tidied
 /// outlines ([`merge_regions`]) could leave those edges in, as a hairline gap or a spur, where
 /// neighbouring faces' outlines had been refit apart. Shapes with open paths (faces lines cut, as
 /// [`shape_builder`](crate::shape_builder) gives them) merge in their planar map the same way
@@ -306,6 +310,9 @@ pub struct FaceMerger {
     shapes: usize,
     /// The shapes, and their planar map once a merge has needed it (open paths, or a gap).
     lines: Option<(Vec<Shape>, std::cell::OnceCell<Option<crate::planar::Map>>)>,
+    /// Whether every merge moves the points of the faces' contours together first: the first
+    /// merge that unites contours decides it (`unite_faces`).
+    snap: std::cell::OnceCell<bool>,
 }
 
 impl FaceMerger {
@@ -314,7 +321,7 @@ impl FaceMerger {
         // The Shape Builder's faces come from the planar map only up to its cap.
         let segments: usize = shapes.iter().flat_map(|s| &s.path.subpaths).map(|sp| sp.segment_count()).sum();
         let lines = (segments <= crate::SHAPE_BUILDER_MAX_SEGMENTS).then(|| (shapes.to_vec(), std::cell::OnceCell::new()));
-        Self { arr: if has_open { None } else { arrangement(shapes) }, shapes: shapes.len(), lines }
+        Self { arr: if has_open { None } else { arrangement(shapes) }, shapes: shapes.len(), lines, snap: std::cell::OnceCell::new() }
     }
 
     /// The union of `faces`.
@@ -368,9 +375,173 @@ impl FaceMerger {
                 }
             }
         }
-        let merged = normalize_bez(&raw, FillRule::NonZero).ok()?;
-        Some(all_contours_to_path(&merged, &arr.tidy))
+        unite_faces(&raw, &arr.tidy, &self.snap)
     }
+}
+
+/// The union of the faces whose contours are `raw`, tidied with `tidy`. The points of the
+/// contours move together first ([`snap_points`]) when `snap` holds `true`. When `snap` is empty,
+/// it is set to whether two copies of an edge in `raw` differ.
+fn unite_faces(raw: &BezPath, tidy: &Tidy, snap: &std::cell::OnceCell<bool>) -> Option<PathData> {
+    // The planar map joins the ends of copies of an edge within 16 eps too.
+    let eps = eps_for([raw]).ok()?;
+    let snapped = if snap.get() == Some(&false) {
+        None
+    } else {
+        let (snapped, differ) = snap_points(raw, 16.0 * eps);
+        snap.get_or_init(|| differ).then_some(snapped)
+    };
+    let merged = normalize_bez(snapped.as_ref().unwrap_or(raw), FillRule::NonZero).ok()?;
+    Some(all_contours_to_path(&merged, tidy))
+}
+
+/// `raw` with the points of its contours gathered onto points more than `tol` apart: each point
+/// moves onto a point kept before it within `tol`, or is kept, and the handles next to it move
+/// along. A piece left within `tol` of one point is dropped. It also returns whether two copies of
+/// an edge differ, before the move or after it ([`copies_differ`]).
+///
+/// Two faces' contours can carry the edge they share as pieces whose ends lie a few eps apart, the
+/// difference left as pieces shorter than eps: linesweeper 0.5 rebuilds a contour's run of pieces
+/// of one input curve from that curve and does not move the rebuilt ends onto the sweep's points.
+/// Uniting the faces as they are can leave the space between the two copies in, as a hairline that
+/// reaches a hole through those short pieces (a spur) or as a seam that splits the outline (#1770).
+/// Copies that share their ends leave at most a hairline contour of their own, which
+/// [`is_sliver`](crate::boolean::is_sliver) drops.
+fn snap_points(raw: &BezPath, tol: f64) -> (BezPath, bool) {
+    let cell = |p: Point| ((p.x / tol).floor() as i64, (p.y / tol).floor() as i64);
+    let mut grid: HashMap<(i64, i64), Vec<(usize, Point)>> = HashMap::new();
+    let mut snapped: HashMap<(u64, u64), (usize, Point)> = HashMap::new();
+    let mut kept: usize = 0;
+    let mut snap = |p: Point| {
+        *snapped.entry(vertex_key(p)).or_insert_with(|| {
+            let (cx, cy) = cell(p);
+            let near = (cx - 1..=cx + 1)
+                .flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y)))
+                .filter_map(|k| grid.get(&k))
+                .flatten()
+                .find(|(_, q)| q.distance(p) <= tol)
+                .copied();
+            near.unwrap_or_else(|| {
+                let v = (kept, p);
+                kept += 1;
+                grid.entry((cx, cy)).or_default().push(v);
+                v
+            })
+        })
+    };
+    let mut out = BezPath::new();
+    // Each contour's pieces, each with the segment it was and the indices of the two points it runs
+    // between.
+    let mut contours: Vec<Vec<(PathSeg, PathSeg, [usize; 2])>> = Vec::new();
+    for (range, closed) in vectorcraft_geom::bez::subpaths(raw) {
+        let Some(els) = raw.elements().get(range) else { continue };
+        let mut pieces = Vec::new();
+        for s in vectorcraft_geom::bez::segments(els) {
+            let ((i, a), (j, b)) = (snap(s.start()), snap(s.end()));
+            let mut seg = to_seg(s);
+            crate::planar::pin_ends(std::slice::from_mut(&mut seg), a, b);
+            if a == b && seg.c.p1.distance(a) <= tol && seg.c.p2.distance(a) <= tol {
+                continue;
+            }
+            if pieces.is_empty() {
+                out.move_to(a);
+            }
+            let piece = if (a, b) == (s.start(), s.end()) {
+                s
+            } else if seg.line {
+                PathSeg::Line(Line::new(a, b))
+            } else {
+                PathSeg::Cubic(seg.c)
+            };
+            out.push(piece.as_path_el());
+            pieces.push((piece, s, [i, j]));
+        }
+        if !pieces.is_empty() && closed {
+            out.close_path();
+        }
+        contours.push(pieces);
+    }
+    let differ = copies_differ(&contours, kept, tol);
+    (out, differ)
+}
+
+/// Whether two copies of an edge in `contours` differ. Each piece comes with the segment it was
+/// before the move and the indices of the two points it runs between, out of `points`. A copy is a
+/// chain of pieces between junctions, the points where other than two piece ends meet. Two chains
+/// that run opposite ways between the same two junctions, with the middle and the end of each
+/// piece within `tol` of the other chain, are copies of one edge, and they differ when one is not
+/// the exact reverse of the other, after the move or before it.
+fn copies_differ(contours: &[Vec<(PathSeg, PathSeg, [usize; 2])>], points: usize, tol: f64) -> bool {
+    let mut degree = vec![0usize; points];
+    for &v in contours.iter().flatten().flat_map(|(_, _, ends)| ends) {
+        if let Some(d) = degree.get_mut(v) {
+            *d += 1;
+        }
+    }
+    let junction = |v: usize| degree.get(v) != Some(&2);
+    // (pieces, the segments they were, first point, last point). A contour through no junction
+    // shares no point with another contour.
+    let mut chains: Vec<(Vec<PathSeg>, Vec<PathSeg>, usize, usize)> = Vec::new();
+    for pieces in contours {
+        let Some(first) = pieces.iter().position(|(_, _, [a, _])| junction(*a)) else { continue };
+        let (mut cur, mut was): (Vec<PathSeg>, Vec<PathSeg>) = (Vec::new(), Vec::new());
+        let (mut from, mut to) = (0, 0);
+        for &(s, w, [a, b]) in pieces.iter().cycle().skip(first).take(pieces.len()) {
+            if junction(a) && !cur.is_empty() {
+                chains.push((std::mem::take(&mut cur), std::mem::take(&mut was), from, to));
+            }
+            if cur.is_empty() {
+                from = a;
+            }
+            cur.push(s);
+            was.push(w);
+            to = b;
+        }
+        chains.push((cur, was, from, to));
+    }
+    let key = |a: usize, b: usize| (a.min(b), a.max(b));
+    let mut by_ends: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+    for (k, (_, _, a, b)) in chains.iter().enumerate() {
+        by_ends.entry(key(*a, *b)).or_default().push(k);
+    }
+    let reversed = |a: &[PathSeg], b: &[PathSeg]| a.iter().rev().map(|s| s.reverse()).eq(b.iter().copied());
+    let mut paired = vec![false; chains.len()];
+    for (k, (segs, was, a, b)) in chains.iter().enumerate() {
+        if paired.get(k) != Some(&false) {
+            continue;
+        }
+        let Some(candidates) = by_ends.get(&key(*a, *b)) else { continue };
+        let found = candidates.iter().filter(|&&j| j > k && paired.get(j) == Some(&false)).find_map(|&j| {
+            let (other, other_was, c, d) = chains.get(j)?;
+            (c == b && d == a && along(segs, other, tol)).then_some((j, other, other_was))
+        });
+        let Some((j, other, other_was)) = found else { continue };
+        for i in [k, j] {
+            if let Some(p) = paired.get_mut(i) {
+                *p = true;
+            }
+        }
+        if !reversed(segs, other) || !reversed(was, other_was) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether the middle and the end of every piece of `a` lie within `tol` of `b`, and the middle
+/// and the end of every piece of `b` lie within `tol` of `a`. `a` and `b` run opposite ways.
+fn along(a: &[PathSeg], b: &[PathSeg], tol: f64) -> bool {
+    let covers = |from: &[PathSeg], to: &[PathSeg]| {
+        // Each point's search goes back along `to` from the piece the point before it was near.
+        let mut at = to.len();
+        from.iter().flat_map(|s| [s.eval(0.5), s.end()]).all(|p| {
+            let mut order = to.iter().enumerate().take(at).rev().chain(to.iter().enumerate().skip(at).rev());
+            let Some((i, _)) = order.find(|(_, t)| t.nearest(p, 1e-12).distance_sq.sqrt() <= tol) else { return false };
+            at = i + 1;
+            true
+        })
+    };
+    covers(a, b) && covers(b, a)
 }
 
 /// Pathfinder Outline: split every shape's boundary at junctions of the arrangement.
@@ -580,6 +751,94 @@ mod tests {
         fn batched_regions_match_one_mask_at_a_time(v in prop::collection::vec(arb_shape(), 1..8)) {
             same_as_one_mask_at_a_time(&v);
         }
+    }
+
+    /// The edge that the two faces of the #1770 tests share.
+    fn shared_edge() -> kurbo::CubicBez {
+        kurbo::CubicBez::new((100.0, 0.0), (130.0, 30.0), (130.0, 70.0), (100.0, 100.0))
+    }
+
+    /// Two faces on either side of [`shared_edge`]. The right face's copy of the edge has its ends
+    /// moved along the bottom and top edges by `bottom` and `top`, its handles moved with them, and
+    /// its first handle moved by `nudge` more.
+    fn faces_apart(bottom: f64, top: f64, nudge: f64) -> BezPath {
+        use kurbo::{CubicBez, Vec2};
+        let edge = shared_edge();
+        let (p0, p3) = (edge.p0 + Vec2::new(bottom, 0.0), edge.p3 + Vec2::new(top, 0.0));
+        let copy = CubicBez::new(p0, edge.p1 + (p0 - edge.p0) + Vec2::new(0.0, nudge), edge.p2 + (p3 - edge.p3), p3);
+        let mut raw = BezPath::new();
+        raw.move_to((0.0, 0.0));
+        raw.line_to(edge.p0);
+        raw.curve_to(edge.p1, edge.p2, edge.p3);
+        raw.line_to((0.0, 100.0));
+        raw.close_path();
+        raw.move_to(copy.p0);
+        raw.line_to((200.0, 0.0));
+        raw.line_to((200.0, 100.0));
+        raw.line_to(copy.p3);
+        raw.curve_to(copy.p2, copy.p1, copy.p0);
+        raw.close_path();
+        raw
+    }
+
+    /// Two faces whose copies of [`shared_edge`] are exact reverses of each other. The left face
+    /// has a point 5e-6 pt from another point.
+    fn faces_matching() -> BezPath {
+        let edge = shared_edge();
+        let mut raw = BezPath::new();
+        raw.move_to((0.0, 0.0));
+        raw.line_to(edge.p0);
+        raw.curve_to(edge.p1, edge.p2, edge.p3);
+        raw.line_to((0.0, 100.0));
+        raw.curve_to((-20.0, 90.0), (-30.0, 70.0), (-30.0, 50.0));
+        raw.line_to((-30.0, 50.0 - 5e-6));
+        raw.curve_to((-20.0, 40.0), (-20.0, 10.0), (0.0, 0.0));
+        raw.close_path();
+        raw.move_to(edge.p0);
+        raw.line_to((200.0, 0.0));
+        raw.line_to((200.0, 100.0));
+        raw.line_to(edge.p3);
+        raw.curve_to(edge.p2, edge.p1, edge.p0);
+        raw.close_path();
+        raw
+    }
+
+    /// #1770: two faces' contours carry the edge they share as copies whose ends lie a few eps
+    /// apart, at one end or at both, with or without a handle a rounding error apart. The faces
+    /// unite into one outline, with no hairline left between the copies.
+    #[test]
+    fn faces_unite_into_one_outline_when_their_copies_of_an_edge_end_a_few_eps_apart() {
+        let tidy = Tidy::free(crate::DEFAULT_PRECISION);
+        for (bottom, top, nudge) in [(0.0, 3e-6, 4e-7), (3e-6, 3e-6, 4e-7), (0.0, 3e-6, 0.0), (3e-6, 3e-6, 0.0)] {
+            let merged = unite_faces(&faces_apart(bottom, top, nudge), &tidy, &std::cell::OnceCell::new()).unwrap();
+            assert_eq!(merged.subpaths.len(), 1, "ends apart by {bottom} and {top}, nudge {nudge}: {merged:?}");
+            assert!((merged.length() - 600.0).abs() < 1e-3, "ends apart by {bottom} and {top}, nudge {nudge}: {} pt of outline", merged.length());
+        }
+    }
+
+    /// #1770: when the faces' copies of every edge they share are exact reverses of each other,
+    /// the faces unite as they are, and a point 5e-6 pt from another point stays where it is.
+    #[test]
+    fn faces_whose_copies_of_each_shared_edge_match_unite_as_they_are() {
+        let tidy = Tidy::free(crate::DEFAULT_PRECISION);
+        let raw = faces_matching();
+        let as_they_are = all_contours_to_path(&normalize_bez(&raw, FillRule::NonZero).unwrap(), &tidy);
+        assert_eq!(as_they_are.subpaths.len(), 1, "{as_they_are:?}");
+        assert_eq!(unite_faces(&raw, &tidy, &std::cell::OnceCell::new()), Some(as_they_are));
+    }
+
+    /// #1770: the first union decides for every later union of the same set whether the points
+    /// move together. After faces whose copies of an edge end apart, the faces whose copies match
+    /// lose their point 5e-6 pt from another point.
+    #[test]
+    fn later_unions_move_points_as_the_first_union_decided() {
+        let tidy = Tidy::free(crate::DEFAULT_PRECISION);
+        let snap = std::cell::OnceCell::new();
+        let first = unite_faces(&faces_apart(0.0, 3e-6, 0.0), &tidy, &snap).unwrap();
+        assert_eq!(first.subpaths.len(), 1, "{first:?}");
+        let later = unite_faces(&faces_matching(), &tidy, &snap).unwrap();
+        let moved = Point::new(-30.0, 50.0 - 5e-6);
+        assert!(later.subpaths.iter().flat_map(|sp| &sp.anchors).all(|a| a.p != moved), "{later:?}");
     }
 
     #[test]
