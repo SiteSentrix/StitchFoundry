@@ -46,6 +46,10 @@ pub struct GuideState {
     pub shape: Option<&'static str>,
     pub sample: Option<String>,
     pub picture: Option<String>,
+    /// The in-the-hoop project chosen (`embroidery.ith.projects`).
+    pub project: Option<String>,
+    /// The in-the-hoop project's shape, if any.
+    pub ith_shape: Option<&'static str>,
     /// The last thing that went wrong, shown under the step.
     pub error: Option<String>,
 }
@@ -62,6 +66,8 @@ impl Default for GuideState {
             shape: None,
             sample: None,
             picture: None,
+            project: None,
+            ith_shape: None,
             error: None,
         }
     }
@@ -133,7 +139,7 @@ fn nav(app: &mut VectorcraftApp, ui: &mut Ui) {
     let back = match g.step {
         Step::What => None,
         Step::Hoop => Some(Step::What),
-        Step::Details if g.what == Some("sample") => Some(Step::What),
+        Step::Details if matches!(g.what, Some("sample" | "ith")) => Some(Step::What),
         Step::Details => Some(Step::Hoop),
         Step::Colours => Some(Step::Details),
         Step::Watch => Some(Step::Colours),
@@ -170,12 +176,14 @@ fn what(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         ("shape", tl!("A shape"), tl!("A heart, a star, a flower and more")),
         ("applique", tl!("An appliqué"), tl!("A shape cut from fabric and sewn down")),
         ("picture", tl!("A picture"), tl!("A photo or a drawing turned into stitches")),
+        ("ith", tl!("An in-the-hoop project"), tl!("A little pillow front, a mug rug, a coaster or an ornament")),
         ("sample", tl!("A sample to try"), tl!("A finished design to sew and learn from")),
     ];
     for (id, title, line) in choices {
         if card(ui, t, title, line, app.guide.what == Some(id)).clicked() {
             app.guide.what = Some(id);
-            app.guide.step = if id == "sample" { Step::Details } else { Step::Hoop };
+            // a sample brings its hoop, a project picks the one it fits
+            app.guide.step = if matches!(id, "sample" | "ith") { Step::Details } else { Step::Hoop };
         }
     }
 }
@@ -260,6 +268,40 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                 });
             }
         }
+        "ith" => {
+            ui.label(RichText::new(tl!("Which project?")).font(theme::semibold(18.0)).color(t.text));
+            let list = app.session.execute("embroidery.ith.projects", &json!({})).unwrap_or_default();
+            for pr in list["projects"].as_array().map(Vec::as_slice).unwrap_or_default() {
+                let (Some(id), Some(name)) = (pr["id"].as_str(), pr["name"].as_str()) else { continue };
+                let line = if pr["panel"] == true {
+                    tl!("Sewn in a 5×7 hoop, borders and back sewn on after")
+                } else {
+                    tl!("Finished in the hoop: batting, backing and a satin edge")
+                };
+                if card(ui, t, project_name(name), line, app.guide.project.as_deref() == Some(id)).clicked() {
+                    app.guide.project = Some(id.to_string());
+                }
+            }
+            ui.label(RichText::new(tl!("Words (you can leave this empty)")).size(14.0));
+            ui.add(egui::TextEdit::singleline(&mut app.guide.text).font(egui::FontId::proportional(18.0)).desired_width(500.0));
+            ui.label(RichText::new(tl!("A shape")).size(14.0));
+            ui.horizontal_wrapped(|ui| {
+                if ui.selectable_label(app.guide.ith_shape.is_none(), tl!("None")).clicked() {
+                    app.guide.ith_shape = None;
+                }
+                for name in vectorcraft_engine::cmd::embroidery_simple::SIMPLE_SHAPES {
+                    if ui.selectable_label(app.guide.ith_shape == Some(name), crate::simple::shape_name(name)).clicked() {
+                        app.guide.ith_shape = Some(name);
+                    }
+                }
+            });
+            if let Some(project) = app.guide.project.clone()
+                && crate::widgets::primary_button(ui, tl!("Make It")).clicked()
+            {
+                let text = app.guide.text.trim().to_string();
+                make = Some(json!({ "what": "ith", "project": project, "text": (!text.is_empty()).then_some(text), "shape": app.guide.ith_shape }));
+            }
+        }
         _ => {
             ui.label(RichText::new(tl!("Which sample?")).font(theme::semibold(18.0)).color(t.text));
             let samples = app.session.execute("embroidery.samples", &json!({})).unwrap_or_default();
@@ -272,10 +314,22 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         }
     }
     if let Some(mut q) = make {
-        if what != "sample" {
+        if what != "sample" && what != "ith" {
             q["hoop"] = json!(app.guide.hoop);
         }
         make_it(app, q);
+    }
+}
+
+/// An in-the-hoop project's name in the UI language.
+fn project_name(name: &str) -> &str {
+    match name {
+        "Little pillow front, 8″ square" => tl!("Little pillow front, 8″ square"),
+        "Little pillow front, 9½ × 5½″" => tl!("Little pillow front, 9½ × 5½″"),
+        "Mug rug, 6½ × 4½″" => tl!("Mug rug, 6½ × 4½″"),
+        "Coaster, 3¾″ square" => tl!("Coaster, 3¾″ square"),
+        "Round ornament, 3½″" => tl!("Round ornament, 3½″"),
+        other => other,
     }
 }
 
