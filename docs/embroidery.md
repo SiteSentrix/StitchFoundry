@@ -251,6 +251,10 @@ Editing:
 - **Embroidery › Auto Direction** places the automatic lines again; **Embroidery › Clear
   Inclination Lines** goes back to the automatic direction.
 - Inclination lines, beads and fill angles move, rotate, scale and mirror with their object.
+- A click selects a stitched object where its stitches are, not only on its art: inside a fill,
+  appliqué or filled satin even when the art has no fill colour, across the whole width of a satin
+  line drawn on a hairline, and on an imported machine file's thin stitch lines, so it never
+  passes through to the object behind.
 
 **Reverse Stitch Direction** (Embroidery menu) swaps where the selected objects start and stop
 sewing.
