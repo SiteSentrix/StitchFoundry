@@ -1,0 +1,50 @@
+# A Windows x64 build on demand (Actions › Windows build › Run workflow, or a push to the
+# `windows-build` branch): the MSI installer and the portable zip, unsigned, uploaded as the run's
+# artifact. For trying the app before a release;
+# releases come from release.yml (signed, every platform).
+name: Windows build
+
+on:
+  push:
+    branches: [windows-build]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-build-x64
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2
+      - name: Build and package (unsigned)
+        shell: pwsh
+        env:
+          VECTORCRAFT_BUILD_SHA: ${{ github.sha }}
+        run: ./packaging/windows/package.ps1 -Arch x64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: stitchfoundry-windows-x64
+          path: dist/release/*
+          if-no-files-found: error
