@@ -3508,6 +3508,8 @@ effect	Regular	Pravidelný
 	Serif / Mincho	Patkové / mincho
 	Changes made since it was last saved will be lost.	Změny provedené od posledního uložení budou ztraceny.
 	Can't open “{name}”.	„{name}“ nelze otevřít.
+	Can't save “{name}”.	„{name}“ nelze uložit.
+	Can't export “{name}”.	„{name}“ nelze exportovat.
 	Downloaded {what}	Staženo: {what}
 	Exported {count} file(s) to {folder}	Exportováno souborů: {count} do {folder}
 	Exported {what}	Exportováno: {what}

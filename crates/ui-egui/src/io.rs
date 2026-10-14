@@ -167,6 +167,29 @@ pub fn report_open_error(app: &mut VectorcraftApp, name: &str, e: &str) {
     dialogs::confirm::tell(app, &message, &crate::i18n::message(crate::i18n::current(), e));
 }
 
+/// A save or an export that didn't write `path`: say so in a dialog that names the file and the
+/// reason and stays until it is closed, as an editor does (#1685). The status bar's line, which
+/// the caller's error becomes, is replaced by the next message, and a document that wasn't saved
+/// must not look saved: it stays modified, and what was at `path` is as it was. Not for a request
+/// an agent sent and waits on: the error is its reply.
+pub(crate) fn report_write_error(app: &mut VectorcraftApp, export: bool, path: &str, e: &str) {
+    if app.ui.answering_control {
+        return;
+    }
+    let name = fileio::file_name(path);
+    let message = if export { tl!("Can't export “{name}”.") } else { tl!("Can't save “{name}”.") };
+    dialogs::confirm::tell(app, &crate::i18n::fmt(message, &[("name", &name)]), &crate::i18n::message(crate::i18n::current(), e));
+}
+
+/// [`write_to`], a failure reported ([`report_write_error`]).
+pub(crate) fn write_reporting(app: &mut VectorcraftApp, path: &str, bytes: &[u8]) -> Result<(), String> {
+    let r = write_to(&mut app.services, path, bytes);
+    if let Err(e) = &r {
+        report_write_error(app, false, path, e);
+    }
+    r
+}
+
 /// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]). On
 /// the desktop a document is decoded off the UI thread ([`crate::opening`]): the result is then
 /// `{background: true, status}`, and the document opens in its tab (or the failure is reported)
@@ -259,7 +282,7 @@ pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: 
             pick_path(app, &FilePick { name: name.to_string(), folder, ..Default::default() })?
         }
     };
-    write_to(&mut app.services, &path, bytes)?;
+    write_reporting(app, &path, bytes)?;
     Ok(path)
 }
 
@@ -515,8 +538,10 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
         }
         .map_err(|e| e.to_string())
     };
+    let failed = target.clone().unwrap_or_default();
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
-        let r = r?;
+        // Not written: the document keeps its file, format and modified state, and the user is told.
+        let r = r.inspect_err(|e| report_write_error(app, false, &failed, e))?;
         // The document may have closed meanwhile: the file is written all the same.
         done.complete(&mut app.session, uid);
         let path = r["path"].as_str().unwrap_or_default().to_string();
@@ -601,8 +626,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         Ok(out)
     };
     let enabled = app.session.prefs.background_export;
-    let mut r = background::run(app, enabled, label, None, work, |app, r| {
-        let r = r?;
+    let failed = target.clone();
+    let mut r = background::run(app, enabled, label, None, work, move |app, r| {
+        let r = r.inspect_err(|e| report_write_error(app, true, &failed, e))?;
         let what = match r["files"].as_array() {
             Some(files) => format!("{} files", files.len()),
             None => r["path"].as_str().unwrap_or_default().to_string(),
@@ -672,7 +698,7 @@ pub(crate) fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut par
         Some(p) => p,
         None => target_path(app, None, ext)?,
     };
-    write_to(&mut app.services, &path, &bytes)?;
+    write_reporting(app, &path, &bytes)?;
     Ok((path, v))
 }
 
@@ -829,13 +855,69 @@ mod tests {
         assert!(app.ui.dialog.is_none());
     }
 
+    /// #1685: a save or an export that can't write its file says so in a dialog that names the
+    /// file and the reason and stays until it is closed; the document stays modified and keeps
+    /// the file it had. An agent's request only gets the error, and a message that arrives while
+    /// another dialog is open waits for it to close.
+    #[test]
+    fn a_save_that_cannot_write_is_reported_in_a_dialog_that_stays() {
+        let refuse: crate::WriteFn = Box::new(|p: &str, _: &[u8]| Err(format!("{p}: Access is denied. (os error 5)")));
+        let mut app = VectorcraftApp::new(Session::new(), Services { write: Some(refuse), ..Default::default() });
+        app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let unsaved = |app: &VectorcraftApp| {
+            let st = app.session.doc().unwrap();
+            (st.is_dirty(), st.path.clone())
+        };
+        for (command, path, message) in [
+            ("file.save", "/docs/Poster.vectorcraft", "Can't save “Poster.vectorcraft”."),
+            ("file.saveAs", "/docs/Poster.vectorcraft", "Can't save “Poster.vectorcraft”."),
+            ("file.saveCopy", "/docs/Copy.vectorcraft", "Can't save “Copy.vectorcraft”."),
+            ("file.exportAs", "/docs/Poster.png", "Can't export “Poster.png”."),
+            ("file.export.pdf", "/docs/Poster.pdf", "Can't save “Poster.pdf”."),
+        ] {
+            let e = app.run(command, json!({"path": path})).unwrap_err();
+            assert!(e.contains("Access is denied"), "{command}: {e}");
+            let d = app.ui.dialog.take().unwrap_or_else(|| panic!("{command}: a dialog says so"));
+            assert_eq!((d.kind.as_str(), d.str("message").as_str()), (dialogs::confirm::MESSAGE, message), "{command}");
+            assert_eq!(d.str("detail"), format!("{path}: Access is denied. (os error 5)"), "{command}");
+            assert_eq!(unsaved(&app), (true, None), "{command}");
+        }
+        // An agent waiting on its request gets the error as its reply, and no dialog.
+        app.ui.answering_control = true;
+        assert!(app.run("file.save", json!({"path": "/docs/Poster.vectorcraft"})).is_err());
+        app.ui.answering_control = false;
+        assert!(app.ui.dialog.is_none() && app.ui.told.is_empty());
+        // Under another dialog (a background save that fails later) the message waits its turn,
+        // once, and is drawn when that dialog is closed.
+        dialogs::confirm::ask(&mut app, "Delete the swatch?", "", "edit.undo", json!({}));
+        for _ in 0..2 {
+            report_write_error(&mut app, false, "/docs/Poster.vectorcraft", "the disk is full");
+        }
+        assert_eq!((app.ui.dialog.as_ref().map(|d| d.kind.as_str()), app.ui.told.len()), (Some(dialogs::confirm::KIND), 1));
+        app.ui.dialog = None;
+        for _ in 0..2 {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        let d = app.ui.dialog.as_ref().expect("the message is shown, and stays");
+        assert_eq!(
+            (d.kind.as_str(), d.str("message").as_str(), d.str("detail").as_str()),
+            (dialogs::confirm::MESSAGE, "Can't save “Poster.vectorcraft”.", "the disk is full")
+        );
+        assert!(app.ui.told.is_empty());
+    }
+
     /// #1693: a browser download that can't be started is a failed save: the document stays
     /// modified and without a file, and Save Changes doesn't close it.
     #[test]
     fn a_download_that_cannot_start_leaves_the_document_unsaved_and_open() {
         let started = Rc::new(RefCell::new(false));
         let ok = started.clone();
-        let download: crate::DownloadFn = Box::new(move |_: &str, _: &[u8]| if *ok.borrow() { Ok(()) } else { Err("the browser refused the download".into()) });
+        let download: crate::DownloadFn =
+            Box::new(move |_: &str, _: &[u8]| if *ok.borrow() { Ok(()) } else { Err("the browser refused the download".into()) });
         let mut app = VectorcraftApp::new(Session::new(), Services { download: Some(download), ..Default::default() });
         app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();

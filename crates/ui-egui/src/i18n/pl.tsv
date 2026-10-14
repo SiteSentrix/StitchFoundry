@@ -3391,6 +3391,8 @@ effect	Regular	Normalny
 	Serif / Mincho	Szeryfowe / mincho
 	Changes made since it was last saved will be lost.	Zmiany wprowadzone od ostatniego zapisu zostaną utracone.
 	Can't open “{name}”.	Nie można otworzyć „{name}”.
+	Can't save “{name}”.	Nie można zapisać „{name}”.
+	Can't export “{name}”.	Nie można wyeksportować „{name}”.
 	Downloaded {what}	Pobrano {what}
 	Exported {count} file(s) to {folder}	Wyeksportowane pliki do {folder}: {count}
 	Exported {what}	Wyeksportowano {what}

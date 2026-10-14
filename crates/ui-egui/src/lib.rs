@@ -780,7 +780,10 @@ impl VectorcraftApp {
             let reply = req.reply.clone();
             // Guarded per request: a panic must not drop the channel (taken out of `self` above).
             let roots = self.automation_roots.clone();
-            let outcome = match file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req))) {
+            self.ui.answering_control = true;
+            let answer = file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req)));
+            self.ui.answering_control = false;
+            let outcome = match answer {
                 Ok(outcome) => outcome,
                 Err(msg) => {
                     self.picks.recover();

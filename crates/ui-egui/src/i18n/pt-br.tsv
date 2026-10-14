@@ -692,6 +692,8 @@
 	Divide Vertically Into	Dividir Verticalmente Em
 	Do you want to save the changes you made to “{name}”?	Deseja salvar as alterações feitas em “{name}”?
 	Can't open “{name}”.	Não é possível abrir “{name}”.
+	Can't save “{name}”.	Não é possível salvar “{name}”.
+	Can't export “{name}”.	Não é possível exportar “{name}”.
 	Document	Documento
 	Document Color Mode	Modo de Cor do Documento
 	Document Info	Informações do Documento

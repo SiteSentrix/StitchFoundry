@@ -1223,6 +1223,8 @@
 	Divide Vertically Into	垂直方向に分割
 	Do you want to save the changes you made to “{name}”?	「{name}」への変更を保存しますか？
 	Can't open “{name}”.	「{name}」を開けません。
+	Can't save “{name}”.	「{name}」を保存できません。
+	Can't export “{name}”.	「{name}」を書き出せません。
 	Document	ドキュメント
 	Document Ink Options	ドキュメントのインキオプション
 	Document JSON	ドキュメント JSON

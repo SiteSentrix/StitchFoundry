@@ -768,6 +768,8 @@
 	Do Not Move	No mover
 	Do you want to save the changes you made to “{name}”?	¿Quieres guardar los cambios hechos en “{name}”?
 	Can't open “{name}”.	No se puede abrir «{name}».
+	Can't save “{name}”.	No se puede guardar «{name}».
+	Can't export “{name}”.	No se puede exportar «{name}».
 	Document	Documento
 	Document Color Mode	Modo de color del documento
 	Document Info	Información del documento
