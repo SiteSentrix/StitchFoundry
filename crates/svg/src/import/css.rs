@@ -214,7 +214,13 @@ impl Selector {
     }
 
     fn matches(&self, n: XNode) -> bool {
-        fn go(parts: &[(Compound, bool)], n: XNode) -> bool {
+        // The result of matching a selector suffix from a node depends only on the suffix and
+        // the node, so memoize it: without this, every descendant step retries every matching
+        // ancestor and a selector whose leftmost compound never matches makes the search
+        // enumerate ancestor combinations (#1703). A suffix of `parts` is identified by its
+        // length, so (suffix length, node id) is a complete key and the visited states are
+        // bounded by parts × ancestors.
+        fn go(parts: &[(Compound, bool)], n: XNode, memo: &mut HashMap<(usize, roxmltree::NodeId), bool>) -> bool {
             let Some(((c, child), rest)) = parts.split_first() else { return true };
             if !c.matches(n) {
                 return false;
@@ -222,13 +228,19 @@ impl Selector {
             if rest.is_empty() {
                 return true;
             }
-            if *child {
-                n.parent_element().is_some_and(|p| go(rest, p))
-            } else {
-                n.ancestors().skip(1).filter(|a| a.is_element()).any(|a| go(rest, a))
+            let key = (rest.len(), n.id());
+            if let Some(&hit) = memo.get(&key) {
+                return hit;
             }
+            let hit = if *child {
+                n.parent_element().is_some_and(|p| go(rest, p, memo))
+            } else {
+                n.ancestors().skip(1).filter(|a| a.is_element()).any(|a| go(rest, a, memo))
+            };
+            memo.insert(key, hit);
+            hit
         }
-        go(&self.parts, n)
+        go(&self.parts, n, &mut HashMap::new())
     }
 }
 
@@ -487,6 +499,36 @@ mod tests {
                 assert_eq!(st.prop(by_id(doc, "t2"), "font-size").as_deref(), Some("9px"));
             },
         );
+    }
+
+    #[test]
+    fn descendant_matching_does_not_backtrack_combinatorially() {
+        // Many nested groups share class `a` and the first rule stacks eight descendant
+        // `.a` compounds under a leftmost class that matches nothing: an unmemoized
+        // matcher enumerates ancestor combinations for it and effectively never
+        // finishes (#1703). With suffix states memoized this returns at once, and the
+        // matching descendant and mixed child/descendant rules still apply.
+        let depth = 48;
+        let mut svg = String::from(
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><style>
+            .missing .a .a .a .a .a .a .a .a text { fill: #111 }
+            .a .a .a text { fill: #222 }
+            .a > .a text { stroke: blue }
+            </style>"#,
+        );
+        for _ in 0..depth {
+            svg.push_str(r#"<g class="a">"#);
+        }
+        svg.push_str(r#"<text id="t">x</text>"#);
+        for _ in 0..depth {
+            svg.push_str("</g>");
+        }
+        svg.push_str("</svg>");
+        with_doc(&svg, |doc, st| {
+            let t = by_id(doc, "t");
+            assert_eq!(st.own(t, "fill").as_deref(), Some("#222"), "descendant rule matches, the .missing one does not");
+            assert_eq!(st.own(t, "stroke").as_deref(), Some("blue"), "mixed child/descendant rule matches");
+        });
     }
 
     #[test]
