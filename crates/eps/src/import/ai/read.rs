@@ -373,6 +373,8 @@ struct Reader<'a> {
     hidden_ids: HashSet<NodeId>,
     /// A group just ended, its state (`Xy`, `Xd`, `XW`) not yet read.
     group_ended: bool,
+    /// A layer's own state (`Xy` after its art, before `LB`), until something says the art moves on.
+    layer_state: Option<(f32, BlendMode, bool, Knockout)>,
     /// Painted copies of clipping paths that have a fill (drawn under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
@@ -524,6 +526,7 @@ impl<'a> Reader<'a> {
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
             group_ended: false,
+            layer_state: None,
             styles: HashMap::new(),
             mesh: None,
             cmyk_cache: HashMap::new(),
@@ -915,6 +918,10 @@ impl<'a> Reader<'a> {
         layer.name = Some(a.name.clone());
         layer.visible = a.visible;
         layer.locked = a.locked;
+        // The layer's own opacity, blend and knockout, written after its art (#2003).
+        if let Some((opacity, blend, isolate, knockout)) = self.layer_state.take() {
+            (layer.opacity, layer.blend, layer.isolate, layer.knockout) = (opacity, blend, isolate, knockout);
+        }
         match self.frames.last_mut() {
             Some(parent) => {
                 parent.children.push(layer);
@@ -969,9 +976,11 @@ impl<'a> Reader<'a> {
             ";" => return self.end_obj(),
             _ => {}
         }
-        // What follows an object (its name, transparency and style) ends with anything else.
-        if !matches!(w, "Xy" | "Xd" | "XW" | "BB") {
+        // What follows an object (its name, transparency and style) ends with anything else. The
+        // state block of a layer whose art ended (`Xy`, `Xd`, `XW`, then `LB`) is read at the `LB`.
+        if !matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB") {
             self.after_object = false;
+            self.layer_state = None;
         }
         let group_ended = std::mem::take(&mut self.group_ended);
         let vals = self.operands();
@@ -1479,13 +1488,20 @@ impl<'a> Reader<'a> {
         };
         gs.knockout_shape = rest.get(2).is_some_and(|v| *v != 0.0);
         let gs = self.gs.clone();
-        if let Some(n) = self.last_object()
-            && matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })
-        {
-            n.opacity = gs.opacity;
-            n.blend = gs.blend;
-            n.isolate = gs.isolate;
-            n.knockout = gs.knockout;
+        if self.last_object().is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
+            if let Some(n) = self.last_object() {
+                n.opacity = gs.opacity;
+                n.blend = gs.blend;
+                n.isolate = gs.isolate;
+                n.knockout = gs.knockout;
+            }
+            self.layer_state = None;
+        } else {
+            // After a layer's art and before its `LB`: the layer's own state (#2003). Kept until
+            // an operator that isn't part of the state block (or the `LB` that takes it) says the
+            // art moves on, so a path's state before its paint isn't read as its layer's.
+            self.layer_state = matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
+                .then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
         }
     }
 
