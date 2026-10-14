@@ -5053,3 +5053,4 @@ machine	Stop	Stopp
 	Screen points per inch	Bildschirmpunkte pro Zoll
 	Use This Size	Diese Größe verwenden
 	Screen Points per Inch at Life Size	Bildschirmpunkte pro Zoll bei echter Größe
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` ist eine Zahl von 40 bis 400

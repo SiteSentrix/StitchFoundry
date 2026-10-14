@@ -5099,3 +5099,4 @@ machine	Stop	Arresto
 	Screen points per inch	Punti schermo per pollice
 	Use This Size	Usa questa dimensione
 	Screen Points per Inch at Life Size	Punti schermo per pollice a grandezza naturale
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` è un numero da 40 a 400
