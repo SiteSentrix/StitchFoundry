@@ -518,6 +518,24 @@ listed with why. ZSK DSZ designs can be converted from but not to. A format with
 (DST, EXP, TAP, U01, DSB) gives the converted design
 standard threads.
 
+## How much the tools show
+
+The Home screen asks **How do you work?** (also **Window › Experience**), and each answer picks a
+workspace and how much the Embroidery panel shows:
+
+- **New to embroidery** (Embroidery Basics workspace): the basic tools, no rulers or control bar,
+  and the Embroidery panel's everyday sections: lettering, monograms, templates, the design
+  library, clipart and Send to Machine. *Show everything* at the top of the panel brings the rest
+  back.
+- **I digitize designs** (Digitizing): every digitizing tool with rulers, the control bar and the
+  Layers panel; the font creator, team names, buttonholes and exports, but not job orders or batch
+  output.
+- **I run an embroidery business** (Embroidery Business): everything, job orders and batch output
+  included.
+
+**Everything** (the start) shows every section in the Essentials workspace. Each is a command too:
+`window.experience {level: beginner|digitizer|business|all}`.
+
 ## Life size on screen
 
 **View › Calibrate Life Size…** shows a 100 mm ruler and the outline of a bank card (85.6 ×
