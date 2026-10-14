@@ -218,3 +218,32 @@ fn experience_levels_choose_the_workspace_and_the_panel_sections() {
     assert_eq!(app.ui.workspace, crate::workspaces::ESSENTIALS);
     assert!(app.run("window.experience", json!({"level": "expert"})).is_err());
 }
+
+/// E4: with My Machine chosen, Home names it and offers its hoops; Save for My Machine writes
+/// its format to the folder, and with no machine it opens the My Machine window.
+#[test]
+fn my_machine_shapes_home_and_saves_in_its_format() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let texts = home_strings(&mut app);
+    assert!(texts.iter().any(|t| t == "Choose My Machine"), "{texts:?}");
+    app.run("embroidery.myMachine.set", json!({"machine": "Husqvarna Viking Designer Diamond deLuxe"})).unwrap();
+    let texts = home_strings(&mut app);
+    assert!(texts.iter().any(|t| t == "My machine: Husqvarna Viking Designer Diamond deLuxe"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "240 × 150 mm (9.4×5.9″)"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "130 × 180 mm (5×7″)"), "the general hoops make way");
+    // a design for the machine's hoop, saved in its format
+    app.run("embroidery.newDesign", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 120, "height": 80})).unwrap();
+    app.run("embroidery.set", json!({"type": "fill"})).unwrap();
+    let dir = std::env::temp_dir().join(format!("sf-my-machine-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let r = app.run("ui.saveForMyMachine", json!({"folder": dir.to_string_lossy()})).unwrap();
+    assert_eq!(r["format"], "vp3");
+    let path = r["path"].as_str().unwrap();
+    assert!(path.ends_with(".vp3") && std::fs::metadata(path).unwrap().len() > 100, "{r}");
+    std::fs::remove_dir_all(&dir).ok();
+    // no machine: the window opens instead
+    app.run("embroidery.myMachine.set", json!({"machine": null})).unwrap();
+    assert_eq!(app.run("ui.saveForMyMachine", json!({})).unwrap()["open"], true);
+    assert!(app.ui.my_machine.open);
+}

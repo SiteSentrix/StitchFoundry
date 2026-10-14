@@ -699,6 +699,11 @@ pub struct Prefs {
     /// network shares, the last used first. A local list, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embroidery_send_dirs: Vec<String>,
+    /// The embroidery machine someone sews on (`embroidery.myMachine.set`): one of
+    /// `sf_core::machines::HOME_MACHINES` by name, "" when not chosen. New designs take its first
+    /// hoop and Save for My Machine its format.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub my_machine: String,
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/StitchFoundry Templates`).
     pub templates_folder: String,
@@ -890,6 +895,7 @@ impl Default for Prefs {
             embroidery_sheet_setup: Default::default(),
             embroidery_kiosk: Default::default(),
             embroidery_send_dirs: vec![],
+            my_machine: String::new(),
             templates_folder: String::new(),
             append_converted: true,
             use_compression: false,

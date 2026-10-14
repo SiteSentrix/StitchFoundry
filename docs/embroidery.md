@@ -10,6 +10,7 @@ Everything is a command (`embroidery.*`), so the same features work from the men
 the control channel, the CLI and the MCP server.
 
 - [Quick start](#quick-start)
+- [My Machine](#my-machine)
 - [Digitizing basics](#digitizing-basics)
 - [Stitch types](#stitch-types)
 - [Stitch direction: automatic, then editable](#stitch-direction-automatic-then-editable)
@@ -813,6 +814,26 @@ a home-built machine:
   `flipY: false`; `feed` sets the stitching speed (1200 mm/min).
 
 These are exports only: they aren't read back.
+
+## My Machine
+
+**File › My Machine…** (also on the Embroidery menu and the Home screen) asks once which machine
+you have: Husqvarna Viking Designer Diamond deLuxe, other Husqvarna Viking models, Brother or Baby
+Lock, Janome or Elna, Bernina, Singer, or another machine (DST). It also asks whether to measure
+in millimetres or inches, and which folder or USB stick designs go to. From then on:
+
+- the Home screen offers that machine's hoops (for the Designer Diamond deLuxe 240 × 150, 260 ×
+  200, 120 × 120, 360 × 200 and 360 × 350 mm), and a new design uses its first hoop when none is
+  named (`embroidery.newDesign`);
+- new designs and exports use the machine's format (VP3 for Husqvarna Viking, PES for Brother,
+  JEF for Janome, EXP for Bernina, XXX for Singer, DST otherwise);
+- **File › Save for My Machine** writes the design in that format to the chosen folder in one step
+  (`embroidery.send`), asking for a folder first when none is chosen or the USB stick isn't
+  plugged in.
+
+Commands: `embroidery.myMachine` (the machine, its format, hoops and folder, and the list to choose
+from), `embroidery.myMachine.set {machine: name|null}`, `ui.myMachine`, `ui.saveForMyMachine
+{folder?}`.
 
 ## Send queue
 

@@ -5113,3 +5113,21 @@ machine	Stop	停止
 	Background Quilting	背景キルティング
 	Remove Blend	ブレンドを解除
 	Blend layers	ブレンドの層
+	My Machine…	マイマシン…
+	Save for My Machine	マイマシン用に保存
+	My Machine	マイマシン
+	Which embroidery machine do you have?	お使いの刺繍ミシンはどれですか？
+	Measure in	単位
+	Save designs to	デザインの保存先
+	No folder chosen yet	フォルダーが未選択です
+	Plug in the USB stick you take to your machine, then choose it here.	ミシンに持っていく USB メモリを挿してから、ここで選んでください。
+	Husqvarna Viking (other models)	Husqvarna Viking（その他の機種）
+	Brother or Baby Lock	Brother または Baby Lock
+	Janome or Elna	Janome または Elna
+	Another machine (DST)	その他のミシン（DST）
+	My machine:	マイマシン：
+	Tell us your machine to see its hoops and save in its format.	ミシンを選ぶと、その枠が表示され、その形式で保存できます。
+	Choose My Machine	マイマシンを選ぶ
+	Saved for your machine:	ミシン用に保存しました：
+@msg	the design has no page	デザインにページがありません
+@msg	open or start a design first	先にデザインを開くか始めてください

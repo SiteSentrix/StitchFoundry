@@ -5115,3 +5115,21 @@ machine	Stop	Остановка
 	Background Quilting	Фоновая стёжка
 	Remove Blend	Убрать смешение
 	Blend layers	Слои смешения
+	My Machine…	Моя машина…
+	Save for My Machine	Сохранить для моей машины
+	My Machine	Моя машина
+	Which embroidery machine do you have?	Какая у вас вышивальная машина?
+	Measure in	Единицы
+	Save designs to	Сохранять дизайны в
+	No folder chosen yet	Папка ещё не выбрана
+	Plug in the USB stick you take to your machine, then choose it here.	Вставьте флешку, которую носите к машине, и выберите её здесь.
+	Husqvarna Viking (other models)	Husqvarna Viking (другие модели)
+	Brother or Baby Lock	Brother или Baby Lock
+	Janome or Elna	Janome или Elna
+	Another machine (DST)	Другая машина (DST)
+	My machine:	Моя машина:
+	Tell us your machine to see its hoops and save in its format.	Укажите свою машину, чтобы видеть её пяльцы и сохранять в её формате.
+	Choose My Machine	Выбрать мою машину
+	Saved for your machine:	Сохранено для вашей машины:
+@msg	the design has no page	у рисунка нет страницы
+@msg	open or start a design first	сначала откройте или начните рисунок

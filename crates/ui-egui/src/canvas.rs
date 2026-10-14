@@ -1881,11 +1881,45 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     recent(app, ui);
     ui.add_space(24.0);
     ui.label(egui::RichText::new(tl!("Start a design for your hoop")).font(theme::semibold(14.0)).color(t.text));
-    ui.add_space(10.0);
+    ui.add_space(6.0);
+    // My Machine: its name, and its hoops in place of the general ones
+    let mine = app.session.execute("embroidery.myMachine", &json!({})).unwrap_or_default();
+    ui.horizontal_wrapped(|ui| {
+        match mine["machine"].as_str() {
+            Some(m) => {
+                ui.label(egui::RichText::new(format!("{} {}", tl!("My machine:"), crate::dialogs::my_machine::machine_name(m))).color(t.text_dim));
+                if ui.link(tl!("Change")).clicked() {
+                    app.run("ui.myMachine", json!({})).ok();
+                }
+            }
+            None => {
+                ui.label(egui::RichText::new(tl!("Tell us your machine to see its hoops and save in its format.")).color(t.text_dim));
+                if ui.link(tl!("Choose My Machine")).clicked() {
+                    app.run("ui.myMachine", json!({})).ok();
+                }
+            }
+        }
+    });
+    ui.add_space(8.0);
+    let theirs: Vec<(String, String, f64, f64)> = mine["hoops"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|h| {
+            let (name, w, ht) = (h["name"].as_str()?, h["width"].as_f64()?, h["height"].as_f64()?);
+            Some((hoop_label(w, ht), name.to_string(), w, ht))
+        })
+        .collect();
+    let hoops: Vec<(String, String, f64, f64)> = if theirs.is_empty() {
+        HOME_HOOPS.iter().map(|(label, hoop, w, h)| ((*label).to_string(), (*hoop).to_string(), *w, *h)).collect()
+    } else {
+        theirs
+    };
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(14.0, 14.0);
-        for (label, hoop, w, h) in HOME_HOOPS {
-            if hoop_card(ui, &t, label, (w, h)).clicked() {
+        for (label, hoop, w, h) in &hoops {
+            if hoop_card(ui, &t, label, (*w, *h)).clicked() {
                 app.run("embroidery.newDesign", json!({ "hoop": hoop })).ok();
             }
         }
@@ -1965,6 +1999,15 @@ fn experience_row(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
             app.run("window.experience", json!({ "level": "all" })).ok();
         }
     });
+}
+
+/// A hoop card's label: its sewing field in millimetres and inches (`240 × 150 mm (9.4 × 5.9″)`).
+fn hoop_label(w: f64, h: f64) -> String {
+    let inch = |mm: f64| {
+        let i = mm / 25.4;
+        if (i - i.round()).abs() < 0.05 { format!("{}", i.round()) } else { format!("{i:.1}") }
+    };
+    format!("{w:.0} × {h:.0} mm ({}×{}″)", inch(w), inch(h))
 }
 
 /// The hoops the Home screen offers a new design for: label, hoop name, width × height (mm).
