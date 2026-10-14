@@ -289,10 +289,11 @@ fn make_a_design_guide_walks_from_words_to_saving() {
     has(&s, "What should it say?");
     has(&s, "Make It");
     // nothing typed: the step says so and stays
-    crate::guide::make_it(&mut app, json!({"what": "words", "text": "", "hoop": app.guide.hoop}));
+    let hoop = app.guide.hoop.clone();
+    crate::guide::make_it(&mut app, json!({"what": "words", "text": "", "hoop": hoop}));
     assert_eq!(app.guide.step, Step::Details);
     assert!(app.guide.error.is_some());
-    crate::guide::make_it(&mut app, json!({"what": "words", "text": "Mia", "height": 25, "hoop": app.guide.hoop}));
+    crate::guide::make_it(&mut app, json!({"what": "words", "text": "Mia", "height": 25, "hoop": hoop}));
     assert_eq!(app.guide.step, Step::Colours, "{:?}", app.guide.error);
     let s = guide_strings(&mut app);
     has(&s, "Your thread colours");
@@ -312,7 +313,7 @@ fn make_a_design_guide_walks_from_words_to_saving() {
 /// Keep Safe saves the design in My Designs and Your Design says where.
 #[test]
 fn simple_mode_makes_mistakes_safe_and_text_larger() {
-    fn strings(app: &mut VectorcraftApp, f: impl FnOnce(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
+    fn strings(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
         fn texts(s: &egui::Shape, out: &mut Vec<String>) {
             match s {
                 egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
