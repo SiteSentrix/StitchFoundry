@@ -7,7 +7,7 @@
 //! mode (Double Click To Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
 //! click or drag a ruler guide ([`crate::rulerguide`]), drag the brackets of type on a path
 //! ([`crate::pathtype`]), double-click the type widget to convert point type to area type and back
-//! ([`crate::typewidget`]).
+//! ([`crate::typewidget`]), double-click area type's bottom middle handle to turn on Auto Size.
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
@@ -268,7 +268,9 @@ impl Tool for SelectionTool {
         match (ev.kind, self.state.clone()) {
             (PointerKind::DoubleClick, _) => {
                 self.state = State::Idle;
-                if let Some(a) = corners::double_click(cx, p, false).or_else(|| typewidget::double_click(cx, p)) {
+                if let Some(a) =
+                    corners::double_click(cx, p, false).or_else(|| typewidget::double_click(cx, p)).or_else(|| typewidget::auto_size(cx, p))
+                {
                     return vec![a];
                 }
                 if crate::rulerguide::guide_at(cx, p).is_some() {

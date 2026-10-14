@@ -1,7 +1,8 @@
 //! The type widget: a small circle beside the right side of a selected type object's bounding
 //! box, hollow on point type and filled on area type. Double-clicking it converts the type to the
 //! other kind (Type › Convert To Area Type / Convert To Point Type), keeping its text and styles.
-//! The Selection tool hits it and the canvas draws it from the same geometry.
+//! The Selection tool hits it and the canvas draws it from the same geometry. A double-click on
+//! area type's bottom middle handle turns on Auto Size.
 
 use serde_json::json;
 use vectorcraft_doc::{Document, NodeId, NodeKind, OrientedBox, Selection, TextKind};
@@ -78,11 +79,28 @@ pub fn double_click(cx: &ToolContext, p: Point) -> Option<Action> {
     Some(Action::Exec(w.command().into(), json!({ "ids": [w.id.0] })))
 }
 
+/// A double-click on the bottom middle handle of one selected area type object turns on Auto Size
+/// (the frame's height follows the text), as a double-click on Illustrator's auto-size widget there
+/// does (<https://community.adobe.com/t5/illustrator-discussions/fit-bounding-box-to-text-in-illustrator/m-p/10013340>).
+pub fn auto_size(cx: &ToolContext, p: Point) -> Option<Action> {
+    if !cx.show_bbox {
+        return None;
+    }
+    let [id] = cx.selection.objects[..] else { return None };
+    if !cx.doc.is_editable(id) || !cx.doc.node(id).is_some_and(crate::select::is_area_type) {
+        return None;
+    }
+    let bx = selection_box(cx)?;
+    (crate::bbox::hit_handle(bx.rect, bx.to_local(p), cx.tol(5.0)) == Some(crate::bbox::Handle::Bottom))
+        .then(|| Action::Exec("text.areaOptions".into(), json!({ "ids": [id.0], "fit": "autoHeight" })))
+}
+
 #[cfg(test)]
 mod tests {
     use vectorcraft_doc::{Node, TextObject};
 
     use super::*;
+    use crate::bbox::Handle;
     use crate::select::SelectionTool;
     use crate::testutil::*;
     use crate::{Cursor, Mods, PointerEvent, PointerKind, Tool};
@@ -131,5 +149,41 @@ mod tests {
         let mut s = Selection::default();
         s.add(path_type);
         assert!(TypeWidget::for_tool(&cx(&pd, &s, &p)).is_none());
+    }
+
+    /// A double-click on the bottom middle handle of area type's bounding box turns on Auto Size,
+    /// as a double-click on Illustrator's auto-size widget there does (#1940).
+    #[test]
+    fn a_double_click_on_area_types_bottom_handle_turns_on_auto_size() {
+        let (mut d, area) = doc_with_area_type();
+        let point = d.alloc_id();
+        let l = d.layers[0].id;
+        let t = TextObject::point(Point::new(100.0, 300.0), "Point", Default::default());
+        d.insert(Some(l), 0, Node::new(point, NodeKind::Text(Box::new(t)))).unwrap();
+        let p = paint();
+        let fit = Action::Exec("text.areaOptions".into(), json!({ "ids": [area.0], "fit": "autoHeight" }));
+        let mut s = Selection::default();
+        s.add(area);
+        let c = cx(&d, &s, &p);
+        let bx = selection_box(&c).unwrap();
+        let mut t = SelectionTool::default();
+        let at = |h: Handle| bx.to_doc() * h.pos(bx.rect);
+        let double_click = |t: &mut SelectionTool, c: &ToolContext, q: Point| t.pointer(c, &ev(PointerKind::DoubleClick, q));
+        assert_eq!(double_click(&mut t, &c, at(Handle::Bottom) + vectorcraft_geom::Vec2::new(2.0, -2.0)), vec![fit.clone()]);
+        // The other handles, and the bottom handle of point type, don't.
+        for h in [Handle::Top, Handle::BottomLeft, Handle::Right] {
+            assert!(!double_click(&mut t, &c, at(h)).contains(&fit), "{h:?}");
+        }
+        let mut s = Selection::default();
+        s.add(point);
+        let c = cx(&d, &s, &p);
+        let bx = selection_box(&c).unwrap();
+        let a = double_click(&mut t, &c, bx.to_doc() * Handle::Bottom.pos(bx.rect));
+        assert!(!a.iter().any(|a| matches!(a, Action::Exec(id, _) if id == "text.areaOptions")), "{a:?}");
+        // Hidden bounding box: no handle.
+        let mut s = Selection::default();
+        s.add(area);
+        let c = ToolContext { show_bbox: false, ..cx(&d, &s, &p) };
+        assert!(!double_click(&mut t, &c, at(Handle::Bottom)).contains(&fit));
     }
 }

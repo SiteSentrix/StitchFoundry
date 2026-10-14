@@ -130,6 +130,26 @@ pub(crate) fn paste_command(held: Modifiers) -> &'static str {
         .map_or("edit.paste", |(_, id, _)| id)
 }
 
+/// Give a copy or cut chord held with more modifiers its key back when it has a shortcut of its own:
+/// egui reports every Cmd+C and Cmd+X chord as Copy or Cut, Shift and Alt held too, so Cmd+Shift+C
+/// (Align center) copied instead (#1940).
+fn unclip_chords(i: &mut egui::InputState) {
+    if !i.events.iter().any(|e| matches!(e, egui::Event::Copy | egui::Event::Cut)) {
+        return;
+    }
+    let (held, shortcuts) = (i.modifiers, all_shortcuts());
+    for e in &mut i.events {
+        let (key, own) = match e {
+            egui::Event::Copy => (Key::C, "edit.copy"),
+            egui::Event::Cut => (Key::X, "edit.cut"),
+            _ => continue,
+        };
+        if shortcuts.iter().any(|(sc, id, _)| sc.logical_key == key && *id != own && held.matches_exact(sc.modifiers)) {
+            *e = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: held };
+        }
+    }
+}
+
 /// Keyboard pastes of something other than text. egui swallows a paste chord's key press and
 /// sends a Paste event only when the clipboard holds text, so a paste key released without its
 /// press (or a Paste event) reported was a paste of a bitmap or a PDF.
@@ -294,6 +314,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if typing {
         return;
     }
+    ctx.input_mut(unclip_chords);
     // Tab is ours when no field has the keyboard (it shows and hides the panels, or goes to the
     // Type tool): left to egui, it would also move the focus on to a field, and every key after it
     // would count as typing.
