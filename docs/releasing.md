@@ -40,6 +40,10 @@ pick that branch for a full run. Run on any other branch, it is a dry run: the L
 FreeBSD and web jobs build and upload their artifacts, the environment refuses the signing jobs,
 and no draft release is created.
 
+**Windows build to try:** *Actions › Windows build › Run workflow*, or a push to the
+`windows-build` branch (`.github/workflows/windows-build.yml`), builds the x64 MSI and portable
+zip, unsigned, as the run's artifact `stitchfoundry-windows-x64`. It drafts no release.
+
 ## What gets built
 
 | Platform | Artifacts | Built on |
