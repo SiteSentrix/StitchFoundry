@@ -5146,7 +5146,6 @@ machine	Stop	Zastavení
 	Blend layers	Vrstvy prolínání
 	My Machine…	Můj stroj…
 	Save for My Machine	Uložit pro můj stroj
-	My Machine	Můj stroj
 	Which embroidery machine do you have?	Jaký vyšívací stroj máte?
 	Measure in	Měřit v
 	Save designs to	Ukládat návrhy do
@@ -5202,3 +5201,4 @@ machine	Stop	Zastavení
 	Show Everything	Zobrazit vše
 @msg	the design has no page	vzor nemá stránku
 @msg	open or start a design first	nejprve otevřete nebo začněte vzor
+	Set My Machine	Nastavit můj stroj

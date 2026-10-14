@@ -5075,7 +5075,6 @@ machine	Stop	Stopp
 	Blend layers	Verlaufsebenen
 	My Machine…	Meine Maschine…
 	Save for My Machine	Für meine Maschine speichern
-	My Machine	Meine Maschine
 	Which embroidery machine do you have?	Welche Stickmaschine haben Sie?
 	Measure in	Maßeinheit
 	Save designs to	Stickmuster speichern in
@@ -5131,3 +5130,4 @@ machine	Stop	Stopp
 	Show Everything	Alles anzeigen
 @msg	the design has no page	das Motiv hat keine Seite
 @msg	open or start a design first	öffnen oder beginnen Sie zuerst ein Motiv
+	Set My Machine	Meine Maschine festlegen

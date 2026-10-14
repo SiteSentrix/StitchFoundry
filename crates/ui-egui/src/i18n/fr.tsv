@@ -5129,7 +5129,6 @@ machine	Stop	Arrêt
 	Blend layers	Couches de fondu
 	My Machine…	Ma machine…
 	Save for My Machine	Enregistrer pour ma machine
-	My Machine	Ma machine
 	Which embroidery machine do you have?	Quelle machine à broder avez-vous ?
 	Measure in	Mesurer en
 	Save designs to	Enregistrer les motifs dans
@@ -5185,3 +5184,4 @@ machine	Stop	Arrêt
 	Show Everything	Tout afficher
 @msg	the design has no page	le motif n’a pas de page
 @msg	open or start a design first	ouvrez ou commencez d’abord un motif
+	Set My Machine	Choisir ma machine

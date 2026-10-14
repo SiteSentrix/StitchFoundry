@@ -5117,7 +5117,6 @@ machine	Stop	Остановка
 	Blend layers	Слои смешения
 	My Machine…	Моя машина…
 	Save for My Machine	Сохранить для моей машины
-	My Machine	Моя машина
 	Which embroidery machine do you have?	Какая у вас вышивальная машина?
 	Measure in	Единицы
 	Save designs to	Сохранять дизайны в
@@ -5173,3 +5172,4 @@ machine	Stop	Остановка
 	Show Everything	Показать всё
 @msg	the design has no page	у рисунка нет страницы
 @msg	open or start a design first	сначала откройте или начните рисунок
+	Set My Machine	Выбрать мою машину
