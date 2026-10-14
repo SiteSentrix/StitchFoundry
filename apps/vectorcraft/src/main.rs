@@ -95,6 +95,11 @@ impl eframe::App for App {
             self.app.titlebar_inset = inset.unwrap_or(mac_window::DEFAULT_INSET);
         }
         file_access::unconfined(|| self.app.ui(ui));
+        // Preferences are written when confirmed, not only at exit: a session ended any other way
+        // (the system shutting down, the process ended or crashing) used to lose them (#1747).
+        if self.app.take_prefs_changed() {
+            file_access::unconfined(|| save_prefs(&self.app));
+        }
         // Not while a file dialog's sheet has the keyboard: its name field's composition would go.
         #[cfg(target_os = "macos")]
         if !self.app.file_dialog_open() && self.app.take_ime_discard() {
