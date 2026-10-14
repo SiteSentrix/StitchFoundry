@@ -25,7 +25,8 @@
 //! A cached raster is made again when something its content reads from outside the object
 //! changes ([`Inputs`]): the pattern definitions, symbols, images and brushes it uses, the
 //! document's raster resolution, color mode and substitution highlights, the knockout its object
-//! inherits, the color settings and fonts, and the options and layer settings it is drawn with.
+//! inherits, the color settings and fonts, the plug-ins its plug-in effects run, and the options
+//! and layer settings it is drawn with.
 //!
 //! The same applies to one fill or stroke's own raster effects (around that item alone) and to
 //! type, images, symbol instances and live objects ([`Renderer::draw_object_fx`]): their art is
@@ -567,6 +568,9 @@ pub(crate) struct Reads {
     /// Type: the fonts, whether overprinting shows ([`crate::proof::overprints`]) and Document
     /// Setup's substitution highlights.
     text: bool,
+    /// Plug-in effects on its objects: the plug-ins installed. Those in the symbol and pattern art
+    /// it shows are found with the document's inputs ([`DocInputs`]).
+    plugins: bool,
 }
 
 impl Reads {
@@ -581,7 +585,7 @@ impl Reads {
         let mut reads = Self::default();
         nodes.for_each(|n| reads.add(n));
         if reads.symbols || reads.patterns {
-            return Self { patterns: true, symbols: true, images: true, brushes: true, text: true };
+            return Self { patterns: true, symbols: true, images: true, brushes: true, text: true, plugins: reads.plugins };
         }
         reads
     }
@@ -591,9 +595,16 @@ impl Reads {
         self != Self::default()
     }
 
+    /// Can installing or removing a plug-in change what the content draws? It can when an object in
+    /// it has a plug-in effect, and when it shows symbol or pattern art.
+    pub(crate) fn plugins_can_change(self) -> bool {
+        self.plugins || self.symbols || self.patterns
+    }
+
     fn add(&mut self, n: &Node) {
         let pattern = |p: &vectorcraft_color::Paint| matches!(p, vectorcraft_color::Paint::Pattern { .. });
         n.walk(&mut |c| {
+            self.plugins |= effects::has_plugin_effect(c);
             for item in &c.appearance.items {
                 self.patterns |= pattern(item.paint());
                 self.brushes |= matches!(item, AppearanceItem::Stroke(s) if s.brush.is_some());
@@ -649,16 +660,19 @@ impl Inputs {
 /// What raster contents read from the document by name or key, and the color settings, as a frame
 /// finds them ([`Renderer::doc_inputs`]): hashes of the patterns' tilings
 /// ([`crate::pattern::hash_tiling`]), of the symbols' names and art and of the images' keys and
-/// pixels, and the address of the color settings. Art, pixels and previews are hashed by the
-/// addresses of their shared values, and names, keys, tiles, tile types and overlaps are hashed by
-/// value. The live cache keeps these inputs with each evaluated live object and with each mesh's
-/// quads (`crate::live`), and [`Renderer::fx_art`] keeps them with art that can be made from
-/// evaluated live objects.
+/// pixels, the address of the color settings, and whether the patterns' and symbols' art has a
+/// plug-in effect. Art, pixels and previews are hashed by the addresses of their shared values,
+/// and names, keys, tiles, tile types and overlaps are hashed by value. The live cache keeps these
+/// inputs with each evaluated live object and with each mesh's quads (`crate::live`), and
+/// [`Renderer::fx_art`] keeps them with art that can be made from evaluated live objects.
 pub(crate) struct DocInputs {
     patterns: u64,
     symbols: u64,
     images: u64,
     pub(crate) cms: usize,
+    /// Whether an object in a pattern's or a symbol's art, or in an opacity mask there, has a
+    /// visible plug-in effect.
+    plugins: bool,
     /// Weak references to the values whose addresses the hashes hold: a weak reference keeps the
     /// allocation, not the value, so no other value gets one of those addresses while these
     /// inputs are kept.
@@ -680,7 +694,7 @@ fn raster_bytes(pm: &vello_cpu::Pixmap) -> usize {
 /// appearance item's own result on it (filled in as items are drawn). The node is kept alive, so
 /// its address names it alone and a hit is exact.
 pub(crate) struct FxGeom {
-    node: Arc<Node>,
+    pub(crate) node: Arc<Node>,
     g: Arc<BezPath>,
     items: Vec<Option<Arc<BezPath>>>,
     pub(crate) stamp: u64,
@@ -865,7 +879,8 @@ impl Renderer {
     /// `draw_shape` for nodes with live effects.
     pub(crate) fn draw_shape_fx(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, bp: &BezPath, rule: FillRule) {
         // The node `draw_arc` is drawing gets its geometry from the cache: `bp` is its own path,
-        // made from the node alone, so the effects give the same result every frame.
+        // made from the node alone, so the effects give the same result every frame while the
+        // plug-ins installed stay the same (`check_plugins`).
         let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned();
         let mut cached = owner.map(|o| {
             let key = Arc::as_ptr(&o) as usize;
@@ -1331,7 +1346,9 @@ impl Renderer {
     /// isolated group, isolation mode; the pattern definitions, symbols and brush library it
     /// reads; for images and placed documents their pixels and files, the layer's Dim Images and
     /// the options they are drawn with; for type the fonts, whether overprinting shows
-    /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights.
+    /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights; and the
+    /// plug-ins installed, when an object in it has a plug-in effect, and when it shows symbol or
+    /// pattern art and an object in the document's symbol or pattern art has one.
     pub(crate) fn raster_inputs(&mut self, f: &Frame, n: &Node, reads: Reads) -> Inputs {
         let doc = self.doc_inputs(f.doc);
         let mut h = DefaultHasher::new();
@@ -1359,6 +1376,9 @@ impl Renderer {
             let setup = &f.doc.setup;
             let highlights = f.opts.highlight_substitutions.then_some((setup.highlight_substituted_fonts, setup.highlight_substituted_glyphs));
             (vectorcraft_text::FontDb::global().generation(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
+        }
+        if reads.plugins || (doc.plugins && (reads.symbols || reads.patterns)) {
+            effects::plugin_revision().hash(&mut h);
         }
         Inputs { reads, key: h.finish(), _doc: doc }
     }
@@ -1390,9 +1410,11 @@ impl Renderer {
         let d = match &self.doc_inputs {
             Some((_, d)) if (d.patterns, d.symbols, d.images, d.cms) == found => d.clone(),
             _ => {
-                let art = doc.patterns.iter().flat_map(|p| &p.art).chain(doc.symbols.iter().map(|s| &s.art)).map(Arc::downgrade).collect();
+                let doc_art = || doc.patterns.iter().flat_map(|p| &p.art).chain(doc.symbols.iter().map(|s| &s.art));
+                let art = doc_art().map(Arc::downgrade).collect();
                 let pixels = doc.images.values().flat_map(|b| std::iter::once(&b.bytes).chain(&b.proxy)).map(Arc::downgrade).collect();
-                Arc::new(DocInputs { patterns, symbols, images, cms: found.3, _held: (art, pixels, Arc::downgrade(&cms)) })
+                let plugins = doc_art().any(|a| crate::holds_plugin_effect(a));
+                Arc::new(DocInputs { patterns, symbols, images, cms: found.3, plugins, _held: (art, pixels, Arc::downgrade(&cms)) })
             }
         };
         self.doc_inputs = Some((at, d.clone()));

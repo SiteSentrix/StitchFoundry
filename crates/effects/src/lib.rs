@@ -749,6 +749,18 @@ pub fn has_geometry(effects: &[Effect]) -> bool {
     effects.iter().any(|e| e.visible && is_geometry(&e.id))
 }
 
+/// Does `n` have a visible plug-in effect, its own or a fill's or stroke's? Such an effect draws
+/// what the plug-in installed under its id draws ([`plugin_revision`]).
+pub fn has_plugin_effect(n: &Node) -> bool {
+    let plugin = |e: &Effect| e.visible && vectorcraft_plugins::effect::plugin_id(&e.id).is_some();
+    n.appearance.effects.iter().any(plugin) || n.appearance.items.iter().any(|i| i.effects().iter().any(plugin))
+}
+
+/// The plug-in registry's revision, which changes whenever a plug-in is installed or removed.
+pub fn plugin_revision() -> u64 {
+    vectorcraft_plugins::registry::revision()
+}
+
 /// Context the geometry effects may need from the object's appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GeomContext<'a> {

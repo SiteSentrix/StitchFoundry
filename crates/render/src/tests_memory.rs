@@ -878,6 +878,228 @@ fn live_objects_draw_symbol_and_pattern_art_edits() {
     edit_draws_as_new(with_art(d, vec![envelope]), red_bar);
 }
 
+/// Installs live-effect plug-in `id`, replacing one with the same id: its effect draws `shape` in
+/// place of the geometry it is given.
+fn install_shape(id: &str, shape: &vectorcraft_geom::PathData) {
+    use vectorcraft_plugins::wat as tpl;
+    let output = serde_json::json!({"objects": [{"path": shape}]}).to_string();
+    let module = wat::parse_str(tpl::returning(&tpl::manifest(id, "effect", "{}"), &output)).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+}
+
+/// The triangle with corners (`x`, `y`), (`x` + `size`, `y`) and (`x` + `size` / 2, `y` + `size` / 2).
+fn triangle(x: f64, y: f64, size: f64) -> vectorcraft_geom::PathData {
+    use vectorcraft_geom::{PathData, Point, SubPath};
+    let corners = [Point::new(x, y), Point::new(x + size, y), Point::new(x + size / 2.0, y + size / 2.0)];
+    PathData::single(SubPath::polyline(&corners, true))
+}
+
+/// Draws `d` with live-effect plug-in `id` drawing `before` (`None`: not installed), installs the
+/// plug-in drawing `after` (`None`: removes it) and draws `d` again, as [`edit_draws_as_new`] does.
+#[track_caller]
+fn plugin_change_draws_as_new(d: Document, id: &str, before: Option<vectorcraft_geom::PathData>, after: Option<vectorcraft_geom::PathData>) {
+    match &before {
+        Some(shape) => install_shape(id, shape),
+        None => {
+            vectorcraft_plugins::registry::remove(id);
+        }
+    }
+    edit_draws_as_new(d, |_| match &after {
+        Some(shape) => install_shape(id, shape),
+        None => assert!(vectorcraft_plugins::registry::remove(id), "the plug-in was installed"),
+    });
+}
+
+/// What plug-in effects draw follows the plug-ins installed. In the next frame, a square with a
+/// plug-in effect is drawn as the plug-in installed again with another shape draws it, and as it
+/// is without the plug-in after the plug-in is removed; after the plug-in is installed again, so
+/// are the square with a drop shadow, the square blurred, and an instance of a symbol whose art, a
+/// group kept between frames, holds the square. A square left of the view, alone and in a group,
+/// is drawn where a plug-in installed for the first time draws it, in the view, and so is an
+/// instance left of the view whose symbol's art holds the square, when the plug-in installed again
+/// draws a shape that reaches the view.
+#[test]
+fn objects_with_plugin_effects_follow_the_plugins_installed() {
+    let _fonts = fonts_steady();
+    use vectorcraft_geom::shapes::rectangle;
+    const ID: &str = "test.render.objects";
+    let (small, big) = (Some(triangle(30.0, 40.0, 30.0)), Some(triangle(30.0, 40.0, 120.0)));
+    // A black square of `d` from (`x`, `y`), 40 × 40, with the plug-in effect and `more` effects.
+    let square = |d: &mut Document, x: f64, y: f64, more: Vec<vectorcraft_doc::Effect>| {
+        let effects = std::iter::once(effect(&format!("plugin.{ID}"), serde_json::json!({}))).chain(more).collect();
+        filled(d, rectangle(Rect::new(x, y, x + 40.0, y + 40.0)), Paint::solid(Color::BLACK), effects)
+    };
+    let alone = |x: f64, more: Vec<vectorcraft_doc::Effect>| {
+        let mut d = Document::new(200.0, 100.0);
+        let n = square(&mut d, x, 30.0, more);
+        with_art(d, vec![n])
+    };
+    plugin_change_draws_as_new(alone(20.0, vec![]), ID, small.clone(), big.clone());
+    plugin_change_draws_as_new(alone(20.0, vec![]), ID, small.clone(), None);
+    plugin_change_draws_as_new(alone(20.0, vec![drop_shadow()]), ID, small.clone(), big.clone());
+    let blur = effect("blur.gaussian", serde_json::json!({"radius": 1.0}));
+    plugin_change_draws_as_new(alone(20.0, vec![blur]), ID, small.clone(), big.clone());
+    // An instance of symbol `Shaped`, a group of the square around the origin.
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, -20.0, -20.0, vec![]);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((100.0, 50.0)) });
+    plugin_change_draws_as_new(with_art(d, vec![instance]), ID, small.clone(), big);
+    // Left of the view, the square is culled until the plug-in draws it in the view.
+    plugin_change_draws_as_new(alone(-100.0, vec![]), ID, None, small.clone());
+    let mut d = Document::new(200.0, 100.0);
+    let n = square(&mut d, -100.0, 30.0, vec![]);
+    let group = Node::group(d.alloc_id(), vec![Arc::new(n)]);
+    plugin_change_draws_as_new(with_art(d, vec![group]), ID, None, small);
+    // The instance's box lies from (-50, 30) to (-10, 70). Its cull bounds grow by how far the
+    // effects in the art paint past the art, which the plug-in's first shape does not.
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, -20.0, -20.0, vec![]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((-30.0, 50.0)) });
+    plugin_change_draws_as_new(with_art(d, vec![instance]), ID, Some(triangle(-15.0, -15.0, 10.0)), Some(triangle(0.0, 0.0, 150.0)));
+}
+
+/// Installing a plug-in between two frames leaves the path a renderer keeps for a plain square and
+/// the art it keeps for a group with a Transform effect: the second frame draws them from what was
+/// kept.
+#[test]
+fn installing_a_plugin_keeps_what_is_kept_for_other_objects() {
+    let _fonts = fonts_steady();
+    use vectorcraft_geom::shapes::rectangle;
+    let mut d = Document::new(200.0, 100.0);
+    let square = filled(&mut d, rectangle(Rect::new(20.0, 30.0, 60.0, 70.0)), Paint::solid(Color::BLACK), vec![]);
+    let inner = filled(&mut d, rectangle(Rect::new(120.0, 30.0, 160.0, 70.0)), Paint::solid(Color::BLACK), vec![]);
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    group.appearance.effects.push(effect("distort.transform", serde_json::json!({"moveH": 10.0})));
+    let d = with_art(d, vec![square, group]);
+    let [square, group] = [0, 1].map(|i| d.layers[0].children().unwrap()[i].clone());
+    let kept = |r: &mut Renderer| {
+        let path = r.geom.get(&(Arc::as_ptr(&square) as usize)).and_then(|e| e.path.clone()).unwrap();
+        let art = r.fx_arts.get(&(Arc::as_ptr(&group) as usize), r.stamp).map(|e| e.1.clone()).unwrap();
+        (path, art)
+    };
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    r.render(&d, 200, 100, Affine::IDENTITY, &opts);
+    let before = kept(&mut r);
+    install_shape("test.render.other", &triangle(0.0, 0.0, 10.0));
+    r.render(&d, 200, 100, Affine::IDENTITY, &opts);
+    let after = kept(&mut r);
+    assert!(Arc::ptr_eq(&before.0, &after.0), "the square's path is kept");
+    assert!(Arc::ptr_eq(&before.1, &after.1), "the group's art is kept");
+}
+
+/// The art drawn for an object's effects follows the plug-ins installed: in the next frame, a group
+/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), an
+/// instance of symbol `S` ([`symbol_art`]) and type, each with a plug-in effect, are drawn as the
+/// plug-in installed again with another shape draws them.
+#[test]
+fn effect_art_follows_the_plugins_installed() {
+    let _fonts = fonts_steady();
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    use vectorcraft_geom::shapes::rectangle;
+    const ID: &str = "test.render.art";
+    let plugin = || effect(&format!("plugin.{ID}"), serde_json::json!({}));
+    let (small, big) = (Some(triangle(30.0, 40.0, 30.0)), Some(triangle(30.0, 40.0, 120.0)));
+    // A group of a black square, with the plug-in effect and `more` effects.
+    let group = |more: Vec<vectorcraft_doc::Effect>| {
+        let mut d = Document::new(200.0, 100.0);
+        let square = filled(&mut d, rectangle(Rect::new(20.0, 30.0, 60.0, 70.0)), Paint::solid(Color::BLACK), vec![]);
+        let mut group = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+        group.appearance.effects = std::iter::once(plugin()).chain(more).collect();
+        with_art(d, vec![group])
+    };
+    plugin_change_draws_as_new(group(vec![]), ID, small.clone(), big.clone());
+    let feather = effect("stylize.feather", serde_json::json!({"radius": 2.0}));
+    plugin_change_draws_as_new(group(vec![feather]), ID, small.clone(), big.clone());
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((100.0, 50.0)) });
+    instance.appearance.effects.push(plugin());
+    plugin_change_draws_as_new(with_art(d, vec![instance]), ID, small.clone(), big.clone());
+    let mut d = Document::new(200.0, 100.0);
+    let style = CharStyle { size: 30.0, ..Default::default() };
+    let mut text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 60.0), "Hamburg", style))));
+    text.appearance.effects.push(plugin());
+    plugin_change_draws_as_new(with_art(d, vec![text]), ID, small, big);
+}
+
+/// Live objects follow the plug-ins installed: in the next frame, an envelope that distorts the
+/// appearance of a band with a plug-in effect, the same envelope without Distort Appearance, an
+/// envelope that distorts the appearance of an instance of a symbol whose art has a plug-in effect,
+/// and a blend of two squares with a plug-in effect are drawn as the plug-in installed again with
+/// another shape draws them.
+#[test]
+fn live_objects_follow_the_plugins_installed() {
+    let _fonts = fonts_steady();
+    use vectorcraft_geom::shapes::rectangle;
+    const ID: &str = "test.render.live";
+    let plugin = || effect(&format!("plugin.{ID}"), serde_json::json!({}));
+    let (small, big) = (Some(triangle(30.0, 40.0, 30.0)), Some(triangle(30.0, 40.0, 120.0)));
+    let black = |d: &mut Document, r: Rect| filled(d, rectangle(r), Paint::solid(Color::BLACK), vec![plugin()]);
+    let mut d = Document::new(200.0, 100.0);
+    let band = black(&mut d, Rect::new(20.0, 30.0, 180.0, 70.0));
+    let envelope = arc_envelope(&mut d, vec![band], true);
+    plugin_change_draws_as_new(with_art(d, vec![envelope]), ID, small.clone(), big.clone());
+    let mut d = Document::new(200.0, 100.0);
+    let band = black(&mut d, Rect::new(20.0, 30.0, 180.0, 70.0));
+    let envelope = arc_envelope(&mut d, vec![band], false);
+    plugin_change_draws_as_new(with_art(d, vec![envelope]), ID, small.clone(), big.clone());
+    // Symbol `Shaped` is a square with the plug-in effect.
+    let mut d = Document::new(200.0, 100.0);
+    let art = black(&mut d, Rect::new(-20.0, -20.0, 20.0, 20.0));
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((100.0, 50.0)) });
+    let envelope = arc_envelope(&mut d, vec![instance], true);
+    plugin_change_draws_as_new(with_art(d, vec![envelope]), ID, small.clone(), big.clone());
+    let mut d = Document::new(200.0, 100.0);
+    let keys = [Rect::new(20.0, 30.0, 40.0, 50.0), Rect::new(140.0, 30.0, 160.0, 50.0)].map(|r| Arc::new(black(&mut d, r)));
+    let spec = vectorcraft_doc::live::BlendSpec { spacing: vectorcraft_doc::live::BlendSpacing::Steps(3), ..Default::default() };
+    let blend = Node::new(d.alloc_id(), NodeKind::Blend { children: keys.to_vec(), spec: Box::new(spec) });
+    plugin_change_draws_as_new(with_art(d, vec![blend]), ID, small, big);
+}
+
+/// Pattern tiles and the rasters of raster effects follow the plug-ins installed when the art of a
+/// pattern or of a symbol has a plug-in effect: in the next frame, a band filled with such a
+/// pattern, the band with a drop shadow, and a group with a drop shadow around an instance of such
+/// a symbol are drawn as the plug-in installed again with another shape draws them.
+#[test]
+fn pattern_and_symbol_art_with_plugin_effects_follow_the_plugins_installed() {
+    let _fonts = fonts_steady();
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    use vectorcraft_geom::shapes::rectangle;
+    const ID: &str = "test.render.tiles";
+    let plugin = || effect(&format!("plugin.{ID}"), serde_json::json!({}));
+    // Pattern `Shaped` is a 10 × 10 square with the plug-in effect in a 20 × 20 tile, inside which
+    // the plug-in draws; a band of `d` is filled with it.
+    let band = |d: &mut Document, effects: Vec<vectorcraft_doc::Effect>| {
+        let square = filled(d, rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Paint::solid(Color::BLACK), vec![plugin()]);
+        let mut def = PatternDef::new("Shaped", vec![Arc::new(square)]);
+        def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+        d.patterns.push(def);
+        filled(d, rectangle(Rect::new(20.0, 20.0, 180.0, 80.0)), pattern_paint("Shaped"), effects)
+    };
+    let (small, big) = (Some(triangle(0.0, 0.0, 10.0)), Some(triangle(0.0, 0.0, 20.0)));
+    let mut d = Document::new(200.0, 100.0);
+    let n = band(&mut d, vec![]);
+    plugin_change_draws_as_new(with_art(d, vec![n]), ID, small.clone(), big.clone());
+    let mut d = Document::new(200.0, 100.0);
+    let n = band(&mut d, vec![drop_shadow()]);
+    plugin_change_draws_as_new(with_art(d, vec![n]), ID, small, big);
+    // Symbol `Shaped` is a square around the origin with the plug-in effect, which draws inside
+    // the instance's box, from (80, 30) to (120, 70).
+    let mut d = Document::new(200.0, 100.0);
+    let art = filled(&mut d, rectangle(Rect::new(-20.0, -20.0, 20.0, 20.0)), Paint::solid(Color::BLACK), vec![plugin()]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((100.0, 50.0)) });
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(instance)]);
+    group.appearance.effects.push(drop_shadow());
+    plugin_change_draws_as_new(with_art(d, vec![group]), ID, Some(triangle(82.0, 32.0, 10.0)), Some(triangle(82.0, 32.0, 30.0)));
+}
+
 fn effect(id: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
     vectorcraft_doc::Effect { id: id.into(), params, visible: true }
 }
