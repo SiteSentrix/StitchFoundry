@@ -3,7 +3,7 @@
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use super::data::Stream;
 use super::graphics::GState;
@@ -17,8 +17,93 @@ pub(crate) struct DictRef(Rc<RefCell<Dict>>);
 
 impl DictRef {
     pub fn new(d: Dict) -> Self {
-        Self(Rc::new(RefCell::new(d)))
+        let d = Rc::new(RefCell::new(d));
+        note(Made::Dict(Rc::downgrade(&d)));
+        Self(d)
     }
+}
+
+/// An array or a dictionary a program made.
+enum Made {
+    Array(Weak<RefCell<Vec<Obj>>>),
+    Dict(Weak<RefCell<Dict>>),
+}
+
+/// The arrays and dictionaries made on this thread since [`track`], for [`release_tracked`].
+struct Tracked {
+    owner: u64,
+    made: Vec<Made>,
+    /// The list is cleared of dropped objects when it reaches this length.
+    sweep_at: usize,
+}
+
+const SWEEP_MIN: usize = 4096;
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: the arrays of the list last released on this thread that were still alive after it
+    /// (the ones the interpreter itself still held).
+    pub(crate) static ARRAYS_LEFT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+thread_local! {
+    static TRACKED: RefCell<Option<Tracked>> = const { RefCell::new(None) };
+}
+
+/// Start listing the arrays and dictionaries made on this thread (an interpreter starting) → the
+/// list's owner, for [`release_tracked`]. A list already there is dropped: its objects are freed
+/// as before this existed, unless they hold each other.
+pub(crate) fn track() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let owner = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // (Nothing to list on when the thread is ending.)
+    let _ = TRACKED.try_with(|t| t.try_borrow_mut().map(|mut t| *t = Some(Tracked { owner, made: vec![], sweep_at: SWEEP_MIN })));
+    owner
+}
+
+fn note(m: Made) {
+    let _ = TRACKED.try_with(|t| {
+        let Ok(mut t) = t.try_borrow_mut() else { return };
+        let Some(t) = t.as_mut() else { return };
+        if t.made.len() >= t.sweep_at {
+            // Twice what is alive at most, so the list costs a program no more than its objects.
+            t.made.retain(|m| match m {
+                Made::Array(a) => a.strong_count() > 0,
+                Made::Dict(d) => d.strong_count() > 0,
+            });
+            t.sweep_at = (t.made.len() * 2).max(SWEEP_MIN);
+        }
+        t.made.push(m);
+    });
+}
+
+/// Empty every array and dictionary still alive of the list `owner` started (the interpreter is
+/// done with them), so those holding themselves or each other are freed too: reference counts
+/// alone never free `/a 1 array def a 0 a put`, and a program can leave as much of that behind as
+/// it may allocate, on every import (#1714).
+pub(crate) fn release_tracked(owner: u64) {
+    let made = TRACKED.try_with(|t| {
+        let mut t = t.try_borrow_mut().ok()?;
+        t.take_if(|t| t.owner == owner).map(|t| t.made)
+    });
+    let made = made.ok().flatten().unwrap_or_default();
+    #[cfg(test)]
+    let arrays: Vec<_> = made.iter().filter_map(|m| if let Made::Array(a) = m { Some(a.clone()) } else { None }).collect();
+    for m in made {
+        // What it holds is taken out first and dropped with nothing borrowed.
+        match m {
+            Made::Array(a) => {
+                let held = a.upgrade().and_then(|a| a.try_borrow_mut().ok().map(|mut values| std::mem::take(&mut *values)));
+                drop_held(held.unwrap_or_default().into_iter());
+            }
+            Made::Dict(d) => {
+                let held = d.upgrade().and_then(|d| d.try_borrow_mut().ok().map(|mut d| std::mem::take(&mut *d)));
+                drop_held(held.unwrap_or_default().into_values());
+            }
+        }
+    }
+    #[cfg(test)]
+    ARRAYS_LEFT.with(|n| n.set(arrays.iter().filter(|a| a.strong_count() > 0).count()));
 }
 
 impl std::ops::Deref for DictRef {
@@ -70,6 +155,8 @@ fn drop_held(held: impl Iterator<Item = Obj>) {
 pub(crate) trait Held: Sized {
     /// Drop the values of storage nothing refers to any more.
     fn release(_values: Vec<Self>) {}
+    /// Storage of these values was made.
+    fn made(_storage: &Rc<RefCell<Vec<Self>>>) {}
 }
 
 impl Held for u8 {}
@@ -77,6 +164,9 @@ impl Held for u8 {}
 impl Held for Obj {
     fn release(values: Vec<Self>) {
         drop_held(values.into_iter());
+    }
+    fn made(storage: &Rc<RefCell<Vec<Self>>>) {
+        note(Made::Array(Rc::downgrade(storage)));
     }
 }
 
@@ -219,7 +309,9 @@ impl<T: Held> Drop for Shared<T> {
 
 impl<T: Clone + Held> Shared<T> {
     pub fn new(v: Vec<T>) -> Self {
-        Self { len: v.len(), buf: Rc::new(RefCell::new(v)), at: 0 }
+        let (len, buf) = (v.len(), Rc::new(RefCell::new(v)));
+        T::made(&buf);
+        Self { len, buf, at: 0 }
     }
 
     pub fn len(&self) -> usize {
