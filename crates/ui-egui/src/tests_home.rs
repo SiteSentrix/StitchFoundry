@@ -282,6 +282,14 @@ fn make_a_design_guide_walks_from_words_to_saving() {
     for want in ["Step 1 / 6", "What would you like to make?", "A name or some words", "An appliqué", "A sample to try"] {
         has(&s, want);
     }
+    has(&s, "An in-the-hoop project");
+    // an in-the-hoop project: its list, then made in a hoop it fits, its steps named
+    (app.guide.what, app.guide.step) = (Some("ith"), Step::Details);
+    let s = guide_strings(&mut app);
+    has(&s, "Which project?");
+    has(&s, "Little pillow front, 8″ square");
+    crate::guide::make_it(&mut app, json!({"what": "ith", "project": "mug-rug", "text": "Hi"}));
+    assert_eq!(app.guide.step, Step::Colours, "{:?}", app.guide.error);
     (app.guide.what, app.guide.step) = (Some("words"), Step::Hoop);
     let s = guide_strings(&mut app);
     has(&s, "Which hoop will you use?");

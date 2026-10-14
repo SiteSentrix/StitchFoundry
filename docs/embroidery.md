@@ -12,6 +12,7 @@ the control channel, the CLI and the MCP server.
 - [Quick start](#quick-start)
 - [Make a Design](#make-a-design)
 - [Simple mode](#simple-mode)
+- [In-the-hoop projects](#in-the-hoop-projects)
 - [My Machine](#my-machine)
 - [Digitizing basics](#digitizing-basics)
 - [Stitch types](#stitch-types)
@@ -553,8 +554,8 @@ workspace and how much the Embroidery panel shows:
 Embroidery menu and the first button in simple mode) walks through a whole design in six steps,
 with Back to change an answer:
 
-1. **What would you like to make?** A name or some words, a shape, an appliqué, a picture, or a
-   sample to try.
+1. **What would you like to make?** A name or some words, a shape, an appliqué, a picture, an
+   in-the-hoop project (below), or a sample to try.
 2. **Which hoop will you use?** My Machine's hoops (or the usual ones); the design is made to fit
    it. A sample comes with its own hoop.
 3. **The words, the shape or the picture.** Words: what it should say and how tall the capital
@@ -612,6 +613,35 @@ a new design in **My Designs** (Documents/StitchFoundry Designs, or the `myDesig
 preference): "My design 1", "My design 2"…, or the name of the machine file it was opened from,
 which is never written over. Your Design shows where it went. Data Recovery's copies still cover
 a crash in between.
+
+## In-the-hoop projects
+
+An in-the-hoop project is sewn whole, or nearly, in the hoop: the machine stops at each step for
+you to lay, tape or trim fabric. **Make a Design › An in-the-hoop project** (or
+`embroidery.ith.make {project, hoop?, text?, shape?, height?, color?}`) makes one with your
+words and a shape in the middle, in the smallest of My Machine's hoops it fits, turned the right
+way round:
+
+- **Little pillow front, 8″ square** and **9½ × 5½″**: fronts for the little seasonal bench
+  pillows that sit on a small bench and change with the months (forms of those two sizes). The
+  hoop sews a panel as big as a 5×7-class hoop allows: a trim line, the design and a triple-stitch
+  frame. Border strips and an envelope back, cut to the sizes given, make up the rest on the
+  sewing machine.
+- **Mug rug**, **coaster** and **round ornament**: finished in the hoop. A placement line; batting
+  and top fabric tacked down; the design; the backing taped under the hoop and tacked on, with a
+  stop to trim the layers; a satin edge all round.
+
+Each step is its own thread, named for what to do ("Placement: lay batting, then top fabric over
+the line", "Backing: tape the backing fabric under the hoop", "Edge: satin all round"), so the
+machine stops between steps and its screen says what comes next. The supplies with their cut
+sizes (inches and millimetres, ¼″ seams) and the steps are kept as the design's notes, printed on
+its worksheet: in simple mode **Print the Steps…** under Your Design.
+
+**Designs you bought.** Your Design lists any design's steps, its threads in sewing order by the
+names the file gives them, so an in-the-hoop design from a kit reads as its steps; and Smaller or
+Bigger asks first on a design that stops for fabric (or carries a project's cut sizes), since a new
+size would no longer match fabric cut to size. Projects and wording here are our own; we don't
+copy any company's designs, files or instructions.
 
 ## Life size on screen
 

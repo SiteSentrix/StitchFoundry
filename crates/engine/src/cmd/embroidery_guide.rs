@@ -12,7 +12,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Make a Design",
         [],
         None,
-        "{what: words|shape|applique|picture|sample, hoop?: a hoop's name (My Machine's first), text?, height?: mm (words), shape?: Heart|Star|… (shape, applique), size?: mm (shape, applique), path? | name+dataBase64 (picture), colors?: 2-12 (picture, 6), sample?: heart-patch|sun-and-moon|applique-star} a new design made in one step: words or a shape in the middle of the hoop, an appliqué piece, a picture turned into stitches at most four fifths of the hoop, or a sample design → {what, ids, stitches, colors, widthMm, heightMm, fits}",
+        "{what: words|shape|applique|picture|sample|ith, project? (ith: embroidery.ith.projects), hoop?: a hoop's name (My Machine's first), text?, height?: mm (words), shape?: Heart|Star|… (shape, applique), size?: mm (shape, applique), path? | name+dataBase64 (picture), colors?: 2-12 (picture, 6), sample?: heart-patch|sun-and-moon|applique-star} a new design made in one step: words or a shape in the middle of the hoop, an appliqué piece, a picture turned into stitches at most four fifths of the hoop, or a sample design, or an in-the-hoop project (embroidery.ith.make) → {what, ids, stitches, colors, widthMm, heightMm, fits}",
         always,
         make_design
     )]
@@ -69,7 +69,17 @@ fn make_design(s: &mut Session, p: &Value) -> Result<Value> {
             let r = s.execute("embroidery.autoDigitize", &json!({ "colors": colors, "size": size, "keepImage": false }))?;
             vec![r["id"].clone()]
         }
-        other => return Err(bad(CMD, format!("`what` is words, shape, applique, picture or sample, not `{other}`"))),
+        "ith" => {
+            let mut q = json!({ "project": p.get("project").cloned().unwrap_or(Value::Null) });
+            for k in ["hoop", "text", "shape", "height"] {
+                if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+                    q[k] = v.clone();
+                }
+            }
+            s.execute("embroidery.ith.make", &q)?;
+            Vec::new()
+        }
+        other => return Err(bad(CMD, format!("`what` is words, shape, applique, picture, sample or ith, not `{other}`"))),
     };
     let info = s.execute("embroidery.info", &json!({}))?;
     Ok(json!({
@@ -115,6 +125,7 @@ mod tests {
             json!({"what": "applique", "shape": "Heart", "hoop": "Husqvarna 120 × 120"}),
             json!({"what": "picture", "name": "blocks.png", "dataBase64": png_base64(), "colors": 3}),
             json!({"what": "sample", "sample": "heart-patch"}),
+            json!({"what": "ith", "project": "coaster", "text": "Tea"}),
         ] {
             let r = s.execute("embroidery.makeDesign", &q).unwrap_or_else(|e| panic!("{q}: {e}"));
             assert!(r["stitches"].as_u64().unwrap() > 100, "{q}: {r}");
