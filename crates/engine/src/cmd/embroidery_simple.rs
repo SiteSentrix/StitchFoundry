@@ -98,7 +98,7 @@ fn sewn_size(s: &Session, id: u64) -> Option<(f64, f64)> {
             (x0, y0, x1, y1) = (x0.min(st.x), y0.min(st.y), x1.max(st.x), y1.max(st.y));
         }
     }
-    (x1 >= x0 && y1 >= y0).then(|| (x1 - x0, y1 - y0))
+    (x1 >= x0 && y1 >= y0).then_some((x1 - x0, y1 - y0))
 }
 
 fn add_shape(s: &mut Session, p: &Value) -> Result<Value> {
