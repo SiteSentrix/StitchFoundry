@@ -994,6 +994,13 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             out.actions.push(("ui.layerOptions".into(), json!({"ids": [n.id.0]})));
         }
     }
+    // Row menu: Collect for Export on this row (or every highlighted row when this is one of them).
+    let collect_ids: Vec<u64> = if view.rows.contains(&n.id) { view.rows.iter().map(|id| id.0).collect() } else { vec![n.id.0] };
+    resp.context_menu(|ui| {
+        collect_for_export_menu(ui, true, |multiple| {
+            out.actions.push(("assets.add".into(), json!({ "ids": collect_ids.clone(), "multiple": multiple })));
+        });
+    });
     // Dragging rows: the highlighted rows when this is one of them, else this row.
     if resp.drag_started() && view.column.is_none() {
         let ids = if view.rows.contains(&n.id) { view.rows.clone() } else { vec![n.id] };
@@ -1486,6 +1493,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some(("Merge Selected", "layer.merge", json!({}), rows.len() >= 2, false)),
         Some(("Flatten Artwork", "layer.flatten", json!({}), true, false)),
         Some(("Collect in New Layer", "layer.collectInNew", json!({}), !rows.is_empty() || has_sel, false)),
+        // Sentinel: rendered as Collect for Export › As Single / As Multiple (assets.add).
+        Some(("Collect for Export", "", json!({}), !targets.is_empty() || has_sel, false)),
         Some(("Release to Layers (Sequence)", "layer.releaseToLayers", json!({}), one_container, false)),
         Some(("Release to Layers (Build)", "layer.releaseToLayersBuild", json!({}), one_container, false)),
         Some(("Reverse Order", "layer.reverse", json!({}), rows.len() >= 2, false)),
@@ -1525,6 +1534,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => {
                 ui.separator();
             }
+            Some(("Collect for Export", _, _, enabled, _)) => {
+                collect_for_export_menu(ui, enabled, |multiple| {
+                    let mut p = json!({ "multiple": multiple });
+                    if !targets.is_empty() {
+                        p["ids"] = json!(targets.iter().map(|id| id.0).collect::<Vec<_>>());
+                    }
+                    app.run("assets.add", p).ok();
+                });
+            }
             Some((label, cmd, p, enabled, checked)) => {
                 if widgets::menu_item(ui, label, enabled, checked) {
                     app.run(cmd, p).ok();
@@ -1532,6 +1550,23 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
+}
+
+/// Collect for Export › As Single Asset / As Multiple Assets (`assets.add`).
+fn collect_for_export_menu(ui: &mut Ui, enabled: bool, mut run: impl FnMut(bool)) {
+    ui.add_enabled_ui(enabled, |ui| {
+        // English labels match the rest of this panel menu (and Object › Collect for Export).
+        ui.menu_button("Collect for Export", |ui| {
+            if widgets::menu_item(ui, "As Single Asset", true, false) {
+                run(false);
+                ui.close();
+            }
+            if widgets::menu_item(ui, "As Multiple Assets", true, false) {
+                run(true);
+                ui.close();
+            }
+        });
+    });
 }
 
 /// `ui.layersExpand {ids?, open?}`: open (or close) rows of the active document's Layers panel;
@@ -2500,6 +2535,7 @@ mod tests {
             "Merge Selected",
             "Flatten Artwork",
             "Collect in New Layer",
+            "Collect for Export",
             "Release to Layers (Sequence)",
             "Release to Layers (Build)",
             "Reverse Order",

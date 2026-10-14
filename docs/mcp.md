@@ -2766,13 +2766,14 @@ defaults); presets and remembered settings are preferences.
 
 ## Asset Export
 
-Assets are pieces of art collected for export on their own (Window › Asset Export, Object › Collect for Export, File ›
-Export Selection…).
+Assets are pieces of art collected for export on their own (Window › Asset Export, Object › Collect for Export, the
+Layers panel ≡ menu and row menu, File › Export Selection…).
 `assets.add {ids?, multiple?}` collects the selected objects (or `ids`): one asset per object, or with
-`multiple: false` one asset of them all, named after the object or `Asset 1`, `Asset 2`…; art already collected keeps
-its asset. Assets name their objects, so they follow edits: moving the art moves the crop, and deleting it
-removes it from its asset (an asset left with nothing goes). `assets.list` gives each asset's id, name, objects and
-crop (`bounds`); `assets.rename {asset, name}` and `assets.remove {assets}` are undo steps.
+`multiple: false` one asset of them all, named after the object or `Asset 1`, `Asset 2`…; a layer id collects the art
+under it (sublayers included). Art already collected keeps its asset. Assets name their objects, so they follow edits:
+moving the art moves the crop, and deleting it removes it from its asset (an asset left with nothing goes).
+`assets.list` gives each asset's id, name, objects and crop (`bounds`); `assets.rename {asset, name}` and
+`assets.remove {assets}` are undo steps.
 
 `assets.export {assets?, folder?, zip?}` writes each asset's art alone, cropped to it and named after it, in every
 format row of the document's export settings, the ones Export for Screens remembers (`document.exportSettings`); any
@@ -2783,9 +2784,12 @@ renderer measures for what the art draws, its effects included.
 
 ```json
 {"name":"run_command","arguments":{"command":"assets.add","params":{"multiple":true}}}
+{"name":"run_command","arguments":{"command":"assets.add","params":{"ids":[12],"multiple":true}}}
 {"name":"run_command","arguments":{"command":"assets.settings.set","params":{"formats":[{"format":"png","scale":"1x"},{"format":"png","scale":"2x"},{"format":"svg"}]}}}
 {"name":"run_command","arguments":{"command":"assets.export","params":{"zip":true}}}
 ```
+A layer id in `ids` (12 above) is the same as Collect for Export on that Layers row: every object under the layer
+becomes an asset (or one asset with `multiple: false`).
 
 ## CSS Properties
 
