@@ -832,6 +832,21 @@ impl<'a> Reader<'a> {
             _ => self.close(what, |k| matches!(k, Kind::Clip))?,
         };
         let Frame { kind, children: kids, gs, clips, hidden: opened_hidden, .. } = f;
+        // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
+        // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
+        if matches!(kind, Kind::Group)
+            && !clips.is_empty()
+            && clips.len() == kids.len()
+            && matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. }))
+        {
+            for kid in kids {
+                if let Some(parent) = self.frames.last_mut() {
+                    parent.clips.push(parent.children.len());
+                }
+                self.add(kid, opened_hidden || hidden)?;
+            }
+            return Ok(());
+        }
         // A compound path of clipping paths clips its clipping group.
         let clipping = matches!(kind, Kind::Compound) && !clips.is_empty();
         self.group_ended = !matches!(kind, Kind::Compound);
