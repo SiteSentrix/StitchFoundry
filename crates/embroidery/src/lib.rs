@@ -413,19 +413,32 @@ impl Planner {
                 _ => {
                     let thread = node_thread(n, e);
                     let name = n.name.clone().unwrap_or_else(|| e.stitch.label().to_string());
-                    let kinds = convert::convert(n, e);
-                    let count = kinds.len();
-                    kinds
+                    // a Multi Blend fill: one object per layer, each in its own thread
+                    let mut parts: Vec<(ObjectKind, Rgb, bool)> = Vec::new();
+                    for kind in convert::convert(n, e) {
+                        match &kind {
+                            ObjectKind::Fill(f) if !f.params.blend.is_empty() => {
+                                for (k, (params, layer)) in f.params.blend_layers().into_iter().enumerate() {
+                                    let color = layer.map_or(thread.color, |t| t.color);
+                                    parts.push((ObjectKind::Fill(sf_core::model::FillObject { params, ..f.clone() }), color, k == 0));
+                                }
+                            }
+                            _ => parts.push((kind, thread.color, true)),
+                        }
+                    }
+                    let count = parts.len();
+                    parts
                         .into_iter()
                         .enumerate()
-                        .map(|(k, kind)| {
+                        .map(|(k, (kind, color, lead))| {
                             // stable ids per node part (and copy) keep the stitch cache warm
                             let copy = (key.1 as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
                             let id: ObjectId = n.id.0.wrapping_mul(64).wrapping_add(k as u64) ^ copy;
                             let mut o = EmbObject::new(id, kind, 0);
                             o.name = name.clone();
-                            o.entry = e.entry.map(|p| p * MM_PER_PT);
-                            o.exit = e.exit.map(|p| p * MM_PER_PT);
+                            // a blend's later layers find their own way in and out
+                            o.entry = e.entry.filter(|_| lead).map(|p| p * MM_PER_PT);
+                            o.exit = e.exit.filter(|_| lead).map(|p| p * MM_PER_PT);
                             o.trim_after = e.trim_after;
                             o.tie_in = e.tie_in;
                             o.tie_off = e.tie_off;
@@ -433,7 +446,7 @@ impl Planner {
                             o.own_block = e.own_block && k == 0;
                             o.omit_last = e.omit_last && k + 1 == count;
                             // the palette index is resolved below; keep the thread colour
-                            o.color = usize::from(thread.color.r) << 16 | usize::from(thread.color.g) << 8 | usize::from(thread.color.b);
+                            o.color = usize::from(color.r) << 16 | usize::from(color.g) << 8 | usize::from(color.b);
                             o
                         })
                         .collect()
@@ -445,7 +458,11 @@ impl Planner {
                 let mut o = o.clone();
                 o.branch = branch;
                 let rgb = Rgb::new((o.color >> 16) as u8, (o.color >> 8) as u8, o.color as u8);
-                let thread = e.thread.clone().filter(|t| t.color == rgb).unwrap_or_else(|| Thread::new(rgb, rgb.to_hex()));
+                let blended = match &e.stitch {
+                    sf_core::attr::StitchType::Fill(f) => f.blend.iter().map(|l| &l.thread).find(|t| t.color == rgb).cloned(),
+                    _ => None,
+                };
+                let thread = e.thread.clone().filter(|t| t.color == rgb).or(blended).unwrap_or_else(|| Thread::new(rgb, rgb.to_hex()));
                 o.color = design.thread_index(&thread);
                 design.objects.push(o);
                 node_ids.push(n.id);

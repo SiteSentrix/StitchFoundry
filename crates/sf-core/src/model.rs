@@ -1680,6 +1680,42 @@ pub struct FillParams {
     /// evenly. Empty = `spacing` (graded to `spacing_end` when that is set).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub spacing_profile: Vec<[f64; 2]>,
+    /// Multi Blend (tatami): the fill sewn as stacked layers in these threads, one after the
+    /// other, each with its own spacing profile, so the colours blend across the rows in one
+    /// object. Underlay goes under the first layer only. Empty = one layer in the object's thread.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub blend: Vec<BlendLayer>,
+}
+
+/// One layer of a Multi Blend: its thread and how its rows are spaced across the fill.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BlendLayer {
+    pub thread: Thread,
+    /// As [`FillParams::spacing_profile`]: `[t, spacing]` points, 0 for no rows.
+    #[serde(default)]
+    pub spacing_profile: Vec<[f64; 2]>,
+}
+
+impl FillParams {
+    /// The fill as its Multi Blend layers, sewn in order, each with its thread colour: one
+    /// fill per layer with that layer's spacing profile, underlay under the first only. A fill
+    /// without a blend is one layer.
+    pub fn blend_layers(&self) -> Vec<(FillParams, Option<&Thread>)> {
+        if self.blend.is_empty() {
+            return vec![(self.clone(), None)];
+        }
+        self.blend
+            .iter()
+            .enumerate()
+            .map(|(k, layer)| {
+                let mut f = FillParams { blend: Vec::new(), spacing_profile: layer.spacing_profile.clone(), spacing_end: 0.0, ..self.clone() };
+                if k > 0 {
+                    f.underlay = FillUnderlay { edge_run: false, tatami: false, ..f.underlay.clone() };
+                }
+                (f, Some(&layer.thread))
+            })
+            .collect()
+    }
 }
 
 fn is_zero(n: &u32) -> bool {
@@ -1712,6 +1748,7 @@ impl Default for FillParams {
             warp: None,
             rings: 0,
             spacing_profile: Vec::new(),
+            blend: Vec::new(),
         }
     }
 }

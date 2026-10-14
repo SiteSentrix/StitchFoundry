@@ -5117,3 +5117,5 @@ machine	Stop	Arresto
 @msg	`level` is beginner, digitizer, business or all	`level` è beginner, digitizer, business o all
 	Echo Quilting	Trapuntatura a eco
 	Background Quilting	Trapuntatura di sfondo
+	Remove Blend	Rimuovi sfumatura
+	Blend layers	Strati di sfumatura

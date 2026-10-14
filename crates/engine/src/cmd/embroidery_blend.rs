@@ -1,6 +1,7 @@
-//! Colour blends (`embroidery.makeBlend`, Multi Blend): a tatami fill turned into stacked
-//! layers, one per colour, each densest across its own band and fading to nothing at the next
-//! colour's, so neighbouring colours blend across the rows.
+//! Colour blends (`embroidery.makeBlend`, Multi Blend): a tatami fill sewn as stacked layers,
+//! one per colour, each densest across its own band and fading to nothing at the next colour's,
+//! so neighbouring colours blend across the rows. The layers live in the one object
+//! (`FillParams::blend`), or with `separate` become objects of their own.
 
 use serde_json::{Value, json};
 use sf_core::attr::StitchType;
@@ -22,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Blend Colors",
         [],
         None,
-        "{colors: [\"#rrggbb\", …] (2 to 6, first to last across the rows), ids?, spacing?: mm (the densest rows; default the fill's)} turn each selected tatami fill into stacked layers, one per colour, each densest across its own band and fading to nothing at the next colour's, so the colours blend across the rows (turn the fill's angle to turn the blend) → {ids}",
+        "{colors: [\"#rrggbb\", …] (2 to 6, first to last across the rows), ids?, spacing?: mm (the densest rows; default the fill's), separate?: bool (false: the layers stay in the one object, its blend: setParams blend [] takes it out; true: one object per layer)} sew each selected tatami fill as stacked layers, one per colour, each densest across its own band and fading to nothing at the next colour's, so the colours blend across the rows (turn the fill's angle to turn the blend) → {ids}",
         has_selection,
         make_blend
     )]
@@ -58,6 +59,10 @@ fn make_blend(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
         Some(v) => Some(v.as_f64().filter(|v| (0.2..=5.0).contains(v)).ok_or_else(|| bad(CMD, "`spacing` is 0.2 to 5 mm"))?),
     };
+    let separate = match p.get("separate") {
+        None => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad(CMD, "`separate` is true or false"))?,
+    };
     let d = &s.doc()?.doc;
     let ids: Vec<NodeId> = super::embroidery::stitched_targets(s, p)?.into_iter().filter(|id| tatami(d, *id)).collect();
     if ids.is_empty() {
@@ -72,6 +77,29 @@ fn make_blend(s: &mut Session, p: &Value) -> Result<Value> {
         })
         .collect();
     let n = threads.len();
+    if !separate {
+        // one object: the layers are its blend, its thread and colour the first's
+        s.edit("Blend Colors", |d, sel| {
+            for id in &ids {
+                let node = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+                let Some(e) = node.embroidery.as_deref_mut() else { continue };
+                let StitchType::Fill(f) = &mut e.stitch else { continue };
+                let dense = spacing.unwrap_or(f.spacing).clamp(0.2, 5.0);
+                f.blend = threads
+                    .iter()
+                    .enumerate()
+                    .map(|(k, (thread, _))| sf_core::model::BlendLayer { thread: thread.clone(), spacing_profile: layer_profile(k, n, dense) })
+                    .collect();
+                if let Some((thread, color)) = threads.first() {
+                    e.thread = Some(thread.clone());
+                    node.appearance.set_fill(Paint::solid(*color));
+                }
+            }
+            sel.set(ids.iter().copied());
+            Ok(())
+        })?;
+        return Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
+    }
     let made = s.edit("Blend Colors", |d, sel| {
         let mut made = Vec::new();
         for id in &ids {

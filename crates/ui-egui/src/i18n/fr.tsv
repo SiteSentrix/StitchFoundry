@@ -5125,3 +5125,5 @@ machine	Stop	Arrêt
 @msg	`level` is beginner, digitizer, business or all	`level` vaut beginner, digitizer, business ou all
 	Echo Quilting	Matelassage en écho
 	Background Quilting	Matelassage de fond
+	Remove Blend	Retirer le fondu
+	Blend layers	Couches de fondu

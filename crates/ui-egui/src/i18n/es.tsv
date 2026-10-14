@@ -5115,3 +5115,5 @@ machine	Stop	Parada
 @msg	`level` is beginner, digitizer, business or all	`level` es beginner, digitizer, business o all
 	Echo Quilting	Acolchado en eco
 	Background Quilting	Acolchado de fondo
+	Remove Blend	Quitar fusión
+	Blend layers	Capas de fusión

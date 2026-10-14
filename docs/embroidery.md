@@ -220,7 +220,11 @@ any profile (`spacing_profile: [[t, spacing], …]`, 0 for no rows). **Make Blen
 picked in *Blend into*) turns the fill into stacked layers, one per colour, each densest across
 its own band and fading to nothing at the next colour's, so the thread colours mix across the
 rows; the layers together sew about as much as the fill did, and only the first keeps the
-underlay. `embroidery.makeBlend` takes up to six colours. Turn the fill's angle to turn the blend.
+underlay. The layers stay in the one object (Multi Blend): select it, move it or reshape it and
+every layer follows, each sewn in its own thread one after the other; *Blend layers* in the panel
+shows their colours and **Remove Blend** sews it plain again (`setParams {blend: []}`).
+`embroidery.makeBlend` takes up to six colours, and `separate: true` makes the layers objects of
+their own instead. Turn the fill's angle to turn the blend.
 
 **Outlines and borders:** **Embroidery › Add Outline** sews an outline round the selected
 stitched shapes, lines and type, after them and in the top one's thread: a **Satin Outline** or
@@ -1418,7 +1422,7 @@ tool list for all parameters):
 | `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif (built-in or the design's) as a path sewn in a single run |
 | `embroidery.motif.make {name?, ids?}`, `embroidery.motif.apply {name, ids?}`, `embroidery.motif.list`, `embroidery.motif.delete {name}` | the design's own motifs: made from the selected path, sewn by the selected runs and fills (paths not stitched yet become motif runs or fills), listed with how many objects sew each, removed |
 | `embroidery.addLaydown {ids?, margin?, spacing?, angle?}` | an open fill sewn first under the selected shapes and type (pile fabrics) |
-| `embroidery.makeBlend {colors, ids?, spacing?}` | a tatami fill as stacked layers blending 2 to 6 thread colours across its rows |
+| `embroidery.makeBlend {colors, ids?, spacing?, separate?}` | a tatami fill as stacked layers blending 2 to 6 thread colours across its rows, in the one object (or one object per layer) |
 | `embroidery.addOutline {ids?, shape?, offset?, stitch?, width?, motif?}` | a stitched outline or border round the selected shapes, lines and type |
 | `embroidery.placeRing {stitch?, diameter?, width?, at?}` | a satin, filled or bean ring |
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
