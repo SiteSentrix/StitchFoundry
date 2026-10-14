@@ -55,7 +55,17 @@ pub fn drag_area(ui: &Ui, rect: Rect) {
         toggle_maximize(ctx);
     } else if resp.drag_started_by(PointerButton::Primary) && ctx.data(|d| d.get_temp(resp.id).unwrap_or(false)) {
         ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+        handed_to_os(ctx);
     }
+}
+
+/// The window manager runs the move or resize from here, and on X11 and Wayland it keeps the
+/// button release: egui would hold the drag and the button until the next press, and that press
+/// would start no drag on the bar or a resize zone (emilk/egui#7959). End both now. On Windows
+/// winit hands the release back, which then ends nothing.
+fn handed_to_os(ctx: &egui::Context) {
+    ctx.stop_dragging();
+    ctx.input_mut(|i| i.pointer = Default::default());
 }
 
 /// Minimize, Maximize/Restore and Close at the right end of `bar` (the app bar's outer rect), full
@@ -154,6 +164,7 @@ pub fn resize_zones(ui: &mut Ui) {
         let resp = zui.interact(r, Id::new(("titlebar-resize", i)), Sense::drag()).on_hover_cursor(cursor);
         if resp.drag_started_by(PointerButton::Primary) {
             ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
+            handed_to_os(&ctx);
         }
     }
 }
@@ -362,5 +373,34 @@ mod tests {
         assert!(!cmds.iter().any(|c| matches!(c, ViewportCommand::BeginResize(_))), "{cmds:?}");
         assert!(w.click(pos2(999.5, 0.5)).is_empty());
         assert_eq!(w.app.ui.status, "quit");
+    }
+
+    #[test]
+    fn a_move_or_resize_the_window_manager_finished_does_not_block_the_next_resize() {
+        use ResizeDirection::*;
+        fn sent(mut out: egui::FullOutput) -> Vec<ViewportCommand> {
+            out.viewport_output.remove(&ViewportId::ROOT).map(|v| v.commands).unwrap_or_default()
+        }
+        // After BeginResize or StartDrag the window manager owns the pointer and, on X11 and
+        // Wayland, keeps the release: the app sees the press and the pointer leaving, nothing else.
+        fn handed_off(w: &mut Win, path: &[Pos2]) -> Vec<ViewportCommand> {
+            let mut events = vec![vec![Event::PointerMoved(path[0])], vec![button(path[0], true)]];
+            events.extend(path[1..].iter().map(|p| vec![Event::PointerMoved(*p)]));
+            events.push(vec![Event::PointerGone]);
+            events.into_iter().flat_map(|e| sent(w.frame(e))).collect()
+        }
+        let (zone, out) = (pos2(1.0, 300.0), pos2(-39.0, 300.0));
+        let mut w = Win::new(1440.0);
+        w.frame(vec![]);
+        assert_eq!(handed_off(&mut w, &[zone]), vec![ViewportCommand::BeginResize(West)]);
+        assert_eq!(w.gesture(&[zone, out]), vec![ViewportCommand::BeginResize(West)], "the next resize");
+        let (empty, moved) = (pos2(700.0, 16.0), pos2(712.0, 20.0));
+        assert_eq!(handed_off(&mut w, &[empty, moved]), vec![ViewportCommand::StartDrag]);
+        assert_eq!(w.gesture(&[zone, out]), vec![ViewportCommand::BeginResize(West)], "a resize after a move");
+        // Windows hands the release back: it ends nothing, and a click right after it stays a single one.
+        assert_eq!(handed_off(&mut w, &[empty, moved]), vec![ViewportCommand::StartDrag]);
+        let mut cmds = sent(w.frame(vec![button(moved, false)]));
+        cmds.extend(w.click(moved));
+        assert!(cmds.is_empty(), "{cmds:?}");
     }
 }
