@@ -5097,3 +5097,4 @@ machine	Stop	Parada
 	Screen points per inch	Puntos de pantalla por pulgada
 	Use This Size	Usar este tamaño
 	Screen Points per Inch at Life Size	Puntos de pantalla por pulgada a tamaño real
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` es un número de 40 a 400

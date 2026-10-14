@@ -5124,3 +5124,4 @@ machine	Stop	Zastavení
 	Screen points per inch	Bodů obrazovky na palec
 	Use This Size	Použít tuto velikost
 	Screen Points per Inch at Life Size	Bodů obrazovky na palec ve skutečné velikosti
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` je číslo od 40 do 400

@@ -5093,3 +5093,4 @@ machine	Stop	停止
 	Screen points per inch	画面ポイント/インチ
 	Use This Size	このサイズを使用
 	Screen Points per Inch at Life Size	実寸時の画面ポイント/インチ
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` は 40～400 の数値です

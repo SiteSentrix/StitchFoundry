@@ -5095,3 +5095,4 @@ machine	Stop	Остановка
 	Screen points per inch	Точек экрана на дюйм
 	Use This Size	Использовать этот размер
 	Screen Points per Inch at Life Size	Точек экрана на дюйм в натуральную величину
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` — число от 40 до 400

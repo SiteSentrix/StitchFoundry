@@ -4673,3 +4673,4 @@ machine	Stop	停止
 	Screen points per inch	每英寸屏幕点数
 	Use This Size	使用此尺寸
 	Screen Points per Inch at Life Size	实物尺寸时的每英寸屏幕点数
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` 是 40 到 400 之间的数字
