@@ -964,6 +964,8 @@ impl VectorcraftApp {
     }
 }
 
+/// Returns the milliseconds since the Unix epoch, or in the web build the milliseconds since the
+/// first call, read from the page's `performance.now()`.
 pub fn now_ms() -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -972,7 +974,10 @@ pub fn now_ms() -> f64 {
     }
     #[cfg(target_arch = "wasm32")]
     {
-        0.0
+        use std::sync::LazyLock;
+        use web_time::Instant;
+        static START: LazyLock<Instant> = LazyLock::new(Instant::now);
+        START.elapsed().as_secs_f64() * 1000.0
     }
 }
 
