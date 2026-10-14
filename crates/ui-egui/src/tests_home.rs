@@ -170,3 +170,51 @@ fn home_starts_embroidery_designs_by_hoop_with_samples_steps_and_a_tip() {
     app.run("help.show", json!({"topic": "machine-files"})).unwrap();
     assert!(app.ui.help.open && app.ui.help.topic == "machine-files");
 }
+
+/// The texts one frame of the Embroidery panel draws.
+fn panel_texts(app: &mut VectorcraftApp) -> Vec<String> {
+    fn collect(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|x| collect(x, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 4000.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| crate::embroidery::panel::show(app, ui));
+    out.textures_delta.clear();
+    let mut texts = Vec::new();
+    out.shapes.iter().for_each(|c| collect(&c.shape, &mut texts));
+    texts
+}
+
+/// NEW-34: an experience level switches to its workspace and sets which sections the Embroidery
+/// panel shows: a beginner the everyday ones, a digitizer every digitizing tool, a business all.
+#[test]
+fn experience_levels_choose_the_workspace_and_the_panel_sections() {
+    let mut app = app_with_doc();
+    let has = |texts: &[String], s: &str| texts.iter().any(|t| t == s);
+    let all = panel_texts(&mut app);
+    assert!(has(&all, "Job Orders") && has(&all, "Font Creator") && has(&all, "Team Names"), "{all:?}");
+    app.run("window.experience", json!({"level": "beginner"})).unwrap();
+    assert_eq!(app.ui.workspace, crate::workspaces::EMBROIDERY_BASICS);
+    assert!(!app.ui.toolbar_advanced && app.ui.open_panel.as_deref() == Some("embroidery"));
+    assert_eq!(crate::menus::checked(&app, "window.experience", &json!({"level": "beginner"})), Some(true));
+    let basic = panel_texts(&mut app);
+    for gone in ["Job Orders", "Batch Output", "Font Creator", "Team Names", "Buttonholes", "Exports"] {
+        assert!(!has(&basic, gone), "{gone} shown to a beginner");
+    }
+    assert!(has(&basic, "Design Library") && has(&basic, "Send to Machine") && has(&basic, "Showing the basics."), "{basic:?}");
+    app.run("window.experience", json!({"level": "digitizer"})).unwrap();
+    assert_eq!(app.ui.workspace, crate::workspaces::DIGITIZING);
+    let dig = panel_texts(&mut app);
+    assert!(has(&dig, "Font Creator") && has(&dig, "Buttonholes") && !has(&dig, "Job Orders") && !has(&dig, "Batch Output"));
+    app.run("window.experience", json!({"level": "business"})).unwrap();
+    assert_eq!(app.ui.workspace, crate::workspaces::EMBROIDERY_BUSINESS);
+    assert!(has(&panel_texts(&mut app), "Job Orders"));
+    app.run("window.experience", json!({"level": "all"})).unwrap();
+    assert_eq!(app.ui.workspace, crate::workspaces::ESSENTIALS);
+    assert!(app.run("window.experience", json!({"level": "expert"})).is_err());
+}

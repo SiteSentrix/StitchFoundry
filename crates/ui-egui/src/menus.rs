@@ -526,6 +526,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     ("window.workspace", "Workspace", "", "{name} switch workspace (Essentials, Essentials Classic, Painting, …)"),
     ("window.workspace.reset", "Reset Essentials", "", "{} reset the current workspace"),
+    (
+        "window.experience",
+        "Experience",
+        "",
+        "{level: beginner|digitizer|business|all} how much the embroidery tools show, and the workspace for it: beginner the basic tools and the Embroidery panel's everyday sections (Embroidery Basics), digitizer every digitizing tool (Digitizing), business everything with orders and batches (Embroidery Business), all everything (Essentials) → {level, workspace}",
+    ),
     ("window.workspace.new", "New Workspace…", "", "{name?} save the current layout"),
     ("window.workspace.manage", "Manage Workspaces…", "", "{}"),
     ("window.workspace.delete", "Delete Workspace", "", "{name}"),
@@ -1794,6 +1800,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         }
         "window.collapseDock" => app.ui.dock_collapsed,
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
+        "window.experience" => p.get("level").and_then(Value::as_str) == Some(app.ui.experience.id()),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
         "view.slices.lock" => app.session.slices_locked(),
         "object.slice.clipToArtboard" => app.session.active().is_some_and(|d| d.doc.slices_clip_to_artboard),
@@ -2849,6 +2856,15 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("New Window", "window.newWindow"),
                 sub("Arrange", vec![todo("Cascade"), todo("Tile"), todo("Float in Window"), todo("Consolidate All Windows")]),
                 sub("Workspace", crate::workspaces::menu_items()),
+                sub(
+                    "Experience",
+                    vec![
+                        cp("New to Embroidery", "window.experience", json!({"level": "beginner"})),
+                        cp("Digitizer", "window.experience", json!({"level": "digitizer"})),
+                        cp("Embroidery Business", "window.experience", json!({"level": "business"})),
+                        cp("Everything", "window.experience", json!({"level": "all"})),
+                    ],
+                ),
                 Sep,
                 c("Control", "window.control"),
                 c("Contextual Task Bar", "window.taskBar"),

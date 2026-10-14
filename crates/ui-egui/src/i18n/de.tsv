@@ -5054,3 +5054,18 @@ machine	Stop	Stopp
 	Use This Size	Diese Größe verwenden
 	Screen Points per Inch at Life Size	Bildschirmpunkte pro Zoll bei echter Größe
 @msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` ist eine Zahl von 40 bis 400
+	Experience	Erfahrung
+	New to Embroidery	Neu im Sticken
+	Digitizer	Digitalisierer
+	Embroidery Business	Stickerei-Betrieb
+	Everything	Alles
+	Showing the basics.	Nur die Grundlagen werden angezeigt.
+	Show everything	Alles anzeigen
+	New to embroidery	Neu im Sticken
+	I digitize designs	Ich digitalisiere Stickmuster
+	I run an embroidery business	Ich führe eine Stickerei
+	The basic tools and everyday sections, nothing more	Die Grundwerkzeuge und alltäglichen Bereiche, nicht mehr
+	Every digitizing tool, rulers and the control bar	Alle Digitalisierwerkzeuge, Lineale und das Steuerungsbedienfeld
+	Everything, with job orders and batch output	Alles, mit Aufträgen und Stapelausgabe
+	How do you work?	Wie arbeiten Sie?
+@msg	`level` is beginner, digitizer, business or all	`level` ist beginner, digitizer, business oder all

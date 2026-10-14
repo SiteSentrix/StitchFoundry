@@ -5080,3 +5080,18 @@ machine	Stop	Зупинка
 	Use This Size	Використати цей розмір
 	Screen Points per Inch at Life Size	Точок екрана на дюйм у натуральну величину
 @msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` — число від 40 до 400
+	Experience	Досвід
+	New to Embroidery	Новачок у вишивці
+	Digitizer	Дигітайзер
+	Embroidery Business	Вишивальний бізнес
+	Everything	Усе
+	Showing the basics.	Показано лише основи.
+	Show everything	Показати все
+	New to embroidery	Новачок у вишивці
+	I digitize designs	Я оцифровую дизайни
+	I run an embroidery business	У мене вишивальний бізнес
+	The basic tools and everyday sections, nothing more	Основні інструменти та повсякденні розділи, нічого зайвого
+	Every digitizing tool, rulers and the control bar	Усі інструменти оцифрування, лінійки й панель керування
+	Everything, with job orders and batch output	Усе, разом із замовленнями та пакетним виводом
+	How do you work?	Як ви працюєте?
+@msg	`level` is beginner, digitizer, business or all	`level` — beginner, digitizer, business або all

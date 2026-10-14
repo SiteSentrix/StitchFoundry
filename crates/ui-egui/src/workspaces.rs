@@ -51,6 +51,10 @@ impl Default for Workspace {
 }
 
 pub const ESSENTIALS: &str = "Essentials";
+/// The workspaces Window › Experience switches to (NEW-34).
+pub const EMBROIDERY_BASICS: &str = "Embroidery Basics";
+pub const DIGITIZING: &str = "Digitizing";
+pub const EMBROIDERY_BUSINESS: &str = "Embroidery Business";
 
 /// Built-in workspaces, in Illustrator's menu order (Essentials first).
 pub fn builtins() -> Vec<Workspace> {
@@ -62,6 +66,25 @@ pub fn builtins() -> Vec<Workspace> {
     };
     vec![
         w(ESSENTIALS, &|_| {}),
+        // the basic tools and the Embroidery panel, nothing more
+        w(EMBROIDERY_BASICS, &|x| {
+            x.control_bar = false;
+            x.rulers = false;
+            x.toolbar_advanced = false;
+            x.open_panel = Some("embroidery".into());
+        }),
+        w(DIGITIZING, &|x| {
+            x.control_bar = true;
+            x.rulers = true;
+            x.toolbar_advanced = true;
+            x.dock_tab = DockTab::Layers;
+            x.open_panel = Some("embroidery".into());
+        }),
+        w(EMBROIDERY_BUSINESS, &|x| {
+            x.control_bar = true;
+            x.toolbar_advanced = true;
+            x.open_panel = Some("embroidery".into());
+        }),
         w("Essentials Classic", &|x| {
             x.control_bar = true;
             x.rulers = true;
@@ -303,6 +326,16 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 Ok(json!({"workspace": w.name}))
             }
             None => Err(format!("unknown workspace (one of {})", names(&app.ui).join(", "))),
+        },
+        "window.experience" => match s("level").as_deref().and_then(crate::state::Experience::from_id) {
+            Some(e) => {
+                app.ui.experience = e;
+                if let Some(w) = find(&app.ui, e.workspace()) {
+                    apply(&mut app.ui, &w);
+                }
+                Ok(json!({"level": e.id(), "workspace": app.ui.workspace}))
+            }
+            None => Err("`level` is beginner, digitizer, business or all".into()),
         },
         "window.workspace.reset" => {
             let w = find(&app.ui, &app.ui.workspace.clone()).unwrap_or_default();

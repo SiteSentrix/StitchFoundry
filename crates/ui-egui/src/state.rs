@@ -100,6 +100,58 @@ pub fn all_panels() -> impl Iterator<Item = (&'static str, &'static str)> {
     tabs.chain(ICON_PANELS.iter().map(|&(id, label, _)| (id, label)))
 }
 
+/// How someone works, which sets how much the embroidery tools show (Window › Experience):
+/// everything until one is chosen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Experience {
+    #[default]
+    All,
+    /// New to embroidery: the basic tools, the Embroidery panel's everyday sections.
+    Beginner,
+    /// Digitizes designs: every digitizing tool, no order and batch sections.
+    Digitizer,
+    /// Runs an embroidery business: everything, orders and batches included.
+    Business,
+}
+
+impl Experience {
+    pub const ALL: [Experience; 4] = [Experience::Beginner, Experience::Digitizer, Experience::Business, Experience::All];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Experience::All => "all",
+            Experience::Beginner => "beginner",
+            Experience::Digitizer => "digitizer",
+            Experience::Business => "business",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Experience> {
+        Experience::ALL.into_iter().find(|e| e.id().eq_ignore_ascii_case(id.trim()))
+    }
+
+    /// The built-in workspace it switches to.
+    pub fn workspace(self) -> &'static str {
+        match self {
+            Experience::All => crate::workspaces::ESSENTIALS,
+            Experience::Beginner => crate::workspaces::EMBROIDERY_BASICS,
+            Experience::Digitizer => crate::workspaces::DIGITIZING,
+            Experience::Business => crate::workspaces::EMBROIDERY_BUSINESS,
+        }
+    }
+
+    /// The Embroidery panel's sections for the tools a beginner doesn't need yet.
+    pub fn advanced(self) -> bool {
+        self != Experience::Beginner
+    }
+
+    /// The Embroidery panel's order and batch sections.
+    pub fn business(self) -> bool {
+        matches!(self, Experience::All | Experience::Business)
+    }
+}
+
 /// Panels that live as collapsed icons in the dock (Essentials Classic).
 pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("color", "Color", "palette"),
@@ -347,6 +399,9 @@ pub struct UiState {
     /// Current workspace (Window → Workspace).
     #[serde(default = "default_workspace")]
     pub workspace: String,
+    /// How much the embroidery tools show (Window › Experience, the Home screen).
+    #[serde(default)]
+    pub experience: Experience,
     /// User-saved workspaces (New Workspace…).
     #[serde(default)]
     pub custom_workspaces: Vec<crate::workspaces::Workspace>,
@@ -644,6 +699,7 @@ impl Default for UiState {
             shortcut_overrides: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),
+            experience: Experience::default(),
             custom_workspaces: vec![],
             recent_files: vec![],
             recent_fonts: vec![],

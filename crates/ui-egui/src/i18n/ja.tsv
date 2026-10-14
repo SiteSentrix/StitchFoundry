@@ -5094,3 +5094,18 @@ machine	Stop	停止
 	Use This Size	このサイズを使用
 	Screen Points per Inch at Life Size	実寸時の画面ポイント/インチ
 @msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` は 40～400 の数値です
+	Experience	経験
+	New to Embroidery	刺繍は初めて
+	Digitizer	デジタイザー
+	Embroidery Business	刺繍ビジネス
+	Everything	すべて
+	Showing the basics.	基本のみを表示しています。
+	Show everything	すべて表示
+	New to embroidery	刺繍は初めて
+	I digitize designs	デザインをデジタイズする
+	I run an embroidery business	刺繍のビジネスをしている
+	The basic tools and everyday sections, nothing more	基本ツールと日常的なセクションだけ
+	Every digitizing tool, rulers and the control bar	すべてのデジタイズツール、定規、コントロールバー
+	Everything, with job orders and batch output	すべて（ジョブオーダーとバッチ出力を含む）
+	How do you work?	どのように使いますか？
+@msg	`level` is beginner, digitizer, business or all	`level` は beginner、digitizer、business、all のいずれかです

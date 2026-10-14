@@ -5108,3 +5108,18 @@ machine	Stop	Arrêt
 	Use This Size	Utiliser cette taille
 	Screen Points per Inch at Life Size	Points d’écran par pouce en taille réelle
 @msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` est un nombre de 40 à 400
+	Experience	Expérience
+	New to Embroidery	Débutant en broderie
+	Digitizer	Numériseur
+	Embroidery Business	Atelier de broderie
+	Everything	Tout
+	Showing the basics.	Seules les bases sont affichées.
+	Show everything	Tout afficher
+	New to embroidery	Débutant en broderie
+	I digitize designs	Je numérise des motifs
+	I run an embroidery business	Je dirige un atelier de broderie
+	The basic tools and everyday sections, nothing more	Les outils de base et les sections courantes, rien de plus
+	Every digitizing tool, rulers and the control bar	Tous les outils de numérisation, les règles et la barre de contrôle
+	Everything, with job orders and batch output	Tout, avec les commandes et la sortie par lots
+	How do you work?	Comment travaillez-vous ?
+@msg	`level` is beginner, digitizer, business or all	`level` vaut beginner, digitizer, business ou all

@@ -5098,3 +5098,18 @@ machine	Stop	Parada
 	Use This Size	Usar este tamaño
 	Screen Points per Inch at Life Size	Puntos de pantalla por pulgada a tamaño real
 @msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` es un número de 40 a 400
+	Experience	Experiencia
+	New to Embroidery	Nuevo en bordado
+	Digitizer	Digitalizador
+	Embroidery Business	Negocio de bordado
+	Everything	Todo
+	Showing the basics.	Se muestran los conceptos básicos.
+	Show everything	Mostrar todo
+	New to embroidery	Nuevo en bordado
+	I digitize designs	Digitalizo diseños
+	I run an embroidery business	Tengo un negocio de bordado
+	The basic tools and everyday sections, nothing more	Las herramientas básicas y las secciones de uso diario, nada más
+	Every digitizing tool, rulers and the control bar	Todas las herramientas de digitalización, reglas y la barra de control
+	Everything, with job orders and batch output	Todo, con pedidos y salida por lotes
+	How do you work?	¿Cómo trabaja?
+@msg	`level` is beginner, digitizer, business or all	`level` es beginner, digitizer, business o all

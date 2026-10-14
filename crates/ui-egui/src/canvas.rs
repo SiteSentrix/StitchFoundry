@@ -1876,6 +1876,8 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
             app.run("file.open", json!({})).ok();
         }
     });
+    ui.add_space(14.0);
+    experience_row(app, ui, &t);
     recent(app, ui);
     ui.add_space(24.0);
     ui.label(egui::RichText::new(tl!("Start a design for your hoop")).font(theme::semibold(14.0)).color(t.text));
@@ -1940,6 +1942,29 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     crate::community::links(app, ui);
+}
+
+/// How do you work? (Window › Experience): each level a button, the chosen one lit; it sets how
+/// much the embroidery tools show and the workspace for it.
+fn experience_row(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
+    use crate::state::Experience;
+    let levels = [
+        (Experience::Beginner, tl!("New to embroidery"), tl!("The basic tools and everyday sections, nothing more")),
+        (Experience::Digitizer, tl!("I digitize designs"), tl!("Every digitizing tool, rulers and the control bar")),
+        (Experience::Business, tl!("I run an embroidery business"), tl!("Everything, with job orders and batch output")),
+    ];
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new(tl!("How do you work?")).font(theme::semibold(13.0)).color(t.text));
+        ui.add_space(6.0);
+        for (level, label, hint) in levels {
+            if ui.selectable_label(app.ui.experience == level, label).on_hover_text(hint).clicked() {
+                app.run("window.experience", json!({ "level": level.id() })).ok();
+            }
+        }
+        if app.ui.experience != Experience::All && ui.link(tl!("Show everything")).clicked() {
+            app.run("window.experience", json!({ "level": "all" })).ok();
+        }
+    });
 }
 
 /// The hoops the Home screen offers a new design for: label, hoop name, width × height (mm).
