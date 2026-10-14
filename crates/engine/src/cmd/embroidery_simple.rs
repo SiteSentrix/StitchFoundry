@@ -74,7 +74,7 @@ fn add_words(s: &mut Session, p: &Value) -> Result<Value> {
     centre(s, id, r.center())?;
     s.execute("select.set", &json!({ "ids": [id] }))?;
     s.execute("embroidery.set", &json!({ "type": "satin" }))?;
-    s.execute("embroidery.setThread", &json!({ "color": color, "ids": [id] }))?;
+    s.execute("embroidery.setThread", &json!({ "color": color, "name": "Words", "ids": [id] }))?;
     // the type's frame is taller than its letters: size by the stitches the letters sew
     if let Some((_, ink)) = sewn_size(s, id).filter(|(_, h)| *h > 0.5) {
         let f = height / ink;
