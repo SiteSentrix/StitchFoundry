@@ -1,12 +1,16 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use craft_pdf::syntax::object::{Dict, Stream};
+use std::collections::HashMap;
+
+use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
 use craft_pdf::syntax::page::Page;
+use craft_pdf::syntax::xref::XRef;
 use craft_pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
+use crate::import_color::direct;
 use crate::{Choice, CropTo, ImportOptions, PdfError};
 
 /// What `info` tells about one page.
@@ -33,63 +37,114 @@ pub fn is_postscript(bytes: &[u8]) -> bool {
     bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
 }
 
-/// The application's preflight threshold for arrays and dictionaries in raw or decoded PDF
-/// content. Preserve this 256-level diagnostic guard independently of the shared parser's
-/// 128-level direct-container cap; passing this preflight does not guarantee the reader accepts
-/// every shallower object.
-const MAX_OBJECT_NESTING: usize = 256;
+/// The application's stricter refusal policy for functions and colour spaces built on one
+/// another (a function stitching functions together, an indexed space on an alternate).
+/// The shared interpreter also has function depth and node budgets; this preflight rejects
+/// cyclic or excessively linked objects before interpretation. Files usually have two or three.
+const MAX_LINKS: usize = 16;
 
-fn too_deep() -> PdfError {
-    PdfError::Parse(format!("its arrays and dictionaries are nested more than {MAX_OBJECT_NESTING} deep"))
+/// The application's calculator-procedure depth policy, layered over the shared reader's limits.
+const MAX_PROCEDURES: usize = 64;
+
+/// What the function or colour space `o` is built on: the functions a stitching function joins;
+/// the base, alternate and tint of a colour space; the alternate of a colour profile. Nothing for
+/// any other object.
+fn links<'a>(o: &Object<'a>, xref: &'a XRef) -> Vec<MaybeRef<Object<'a>>> {
+    const SPACES: [&[u8]; 6] = [b"Indexed", b"I", b"Separation", b"DeviceN", b"Pattern", b"ICCBased"];
+    if let Object::Array(a) = o {
+        let mut items = a.raw_iter();
+        let kind = match items.next() {
+            Some(MaybeRef::NotRef(Object::Name(n))) => Some(n),
+            Some(MaybeRef::Ref(r)) => xref.get::<Name<'a>>(r.into()),
+            _ => None,
+        };
+        return if kind.is_some_and(|n| SPACES.contains(&n.as_ref())) { items.collect() } else { vec![] };
+    }
+    let Some((d, _)) = dict_or_stream(o) else { return vec![] };
+    let functions = d.get::<Array<'a>>(b"Functions").map(|a| a.raw_iter().collect::<Vec<_>>()).unwrap_or_default();
+    functions.into_iter().chain(d.get_raw::<Object<'a>>(b"Alternate")).collect()
 }
 
-/// Do the arrays and dictionaries in the text of `pdf` nest deeper than [`MAX_OBJECT_NESTING`]?
-/// Read as tokens (strings and comments hold none), an object at a time. The data of a stream
-/// with a filter is skipped: it isn't PDF text until decoded, which this doesn't do, so nesting
-/// inside compressed streams is not seen here.
-fn nests_too_deep(pdf: &[u8]) -> bool {
-    let after =
-        |from: usize, what: &[u8]| pdf.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at + what.len());
-    let word = |at: usize, w: &[u8]| pdf.get(at..).is_some_and(|rest| rest.starts_with(w));
-    let (mut depth, mut filtered) = (0usize, false);
-    let mut i = 0;
-    while let Some(&c) = pdf.get(i) {
-        i += 1;
+/// How many of its kind the function or colour space `o` is built on, one on the next (0 for any
+/// other object); `None` past `room`, or when it is built on itself. `known`: the objects looked
+/// at so far (`None` while one is being looked at, too). One `None` refuses the file, so that an
+/// object is `None` only for the room there was where it was first met doesn't matter.
+fn built_on<'a>(o: MaybeRef<Object<'a>>, xref: &'a XRef, known: &mut HashMap<ObjectIdentifier, Option<usize>>, room: usize) -> Option<usize> {
+    let (id, o) = match o {
+        MaybeRef::Ref(r) => {
+            let id = ObjectIdentifier::from(r);
+            if let Some(found) = known.get(&id) {
+                return *found;
+            }
+            let Some(o) = xref.get::<Object<'a>>(id) else { return Some(0) };
+            known.insert(id, None);
+            (Some(id), o)
+        }
+        MaybeRef::NotRef(o) => (None, o),
+    };
+    let links = links(&o, xref);
+    let most = match room.checked_sub(1) {
+        _ if links.is_empty() => Some(0),
+        Some(room) => links.into_iter().try_fold(0, |most, on| built_on(on, xref, known, room).map(|n| most.max(n + 1))),
+        None => None,
+    };
+    // (What it is built on may be known already, and deeper than there is room for here.)
+    let most = most.filter(|n| *n <= room);
+    if let Some(id) = id {
+        known.insert(id, most);
+    }
+    most
+}
+
+/// Is `o` a calculator function whose procedures nest deeper than [`MAX_PROCEDURES`]?
+fn procedures_too_deep(o: &Object<'_>) -> bool {
+    let Object::Stream(s) = o else { return false };
+    if s.dict().get::<u8>(b"FunctionType") != Some(4) {
+        return false;
+    }
+    let Ok(program) = s.decoded() else { return false };
+    let mut depth = 0usize;
+    program.iter().any(|c| {
         match c {
-            b'%' => i += pdf.get(i..).and_then(|rest| rest.iter().position(|c| matches!(c, b'\n' | b'\r'))).unwrap_or(pdf.len()),
-            b'(' => {
-                // A string: parentheses nest in it, a backslash takes the next byte.
-                let mut open = 1usize;
-                while open > 0 {
-                    match pdf.get(i) {
-                        None => return false,
-                        Some(b'\\') => i += 1,
-                        Some(b'(') => open += 1,
-                        Some(b')') => open -= 1,
-                        Some(_) => {}
-                    }
-                    i += 1;
-                }
-            }
-            b'[' => depth += 1,
-            b']' => depth = depth.saturating_sub(1),
-            b'<' if pdf.get(i) == Some(&b'<') => (depth, i) = (depth + 1, i + 1),
-            b'>' if pdf.get(i) == Some(&b'>') => (depth, i) = (depth.saturating_sub(1), i + 1),
-            // A string in hexadecimal.
-            b'<' => i = after(i, b">").unwrap_or(pdf.len()),
-            b'/' if word(i - 1, b"/Filter") => filtered = true,
-            b'e' if word(i - 1, b"endobj") => (depth, filtered) = (0, false),
-            b'e' if word(i - 1, b"endstream") => i += 8,
-            b's' if word(i - 1, b"stream") => {
-                depth = 0;
-                if std::mem::take(&mut filtered) {
-                    i = after(i, b"endstream").unwrap_or(pdf.len());
-                }
-            }
+            b'{' => depth += 1,
+            b'}' => depth = depth.saturating_sub(1),
             _ => {}
         }
-        if depth > MAX_OBJECT_NESTING {
+        depth > MAX_PROCEDURES
+    })
+}
+
+/// The error of a file with a stream the reader would fail on ([`crate::streams`]).
+const STREAM_NOTE: &str = "a stream in it would decode to more than 256 MB, or its decode parameters can't be applied";
+
+/// The error of a file [`nests_without_end`].
+const NESTED_NOTE: &str = "its functions or colour spaces are built on one another without end";
+
+/// Why `pdf` is refused, if it is: a stream the reader would fail on (its own checks come first:
+/// the calculator functions are decoded below), or [`nests_without_end`].
+fn hostile(pdf: &Pdf) -> Option<&'static str> {
+    if pdf.objects().into_iter().any(|o| matches!(&o, Object::Stream(s) if crate::streams::unsafe_stream(s))) {
+        return Some(STREAM_NOTE);
+    }
+    nests_without_end(pdf).then_some(NESTED_NOTE)
+}
+
+/// Does `pdf` hold functions or colour spaces built on one another past [`MAX_LINKS`] (or on
+/// themselves), or a calculator function nested past [`MAX_PROCEDURES`]? Every object is looked
+/// at, wherever it is used from: the interpreter builds them from resources, shadings, images,
+/// patterns, masks and graphics states alike.
+fn nests_without_end(pdf: &Pdf) -> bool {
+    let xref = pdf.xref();
+    let mut known = HashMap::new();
+    // The objects of the file, then what each holds directly (64 deep at most: the reader's cap).
+    let mut pending: Vec<Object<'_>> = pdf.objects().into_iter().collect();
+    while let Some(o) = pending.pop() {
+        if procedures_too_deep(&o) || built_on(MaybeRef::NotRef(o.clone()), xref, &mut known, MAX_LINKS).is_none() {
             return true;
+        }
+        match &o {
+            Object::Array(a) => pending.extend(a.raw_iter().filter_map(direct)),
+            _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| d.entries()).filter_map(|(_, v)| direct(v))),
         }
     }
     false
@@ -97,6 +152,14 @@ fn nests_too_deep(pdf: &[u8]) -> bool {
 
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
 /// password opens a file too.
+///
+/// What a hostile file nests or loops is the shared reader's to refuse (it reads arrays and
+/// dictionaries 64 deep and no deeper, wherever they are: the file's text, an object stream, the
+/// content of a page, form, pattern or glyph; and follows a page tree or a chain of object streams
+/// once). What it reads beyond that is left out, as an object it can't read. The application also
+/// rejects overly linked functions and colour spaces, oversized streams and unsupported
+/// predictors before interpretation ([`hostile`], [`crate::streams`]), retaining its stricter
+/// refusal policy alongside the shared backend's bounded decoding and construction.
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
     open_with_options(bytes, password, &open_options())
 }
@@ -111,8 +174,8 @@ pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
     }
-    if nests_too_deep(bytes) {
-        return Err(too_deep());
+    if crate::streams::unsafe_file_streams(bytes) {
+        return Err(PdfError::Parse(STREAM_NOTE.into()));
     }
     let password = password.unwrap_or_default();
     let read = |pw: &str| craft_pdf::open_slice_with_options(bytes, Some(pw), options);
@@ -132,118 +195,12 @@ pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &
             craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
             e => PdfError::Parse(e.to_string()),
         })
-}
-
-/// The error of a page whose decoded operands nest too deeply. Read the same content as the
-/// scanner and interpreter: bare Flate streams can exceed an ordinary materialization limit.
-pub(crate) fn content_too_deep(page: &Page<'_>) -> Result<(), PdfError> {
-    const WINDOW: usize = 64 << 10;
-    let mut content = page.content_reader();
-    let mut window = Vec::new();
-    window.try_reserve_exact(WINDOW).map_err(|_| crate::import_scan::incomplete_content())?;
-    let mut nesting = ContentNesting::default();
-    loop {
-        window.clear();
-        if content.read_into(&mut window, WINDOW) == 0 {
-            break;
-        }
-        if nesting.feed(&window) {
-            return Err(too_deep());
-        }
-    }
-    if content.truncated() {
-        return Err(crate::import_scan::incomplete_content());
-    }
-    Ok(())
-}
-
-#[derive(Clone, Copy, Default)]
-enum ContentToken {
-    #[default]
-    Normal,
-    Comment,
-    Literal {
-        depth: usize,
-        escaped: bool,
-    },
-    Hex,
-    Less,
-    Greater,
-}
-
-/// Only lexical nesting is needed before the recursive operand parser runs. Keep state across
-/// content windows and streams, including a dictionary delimiter split between the two bytes.
-#[derive(Default)]
-struct ContentNesting {
-    depth: usize,
-    token: ContentToken,
-}
-
-impl ContentNesting {
-    fn feed(&mut self, bytes: &[u8]) -> bool {
-        for &byte in bytes {
-            match self.token {
-                ContentToken::Comment => {
-                    if matches!(byte, b'\r' | b'\n') {
-                        self.token = ContentToken::Normal;
-                    }
-                    continue;
-                }
-                ContentToken::Literal { mut depth, escaped } => {
-                    if escaped {
-                        self.token = ContentToken::Literal { depth, escaped: false };
-                    } else if byte == b'\\' {
-                        self.token = ContentToken::Literal { depth, escaped: true };
-                    } else {
-                        if byte == b'(' {
-                            depth = depth.saturating_add(1);
-                        } else if byte == b')' {
-                            depth = depth.saturating_sub(1);
-                        }
-                        self.token = if depth == 0 { ContentToken::Normal } else { ContentToken::Literal { depth, escaped: false } };
-                    }
-                    continue;
-                }
-                ContentToken::Hex => {
-                    if byte == b'>' {
-                        self.token = ContentToken::Normal;
-                    }
-                    continue;
-                }
-                ContentToken::Less => {
-                    self.token = if byte == b'<' || byte == b'>' { ContentToken::Normal } else { ContentToken::Hex };
-                    if byte == b'<' {
-                        self.depth = self.depth.saturating_add(1);
-                        if self.depth > MAX_OBJECT_NESTING {
-                            return true;
-                        }
-                    }
-                    continue;
-                }
-                ContentToken::Greater => {
-                    self.token = ContentToken::Normal;
-                    if byte == b'>' {
-                        self.depth = self.depth.saturating_sub(1);
-                        continue;
-                    }
-                }
-                ContentToken::Normal => {}
-            }
-            match byte {
-                b'%' => self.token = ContentToken::Comment,
-                b'(' => self.token = ContentToken::Literal { depth: 1, escaped: false },
-                b'<' => self.token = ContentToken::Less,
-                b'>' => self.token = ContentToken::Greater,
-                b'[' => self.depth = self.depth.saturating_add(1),
-                b']' => self.depth = self.depth.saturating_sub(1),
-                _ => {}
-            }
-            if self.depth > MAX_OBJECT_NESTING {
-                return true;
-            }
-        }
-        false
-    }
+        // Twice: looking at every object makes the reader repair a damaged table of objects (once
+        // only), and the objects are other ones after that.
+        .and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
+            Some(why) => Err(PdfError::Parse(why.into())),
+            None => Ok(pdf),
+        })
 }
 
 /// The pages and their boxes. An encrypted PDF needs its `password`
@@ -403,38 +360,4 @@ fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
             })
     }
     page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, prefixes, 0))
-}
-
-#[cfg(test)]
-mod content_depth_tests {
-    use super::{ContentNesting, MAX_OBJECT_NESTING, nests_too_deep};
-
-    #[test]
-    fn lexical_nesting_survives_every_two_piece_split() {
-        let n = MAX_OBJECT_NESTING;
-        let cases = [
-            (format!("{}0{}", "[".repeat(n), "]".repeat(n)), false),
-            (format!("{}0{}", "[".repeat(n + 1), "]".repeat(n + 1)), true),
-            (format!("{}0{}", "<< /A ".repeat(n), ">> ".repeat(n)), false),
-            (format!("{}0{}", "<< /A ".repeat(n + 1), ">> ".repeat(n + 1)), true),
-            (format!("% {}\r\n[0]", "[<<".repeat(n + 1)), false),
-            (format!("% {}\r{}0{}", "[<<".repeat(n + 1), "[".repeat(n + 1), "]".repeat(n + 1)), true),
-            (format!("({}\\({}\\) (nested) \\\\) [0]", "[<<".repeat(n + 1), ">>]".repeat(n + 1)), false),
-            (format!("<{}> [0]", "3c3c5b".repeat(n + 1)), false),
-            (format!("<> {}0{}", "[".repeat(n + 1), "]".repeat(n + 1)), true),
-        ];
-        for (text, expected) in cases {
-            let bytes = text.as_bytes();
-            assert_eq!(nests_too_deep(bytes), expected, "raw guard agreement");
-            for split in 0..=bytes.len() {
-                let (first, last) = bytes.split_at(split);
-                let mut nesting = ContentNesting::default();
-                assert_eq!(nesting.feed(first) || nesting.feed(last), expected, "split={split}");
-            }
-            for size in [1, 2, 3, 7, 31, 64] {
-                let mut nesting = ContentNesting::default();
-                assert_eq!(bytes.chunks(size).any(|part| nesting.feed(part)), expected, "chunk={size}");
-            }
-        }
-    }
 }

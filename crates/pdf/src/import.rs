@@ -148,13 +148,24 @@ pub const PAST_PAGE_NOTE: &str = "art reaching past the page was clipped to it, 
 
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
-    import_with_reader_options(bytes, opts, &crate::pages::open_options())
+    // The interpreter draws forms, patterns, glyphs and masks inside one another by recursion, in
+    // large stack frames: it caps that (50 deep), and gets room for the cap whatever thread asks.
+    vectorcraft_doc::depth::with_deep_stack(|| read(bytes, opts))
 }
 
+/// [`import_with_report`] on the thread that asks.
+pub(crate) fn read(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
+    read_with_reader_options(bytes, opts, &crate::pages::open_options())
+}
+
+#[cfg(test)]
 pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+    vectorcraft_doc::depth::with_deep_stack(|| read_with_reader_options(bytes, opts, reader))
+}
+
+fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open_with_options(bytes, opts.password.as_deref(), reader)?;
     let picked = crate::pages::picked(opts, original.pages().len())?;
-    picked.iter().filter_map(|&n| original.pages().get(n)).try_for_each(crate::pages::content_too_deep)?;
     let mut ocgs = Ocgs::read(&original);
     let route = opts.layers && !ocgs.list.is_empty();
     // Content that is off imports as hidden layers: an update of the file turns every group on
@@ -181,7 +192,6 @@ pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, rea
     let all_on = turned_on.is_some();
     let pdf = turned_on.unwrap_or(original);
     let pages = pdf.pages();
-    picked.iter().filter_map(|&n| pages.get(n)).try_for_each(crate::pages::content_too_deep)?;
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink2 = sink.clone();
@@ -1374,7 +1384,11 @@ impl<'p> Builder<'p> {
             Some(art) => {
                 let [r, g, b, _] = m.background_color().to_rgba().components();
                 let backdrop = luminance(&Color::rgb(r, g, b));
-                let inverted = m.transfer_function().is_some_and(|tf| tf.apply(0.0) > tf.apply(1.0));
+                let inverted = m.transfer_function().is_some_and(|tf| {
+                    let mut ends = [0, 255];
+                    tf.apply_to(&mut ends);
+                    ends[0] > ends[1]
+                });
                 let id = self.id();
                 mask_spec(art, m.mask_type() == MaskType::Alpha, backdrop, inverted, page, |all| Node::group(id, all))
             }

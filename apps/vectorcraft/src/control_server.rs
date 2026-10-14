@@ -29,6 +29,21 @@ pub const MAX_CONNECTIONS: usize = 16;
 /// Size in bytes of the buffer that [`write_line`] writes a reply line through.
 const REPLY_CHUNK: usize = 64 * 1024;
 
+/// How long a request waits for the app's reply.
+const REPLY_WAIT: Duration = Duration::from_secs(60);
+
+/// The reply to a request the app didn't answer in [`REPLY_WAIT`]. One it had not started is
+/// withdrawn, so it never runs after its caller was told it failed; one it is running can't be
+/// stopped, and the reply says its outcome isn't known.
+fn timed_out(ticket: &vectorcraft_ui_egui::ControlTicket) -> Value {
+    let error = if ticket.give_up() {
+        "timeout: the app did not start the request in time; it was withdrawn and will not run"
+    } else {
+        "timeout: the app is still running the request; it may yet complete"
+    };
+    json!({"ok": false, "error": error})
+}
+
 #[derive(Clone, Copy)]
 struct ConnectionTimeouts {
     idle: Duration,
@@ -106,9 +121,10 @@ fn spawn_connection(
         let _slot = slot;
         serve_socket(stream, timeouts, |method, params| {
             let (req, rrx) = ControlRequest::new(method, params);
+            let ticket = req.ticket();
             tx.send(req).ok()?;
             ctx.request_repaint();
-            Some(rrx.recv_timeout(Duration::from_secs(60)).unwrap_or_else(|_| json!({"ok": false, "error": "timeout"})))
+            Some(rrx.recv_timeout(REPLY_WAIT).unwrap_or_else(|_| timed_out(&ticket)))
         });
     })
 }
@@ -453,6 +469,19 @@ mod tests {
             })
             .collect();
         json!({"ok": true, "result": {"layers": [{"children": paths, "id": 1, "kind": "Layer", "name": "Layer 1"}]}})
+    }
+
+    /// #1725: a request its caller gave up before the app took it never runs; one the app took
+    /// first can't be withdrawn, and the timeout says so.
+    #[test]
+    fn a_timed_out_request_is_withdrawn_unless_it_started() {
+        let (waiting, _rx) = ControlRequest::new("engine.execute", json!({}));
+        assert!(timed_out(&waiting.ticket())["error"].as_str().unwrap().contains("will not run"));
+        assert!(!waiting.claim(), "the app skips a withdrawn request");
+        let (running, _rx) = ControlRequest::new("engine.execute", json!({}));
+        assert!(running.claim());
+        assert!(timed_out(&running.ticket())["error"].as_str().unwrap().contains("still running"));
+        assert!(!running.claim(), "a request is taken once");
     }
 
     #[test]

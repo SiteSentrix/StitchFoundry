@@ -105,10 +105,17 @@ fn decode(r: &mut Reader, bitmap: ObjId, crop: (u32, u32, u32, u32), world: Affi
         return Ok(None);
     }
     let (w, h) = (x1 - x0, y1 - y0);
-    if u64::from(w) * u64::from(h) > MAX_PIXELS {
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels > MAX_PIXELS {
         r.warn("pixel layers larger than 64 megapixels");
         return Ok(None);
     }
+    // Before anything is allocated: a layer's tiles can be flat colour, with nothing to extract.
+    let Some(left) = r.pixels_left.checked_sub(pixels) else {
+        r.warn("pixel layers beyond the pixels one document may hold");
+        return Ok(None);
+    };
+    r.pixels_left = left;
     let format = s.enumeration(bitmap, b"Frmt").map(|(f, _)| f);
     let (channels, bps) = match format {
         Some(0) => (4, 1),
@@ -402,6 +409,41 @@ mod tests {
             assert_eq!(&pixels[..4], &[0, 0, 0, 0]);
             assert_eq!(&pixels[6 * 4..7 * 4], &[200, 10, 30, 255]);
         }
+    }
+
+    /// Pixel layers of one flat colour: nothing in the archive but `doc.dat` (state 2 is a tile
+    /// of 0xFF). Written by hand for the reader, like [`fixture`].
+    fn flat_layers(count: u32, side: i32) -> Vec<u8> {
+        let layer = |i: u32| {
+            let mut bitmap = vec![(tag(b"Frmt"), F::Enum(0, 0)), (tag(b"BmpW"), F::I32(side)), (tag(b"BmpH"), F::I32(side))];
+            for c in 1..=4 {
+                bitmap.push((tag(&super::tag(b"TWi", c)), F::I32(1)));
+                bitmap.push((tag(&super::tag(b"THi", c)), F::I32(1)));
+                bitmap.push((tag(&super::tag(b"Sta", c)), F::U8s(vec![2])));
+            }
+            F::Def(10 + i, vec![tag(b"Rstr")], vec![(tag(b"Bitm"), F::Obj(tag(b"DyBm"), bitmap))])
+        };
+        let spread = F::Def(1, vec![tag(b"Sprd")], vec![(tag(b"Chld"), F::Shared((0..count).map(layer).collect()))]);
+        let doc = synth::stream(&[(tag(b"DocR"), F::Obj(tag(b"DocN"), vec![(tag(b"Chld"), F::Shared(vec![spread]))]))]);
+        synth::container(&[("doc.dat", &doc, Method::Zlib)], None)
+    }
+
+    /// #1704: the pixels of all pixel layers together are bounded, also when the archive holds
+    /// no data for them: the layers past the allowance are left out with a note.
+    #[test]
+    fn pixel_layers_share_one_allowance_for_the_whole_document() {
+        let file = flat_layers(5, 16);
+        let layers = |pixels: u64| {
+            let doc = crate::model::read_within(&file, crate::Limits::default(), pixels).unwrap();
+            let n = doc.spreads[0].nodes.iter().filter(|n| matches!(n.kind, Kind::Image(_))).count();
+            (n, doc.warnings)
+        };
+        assert_eq!(layers(5 * 256), (5, vec![]));
+        let (kept, warnings) = layers(3 * 256 + 255);
+        assert_eq!(kept, 3);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("pixel layers beyond the pixels one document may hold"), "{warnings:?}");
+        assert_eq!(crate::read(&file, crate::Limits::default()).unwrap().spreads[0].nodes.len(), 5);
     }
 
     #[test]

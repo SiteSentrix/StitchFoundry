@@ -19,6 +19,23 @@ pub(super) fn read(body: &str) -> crate::Imported {
     import(&eps(body)).unwrap()
 }
 
+/// #1714: arrays and dictionaries a program links into themselves or each other are freed with
+/// the interpreter, also the ones it no longer reaches and when it stops on an error.
+#[test]
+fn arrays_and_dictionaries_holding_themselves_are_freed() {
+    // The arrays still alive once a program's interpreter has released what it made: the ones
+    // the interpreter itself holds, the same for every program here.
+    let left = |program: &str| {
+        let _ = import(&eps(program));
+        crate::import::obj::ARRAYS_LEFT.with(std::cell::Cell::get)
+    };
+    let plain = left("/a 1 array def /b 1 array def a 0 b put");
+    let cycles = "/a 1 array def a 0 a put         /b 1 array def /c 1 array def b 0 c put c 0 b put         /d 1 dict def /e 1 array def d /e e put e 0 d put         1 array dup 0 1 index put pop         /a null def /b null def";
+    for program in [cycles.to_string(), format!("{cycles} 1 0 div"), format!("{cycles} /p {{ p }} def")] {
+        assert_eq!(left(&program), plain, "{program}");
+    }
+}
+
 /// The objects of the document's layer.
 pub(super) fn objects(d: &Document) -> Vec<Arc<Node>> {
     d.layers[0].children().unwrap().clone()

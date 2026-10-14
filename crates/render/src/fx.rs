@@ -366,6 +366,29 @@ fn linear_key(view: Affine) -> [u64; 4] {
     [c[0].to_bits(), c[1].to_bits(), c[2].to_bits(), c[3].to_bits()]
 }
 
+/// The raster a shadow or glow blurred by `blur` device pixels is filtered in, for content
+/// reaching `reach` (device pixels) in a view of `screen` pixels: (left, top, width, height,
+/// scale). It covers what of the reach can show in the view, the blur's spread around it
+/// included, at `scale` raster pixels a device pixel: 1, or less to stay within
+/// [`PIXEL_BUDGET`]. At a high zoom the spread of a wide blur is tens of thousands of pixels a
+/// side, whatever the size of the view (#1706). `None`: nothing to draw.
+fn filter_region(reach: Rect, screen: (u16, u16), blur: f64) -> Option<(f64, f64, u16, u16, f64)> {
+    // 3σ of the Gaussian (σ = blur / 2) in pixels, plus a pixel of antialiasing.
+    let spread = blur.max(0.0) * 1.5 + 2.0;
+    let screen = Rect::new(0.0, 0.0, f64::from(screen.0), f64::from(screen.1)).inflate(spread, spread);
+    let r = reach.inflate(spread, spread).intersect(screen);
+    let (x0, y0) = (r.x0.floor(), r.y0.floor());
+    let (rw, rh) = (r.x1.ceil() - x0, r.y1.ceil() - y0);
+    // (Also false for a reach or a blur that isn't a number.)
+    if !(rw >= 1.0 && rh >= 1.0 && rw.is_finite() && rh.is_finite()) {
+        return None;
+    }
+    let side = f64::from(u16::MAX);
+    let k = (PIXEL_BUDGET / (rw * rh)).sqrt().min(side / rw).min(side / rh).min(1.0);
+    let (w, h) = ((rw * k).floor().clamp(1.0, side), (rh * k).floor().clamp(1.0, side));
+    Some((x0, y0, w as u16, h as u16, k))
+}
+
 /// Draw `image` with its top-left at (`x`, `y`) device pixels, `1 / k` device pixels a pixel.
 fn draw_scaled(ctx: &mut RenderContext, image: std::sync::Arc<vello_cpu::Pixmap>, (x, y): (f64, f64), k: f64) {
     let (w, h) = (image.width() as f64, image.height() as f64);
@@ -509,7 +532,8 @@ impl Drawn {
 /// objects in it ([`Reads::of`]): which parts of [`Inputs`] can change what its rasters show.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Reads {
-    /// Pattern paints: the pattern definitions.
+    /// Pattern paints: the pattern definitions. Their art can hold anything, so content painted
+    /// with a pattern reads everything else too.
     patterns: bool,
     /// Symbol instances and type with inline graphics: the symbols' art. Symbol art can hold
     /// anything, so content that shows a symbol reads everything else too.
@@ -527,12 +551,23 @@ pub(crate) struct Reads {
 impl Reads {
     /// What the content of `n` reads.
     pub(crate) fn of(n: &Node) -> Self {
+        Self::of_all(std::iter::once(n))
+    }
+
+    /// What the content of `nodes` reads together. A pattern's art can hold anything, as a
+    /// symbol's can, so content painted with a pattern reads everything else too (#1723).
+    pub(crate) fn of_all<'a>(nodes: impl Iterator<Item = &'a Node>) -> Self {
         let mut reads = Self::default();
-        reads.add(n);
-        if reads.symbols {
+        nodes.for_each(|n| reads.add(n));
+        if reads.symbols || reads.patterns {
             return Self { patterns: true, symbols: true, images: true, brushes: true, text: true };
         }
         reads
+    }
+
+    /// Does the content read anything outside its own nodes?
+    pub(crate) fn any(self) -> bool {
+        self != Self::default()
     }
 
     fn add(&mut self, n: &Node) {
@@ -1365,18 +1400,9 @@ impl Renderer {
         if !f.mt {
             return self.inside_layer(|r| draw(r, ctx, f, composite));
         }
-        // 3σ of the Gaussian (σ = blur / 2) in pixels, plus a pixel of antialiasing.
-        let spread = blur.max(0.0) * 1.5 / f.px + 2.0;
-        let screen = Rect::new(0.0, 0.0, ctx.width() as f64, ctx.height() as f64).inflate(spread, spread);
-        let r = f.view.transform_rect_bbox(reach).inflate(spread, spread).intersect(screen);
-        let (x0, y0) = (r.x0.floor(), r.y0.floor());
-        let (w, h) = ((r.x1.ceil() - x0).min(u16::MAX as f64), (r.y1.ceil() - y0).min(u16::MAX as f64));
-        if w < 1.0 || h < 1.0 {
-            return;
-        }
-        let (w, h) = (w as u16, h as u16);
+        let Some((x0, y0, w, h, k)) = filter_region(f.view.transform_rect_bbox(reach), (ctx.width(), ctx.height()), blur / f.px) else { return };
         let mut off = f.offscreen_context(w, h);
-        let shifted = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
+        let shifted = Frame { mt: false, view: Affine::scale(k) * Affine::translate((-x0, -y0)) * f.view, px: f.px / k, ..*f };
         self.inside_layer(|r| draw(r, &mut off, &shifted, None));
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
@@ -1386,7 +1412,12 @@ impl Renderer {
             ctx.set_transform(Affine::IDENTITY);
             ctx.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
         }
-        crate::group::draw_pixmap(ctx, std::sync::Arc::new(pm), (x0, y0));
+        if k < 1.0 {
+            draw_scaled(ctx, std::sync::Arc::new(pm), (x0, y0), k);
+            ctx.set_transform(Affine::IDENTITY);
+        } else {
+            crate::group::draw_pixmap(ctx, std::sync::Arc::new(pm), (x0, y0));
+        }
         if layered {
             ctx.pop_layer();
         }
@@ -1482,8 +1513,27 @@ mod tests {
     use vectorcraft_doc::{Appearance, Document, Effect, Node};
     use vectorcraft_geom::{Affine, Rect, shapes};
 
-    use super::Drawn;
+    use super::{Drawn, PIXEL_BUDGET, filter_region};
     use crate::{RenderOptions, Rendered, Renderer};
+
+    /// #1706: the raster a shadow or glow is filtered in stays within the pixel budget however
+    /// far the blur spreads at the zoom (it was up to 65535 pixels a side: 16 GB).
+    #[test]
+    fn a_wide_blur_at_a_high_zoom_is_filtered_within_the_pixel_budget() {
+        // A 100 pt square at 3200 % and at 6400 %, blurred by 1000 pt, in a 1600 × 1000 view.
+        for zoom in [32.0, 64.0] {
+            let reach = Rect::new(0.0, 0.0, 100.0 * zoom, 100.0 * zoom);
+            let (x0, y0, w, h, k) = filter_region(reach, (1600, 1000), 1000.0 * zoom).unwrap();
+            assert!(f64::from(w) * f64::from(h) <= PIXEL_BUDGET, "{w} × {h}");
+            assert!(k < 1.0 && x0 < 0.0 && y0 < 0.0);
+            // It still covers the view and the blur's spread around it, at that scale.
+            assert!(f64::from(w) / k >= 1600.0 + 1500.0 * zoom && f64::from(h) / k >= 1000.0 + 1500.0 * zoom);
+        }
+        // A small blur is filtered at full size, cropped to what can show.
+        assert_eq!(filter_region(Rect::new(10.0, 20.0, 110.0, 70.0), (1600, 1000), 4.0), Some((2.0, 12.0, 116, 66, 1.0)));
+        assert_eq!(filter_region(Rect::new(5000.0, 0.0, 5100.0, 100.0), (1600, 1000), 4.0), None, "off the view");
+        assert_eq!(filter_region(Rect::new(0.0, 0.0, 100.0, 100.0), (1600, 1000), f64::NAN).map(|r| r.4), Some(1.0));
+    }
 
     fn doc_with(r: Rect, fill: Color, effects: Vec<(&str, serde_json::Value)>) -> Document {
         let mut d = Document::new(100.0, 100.0);

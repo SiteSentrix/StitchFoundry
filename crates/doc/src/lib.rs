@@ -31,6 +31,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
+pub use pixels::MAX_RASTER_ALLOC;
 pub mod placed_document;
 pub mod profiles;
 pub mod puppet;
@@ -775,7 +776,9 @@ impl Document {
     /// Allocate a fresh node id.
     pub fn alloc_id(&mut self) -> NodeId {
         let id = NodeId(self.next_id);
-        self.next_id += 1;
+        // Never reached from a counter [`Self::fix_next_id`] has seen (it stays under
+        // [`MAX_NEXT_ID`]); saturating so that no counter can overflow.
+        self.next_id = self.next_id.saturating_add(1);
         id
     }
     pub fn peek_next_id(&self) -> u64 {
@@ -783,14 +786,22 @@ impl Document {
     }
     /// Ensure `next_id` is above every id in the tree (after deserializing foreign data).
     pub fn fix_next_id(&mut self) {
+        // Ids from [`MAX_NEXT_ID`] up (a damaged or hand-made file: #1718) are left out, as is a
+        // counter up there: new ids start under them and never reach them, where counting on from
+        // the largest would run out and hand out ids the document already uses.
         let mut max = 0;
+        let mut see = |id: u64| {
+            if id < MAX_NEXT_ID {
+                max = max.max(id);
+            }
+        };
         for l in &self.layers {
-            l.walk(&mut |n| max = max.max(n.id.0));
+            l.walk(&mut |n| see(n.id.0));
         }
-        max = self.slices.iter().fold(max, |m, s| m.max(s.id.0));
-        max = self.assets.iter().fold(max, |m, a| m.max(a.id));
-        // An id of u64::MAX (a damaged file) can't overflow: ids after it are reused at worst.
-        self.next_id = self.next_id.max(max.saturating_add(1));
+        self.slices.iter().for_each(|s| see(s.id.0));
+        self.assets.iter().for_each(|a| see(a.id));
+        let counter = Some(self.next_id).filter(|n| *n <= MAX_NEXT_ID).unwrap_or(0);
+        self.next_id = counter.max(max.saturating_add(1));
     }
 
     /// Find a node anywhere in the tree.
@@ -1376,7 +1387,7 @@ impl Document {
         self.guides.extend(copies);
     }
     pub fn next_artboard_id(&self) -> u32 {
-        self.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1
+        free_id(self.artboards.iter().map(|a| a.id))
     }
     pub fn pattern(&self, name: &str) -> Option<&PatternDef> {
         self.patterns.iter().find(|p| p.name == name)
@@ -1460,7 +1471,7 @@ impl Document {
     }
     /// An id no graphic style has.
     pub fn next_graphic_style_id(&self) -> u32 {
-        self.graphic_styles.iter().map(|g| g.id).max().unwrap_or(0) + 1
+        free_id(self.graphic_styles.iter().map(|g| g.id))
     }
     /// The id of graphic style `index`, assigning one if it has none yet.
     pub fn graphic_style_id(&mut self, index: usize) -> u32 {
@@ -1499,11 +1510,29 @@ fn default_graphic_styles() -> Vec<GraphicStyle> {
     .collect()
 }
 
+/// Node, slice and asset ids are handed out below this: no document gets near it by counting, so
+/// larger ids in a file are damage (or made by hand) and the counter never follows them (#1718).
+const MAX_NEXT_ID: u64 = 1 << 62;
+
+/// An id (never 0) none of `used` has: one past the largest, or, when that is the largest there
+/// is (a damaged file), the smallest one free.
+fn free_id(used: impl Iterator<Item = u32>) -> u32 {
+    let mut used: Vec<u32> = used.collect();
+    if let Some(next) = used.iter().max().copied().unwrap_or(0).checked_add(1) {
+        return next;
+    }
+    used.sort_unstable();
+    used.dedup();
+    // Ids 1, 2, 3… as far as they are all taken: the first that isn't follows them.
+    let taken = used.iter().filter(|&&id| id != 0).zip(1u32..).take_while(|&(&id, n)| id == n).count();
+    u32::try_from(taken).map_or(u32::MAX, |n| n.saturating_add(1))
+}
+
 impl Document {
     /// Make the next id allocated at least `next`: ids handed out outside the layer tree (such
     /// as an importer's opacity mask and pattern art), which [`Document::fix_next_id`] doesn't see.
     pub fn reserve_ids(&mut self, next: u64) {
-        self.next_id = self.next_id.max(next);
+        self.next_id = self.next_id.max(next.min(MAX_NEXT_ID));
     }
 }
 
@@ -1626,6 +1655,45 @@ mod tests {
         assert_eq!(d.node(l2).unwrap().display_name(), "Layer 2");
         assert_eq!(d.default_layer(), Some(l2));
         assert_eq!(d.layer_color(l2), LAYER_COLORS[1].1);
+    }
+
+    /// #1718: a file whose ids or counters are at their type's largest value still hands out ids
+    /// nothing in it uses (and never 0), instead of overflowing.
+    #[test]
+    fn exhausted_ids_in_a_file_dont_run_out() {
+        let (d, a, b) = doc_with_rects();
+        let mut v = serde_json::to_value(&d).unwrap();
+        v["next_id"] = serde_json::json!(u64::MAX);
+        // Object `a` gets the largest id there is.
+        fn renumber(v: &mut serde_json::Value, from: u64) {
+            match v {
+                serde_json::Value::Object(o) => {
+                    if o.get("id").and_then(serde_json::Value::as_u64) == Some(from) {
+                        o.insert("id".into(), serde_json::json!(u64::MAX));
+                    }
+                    o.values_mut().for_each(|c| renumber(c, from));
+                }
+                serde_json::Value::Array(a) => a.iter_mut().for_each(|c| renumber(c, from)),
+                _ => {}
+            }
+        }
+        renumber(&mut v["layers"], a.0);
+        let mut d: Document = serde_json::from_value(v).unwrap();
+        assert!(d.node(NodeId(u64::MAX)).is_some(), "the file's largest id is kept");
+        d.fix_next_id();
+        let fresh: Vec<NodeId> = (0..3).map(|_| d.alloc_id()).collect();
+        assert!(fresh.iter().all(|id| d.node(*id).is_none() && id.0 > b.0 && id.0 < MAX_NEXT_ID), "{fresh:?}");
+        assert!(fresh[0] != fresh[1] && fresh[1] != fresh[2]);
+        // A counter left at the end by other means stays there rather than wrapping to 0.
+        d.next_id = u64::MAX;
+        assert_eq!((d.alloc_id(), d.peek_next_id()), (NodeId(u64::MAX), u64::MAX));
+        d.reserve_ids(u64::MAX);
+        // Artboards and graphic styles: one past the largest, else the smallest id free.
+        assert_eq!(free_id([1, 2, 7].into_iter()), 8);
+        assert_eq!(free_id([u32::MAX, 0, 1, 2, 4].into_iter()), 3);
+        assert_eq!(free_id([u32::MAX].into_iter()), 1);
+        d.artboards[0].id = u32::MAX;
+        assert_eq!(d.next_artboard_id(), 1);
     }
 
     #[test]

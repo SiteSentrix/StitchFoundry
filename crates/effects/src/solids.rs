@@ -113,19 +113,19 @@ fn profile(n: &Node) -> Option<(PathData, FillRule)> {
     }
 }
 
-fn facets(id: &str, path: &PathData, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
+fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
     let view = view_options(p);
     match id {
-        EXTRUDE => vectorcraft_three_d::extrude(path, bounds, extrude_options(p), view),
-        INFLATE => vectorcraft_three_d::inflate(path, bounds, inflate_options(p), view),
-        _ => vectorcraft_three_d::plane(path, bounds, view),
+        EXTRUDE => vectorcraft_three_d::extrude(path, rule, bounds, extrude_options(p), view),
+        INFLATE => vectorcraft_three_d::inflate(path, rule, bounds, inflate_options(p), view),
+        _ => vectorcraft_three_d::plane(path, rule, bounds, view),
     }
 }
 
 /// Validate before a command changes the document; the evaluator bounds loaded files too.
 pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
     let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
-    let (path, _) =
+    let (path, rule) =
         profile(n).ok_or_else(|| format!("{label} currently requires a path or compound path. Convert type, images and groups to paths first."))?;
     let b = path.bounds().ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
     if let Some(v) = p.get("bevel")
@@ -134,7 +134,7 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
         let names: Vec<_> = BevelShape::ALL.iter().map(|b| b.id()).collect();
         return Err(format!("bevel must be none or one of {}", names.join(", ")));
     }
-    facets(id, &path, b, p).map(|_| ())
+    facets(id, &path, rule, b, p).map(|_| ())
 }
 
 /// One surface: each facet a path shaded from `paint`, as a group with the paint's opacity and
@@ -185,11 +185,12 @@ fn paint_of(item: &AppearanceItem) -> (Paint, f32, BlendMode) {
     }
 }
 
-/// The area `item` paints on `path`: the path itself for a fill, the stroke's outline for a stroke.
-fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> PathData {
+/// The area `item` paints on `path`, and the rule that fills it: the path itself for a fill, the
+/// stroke's outline (whose contours nest as its holes do) for a stroke.
+fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> (PathData, FillRule) {
     match item {
-        AppearanceItem::Stroke(s) if s.width > 0.0 && s.width.is_finite() => crate::stroke::outline_region(path, rule, s),
-        _ => path.clone(),
+        AppearanceItem::Stroke(s) if s.width > 0.0 && s.width.is_finite() => (crate::stroke::outline_region(path, rule, s), FillRule::EvenOdd),
+        _ => (path.clone(), rule),
     }
 }
 
@@ -204,7 +205,8 @@ fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&App
         let mut out = vec![];
         for item in items {
             let (paint, opacity, blend) = paint_of(item);
-            let f = facets(ROTATE, &region(path, rule, item), b, &p).ok()?;
+            let (area, rule) = region(path, rule, item);
+            let f = facets(ROTATE, &area, rule, b, &p).ok()?;
             out.push(Arc::new(surface(n, f, &paint, opacity, blend)));
         }
         return Some(out);
@@ -213,7 +215,7 @@ fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&App
     let (paint, opacity, blend) = paint_of(item);
     // A loaded file or a shape edited past the limits keeps drawing its source path instead of
     // failing the frame; commands validate the same evaluator and report its errors.
-    let f = facets(&fx.id, path, b, &p).ok()?;
+    let f = facets(&fx.id, path, rule, b, &p).ok()?;
     Some(vec![Arc::new(surface(n, f, &paint, opacity, blend))])
 }
 

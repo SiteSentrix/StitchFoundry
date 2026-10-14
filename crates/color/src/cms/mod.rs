@@ -13,7 +13,7 @@ pub mod generic;
 pub mod icc;
 pub mod lab;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use serde::{Deserialize, Serialize};
@@ -165,6 +165,8 @@ fn generic() -> Arc<GenericCmyk> {
 }
 
 static USER: RwLock<Vec<Arc<IccProfile>>> = RwLock::new(Vec::new());
+/// Counts the profiles [`register_icc`] has registered ([`profiles_generation`]).
+static PROFILES_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 fn builtin_rgb_cache(name: &str) -> Option<Arc<IccProfile>> {
     static CACHE: Mutex<Vec<Arc<IccProfile>>> = Mutex::new(Vec::new());
@@ -251,7 +253,15 @@ pub fn register_icc(bytes: &[u8], name: Option<String>) -> Result<ProfileInfo, C
     u.push(Arc::new(p));
     drop(u);
     clear_proof_cache();
+    PROFILES_GENERATION.fetch_add(1, Ordering::Relaxed);
     Ok(info)
+}
+
+/// A number that changes whenever [`register_icc`] registers a profile: conversions through a
+/// profile looked up by name, such as those of a [`ProofTarget::Cmyk`] proof, give the same colors
+/// as long as the number stays the same.
+pub fn profiles_generation() -> u64 {
+    PROFILES_GENERATION.load(Ordering::Relaxed)
 }
 
 /// Profile `name` as an ICC file to embed in an export: any RGB or CMYK profile of [`profiles`]

@@ -167,7 +167,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     for c in PREF_CATEGORIES {
                         let sel = *c == cat;
                         let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
-                        let b = egui::Button::selectable(sel, text).frame_when_inactive(false).min_size(egui::vec2(184.0, 24.0));
+                        let b = egui::Button::selectable(sel, text).min_size(egui::vec2(184.0, 24.0));
                         if ui.add(b).clicked() {
                             d.fields.insert("__category".into(), json!(c));
                         }
@@ -597,6 +597,34 @@ mod tests {
         assert!(a.session.prefs.system_title_bar);
         let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
         assert_eq!(saved["engine_prefs"]["systemTitleBar"], json!(true));
+    }
+
+    /// #1866: the category shown is highlighted in the list while the pointer is elsewhere.
+    #[test]
+    fn the_category_shown_is_highlighted() {
+        fn rects(s: &egui::Shape, out: &mut Vec<(egui::Rect, egui::Color32)>) {
+            match s {
+                egui::Shape::Rect(r) => out.push((r.rect, r.fill)),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| rects(s, out)),
+                _ => {}
+            }
+        }
+        let mut a = app();
+        open(&mut a, Some("Units"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // The window sizes itself on the first frame and draws on the second.
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut shown = vec![];
+        out.shapes.iter().for_each(|c| rects(&c.shape, &mut shown));
+        // The list's rows, top to bottom: only the fourth (Units) is filled.
+        let rows: Vec<_> = shown.iter().filter(|(r, _)| r.width() == 184.0 && r.height() < 30.0).collect();
+        assert_eq!(rows.len(), PREF_CATEGORIES.len(), "{shown:?}");
+        let filled: Vec<usize> = rows.iter().enumerate().filter(|(_, (_, c))| c.a() > 0).map(|(i, _)| i).collect();
+        assert_eq!(filled, vec![3], "{rows:?}");
     }
 
     /// Units › Numbers Without Units Are Points (#394): the preference reaches the fields when it

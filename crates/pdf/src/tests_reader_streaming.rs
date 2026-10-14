@@ -114,7 +114,8 @@ fn incomplete_instruction_window_limit_is_an_error() {
     let bytes = pdf(&[stream("", &content)], "", "", &[]);
     assert_eq!(fills(&open(&bytes)), [false]);
     let old = crate::import_scan::TEST_MAX_WINDOW.replace(1024);
-    let result = import_with_report(&bytes, &ImportOptions::default());
+    // The override belongs to this thread; the public entry point uses a dedicated stack.
+    let result = crate::import::read(&bytes, &ImportOptions::default());
     crate::import_scan::TEST_MAX_WINDOW.set(old);
     assert!(result.unwrap_err().to_string().contains("no document was imported"));
 }
@@ -164,7 +165,7 @@ fn lower_document_decode_limit_rejects_run_length_prefixes() {
     }
 }
 #[test]
-fn lowered_materialization_limit_still_checks_streamed_nesting() {
+fn lowered_materialization_limit_rejects_incomplete_nested_content() {
     let content = format!("/Span << /A {}0{} >> BDC 10 10 20 20 re f EMC", "[".repeat(300), "]".repeat(300));
     let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
     encoder.write_all(content.as_bytes()).unwrap();
@@ -172,8 +173,11 @@ fn lowered_materialization_limit_still_checks_streamed_nesting() {
     let mut options = crate::pages::open_options();
     options.decode_limits = options.decode_limits.with_max_decoded_stream(16);
     let error = crate::import::import_with_reader_options(&bytes, &ImportOptions::default(), &options)
-        .expect_err("streaming nesting must be checked even when ordinary materialization omits it");
-    assert!(error.to_string().contains("nested more than 256 deep"), "{error}");
+        .expect_err("bounded operand parsing must reject incomplete streamed content");
+    assert!(
+        matches!(error, crate::PdfError::Parse(ref message) if message == "PDF content is incomplete or exceeds the reader's limits; no document was imported"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -184,5 +188,8 @@ fn decoded_dictionary_delimiter_split_at_content_window_is_checked() {
     encoder.write_all(&content).unwrap();
     let bytes = pdf(&[stream("/Filter /FlateDecode", &encoder.finish().unwrap())], "", "", &[]);
     let error = import_with_report(&bytes, &ImportOptions::default()).unwrap_err();
-    assert!(error.to_string().contains("nested more than 256 deep"), "{error}");
+    assert!(
+        matches!(error, crate::PdfError::Parse(ref message) if message == "PDF content is incomplete or exceeds the reader's limits; no document was imported"),
+        "{error}"
+    );
 }

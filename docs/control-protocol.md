@@ -43,6 +43,12 @@ and does not append a partial gesture. Clients can retry once earlier input has 
 scheduled. These limits cover synthetic input admission, separately from socket transport and
 command-processing timeouts.
 
+A request the app hasn't answered after **60 s** gets `{"ok": false, "error": "timeout: …"}`. If the
+app had not started it (it was busy, or its window wasn't being drawn), the request is withdrawn
+and never runs, and the error says "will not run": retrying is safe. If the app was already
+running it, the error says "still running": it may yet complete, so check the document before
+retrying.
+
 ## Confining file access
 
 ```sh

@@ -590,7 +590,8 @@ impl Walker<'_, '_> {
                             }
                             self.out.groups.push((g.get::<bool>(b"I").unwrap_or(false), g.get::<bool>(b"K").unwrap_or(false)));
                         }
-                        let inner = Resources::from_parent(d.get::<Dict<'_>>(b"Resources").unwrap_or_default(), res.clone());
+                        // (Its own resources, or without any those of what draws it: as the interpreter reads them.)
+                        let inner = Resources::from_scope(d.get::<Dict<'_>>(b"Resources"), res.clone());
                         self.save();
                         self.walk(data.as_ref(), &inner, depth + 1);
                         self.restore();

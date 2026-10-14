@@ -1218,6 +1218,8 @@
 	Divide Vertically Into	세로로 나누기
 	Do you want to save the changes you made to “{name}”?	“{name}”의 변경 내용을 저장하시겠습니까?
 	Can't open “{name}”.	“{name}”을(를) 열 수 없습니다.
+	Can't save “{name}”.	“{name}”을(를) 저장할 수 없습니다.
+	Can't export “{name}”.	“{name}”을(를) 내보낼 수 없습니다.
 	Document	문서
 	Document Ink Options	문서 잉크 옵션
 	Document JSON	문서 JSON

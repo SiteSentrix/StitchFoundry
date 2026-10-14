@@ -754,6 +754,8 @@
 	Do Not Move	Nicht verschieben
 	Do you want to save the changes you made to “{name}”?	Möchten Sie die Änderungen an „{name}“ speichern?
 	Can't open “{name}”.	„{name}“ kann nicht geöffnet werden.
+	Can't save “{name}”.	„{name}“ kann nicht gespeichert werden.
+	Can't export “{name}”.	„{name}“ kann nicht exportiert werden.
 	Document	Dokument
 	Document Color Mode	Dokumentfarbmodus
 	Document Info	Dokumentinformationen

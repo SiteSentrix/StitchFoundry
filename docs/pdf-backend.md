@@ -1,9 +1,13 @@
 # PDF backend
 
 PDF writing uses `craft-pdf` from `storytold/craft-libs`, pinned to
-`89dcbb3060377a26c99a6d80caa16084366704c4`. Its `write` feature supplies Krilla configuration,
+`ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d`. Its `write` feature supplies Krilla configuration,
 metadata construction, fallible font preparation and serialization, and native unwind guards.
 The dependency disables default features and enables `write` and `interpret`.
+The production writer retains Krilla’s raster-image support without its optional text shaper.
+PDF test fixtures enable `simple-text` through a dev dependency.
+The PDF crate explicitly retains the `flate2` `zlib-rs` feature previously supplied
+by the registry reader, preserving compressed export bytes and their derived document IDs.
 
 VectorCraft owns document traversal, drawing, font selection and embedding policy, colour
 conversion, presets, page boxes, layers, editing data, postprocessing and print composition.
@@ -26,7 +30,11 @@ outside the writer's supported coordinate range. Font preparation checks the sha
 VectorCraft's reported outline fallback. The writer is not a peak-memory or runtime budget.
 
 PDF reading uses the same shared revision's patched Hayro syntax 0.7.2, interpreter 0.7.0
-and JBIG2 0.3.0. The application explicitly preserves its existing accepted file sizes with
+and JBIG2 0.3.0. This snapshot also retains CCITT 0.3.0 and JPEG 2000 0.3.5.
+Its established Lab conversion uses Bradford adaptation; calibrated gray/RGB and tint-function
+conversion retain floating-point precision. This policy differs from the registry 0.8 reader's
+Lab profile and byte-quantized conversion and is assessed against independent colour expectations.
+The application explicitly preserves its existing accepted file sizes with
 `OpenOptions { max_input_bytes: usize::MAX, ..Default::default() }`; this migration adds no
 new file-size ceiling. Ordinary decoded streams use the shared backend's immutable
 per-document limits. Those limits are separate from streaming page-content budgets and
@@ -54,15 +62,15 @@ and `ASSETS.md`. Fonts and profiles remain dependency data; this repository adds
 or profile binaries. Native page interpretation has a shared unwind guard; WASM aborts
 and process-wide allocation failures cannot be caught.
 
-The app retains the raw PDF-object nesting guard and the imported document-depth cap.
-Before recursive operand parsing, decoded page content is checked through the same incremental
-reader used by layer scanning and interpretation. Its nesting check carries literal-string,
-comment, hexadecimal-string and dictionary-delimiter state across 64 KiB scratch windows;
-lowering the ordinary stream-materialization limit still produces the app's specific error for
-content nested more than 256 levels. The shared parser separately caps direct containers at
-128 levels: the low-limit regression previously returned an incomplete-content error, so it
-demonstrates restored preflight coverage and error classification, not a successful import or
-a crash bypass.
-Known decoder truncation remains an import error. The scratch bound does not cover whole-filter
-fallback decoding or aggregate parser/process memory. Synthetic regressions exercise lowered
-ordinary limits, split delimiters and lexical state across content boundaries.
+The shared parser retains current main's 64-level cap for direct arrays and dictionaries,
+including decoded content and object streams. The application retains its two-pass traversal
+of repaired object tables, 16-link function/colour-space cap, 64-level calculator-procedure cap,
+256 MiB stream checks and predictor validation. Native interpretation uses the existing
+16 MiB stack wrapper, and imported document depth remains bounded.
+
+Known incomplete decoded content remains an import error, including deeply nested operands
+that the bounded parser cannot finish. Lowered ordinary decode limits and dictionary delimiters
+split across scan windows are covered by synthetic regressions; they require the typed
+incomplete-content error and never return a partial document. The former 256-level lexical
+preflight and its diagnostic are superseded by the parser cap and completion checks.
+The scratch bound does not cover whole-filter fallback decoding or aggregate parser/process memory.

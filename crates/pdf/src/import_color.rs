@@ -379,7 +379,7 @@ impl<'p> Colors<'p> {
 }
 
 /// An object written in place (references are visited as objects of their own).
-fn direct(m: MaybeRef<Object<'_>>) -> Option<Object<'_>> {
+pub(crate) fn direct(m: MaybeRef<Object<'_>>) -> Option<Object<'_>> {
     match m {
         MaybeRef::NotRef(o) => Some(o),
         MaybeRef::Ref(_) => None,

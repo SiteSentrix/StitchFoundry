@@ -1113,9 +1113,9 @@ impl Pen<'_> {
 }
 
 /// Advance of a tab at pen position `x`: up to the next stop after it (explicit stops first, then
-/// every ½ inch). Right, centre and decimal stops align the text that follows (`rest`, up to the
-/// next tab) on the stop.
-fn tab_advance(tabs: &[vectorcraft_doc::TabStop], origin: f64, x: f64, rest: &[SGlyph]) -> f64 {
+/// every ½ inch), and the leader of that stop (default stops have none). Right, centre and decimal
+/// stops align the text that follows (`rest`, up to the next tab) on the stop.
+fn tab_advance<'t>(tabs: &'t [vectorcraft_doc::TabStop], origin: f64, x: f64, rest: &[SGlyph]) -> (f64, &'t str) {
     use vectorcraft_doc::TabAlign;
     let rel = x - origin;
     let seg: Vec<&SGlyph> = rest.iter().take_while(|g| g.ch != '\t').collect();
@@ -1128,14 +1128,52 @@ fn tab_advance(tabs: &[vectorcraft_doc::TabStop], origin: f64, x: f64, rest: &[S
     };
     let explicit = tabs.iter().find_map(|t| {
         let at = target(t.position, t.align, t.align_on);
-        (at > rel + 1e-6).then_some(at)
+        (at > rel + 1e-6).then_some((at, t.leader.as_str()))
     });
-    let at = explicit.unwrap_or_else(|| {
+    let (at, leader) = explicit.unwrap_or_else(|| {
         let last = tabs.iter().map(|t| t.position).fold(0.0, f64::max).max(0.0);
         let base = rel.max(last);
-        ((base / vectorcraft_doc::text::DEFAULT_TAB_INTERVAL).floor() + 1.0) * vectorcraft_doc::text::DEFAULT_TAB_INTERVAL
+        (((base / vectorcraft_doc::text::DEFAULT_TAB_INTERVAL).floor() + 1.0) * vectorcraft_doc::text::DEFAULT_TAB_INTERVAL, "")
     });
-    (at - rel).max(0.0)
+    ((at - rel).max(0.0), leader)
+}
+
+/// Most copies of a leader drawn in one tab: a tiny type size and a far stop must not make
+/// millions of outlines.
+const MAX_LEADER_COPIES: f64 = 4096.0;
+
+/// The outline of a tab leader: `leader`'s characters, in the font and size of tab `g`, repeated
+/// across the tab's gap `from..to` on baseline `y`. Copies sit on a grid of the leader's width
+/// from `origin` (where tab stops are measured from), so the leaders of lines above one another
+/// line up; only whole copies are drawn. Characters the font lacks draw nothing.
+fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64, from: f64, to: f64, y: f64) -> BezPath {
+    let mut out = BezPath::new();
+    let glyphs: Vec<(u32, f64)> = leader
+        .chars()
+        .filter(|c| !c.is_control())
+        .map(|c| {
+            let gid = g.face.glyph_for(c);
+            (gid, g.face.advance(gid) * g.sx)
+        })
+        .collect();
+    let width: f64 = glyphs.iter().map(|(_, a)| a).sum();
+    if !(width > EPS && width.is_finite() && from.is_finite() && to.is_finite()) {
+        return out;
+    }
+    let first = ((from - origin) / width - EPS).ceil();
+    let copies = (((to - origin) / width + EPS).floor() - first).clamp(0.0, MAX_LEADER_COPIES) as usize;
+    let local = Affine::rotate(-g.rotation.to_radians()) * Affine::translate((0.0, -g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
+    for k in 0..copies {
+        let mut pen = origin + (first + k as f64) * width;
+        for &(gid, adv) in &glyphs {
+            if gid != 0 {
+                let m = Affine::translate((pen, y)) * local;
+                out.extend(db.outline(&g.face, gid).elements().iter().map(|el| m * *el));
+            }
+            pen += adv;
+        }
+    }
+    out
 }
 
 /// Width of the word starting at glyph `i`: its advances up to the first break opportunity (spaces
@@ -1734,8 +1772,9 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: Optio
                 if j + 1 == trimmed {
                     adv -= end_trim;
                 }
+                let mut leader = "";
                 if g.ch == '\t' {
-                    adv = tab_advance(&para.tabs, tab_origin, x, &sg[j + 1..trimmed.max(j + 1)]);
+                    (adv, leader) = tab_advance(&para.tabs, tab_origin, x, &sg[j + 1..trimmed.max(j + 1)]);
                 } else if j < body {
                     if g.is_space() {
                         adv += per_space;
@@ -1750,6 +1789,14 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: Optio
                 }
                 let y = baseline - align_shift(g, cx.style_at(g.byte).char_align, line_em, cx.vertical);
                 cx.emit(g, Affine::translate((x, y)), Point::new(x, y), 0.0, adv, li);
+                if !leader.is_empty() {
+                    // The leader belongs to the tab's glyph: the gap stays one character for the
+                    // caret, selection and hit testing.
+                    let dots = leader_outline(cx.db, g, leader, tab_origin, x, x + adv, y);
+                    if let Some(tab) = cx.out.glyphs.last_mut() {
+                        tab.outline.extend(dots);
+                    }
+                }
                 x += adv;
                 if j < trimmed {
                     x_end = x;

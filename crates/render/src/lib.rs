@@ -83,7 +83,8 @@ pub struct RenderOptions {
     pub artboards: bool,
     /// Objects not to draw (e.g. the object being edited by a live drag preview).
     pub hidden: Vec<NodeId>,
-    /// Draw template layers dimmed (50%).
+    /// Draw the layers as their Layer Options show them on screen: Preview off in outline, Dim
+    /// Images fading their images (a template layer's too), a template in Preview in Outline view.
     pub dim_templates: bool,
     /// Soft proof / separations preview (see [`proof`]).
     pub proof: Option<proof::ProofSetup>,
@@ -489,6 +490,9 @@ pub struct Renderer {
     isolation: Option<(u64, usize, NodeId, Vec<NodeId>)>,
     /// Drawing inside the isolated container or a dimmed object: nothing further dims.
     isolation_settled: bool,
+    /// The art the last frame drew with Overprint Preview or Separations Preview: the next frame
+    /// draws it again for the objects that have not changed ([`proof::prepare`]).
+    proof_art: Option<proof::Prepared>,
 }
 
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
@@ -591,6 +595,7 @@ impl Renderer {
             raster: vello_cpu::RasterizerSettings::default(),
             isolation: None,
             isolation_settled: false,
+            proof_art: None,
         }
     }
 
@@ -615,7 +620,7 @@ impl Renderer {
         }
         // The document's own symbols: proofing rewrites the colors and blend modes of their art.
         self.check_symbols(doc);
-        let prepared = proof::prepare(doc, opts);
+        let prepared = proof::prepare(doc, opts, &mut self.proof_art);
         let doc: &Document = &prepared;
         let w = width.clamp(1, u16::MAX as u32) as u16;
         let h = height.clamp(1, u16::MAX as u32) as u16;
@@ -1088,8 +1093,8 @@ impl Renderer {
             return;
         }
         // Layer Options on screen: a layer whose Preview is off draws in outline, and Dim Images
-        // fades its images (exports and thumbnails, which leave templates out, ignore both).
-        // (A template is dimmed as a whole already.)
+        // fades its images, a template's too (exports and thumbnails, which leave templates out,
+        // ignore both).
         if let NodeKind::Layer { preview, dim_images, template, .. } = &n.kind
             && f.opts.dim_templates
             && !f.opts.skip_templates
@@ -1104,7 +1109,7 @@ impl Renderer {
                 let opts = RenderOptions { outline: true, ..f.opts.clone() };
                 return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
             }
-            if let Some(p) = dim_images.filter(|_| !template) {
+            if let Some(p) = *dim_images {
                 let outer = self.dim_images;
                 let dim = f32::from(p).clamp(0.0, 100.0) / 100.0;
                 self.dim_images = Some(outer.map_or(dim, |o| o.min(dim)));
@@ -1162,8 +1167,7 @@ impl Renderer {
             return self.draw_object_fx(ctx, f, &Arc::new(n.clone()), false);
         }
         let outline = f.opts.outline;
-        let template_dim = matches!(n.kind, NodeKind::Layer { template: true, .. }) && f.opts.dim_templates;
-        let opacity = if template_dim { self.opacity_of(n) * 0.5 } else { self.opacity_of(n) };
+        let opacity = self.opacity_of(n);
         // Whether this container's children knock each other out.
         let knockout = !outline && n.knocks_out(self.knockout);
         let enclosing = std::mem::replace(&mut self.knockout, knockout);

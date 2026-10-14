@@ -20,8 +20,22 @@ use super::css::{Styles, XNode, parse_decls};
 /// that hold one object aren't kept, and what is still deeper is merged into the group around
 /// it). usvg uses about 15 kB of stack for each level: the importer runs on a thread with 16 MB
 /// ([`vectorcraft_doc::depth::with_deep_stack`]), except on the web, where there is the one
-/// 1 MB stack.
-pub const MAX_ELEMENT_DEPTH: usize = if cfg!(target_arch = "wasm32") { 48 } else { 256 };
+/// stack: [`WEB_DEPTH`] there.
+pub const MAX_ELEMENT_DEPTH: usize = if cfg!(target_arch = "wasm32") { WEB_DEPTH } else { 256 };
+
+/// The stack of the web build: rustc links `wasm32-unknown-unknown` with
+/// `-z stack-size=1048576` (`rustc --print link-args` shows it), and the web app gives the linker
+/// no arguments of its own (`apps/vectorcraft-web`: `Trunk.toml`, `index.html`, no rustflags).
+const WEB_STACK: usize = 1 << 20;
+
+/// The stack usvg uses for each level of elements: about 70 levels overflowed the 1 MB main
+/// thread of Windows. Measured natively, never in a browser.
+const LEVEL_STACK: usize = 15 << 10;
+
+/// The deepest elements may nest on the web: half its stack at usvg's cost a level, the other
+/// half left for what is on the stack when a file is opened and for the cost being a native
+/// measure. 1,048,576 / (2 × 15,360) = 34.
+const WEB_DEPTH: usize = WEB_STACK / (2 * LEVEL_STACK);
 
 /// Properties whose value an element's descendants use too: the paint server they name is
 /// converted at each descendant, under everything between.
