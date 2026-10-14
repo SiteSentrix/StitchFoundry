@@ -27,6 +27,14 @@ the control channel, the CLI and the MCP server.
 
 ## Quick start
 
+The **Home screen** (shown when no design is open, or with the Home button) starts a design the
+size of your hoop (4×4, 5×7, 6×10, 8×8 or 8×12; `embroidery.newDesign {hoop}`), opens a sample
+design to look at and sew (`embroidery.sample {id}`: a heart patch, sun and moon, an appliqué
+star), walks through a first design in four steps with a link to the help on each, and shows a
+tip. **Help › StitchFoundry Help…** (F1) opens this guide in the app, on the topic about the tool
+in hand, with a search; its **Tips** tab (Help › Tips) has short hints, the tool's first. The
+guide is the same text as this file (`help.topics`, `help.topic`, `help.forTool`).
+
 1. Draw shapes, place a logo, or type text.
 2. Select them and choose **Embroidery › Convert Artwork to Embroidery**. Filled areas become
    satin (if no part is thicker than 7 mm) or tatami fill, and strokes become satin lines, bean

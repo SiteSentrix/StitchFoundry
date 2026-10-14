@@ -322,6 +322,9 @@ pub struct UiState {
     /// Draw Normal / Behind / Inside.
     pub draw_mode: u8,
     pub about: bool,
+    /// Help › StitchFoundry Help… (F1).
+    #[serde(skip)]
+    pub help: crate::dialogs::help::HelpState,
     /// Recorded actions (Actions panel), persisted with the UI preferences.
     #[serde(default = "crate::panels::actions::default_sets")]
     pub action_sets: Vec<crate::panels::actions::ActionSet>,
@@ -626,6 +629,7 @@ impl Default for UiState {
             screen_mode: 0,
             draw_mode: 0,
             about: false,
+            help: Default::default(),
             action_sets: crate::panels::actions::default_sets(),
             recording: None,
             shortcut_overrides: Default::default(),

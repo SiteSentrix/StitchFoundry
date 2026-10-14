@@ -2053,7 +2053,6 @@
 	Quality:	Якість:
 	Quarter Space	Четверта шпація
 	Quick Actions	Швидкі дії
-	Quickly start a new file	Швидко створити новий файл
 	Radar Graph Tool	Інструмент «Пелюсткова діаграма»
 	Radial	Радіальний
 	Radial Glows	Радіальні світіння
@@ -5011,3 +5010,40 @@ machine	Stop	Зупинка
 	Square loop	Квадратна петля
 	Foil	Фольга
 	Shown with the design, not sewn	Показано разом із дизайном, не вишивається
+	StitchFoundry Help	Довідка StitchFoundry
+	Guide	Посібник
+	Tips	Поради
+	Search help	Пошук у довідці
+	Nothing found	Нічого не знайдено
+	Help Topics	Розділи довідки
+	Help Topic	Розділ довідки
+	Help for Tool	Довідка щодо інструмента
+	New Design for Hoop	Новий дизайн для п’ялець
+	Sample Designs	Приклади дизайнів
+	Open Sample Design	Відкрити приклад дизайну
+	Start a design for your hoop	Почніть дизайн під свої п’яльця
+	Your first design	Ваш перший дизайн
+	Draw shapes, place a picture or type text.	Намалюйте фігури, розмістіть зображення або наберіть текст.
+	Choose how each part is stitched: satin, fill, run and more.	Виберіть, як вишивається кожна частина: гладь, заливка, стібок тощо.
+	Watch it sew with the stitch player and check it.	Перегляньте вишивку в програвачі стібків і перевірте її.
+	Export the file for your machine.	Експортуйте файл для своєї машини.
+	Learn how	Як це зробити
+	Try a sample	Спробуйте приклад
+	Heart patch	Нашивка-серце
+	Sun and moon	Сонце і місяць
+	Appliqué star	Зірка-аплікація
+	Tip:	Порада:
+	More tips	Інші поради
+	A new design the size of this hoop's sewing field	Новий дизайн розміром із поле вишивки цих п’ялець
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Проведіть лінію нахилу через фігуру, щоб задати кут стібків; дві й більше ліній повертають стібки.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Клацніть на ділянку розміщеного зображення, щоб вишити її; більший допуск захоплює більше відтінків.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Перетягуйте вибрані проколи, щоб рухати їх, Alt-клацання по стібку додає прокол, Delete видаляє.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Клацайте по черзі на один і на інший бік колони; Enter або Esc завершують її.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	Диск у лівому нижньому куті задає пензель, ширину, щільність, довжину й форму.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Наберіть текст і виберіть вишивальний шрифт на панелі «Написи», щоб він вишивався чисто.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Виділіть малюнок і виберіть Вишивка › Перетворити графіку на вишивку, щоб оцифрувати його за один крок.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Гладь підходить для фігур шириною приблизно до 7 мм; ширші ділянки краще вишивати заливкою татамі.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Виберіть п’яльця на панелі «Вишивка», щоб бачити поле вишивки довкола дизайну.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Перевірка дизайну в меню «Вишивка» знаходить щільні шари, довгі стібки й задрібний текст.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Перед надсиланням перегляньте, як вишивається дизайн, у програвачі «Порядку стібків».
+	Export with Embroidery › Export Machine File and pick your machine's format.	Експортуйте через Вишивка › Експорт файлу для машини й виберіть формат своєї машини.

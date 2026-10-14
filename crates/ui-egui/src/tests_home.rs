@@ -133,3 +133,40 @@ fn home_lists_recent_files_and_a_click_opens_one() {
     assert!(app.session.documents().is_empty());
     assert!(!app.ui.status.is_empty(), "a file that can't be opened says so");
 }
+
+/// Home's texts this frame.
+fn home_strings(app: &mut VectorcraftApp) -> Vec<String> {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 1400.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    v
+}
+
+#[test]
+fn home_starts_embroidery_designs_by_hoop_with_samples_steps_and_a_tip() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let texts = home_strings(&mut app);
+    for want in ["Start a design for your hoop", "130 × 180 mm (5×7″)", "Your first design", "Learn how", "Try a sample", "Heart patch", "Tip:"] {
+        assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
+    }
+    // the graphic-design presets are gone
+    assert!(!texts.iter().any(|t| t.contains("Web 1920")), "{texts:?}");
+    // a hoop card's command: a document the hoop's size, the hoop set
+    app.run("embroidery.newDesign", json!({"hoop": "Brother 100 × 100 (4×4)"})).unwrap();
+    assert_eq!(app.session.documents().len(), 1);
+    assert!(shows_document(&mut app));
+    // Learn how / F1 open Help on a topic
+    app.run("help.show", json!({"topic": "machine-files"})).unwrap();
+    assert!(app.ui.help.open && app.ui.help.topic == "machine-files");
+}

@@ -1873,24 +1873,105 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         }
     });
     recent(app, ui);
-    ui.add_space(28.0);
-    ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));
+    ui.add_space(24.0);
+    ui.label(egui::RichText::new(tl!("Start a design for your hoop")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
-    // A few of New Document's presets (`file.newPresets`), as its cards.
-    let presets = ["Letter", "A4", "Web 1920×1080", "Phone 390×844", "Postcard", "Social Square Post 1080×1080"];
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(14.0, 14.0);
-        let cards: Vec<_> = presets.iter().filter_map(|name| vectorcraft_engine::cmd::newdoc::find(&app.session, name)).collect();
-        for s in cards {
-            if crate::dialogs::preset_card(ui, &s, false).clicked() {
-                app.run("file.new", json!({ "preset": s.name })).ok();
+        for (label, hoop, w, h) in HOME_HOOPS {
+            if hoop_card(ui, &t, label, (w, h)).clicked() {
+                app.run("embroidery.newDesign", json!({ "hoop": hoop })).ok();
             }
         }
     });
+    ui.add_space(24.0);
+    ui.label(egui::RichText::new(tl!("Your first design")).font(theme::semibold(14.0)).color(t.text));
+    ui.add_space(8.0);
+    let steps = [
+        (tl!("Draw shapes, place a picture or type text."), "quick-start"),
+        (tl!("Choose how each part is stitched: satin, fill, run and more."), "stitch-types"),
+        (tl!("Watch it sew with the stitch player and check it."), "stitch-sequence-and-the-stitch-player"),
+        (tl!("Export the file for your machine."), "machine-files"),
+    ];
+    for (i, (step, topic)) in steps.iter().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("{}", i + 1)).font(theme::semibold(14.0)).color(t.accent));
+            ui.label(egui::RichText::new(*step).color(t.text));
+            if ui.link(tl!("Learn how")).clicked() {
+                app.run("help.show", json!({ "topic": topic })).ok();
+            }
+        });
+    }
+    ui.add_space(24.0);
+    ui.label(egui::RichText::new(tl!("Try a sample")).font(theme::semibold(14.0)).color(t.text));
+    ui.add_space(8.0);
+    let samples = app.session.execute("embroidery.samples", &json!({})).unwrap_or_default();
+    ui.horizontal_wrapped(|ui| {
+        for sm in samples["samples"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            let (Some(id), Some(name)) = (sm["id"].as_str(), sm["name"].as_str()) else { continue };
+            if widgets::secondary_button(ui, sample_name(name)).clicked() {
+                app.run("embroidery.sample", json!({ "id": id })).ok();
+            }
+        }
+    });
+    // a tip: a different one as recent files come and go
+    let tips = crate::dialogs::help::tips();
+    let general: Vec<&str> = tips.iter().filter(|(k, _)| k.is_empty()).map(|(_, x)| *x).collect();
+    let n = crate::io::recent_files(app).len();
+    if let Some(tip) = general.get(n % general.len().max(1)) {
+        ui.add_space(20.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new(tl!("Tip:")).font(theme::semibold(13.0)).color(t.accent));
+            ui.label(egui::RichText::new(*tip).color(t.text_dim));
+            if ui.link(tl!("More tips")).clicked() {
+                app.run("help.show", json!({ "tips": true })).ok();
+            }
+        });
+    }
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     crate::community::links(app, ui);
+}
+
+/// The hoops the Home screen offers a new design for: label, hoop name, width × height (mm).
+const HOME_HOOPS: [(&str, &str, f64, f64); 5] = [
+    ("100 × 100 mm (4×4″)", "Brother 100 × 100 (4×4)", 100.0, 100.0),
+    ("130 × 180 mm (5×7″)", "Brother 130 × 180 (5×7)", 130.0, 180.0),
+    ("160 × 260 mm (6×10″)", "Brother 160 × 260 (6×10)", 160.0, 260.0),
+    ("200 × 200 mm (8×8″)", "Brother 200 × 200 (8×8)", 200.0, 200.0),
+    ("200 × 300 mm (8×12″)", "Brother 200 × 300 (8×12)", 200.0, 300.0),
+];
+
+/// A sample design's name in the UI language.
+fn sample_name(name: &str) -> &str {
+    match name {
+        "Heart patch" => tl!("Heart patch"),
+        "Sun and moon" => tl!("Sun and moon"),
+        "Appliqué star" => tl!("Appliqué star"),
+        other => other,
+    }
+}
+
+/// A Home screen card for a hoop: its field drawn to scale, its size under it.
+fn hoop_card(ui: &mut Ui, t: &Tokens, label: &str, (w, h): (f64, f64)) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(128.0, 128.0), egui::Sense::click());
+    let hovered = resp.hovered();
+    ui.painter().rect_filled(rect, 6.0, t.panel);
+    ui.painter().rect_stroke(rect, 6.0, egui::Stroke::new(1.0, if hovered { t.accent } else { t.border }), egui::StrokeKind::Inside);
+    // the field, 72 px at most each way, inside the hoop's rounded frame
+    let k = (72.0 / w.max(h).max(1.0)) as f32;
+    let field = egui::Rect::from_center_size(rect.center() - vec2(0.0, 12.0), vec2(w as f32 * k, h as f32 * k));
+    ui.painter().rect_stroke(field.expand(5.0), 8.0, egui::Stroke::new(3.0, t.text_dim), egui::StrokeKind::Middle);
+    ui.painter().rect_filled(field, 2.0, t.panel_darker);
+    ui.painter().text(
+        egui::pos2(rect.center().x, rect.bottom() - 12.0),
+        egui::Align2::CENTER_CENTER,
+        label,
+        egui::FontId::proportional(11.5),
+        t.text,
+    );
+    resp.on_hover_text(tl!("A new design the size of this hoop's sewing field"))
 }
 
 /// The Home screen's Recent Files (#663): the first of File › Open Recent Files, each its name and

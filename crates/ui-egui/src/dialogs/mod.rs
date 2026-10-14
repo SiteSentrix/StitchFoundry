@@ -38,6 +38,7 @@ pub mod freehand;
 mod gradient_stop;
 pub mod graphic_style_options;
 pub mod halftone;
+pub mod help;
 pub mod import_pdf;
 pub mod layer_options;
 pub mod layers_panel_options;
@@ -357,6 +358,7 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
+    help::show(app, ctx);
     settle(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and
     // its first field is to take the keyboard focus (`focus_id`, until a field takes it).
