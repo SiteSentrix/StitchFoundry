@@ -31,6 +31,9 @@ pub struct SimpleState {
     pub shapes: Option<bool>,
 }
 
+/// The text sizes simple mode offers (UI scaling).
+const TEXT_SIZES: [f64; 3] = [1.0, 1.25, 1.5];
+
 /// A large button filling the column's width.
 fn big(ui: &mut Ui, text: &str, primary: bool) -> egui::Response {
     let t = Tokens::get(ui.ctx());
@@ -85,6 +88,7 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
         ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+            text_size(app, ui);
             if ui.link(tl!("Show everything")).clicked() {
                 app.run("window.experience", json!({ "level": "all" })).ok();
             }
@@ -93,6 +97,21 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
+}
+
+/// Text size: three buttons, the letter bigger on each, for the whole window's text.
+fn text_size(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let now = app.session.prefs.ui_scaling;
+    ui.horizontal(|ui| {
+        for (i, scale) in TEXT_SIZES.into_iter().enumerate() {
+            let label = RichText::new("A").size(13.0 + 4.0 * i as f32);
+            let on = (now - scale).abs() < 0.01;
+            if ui.selectable_label(on, label).on_hover_text(tl!("Text size")).clicked() {
+                app.run("prefs.set", json!({ "key": "uiScaling", "value": scale })).ok();
+            }
+        }
+    });
+    ui.label(RichText::new(tl!("Text size")).size(12.0));
 }
 
 /// How a part sews, as simple mode names it: label, stitch type id.
