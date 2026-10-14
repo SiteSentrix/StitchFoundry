@@ -737,6 +737,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+Alt+Shift+P",
         "{} open Package for the saved document (dialog `package`: folder, name, copyLinks, linksFolder, relink, copyFonts, report; a document never saved asks to Save As first); OK saves unsaved changes, runs file.package (the web downloads the zip) and offers file.showPackage",
     ),
+    (
+        "ui.batchDialog",
+        "Batch…",
+        "",
+        "{set?: index, action?: index} open Batch (dialog `actionBatch`) for the action at set/action (default: the first action of the first set); OK runs action.batch with the dialog's source, destination and overrides",
+    ),
     ("file.showPackage", "Show Package", "", "{folder} show a package folder (file.package's folder) in the file manager → {folder}"),
     (
         "docInfo.save",
@@ -1495,6 +1501,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::find_links::find_in_folder_command(app, s("folder"), p.get("ids").and_then(Value::as_array).cloned())
         }
         "ui.packageDialog" => crate::dialogs::package::open(app),
+        "ui.batchDialog" => {
+            let set = p.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let action = p.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
+            crate::dialogs::action_batch::open(app, set, action)
+        }
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         "file.showPackage" => crate::dialogs::package::show_package(app, p),
         "docInfo.save" => crate::panels::doc_info::save_report(app, p),
@@ -2107,6 +2118,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
+        "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
@@ -2195,6 +2207,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
+                sub("Automate", vec![c("Batch…", "ui.batchDialog"), todos("Scripts…", "")]),
                 sub("Scripts", vec![c("Check Script…", "ui.checkScript"), todos("Other Script…", "Cmd+F12")]),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),

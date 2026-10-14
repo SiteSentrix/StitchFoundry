@@ -3802,6 +3802,19 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+	Automate	Automatizar
+	Batch…	Lote…
+	Source Folder:	Pasta de origem:
+	Destination Folder:	Pasta de destino:
+	Include All Subdirectories	Incluir todos os subdiretórios
+	Uses every data set of the open document.	Usa todos os conjuntos de dados do documento aberto.
+	Overrides	Substituições
+	Override Action "Open" Commands	Substituir comandos "Abrir" da ação
+	Override Action "Save" Commands	Substituir comandos "Salvar" da ação
+	Override Action "Export" Commands	Substituir comandos "Exportar" da ação
+	Stop on Errors	Parar em erros
+	Save and Close	Salvar e fechar
+	Play:	Reproduzir:
 	Make Graph Dynamic	Tornar gráfico dinâmico
 	Registration:	Registro:
 # Dimension tool (linked dimension annotations)

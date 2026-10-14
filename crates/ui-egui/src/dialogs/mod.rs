@@ -7,6 +7,7 @@
 //! Shortcuts, Workspaces, Find Font) draw their own window.
 
 mod about;
+pub mod action_batch;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
@@ -283,6 +284,7 @@ registry! {
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
     Package: [package::KIND] => package::SPEC,
+    ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
