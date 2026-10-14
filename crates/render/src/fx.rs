@@ -532,7 +532,8 @@ impl Drawn {
 /// objects in it ([`Reads::of`]): which parts of [`Inputs`] can change what its rasters show.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Reads {
-    /// Pattern paints: the pattern definitions.
+    /// Pattern paints: the pattern definitions. Their art can hold anything, so content painted
+    /// with a pattern reads everything else too.
     patterns: bool,
     /// Symbol instances and type with inline graphics: the symbols' art. Symbol art can hold
     /// anything, so content that shows a symbol reads everything else too.
@@ -550,12 +551,23 @@ pub(crate) struct Reads {
 impl Reads {
     /// What the content of `n` reads.
     pub(crate) fn of(n: &Node) -> Self {
+        Self::of_all(std::iter::once(n))
+    }
+
+    /// What the content of `nodes` reads together. A pattern's art can hold anything, as a
+    /// symbol's can, so content painted with a pattern reads everything else too (#1723).
+    pub(crate) fn of_all<'a>(nodes: impl Iterator<Item = &'a Node>) -> Self {
         let mut reads = Self::default();
-        reads.add(n);
-        if reads.symbols {
+        nodes.for_each(|n| reads.add(n));
+        if reads.symbols || reads.patterns {
             return Self { patterns: true, symbols: true, images: true, brushes: true, text: true };
         }
         reads
+    }
+
+    /// Does the content read anything outside its own nodes?
+    pub(crate) fn any(self) -> bool {
+        self != Self::default()
     }
 
     fn add(&mut self, n: &Node) {
