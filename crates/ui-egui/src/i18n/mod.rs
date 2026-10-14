@@ -94,7 +94,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 16] = [
+pub static LANGUAGES: [LangInfo; 17] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Japanese: the whole interface (every menu string and `tl!` literal) and the status and error
     // messages, keeping the product, workspace and perspective preset names in English (`MENU_KEEP_AS_IS`).
@@ -161,6 +161,16 @@ pub static LANGUAGES: [LangInfo; 16] = [
         name: "Українська",
         source: include_str!("uk.tsv"),
         plural: plural_east_slavic,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    // Bulgarian: the whole interface (every menu string and `tl!` literal) and the status and error
+    // messages, with one/other plural forms; every `bg-*` locale (including `bg-BG`) resolves here.
+    LangInfo {
+        code: "bg",
+        name: "Български",
+        source: include_str!("bg.tsv"),
+        plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
     },
