@@ -132,6 +132,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),
     p!("usePreviewBounds", "General", "Options", "Use Preview Bounds", bool),
     p!("displayPrintSize", "General", "Options", "Display Print Size at 100% Zoom", bool),
+    p!("screenPointsPerInch", "General", "", "Screen Points per Inch at Life Size", num(40.0, 400.0, "")),
     p!("doubleClickToIsolate", "General", "Options", "Double Click To Isolate", bool),
     p!("transformPatternTiles", "General", "Options", "Transform Pattern Tiles", bool),
     p!("scaleCorners", "General", "Options", "Scale Corners", bool),

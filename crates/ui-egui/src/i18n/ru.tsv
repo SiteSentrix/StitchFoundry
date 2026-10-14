@@ -5088,3 +5088,10 @@ machine	Stop	Остановка
 	Density Map	Карта плотности
 	Density map	Карта плотности
 	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Окрасить дизайн по толщине нити: синий — один слой, красный — так плотно, как отмечает «Проверить дизайн»
+	Calibrate Life Size…	Откалибровать натуральный размер…
+	Calibrate Life Size	Откалибровать натуральный размер
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Приложите к экрану линейку или банковскую карту и меняйте размер, пока деления не совпадут. Тогда «Реальный размер» будет показывать дизайны в натуральную величину.
+	Bank card	Банковская карта
+	Screen points per inch	Точек экрана на дюйм
+	Use This Size	Использовать этот размер
+	Screen Points per Inch at Life Size	Точек экрана на дюйм в натуральную величину

@@ -518,6 +518,15 @@ listed with why. ZSK DSZ designs can be converted from but not to. A format with
 (DST, EXP, TAP, U01, DSB) gives the converted design
 standard threads.
 
+## Life size on screen
+
+**View › Calibrate Life Size…** shows a 100 mm ruler and the outline of a bank card (85.6 ×
+53.98 mm). Hold a real ruler or card against the screen and change the size until they match,
+then **Use This Size**: View › Actual Size (Ctrl/Cmd+1) shows designs life size from then on, so
+you can judge lettering heights and stitch lengths as they will sew. The measurement is kept as
+the `screenPointsPerInch` preference (General) and turns on **Display Print Size at 100% Zoom**;
+`ui.calibrateLifeSize {pointsPerInch}` sets it directly. Calibrate again on another screen.
+
 ## Worksheets
 
 **Embroidery › Worksheet** (`embroidery.worksheet {kind?, customer?, notes?}`) makes a worksheet

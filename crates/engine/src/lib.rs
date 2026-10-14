@@ -457,6 +457,10 @@ pub struct Prefs {
     pub show_home_screen: bool,
     pub use_preview_bounds: bool,
     pub display_print_size: bool,
+    /// Screen points that make an inch on this display (View › Calibrate Life Size…): with
+    /// Display Print Size at 100% Zoom on, Actual Size shows the design life size. 96 is the
+    /// system's reference density.
+    pub screen_points_per_inch: f64,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
     pub scale_corners: bool,
@@ -755,6 +759,7 @@ impl Default for Prefs {
             show_home_screen: true,
             use_preview_bounds: false,
             display_print_size: false,
+            screen_points_per_inch: 96.0,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
             scale_corners: false,

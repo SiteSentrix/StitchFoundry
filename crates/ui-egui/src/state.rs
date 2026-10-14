@@ -329,6 +329,9 @@ pub struct UiState {
     /// Help › StitchFoundry Help… (F1).
     #[serde(skip)]
     pub help: crate::dialogs::help::HelpState,
+    /// View › Calibrate Life Size….
+    #[serde(skip)]
+    pub life_size: crate::dialogs::life_size::LifeSizeState,
     /// Recorded actions (Actions panel), persisted with the UI preferences.
     #[serde(default = "crate::panels::actions::default_sets")]
     pub action_sets: Vec<crate::panels::actions::ActionSet>,
@@ -635,6 +638,7 @@ impl Default for UiState {
             draw_mode: 0,
             about: false,
             help: Default::default(),
+            life_size: Default::default(),
             action_sets: crate::panels::actions::default_sets(),
             recording: None,
             shortcut_overrides: Default::default(),
