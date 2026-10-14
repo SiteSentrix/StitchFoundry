@@ -7,7 +7,8 @@ use super::*;
 
 fn doc_with_rect() -> (Session, u64) {
     let mut s = Session::new();
-    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    // Separately created fixtures must compare equal across clock ticks.
+    s.execute("file.new", &json!({"width": 200, "height": 200, "created": null})).unwrap();
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.none", &json!({})).unwrap();
     (s, id)
