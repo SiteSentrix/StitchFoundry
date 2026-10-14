@@ -977,8 +977,10 @@ impl VectorcraftApp {
         self.ui.recent_fonts.get(..n).unwrap_or(&self.ui.recent_fonts)
     }
 
-    /// The selection's bounding box, rotated with rotated objects ([`Session::transform_box`]). The
-    /// canvas and the transform fields read it every frame: it is measured once per revision.
+    /// The selection's bounding box, rotated with rotated objects ([`Session::transform_box`]); with
+    /// anchors selected with Direct Selection, the box around them square to the page, which
+    /// `object.setBounds` then edits (#1824). The canvas and the transform fields read it every
+    /// frame: it is measured once per revision.
     pub fn selection_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
         let st = self.session.active()?;
         let key = (st.uid, st.revision, self.session.prefs.use_preview_bounds);
@@ -987,7 +989,10 @@ impl VectorcraftApp {
         {
             return b;
         }
-        let b = self.session.transform_box(&st.selection.objects);
+        let b = match st.selection.anchor_bounds(&st.doc, self.session.prefs.use_preview_bounds) {
+            Some(r) => Some(vectorcraft_doc::OrientedBox::aligned(r)),
+            None => self.session.transform_box(&st.selection.objects),
+        };
         self.canvas.selection_box = Some((key, b));
         b
     }

@@ -821,6 +821,32 @@ fn transforms_act_on_direct_selected_anchors() {
     assert_eq!(points(&s), [(25.0, 0.0), (75.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
 }
 
+/// #1824: with anchors selected with Direct Selection, the Transform panel's X/Y/W/H
+/// (`object.setBounds`) are the box around those anchors, and only they move or scale.
+#[test]
+fn set_bounds_acts_on_direct_selected_anchors() {
+    let mut s = session();
+    let square = json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}], "closed": true});
+    let id = NodeId(s.execute("path.create", &square).unwrap()["id"].as_u64().unwrap());
+    let points = |s: &Session| -> Vec<(f64, f64)> {
+        let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("a path") };
+        path.subpaths[0].anchors.iter().map(|a| (a.p.x.round(), a.p.y.round())).collect()
+    };
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    s.execute("object.setBounds", &json!({"x": 130, "reference": 0})).unwrap();
+    assert_eq!(points(&s), [(0.0, 0.0), (130.0, 0.0), (100.0, 100.0), (0.0, 100.0)], "only the selected anchor moves");
+    s.execute("object.setBounds", &json!({"y": 20, "reference": 4})).unwrap();
+    assert_eq!(points(&s), [(0.0, 0.0), (130.0, 20.0), (100.0, 100.0), (0.0, 100.0)]);
+    // Two anchors: W scales their box about the reference point, the others stay.
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2], [0, 3]]})).unwrap();
+    s.execute("object.setBounds", &json!({"width": 50, "reference": 3})).unwrap();
+    assert_eq!(points(&s), [(0.0, 0.0), (130.0, 20.0), (50.0, 100.0), (0.0, 100.0)]);
+    // The path selected whole moves as a whole.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.setBounds", &json!({"x": 10, "reference": 0})).unwrap();
+    assert_eq!(points(&s), [(10.0, 0.0), (140.0, 20.0), (60.0, 100.0), (10.0, 100.0)]);
+}
+
 /// Arrange commands that leave the stacking order as it is record no undo step: Bring to Front and
 /// Bring Forward on the front objects, Send to Back and Send Backward on the back ones, and Send to
 /// Current Layer on objects already on top of the current layer.

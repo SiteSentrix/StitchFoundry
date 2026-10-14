@@ -486,6 +486,29 @@ mod tests {
         assert_eq!(selected_guides(&app), None);
     }
 
+    /// #1824: with an anchor selected with Direct Selection the panel shows that anchor's position,
+    /// and a new X moves it alone.
+    #[test]
+    fn an_anchor_selection_shows_and_moves_its_own_box() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let square = json!({"anchors": [{"x": 20, "y": 30}, {"x": 120, "y": 30}, {"x": 120, "y": 130}, {"x": 20, "y": 130}], "closed": true});
+        let id = app.run("path.create", square).unwrap()["id"].as_u64().unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "70 pt") && shown.iter().any(|t| t == "100 pt"), "the whole path: {shown:?}");
+        app.run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
+        let shown = texts(&mut app, show);
+        for v in ["120 pt", "30 pt", "0 pt"] {
+            assert!(shown.iter().any(|t| t == v), "{v} in {shown:?}");
+        }
+        assert!(!shown.iter().any(|t| t == "70 pt" || t == "100 pt"), "{shown:?}");
+        app.run("object.setBounds", json!({"x": 150, "reference": 4})).unwrap();
+        let n = first_selected(&app).unwrap();
+        let Some(path) = n.path_data() else { panic!("a path") };
+        let xs: Vec<f64> = path.subpaths[0].anchors.iter().map(|a| a.p.x).collect();
+        assert_eq!(xs, [20.0, 150.0, 120.0, 20.0]);
+    }
+
     #[test]
     fn artboard_fields_keep_the_reference_point() {
         let r = Rect::new(0.0, 0.0, 300.0, 200.0);
