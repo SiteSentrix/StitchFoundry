@@ -345,6 +345,11 @@ fn run_length_and_ascii85_round_trip() {
     assert_eq!(ps::ascii85(b"Man "), "9jqo^~>\n");
     assert_eq!(ps::ascii85(&[0, 0, 0, 0]), "z~>\n");
     assert!(ps::ascii85_decode("9jqo^").is_none(), "no end marker");
+    // #1715: the result is bounded while it is made, not by the length of the text.
+    assert_eq!(ps::ascii85_decode_within("zz~>", 8), Some(vec![0; 8]));
+    assert!(ps::ascii85_decode_within("zzz~>", 8).is_none(), "three `z` are 12 bytes");
+    assert!(ps::ascii85_decode_within("zz9jqo^~>", 8).is_none());
+    assert!(ps::ascii85_decode_within(&format!("{}~>", "z".repeat(1 << 16)), 1 << 10).is_none());
     assert!(ps::ascii85_decode("9jqo^v~>").is_none(), "not base 85");
     assert_eq!(ps::num(1.0 / 3.0), "0.3333");
     assert_eq!((ps::num(-0.00001), ps::num(f64::NAN), ps::num(2.5)), ("0".into(), "0".into(), "2.5".into()));
