@@ -296,12 +296,23 @@ const MAX_TREE_DEPTH: usize = 128;
 /// Total layer nodes imported.
 const MAX_NODES: usize = 500_000;
 
+/// Pixels decoded from pixel layers over a whole document (2 GB as RGBA). The archive's limits
+/// count the bytes extracted from it, and a layer of one flat colour needs none (#1704).
+const MAX_LAYER_PIXELS: u64 = 512 << 20;
+
 /// Read a document: archive, `doc.dat` and the model.
 pub fn read(bytes: &[u8], limits: Limits) -> Result<Document, Error> {
+    read_within(bytes, limits, MAX_LAYER_PIXELS)
+}
+
+/// [`read`], its pixel layers holding at most `pixels` pixels together.
+pub(crate) fn read_within(bytes: &[u8], limits: Limits, pixels: u64) -> Result<Document, Error> {
     let mut archive = Archive::open(bytes, limits)?;
     let doc = archive.read("doc.dat")?;
     let s = stream::parse(&doc)?;
-    Reader::new(&s, &mut archive).document()
+    let mut reader = Reader::new(&s, &mut archive);
+    reader.pixels_left = pixels;
+    reader.document()
 }
 
 pub(crate) struct Reader<'s, 'a, 'b> {
@@ -311,11 +322,13 @@ pub(crate) struct Reader<'s, 'a, 'b> {
     warnings: BTreeMap<String, usize>,
     nodes: usize,
     active: HashSet<ObjId>,
+    /// Pixels the pixel layers still to come may decode ([`MAX_LAYER_PIXELS`] in all).
+    pub(crate) pixels_left: u64,
 }
 
 impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
     fn new(s: &'s Stream, archive: &'b mut Archive<'a>) -> Self {
-        Self { s, archive, dpi: 72.0, warnings: BTreeMap::new(), nodes: 0, active: HashSet::new() }
+        Self { s, archive, dpi: 72.0, warnings: BTreeMap::new(), nodes: 0, active: HashSet::new(), pixels_left: MAX_LAYER_PIXELS }
     }
 
     pub(crate) fn warn(&mut self, what: impl Into<String>) {

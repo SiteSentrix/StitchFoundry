@@ -29,6 +29,8 @@ pub(crate) const MAX_GSAVE: usize = 1000;
 const MAX_MEMORY: usize = 1 << 30;
 
 pub(crate) struct Interp<'a> {
+    /// The list of the arrays and dictionaries made since this started ([`super::obj::track`]).
+    made: u64,
     pub lex: Lexer<'a>,
     pub stack: Vec<Obj>,
     pub dicts: Vec<DictRef>,
@@ -101,6 +103,7 @@ const CATEGORIES: &str = "Category Generic Font CIDFont CMap FontSet Encoding Fo
 
 impl<'a> Interp<'a> {
     pub fn new(src: &'a [u8], g: GState, out: Out) -> Self {
+        let made = super::obj::track();
         let system = new_dict();
         {
             let mut d = system.borrow_mut();
@@ -140,6 +143,7 @@ impl<'a> Interp<'a> {
             system.borrow_mut().insert(Key::name(name), Obj::Dict(d.clone()));
         }
         Self {
+            made,
             lex: Lexer::new(src),
             stack: vec![],
             dicts: vec![system.clone(), global.clone(), user.clone()],
@@ -205,6 +209,8 @@ impl<'a> Interp<'a> {
         self.dicts.clear();
         self.stack.clear();
         self.journal.clear();
+        // What the program linked into itself, reachable or not.
+        super::obj::release_tracked(self.made);
     }
 
     // ---------- the operand stack ----------
