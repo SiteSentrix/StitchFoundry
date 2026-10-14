@@ -417,6 +417,38 @@ fn new_symbol_of_an_object_and_the_group_that_holds_it_keeps_order_and_ids() {
     assert!(*s.doc().unwrap().doc == *before, "Undo gives back the document");
 }
 
+/// New Symbol given `ids` that list an object and a group that holds it (directly, or inside
+/// another group) makes the symbol of the outer group, whose art holds the object once, as it does
+/// with those objects selected.
+#[test]
+fn new_symbol_of_an_object_and_a_group_that_holds_it_has_the_object_once() {
+    let nested = || {
+        let mut s = session();
+        let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0, 10.0));
+        select(&mut s, &[a, b]);
+        let inner = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        let c = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+        select(&mut s, &[inner, c]);
+        let outer = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.none", &json!({})).unwrap();
+        (s, [a, inner, outer])
+    };
+    for (picks, paths) in [(&[0, 1][..], 2), (&[1, 0, 2], 3)] {
+        let (mut given, ids) = nested();
+        let list: Vec<NodeId> = picks.iter().map(|i| ids[*i]).collect();
+        given.execute("symbol.new", &json!({"name": "Pair", "ids": list.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        let d = &given.doc().unwrap().doc;
+        let mut n = 0;
+        d.symbols[0].art.walk(&mut |c| n += usize::from(matches!(c.kind, NodeKind::Path { .. })));
+        assert_eq!(n, paths, "ids {list:?}");
+        let (mut selected, _) = nested();
+        select(&mut selected, &list);
+        selected.execute("symbol.new", &json!({"name": "Pair"})).unwrap();
+        let e = &selected.doc().unwrap().doc;
+        assert!(d.symbols == e.symbols && d.layers == e.layers, "ids {list:?}");
+    }
+}
+
 #[test]
 fn place_and_break_link_round_trip_geometry() {
     let mut s = session();

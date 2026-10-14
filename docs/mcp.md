@@ -274,7 +274,8 @@ currently describes them in prose, so MCP does not guess schemas or silently rem
 
 Coordinates are points in document space: y points down, the origin is the first artboard's top-left, and a new
 document is 612 × 792 (US Letter). New objects become the selection. Most commands act on the selection or on
-explicit `ids`.
+explicit `ids`. A command that leaves out an object selected inside a selected group also leaves it out when `ids`
+list it together with a group that holds it.
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).

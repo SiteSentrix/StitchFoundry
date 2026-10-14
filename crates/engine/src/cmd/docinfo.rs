@@ -372,7 +372,8 @@ fn snap_xf(b: Rect, half: bool) -> Affine {
 }
 
 fn pixel_perfect(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids: Vec<NodeId> = if p.get("ids").is_some() { targets(s, p)? } else { super::edit::selected_roots(s)? };
+    let ids: Vec<NodeId> =
+        if p.get("ids").is_some() { super::edit::outermost(&s.doc()?.doc, targets(s, p)?) } else { super::edit::selected_roots(s)? };
     let n = ids.len();
     s.edit("Make Pixel Perfect", |d, _| {
         for id in &ids {
