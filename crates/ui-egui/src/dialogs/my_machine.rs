@@ -107,7 +107,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 done = true;
             }
         });
-    if !open || done {
+    if !open || done || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         app.ui.my_machine.open = false;
     }
 }
