@@ -127,6 +127,41 @@ fn raster_effects_draw_through_new_color_settings() {
     cms::set_active(&old).unwrap();
 }
 
+/// Pattern tiles follow the Color Settings: a fill of a pattern in a CMYK color is drawn through
+/// the new working CMYK profile in the next frame, as a renderer on a new thread (with no tiles of
+/// its own yet) draws it.
+#[test]
+fn pattern_tiles_draw_through_new_color_settings() {
+    use std::sync::Arc;
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    use vectorcraft_doc::{Appearance, Document, Node};
+    use vectorcraft_geom::Rect;
+    use vectorcraft_geom::shapes::rectangle;
+    let _g = settings();
+    let old = cms::active_settings();
+    let mut d = Document::new(200.0, 100.0);
+    let cyan = Appearance::basic(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), Paint::None, 0.0);
+    let square = Node::path(d.alloc_id(), rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), cyan);
+    let mut def = PatternDef::new("Checks", vec![Arc::new(square)]);
+    def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(def);
+    let checks = Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0);
+    let filled = Node::path(d.alloc_id(), rectangle(Rect::new(10.0, 10.0, 190.0, 90.0)), checks);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, filled).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let frame = |r: &mut Renderer, d: &Document| r.render(d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let mut r = Renderer::new();
+    let before = frame(&mut r, &d);
+    session().execute("edit.colorSettings", &json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let warm = frame(&mut r, &d);
+    let fresh = std::thread::scope(|t| t.spawn(|| frame(&mut Renderer::new(), &d)).join().unwrap());
+    cms::set_active(&old).unwrap();
+    assert!(fresh != before, "the new profile changes the frame");
+    assert!(warm == fresh, "drawn as a renderer with no tiles draws it");
+}
+
 /// Live objects follow the Color Settings: in the next frame, a blend of an RGB red and a CMYK cyan,
 /// the same blend in an envelope, an envelope that distorts the appearance of a CMYK cyan rectangle
 /// with Revolve, and a gradient mesh in CMYK colors draw through the new working CMYK profile, and

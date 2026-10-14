@@ -7,8 +7,9 @@
 //! pattern name and raster scale (and ink plane, see [`crate::ink`]) within
 //! [`lru::PATTERN_BUDGET`]. A tile is used while the pattern's definition is the one it was
 //! rasterized from (art `Arc` identity, tile, tile type, overlap): the pattern's "revision", and,
-//! when its art shows more than itself (a symbol, another pattern, an image, type), while what
-//! the document holds of those is what it held then ([`Deps`]).
+//! when its art shows more than itself (a symbol, another pattern, an image, type, a brush), while
+//! what the document holds of those is what it held then ([`Deps`]), and while the color settings
+//! are the ones it was drawn through.
 //!
 //! Pattern editing mode (`Document::pattern_edit`) draws only the temporary tile layer, with
 //! dimmed copies of it at the neighbouring tile positions and the tile edge.
@@ -17,6 +18,7 @@ use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Weak};
 
+use vectorcraft_color::cms::Cms;
 use vectorcraft_doc::pattern::{Overlap, PatternDef, TileType};
 use vectorcraft_doc::{Document, Node};
 use vectorcraft_geom::{Affine, Rect, Shape};
@@ -35,13 +37,17 @@ const MAX_TILE_PX: f64 = 2048.0;
 type TileKey = (String, u64);
 
 /// What a tile was drawn from besides its pattern's own art, for art that shows more than itself:
-/// the art of every pattern and symbol and the pixels of every image in the document, and the
-/// fonts. Editing a symbol leaves the art of a pattern that shows it as it was, so the art alone
-/// kept the tile from before (#1723). Held weakly: a weak reference keeps the allocation, so no
-/// other value gets one of these addresses while the tile is kept.
+/// the art of every pattern and symbol and the pixels of every image in the document, the
+/// document's other data (which holds its brushes), and the fonts. Editing a symbol leaves the art
+/// of a pattern that shows it as it was, so the art alone kept the tile from before (#1723). Held
+/// weakly: a weak reference keeps the allocation, so no other value gets one of these addresses
+/// while the tile is kept.
 struct Deps {
     art: Vec<Weak<Node>>,
     pixels: Vec<Weak<Vec<u8>>>,
+    /// shortcut: any change to the document's other data draws the tile again, not only a brush
+    /// edit; compare the brush library alone if that ever costs a frame.
+    unknown: Weak<vectorcraft_brush::serde_json::Map<String, vectorcraft_brush::serde_json::Value>>,
     fonts: u64,
 }
 
@@ -58,6 +64,7 @@ impl Deps {
         Self {
             art: Self::art(doc).map(Arc::downgrade).collect(),
             pixels: Self::pixels(doc).map(Arc::downgrade).collect(),
+            unknown: vectorcraft_doc::Shared::downgrade(&doc.unknown),
             fonts: vectorcraft_text::FontDb::global().generation(),
         }
     }
@@ -65,6 +72,7 @@ impl Deps {
     /// Does `doc` hold what the tile was drawn from?
     fn current(&self, doc: &Document) -> bool {
         self.fonts == vectorcraft_text::FontDb::global().generation()
+            && std::ptr::eq(self.unknown.as_ptr(), &*doc.unknown)
             && self.art.iter().map(Weak::as_ptr).eq(Self::art(doc).map(Arc::as_ptr))
             && self.pixels.iter().map(Weak::as_ptr).eq(Self::pixels(doc).map(Arc::as_ptr))
     }
@@ -74,6 +82,8 @@ struct TileEntry {
     art: Vec<Arc<Node>>,
     /// `None` for art that shows only itself.
     deps: Option<Deps>,
+    /// The color settings the tile was drawn through, held weakly as [`Deps`] holds its values.
+    cms: Weak<Cms>,
     params: (Rect, TileType, Overlap),
     sx: f64,
     sy: f64,
@@ -199,13 +209,19 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
     let scale = raster_scale(s, (pw, ph));
     let params = (def.tile, def.tile_type, def.overlap);
     let key = (name.to_string(), scale.to_bits());
+    let cms = vectorcraft_color::cms::active();
     let hit = CACHE.with(|c| {
         let mut c = c.borrow_mut();
         let tiles = &mut c.tiles[ink as usize];
         let t = tiles.tick();
         tiles
             .get(&key, t)
-            .filter(|e| e.params == params && same_art(&e.art, &def.art) && e.deps.as_ref().is_none_or(|d| d.current(doc)))
+            .filter(|e| {
+                e.params == params
+                    && same_art(&e.art, &def.art)
+                    && std::ptr::eq(e.cms.as_ptr(), Arc::as_ptr(&cms))
+                    && e.deps.as_ref().is_none_or(|d| d.current(doc))
+            })
             .map(|e| (e.pixmap.clone(), e.sx, e.sy))
     });
     let (pm, sx, sy) = match hit {
@@ -224,7 +240,7 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
                 let mut c = c.borrow_mut();
                 let tiles = &mut c.tiles[ink as usize];
                 let (t, bytes) = (tiles.tick(), size_of::<TileEntry>() + w as usize * h as usize * 4);
-                tiles.insert(key, TileEntry { art: def.art.clone(), deps, params, sx, sy, pixmap: pm.clone() }, bytes, t);
+                tiles.insert(key, TileEntry { art: def.art.clone(), deps, cms: Arc::downgrade(&cms), params, sx, sy, pixmap: pm.clone() }, bytes, t);
             });
             (pm, sx, sy)
         }
