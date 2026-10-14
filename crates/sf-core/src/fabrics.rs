@@ -26,6 +26,70 @@ pub struct Fabric {
     pub topping: bool,
     /// The stabiliser (backing) recommended under it.
     pub stabilizer: Stabilizer,
+    /// Push compensation (mm): satin columns and fill rows stop short of the edges along them.
+    pub push_comp: f64,
+    /// The underlay under satin.
+    pub satin_underlay: SatinUnderlayRecipe,
+    /// An edge run under fills (round the shape, just inside it).
+    pub fill_edge_run: bool,
+    /// Sewn on clothing, worn and washed (`Some`): Check Design's long-stitch limit follows.
+    pub garment: Option<bool>,
+}
+
+/// The underlay a fabric puts under satin.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SatinUnderlayRecipe {
+    /// Chosen from each column's width.
+    #[default]
+    Auto,
+    CenterRun,
+    EdgeRun,
+    Zigzag,
+    /// An edge run, then a zigzag over it: the most support, for knits and pile.
+    EdgeZigzag,
+}
+
+impl SatinUnderlayRecipe {
+    pub const ALL: [SatinUnderlayRecipe; 5] = [
+        SatinUnderlayRecipe::Auto,
+        SatinUnderlayRecipe::CenterRun,
+        SatinUnderlayRecipe::EdgeRun,
+        SatinUnderlayRecipe::Zigzag,
+        SatinUnderlayRecipe::EdgeZigzag,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            SatinUnderlayRecipe::Auto => "auto",
+            SatinUnderlayRecipe::CenterRun => "center-run",
+            SatinUnderlayRecipe::EdgeRun => "edge-run",
+            SatinUnderlayRecipe::Zigzag => "zigzag",
+            SatinUnderlayRecipe::EdgeZigzag => "edge-zigzag",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|r| r.id() == id)
+    }
+
+    /// Sets `u` to this recipe (Auto leaves it to each column's width).
+    pub fn apply(self, u: &mut crate::model::SatinUnderlay) {
+        let (center, edge, zigzag) = match self {
+            SatinUnderlayRecipe::Auto => {
+                u.auto = true;
+                return;
+            }
+            SatinUnderlayRecipe::CenterRun => (true, false, false),
+            SatinUnderlayRecipe::EdgeRun => (false, true, false),
+            SatinUnderlayRecipe::Zigzag => (false, false, true),
+            SatinUnderlayRecipe::EdgeZigzag => (false, true, true),
+        };
+        u.auto = false;
+        u.center_run = center;
+        u.edge_run = edge;
+        u.zigzag = zigzag;
+    }
 }
 
 /// A stabiliser (backing) hooped under the fabric.
@@ -82,6 +146,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 2.5,
             topping: false,
             stabilizer: Stabilizer::TearAway,
+            push_comp: 0.0,
+            satin_underlay: SatinUnderlayRecipe::Auto,
+            fill_edge_run: true,
+            garment: None,
         },
         Fabric {
             name: "Pique knit (polo shirt)".into(),
@@ -94,6 +162,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 2.0,
             topping: true,
             stabilizer: Stabilizer::CutAway,
+            push_comp: 0.2,
+            satin_underlay: SatinUnderlayRecipe::EdgeZigzag,
+            fill_edge_run: true,
+            garment: Some(true),
         },
         Fabric {
             name: "Jersey knit (T-shirt)".into(),
@@ -106,6 +178,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 2.0,
             topping: false,
             stabilizer: Stabilizer::NoShowMesh,
+            push_comp: 0.2,
+            satin_underlay: SatinUnderlayRecipe::EdgeZigzag,
+            fill_edge_run: true,
+            garment: Some(true),
         },
         Fabric {
             name: "Fleece / sweatshirt".into(),
@@ -118,6 +194,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 1.8,
             topping: true,
             stabilizer: Stabilizer::CutAway,
+            push_comp: 0.25,
+            satin_underlay: SatinUnderlayRecipe::EdgeZigzag,
+            fill_edge_run: true,
+            garment: Some(true),
         },
         Fabric {
             name: "Towel / terry".into(),
@@ -130,6 +210,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 1.5,
             topping: true,
             stabilizer: Stabilizer::TearAway,
+            push_comp: 0.25,
+            satin_underlay: SatinUnderlayRecipe::EdgeZigzag,
+            fill_edge_run: true,
+            garment: Some(false),
         },
         Fabric {
             name: "Denim / canvas".into(),
@@ -142,6 +226,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 3.0,
             topping: false,
             stabilizer: Stabilizer::TearAway,
+            push_comp: 0.1,
+            satin_underlay: SatinUnderlayRecipe::Auto,
+            fill_edge_run: true,
+            garment: None,
         },
         Fabric {
             name: "Leather / vinyl".into(),
@@ -154,6 +242,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 3.5,
             topping: false,
             stabilizer: Stabilizer::TearAway,
+            push_comp: 0.0,
+            satin_underlay: SatinUnderlayRecipe::CenterRun,
+            fill_edge_run: false,
+            garment: Some(false),
         },
         Fabric {
             name: "Structured cap".into(),
@@ -166,6 +258,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 2.5,
             topping: false,
             stabilizer: Stabilizer::TearAway,
+            push_comp: 0.15,
+            satin_underlay: SatinUnderlayRecipe::EdgeRun,
+            fill_edge_run: true,
+            garment: None,
         },
         Fabric {
             name: "Silk / lightweight".into(),
@@ -178,6 +274,10 @@ pub fn fabrics() -> Vec<Fabric> {
             underlay_spacing: 3.0,
             topping: false,
             stabilizer: Stabilizer::NoShowMesh,
+            push_comp: 0.1,
+            satin_underlay: SatinUnderlayRecipe::CenterRun,
+            fill_edge_run: true,
+            garment: Some(true),
         },
     ]
 }
@@ -209,12 +309,16 @@ impl Fabric {
                 ObjectKind::Satin(s) => {
                     s.params.spacing = self.satin_spacing;
                     s.params.pull_comp = self.pull_comp;
+                    s.params.push_comp = self.push_comp;
+                    self.satin_underlay.apply(&mut s.params.underlay);
                 }
                 ObjectKind::Fill(f) => {
                     f.params.spacing = self.fill_spacing;
                     f.params.stitch_length = self.fill_stitch_length;
                     f.params.pull_comp = self.pull_comp;
+                    f.params.push_comp = self.push_comp;
                     f.params.underlay.tatami = self.fill_underlay;
+                    f.params.underlay.edge_run = self.fill_edge_run;
                     f.params.underlay.spacing = self.underlay_spacing;
                 }
                 ObjectKind::Lettering(l) => {

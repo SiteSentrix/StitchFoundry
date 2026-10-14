@@ -291,7 +291,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Fabric",
             [],
             None,
-            "{name} set density, pull compensation and underlay of every stitched object for a fabric (see embroidery.info: fabrics)",
+            "{name} set density, stitch length, pull and push compensation and underlay (satin underlay type, fill edge run and tatami) of every stitched object for a fabric, and whether Check Design treats the design as clothing (see embroidery.info: fabrics)",
             has_doc,
             apply_fabric
         ),
@@ -1985,6 +1985,11 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(f) = str_param(p, "fabric") {
         cfg.fabric = f.to_string();
         changed = true;
+        // a fabric worn or not sets what Check Design counts as a long stitch
+        if let Some(g) = cfg.fabric(f).and_then(|fab| fab.garment) {
+            cfg.checks.garment = g;
+            cfg.checks.long_stitch = if g { sf_core::attr::LONG_STITCH_GARMENT } else { sf_core::attr::LONG_STITCH_OTHER };
+        }
     }
     if let Some(c) = str_param(p, "chart") {
         cfg.chart = c.to_string();
@@ -2203,12 +2208,16 @@ fn apply_fabric(s: &mut Session, p: &Value) -> Result<Value> {
                     StitchType::Satin(sp) => {
                         sp.spacing = fabric.satin_spacing;
                         sp.pull_comp = fabric.pull_comp;
+                        sp.push_comp = fabric.push_comp;
+                        fabric.satin_underlay.apply(&mut sp.underlay);
                     }
                     StitchType::Fill(f) => {
                         f.spacing = if f.kind == FillKind::Satin { fabric.satin_spacing } else { fabric.fill_spacing };
                         f.stitch_length = fabric.fill_stitch_length;
                         f.pull_comp = fabric.pull_comp;
+                        f.push_comp = fabric.push_comp;
                         f.underlay.tatami = fabric.fill_underlay;
+                        f.underlay.edge_run = fabric.fill_edge_run;
                         f.underlay.spacing = fabric.underlay_spacing;
                     }
                     StitchType::Applique(a) => {
@@ -2226,6 +2235,11 @@ fn apply_fabric(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let cfg = d.embroidery.get_or_insert_with(Box::default);
         cfg.fabric = fabric.name.to_string();
+        // worn and washed or not: what Check Design counts as a long stitch
+        if let Some(g) = fabric.garment {
+            cfg.checks.garment = g;
+            cfg.checks.long_stitch = if g { sf_core::attr::LONG_STITCH_GARMENT } else { sf_core::attr::LONG_STITCH_OTHER };
+        }
         Ok(())
     })?;
     Ok(json!({ "objects": ids.len(), "fabric": fabric.name }))

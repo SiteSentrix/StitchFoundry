@@ -859,8 +859,12 @@ time and thread used, and whether the design fits the hoop. Its settings:
 
 - **Hoop**: the sewing field, drawn on the canvas centred on the design (machine files are
   centred too); dashed red when the design doesn't fit.
-- **Fabric**: presets that set density, pull compensation and underlay, and say what to hoop
-  under it: a **Stabiliser** (tear-away for stable wovens, caps and towels; cut-away or a no-show
+- **Fabric**: presets (recipes) that set density, fill stitch length, pull and push compensation
+  and underlay (the satin underlay type: automatic, centre run, edge run, zigzag or an edge run
+  with a zigzag over it, the support knits and pile need; and whether fills get an edge run, which
+  leather and vinyl, where every hole shows, go without), whether the design is sewn on clothing
+  (worn and washed, so Check Design flags long stitches from 7 mm, not 12.1 mm: T-shirts, polos,
+  fleece and silk are; towels and leather aren't), and say what to hoop under it: a **Stabiliser** (tear-away for stable wovens, caps and towels; cut-away or a no-show
   mesh for knits, which stretch; wash-away for sheer work) and a water-soluble topping for pile
   fabrics, printed on worksheets too. **Fabric settings**
   below it shows the chosen fabric's values; **Save as New Fabric** makes a copy you can change

@@ -2898,6 +2898,7 @@ fn fabric_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
                 (tl!("Fill density"), "fillSpacing", "fab-fs", 2),
                 (tl!("Fill stitch length"), "fillStitchLength", "fab-fl", 1),
                 (tl!("Pull compensation"), "pullComp", "fab-pc", 2),
+                (tl!("Push compensation"), "pushComp", "fab-push", 2),
                 (tl!("Underlay spacing"), "underlaySpacing", "fab-us", 1),
             ] {
                 if let Some(v) = num(ui, label, id, f[key].as_f64().unwrap_or(0.0), " mm", decimals) {
@@ -2912,6 +2913,21 @@ fn fabric_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
                     change = Some(json!({ "topping": v }));
                 }
             });
+            if let Some(v) = check(ui, tl!("Edge run under fills"), f["fillEdgeRun"].as_bool().unwrap_or(true)) {
+                change = Some(json!({ "fillEdgeRun": v }));
+            }
+            use vectorcraft_embroidery::sf_core::fabrics::SatinUnderlayRecipe;
+            // in the order of SatinUnderlayRecipe::ALL
+            let unders = [tl!("Automatic"), tl!("Centre run"), tl!("Edge run"), tl!("Zigzag"), tl!("Edge run and zigzag")];
+            let cur = SatinUnderlayRecipe::ALL.iter().position(|k| f["satinUnderlay"].as_str() == Some(k.id())).unwrap_or(0);
+            if let Some(i) = pick(ui, tl!("Satin underlay"), "fab-su", cur, &unders)
+                && let Some(k) = SatinUnderlayRecipe::ALL.get(i)
+            {
+                change = Some(json!({ "satinUnderlay": k.id() }));
+            }
+            if let Some(v) = check(ui, tl!("Sewn on clothing"), f["garment"].as_bool().unwrap_or(true)) {
+                change = Some(json!({ "garment": v }));
+            }
             use vectorcraft_embroidery::sf_core::fabrics::Stabilizer;
             // in the order of Stabilizer::ALL
             let kinds = [tl!("Tear-away"), tl!("Cut-away"), tl!("No-show mesh"), tl!("Wash-away")];
