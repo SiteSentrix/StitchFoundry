@@ -917,7 +917,7 @@ impl Writer<'_> {
         let doc = self.doc;
         let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
         match st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) {
-            Some(b) => StrokePlan::Brush(vectorcraft_brush::stroke_pieces(b, bp, st)),
+            Some(b) => StrokePlan::Brush(vectorcraft_brush::stroke_pieces(doc, b, bp, st)),
             None => StrokePlan::Written(stroke::for_writer(bp, st)),
         }
     }
