@@ -580,6 +580,7 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
     // Stitches: needle to needle while the thread is attached.
     let mut long: BTreeMap<NodeId, (usize, f64, sf_core::Point)> = BTreeMap::new();
     let mut short: BTreeMap<NodeId, (usize, sf_core::Point)> = BTreeMap::new();
+    let b = pat.bounds();
     let layers = sf_core::density::LayerGrid::of(pat, CELL);
     let (gw, gh, grid, cell_mm, origin) = (layers.columns, layers.rows, &layers.layers, layers.cell, layers.origin);
     let mut last_needle: Option<sf_core::Point> = None;
