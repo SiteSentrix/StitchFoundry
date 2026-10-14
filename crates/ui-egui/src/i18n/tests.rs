@@ -457,6 +457,8 @@ const MENU_KEEP_AS_IS: &[&str] = &[
     "Tracing",
     "Typography",
     "Web",
+    "Embroidery Basics",
+    "Digitizing",
     "[1P-Normal View]",
     "[1P-Low View]",
     "[1P-High View]",
