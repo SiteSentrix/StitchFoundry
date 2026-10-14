@@ -711,3 +711,29 @@ fn a_previewed_transform_while_typing_keeps_the_typing() {
     assert_eq!(obj(&s, id).plain_text(), "Hello world!");
     assert!((left(&s, id) - 400.0).abs() < 1e-6);
 }
+
+/// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the
+/// typed text: its interaction used to join the typing session and preview from the document
+/// before the typing, so the new type came back as its placeholder text.
+#[test]
+fn a_colour_previewed_while_typing_keeps_the_typing() {
+    let mut s = session();
+    s.prefs.placeholder_text = true;
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abc", v).unwrap();
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abc", "the preview starts from the typed text");
+    s.commit_interaction().unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "abc");
+    assert!(t.runs.iter().all(|r| r.style.fill == Paint::solid(vectorcraft_color::Color::rgb8(0, 160, 0))), "{:?}", t.runs);
+    // The typing and the colour are a step each, and typing goes on after them.
+    let labels = undo_labels(&s);
+    assert_eq!(&labels[labels.len() - 2..], ["Typing", "Fill Color"]);
+    s.tool_text("d", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abcd");
+}
