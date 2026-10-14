@@ -81,7 +81,8 @@ fn make_design(s: &mut Session, p: &Value) -> Result<Value> {
         }
         "quilt" => {
             let mut q = json!({});
-            for k in ["width", "height", "unit", "pattern", "spacing", "stitch", "color", "hoop"] {
+            for k in ["width", "height", "unit", "pattern", "spacing", "stitch", "color", "hoop", "corner", "text", "shape", "applique", "clearance"]
+            {
                 if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
                     q[k] = v.clone();
                 }
