@@ -4445,6 +4445,7 @@ machine	Stop	Остановка
 	Remove Holes	Удалить отверстия
 	Reverse Stitch Direction	Обратить направление стежков
 	Swap Satin Sides	Поменять стороны глади
+	Convert to Satin Column	Преобразовать в колонку глади
 	Stem Stitch	Стебельчатый шов
 	Stem stitch	Стебельчатый шов
 	Stitches up to {n} mm long can snag	Стежки длиной до {n} мм могут цепляться

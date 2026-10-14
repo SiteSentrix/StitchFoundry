@@ -332,6 +332,13 @@ selected satin columns' zigzag on their other side, so each column also ends on 
 a shorter way on to what is sewn next. Each side keeps its own settings (twin pull compensation,
 jagged edges). Choose it again to swap back.
 
+**Convert to Satin Column** (Embroidery menu, `embroidery.toColumn`) turns a closed shape that
+sews as turning satin (long and narrow, without holes: a stroke of a letter, a stem, a leaf)
+into a satin column between two rails, as the Column A/B tool makes them: its two sides become
+open paths you can edit node by node, meeting at a point where its ends were round, and the way
+its stitches turned stays as inclination lines. The satin settings carry over (from a satin fill,
+its satin column settings).
+
 **Holes:** **Embroidery › Remove Holes** deletes the holes of the selected shapes (all of them, or
 with the `maxArea` parameter only small ones, handy after tracing). **Fill Holes** adds an object
 in each hole, sewn right after its shape, so a hole can be sewn in another thread. To add a hole,

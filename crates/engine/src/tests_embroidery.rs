@@ -5346,3 +5346,39 @@ fn fabric_recipes_set_underlay_types_push_compensation_and_clothing() {
     assert!(sat.underlay.zigzag && !sat.underlay.edge_run && (sat.push_comp - 0.3).abs() < 1e-9 && !fill.underlay.edge_run);
     assert!(s.execute("embroidery.fabric.save", &json!({"name": "X", "satinUnderlay": "lots"})).is_err());
 }
+
+/// D3: a long rounded shape sewn as satin becomes a satin column between two open rails that
+/// meet at its tips, with inclination lines, sewing about where it did.
+#[test]
+fn a_closed_shape_converts_to_a_satin_column_between_two_rails() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let id = NodeId(s.execute("shape.ellipse", &json!({"x": 20.0 * PT, "y": 40.0 * PT, "width": 60.0 * PT, "height": 8.0 * PT})).unwrap()["id"].as_u64().unwrap());
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    let before = s.embroidery_plan().unwrap().pattern().bounds();
+    let r = s.execute("embroidery.toColumn", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([id.0]), "{r}");
+    {
+        let d = &s.doc().unwrap().doc;
+        let n = d.node(id).unwrap();
+        let NodeKind::Path { path, .. } = &n.kind else { panic!("a path") };
+        assert_eq!(path.subpaths.len(), 2);
+        assert!(path.subpaths.iter().all(|sp| !sp.closed));
+        let e = n.embroidery.as_deref().unwrap();
+        assert!(matches!(e.stitch, sf_core::attr::StitchType::Satin(_)));
+        assert!(e.guides.len() >= 2);
+        // both rails start at one tip and end at the other
+        let ends = |i: usize| (path.subpaths[i].anchors.first().unwrap().p, path.subpaths[i].anchors.last().unwrap().p);
+        let ((a0, a1), (b0, b1)) = (ends(0), ends(1));
+        assert!(a0.distance(b0) < 0.5 && a1.distance(b1) < 0.5, "{a0:?} {b0:?} {a1:?} {b1:?}");
+    }
+    let after = s.embroidery_plan().unwrap().pattern().bounds();
+    for (x, y) in [(before.min.x, after.min.x), (before.max.x, after.max.x), (before.min.y, after.min.y), (before.max.y, after.max.y)] {
+        assert!((x - y).abs() < 1.5, "{before:?} → {after:?}");
+    }
+    // undo brings the shape back
+    s.execute("edit.undo", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::Path { path, .. } = &d.node(id).unwrap().kind else { panic!("a path") };
+    assert!(path.subpaths.len() == 1 && path.subpaths[0].closed);
+}
