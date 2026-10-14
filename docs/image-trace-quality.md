@@ -1,6 +1,6 @@
 # Image Trace quality
 
-> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (enhanced versions of the presets, each measured beside its preset)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Gradients: grown over noise and soft rims)
 
 What Image Trace (`crates/trace`) makes of images whose right answer is known, measured by a harness and
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
@@ -88,7 +88,7 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Technical Drawing | polygons, star, letter A, lines, askew shapes and lines | 2.73 | 13.67 | 0.210 | 1.43 | 105.76 | 4.7 | 31 | 2.01 | 100 | 9 | 85 | 5.9 | – | – | – | – | 0.1 | 0.0 | – | – | – |
 | Flat Logo | two touching halves, four-colour badge | 0.43 | 3.53 | 3.106 | 88.50 | 0.78 | 69.9 | 352 | 38.92 | 38 | 10 | 80 | 237.0 | 0.0 | 0 | 13.8 | – | 59.1 | 0.2 | – | – | – |
 
-### Now (with the enhanced presets)
+### Now (with gradients grown over noise and soft rims)
 
 | preset | inputs | ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px | centre off | width off | anchors a stroke | shapes % | false shapes | grouped % | gradient paths | found % | angle off | ramp off |
 |:--|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -113,9 +113,9 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Shades of Gray with Auto Grouping | gradient, photo-like | 9.26 | 9.06 | – | – | – | 16.6 | 700 | – | 51 | 40 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | – | 47 | 0.0 | – | – | – |
 | High Fidelity Photo with Auto Grouping | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
 | 6 Colors, no Gradients | two-stop gradient, three-stop gradient in a disc | 2.12 | 3.04 | – | – | – | 6.4 | 469 | – | 21 | 14 | – | – | – | – | 3.9 | 12.7 | 0.0 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
-| 6 Colors with Gradients | two-stop gradient, three-stop gradient in a disc | 0.62 | 1.36 | – | – | – | 3.4 | 126 | – | 8 | 4 | – | – | – | – | 1.8 | 2.7 | 0.0 | 0.0 | – | – | – | – | – | – | 1.1 | 86 | 1.5 | 21 |
+| 6 Colors with Gradients | two-stop gradient, three-stop gradient in a disc | 0.62 | 1.34 | – | – | – | 1.2 | 60 | – | 0 | 0 | – | – | – | – | 1.6 | 1.2 | 0.0 | 0.0 | – | – | – | – | – | – | 0.9 | 86 | 1.5 | 21 |
 | High Fidelity Photo, no Gradients | two-stop gradient, three-stop gradient in a disc | 0.79 | 2.98 | – | – | – | 38.1 | 3827 | – | 31 | 30 | – | – | – | – | 0.0 | – | 1.1 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
-| High Fidelity Photo with Gradients | two-stop gradient, three-stop gradient in a disc | 0.46 | 1.31 | – | – | – | 20.6 | 759 | – | 9 | 5 | – | – | – | – | 0.0 | – | 2.9 | 0.0 | – | – | – | – | – | – | 1.0 | 86 | 1.5 | 21 |
+| High Fidelity Photo with Gradients | two-stop gradient, three-stop gradient in a disc | 0.46 | 1.29 | – | – | – | 8.2 | 545 | – | 1 | 0 | – | – | – | – | 0.0 | – | 0.8 | 0.0 | – | – | – | – | – | – | 0.9 | 86 | 1.5 | 21 |
 | Default, enhanced | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.60 | 9.88 | 0.083 | 1.00 | 2.18 | 1.9 | 16 | 1.59 | 36 | 6 | 83 | 0.4 | – | – | 0.3 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.02 | 14 | 0.0 | – | – | – |
 | Auto Color, enhanced | two touching halves, four-colour badge | 0.55 | 5.00 | 0.139 | 1.33 | 1.00 | 4.0 | 48 | 3.03 | 41 | 16 | 100 | 6.0 | 0.0 | 0 | 1.3 | 1.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
 | High Fidelity Photo, enhanced | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
@@ -131,7 +131,7 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Technical Drawing, enhanced | polygons, star, letter A, lines, askew shapes and lines | 2.65 | 10.93 | 0.128 | 1.46 | 105.64 | 4.7 | 34 | 2.26 | 86 | 19 | 86 | 0.8 | – | – | – | – | 0.5 | 0.0 | – | – | – | – | 0.09 | 0 | 0.0 | – | – | – |
 | Outline, enhanced | lines | 2.61 | 9.39 | 0.050 | 0.88 | 105.74 | 5.0 | 10 | 0.52 | 99 | 4 | – | – | – | – | – | – | 0.0 | 0.0 | 0.039 | 0.02 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
 
-The sections below are the numbers now (with the enhanced presets).
+The sections below are the numbers now (with gradients grown over noise and soft rims).
 
 ## 1. Each preset on the inputs it is meant for
 
@@ -160,9 +160,9 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Shades of Gray with Auto Grouping | gradient, photo-like | 9.26 | 9.06 | – | – | – | 16.6 | 700 | – | 51 | 40 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | – | 47 | 0.0 | – | – | – |
 | High Fidelity Photo with Auto Grouping | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
 | 6 Colors, no Gradients | two-stop gradient, three-stop gradient in a disc | 2.12 | 3.04 | – | – | – | 6.4 | 469 | – | 21 | 14 | – | – | – | – | 3.9 | 12.7 | 0.0 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
-| 6 Colors with Gradients | two-stop gradient, three-stop gradient in a disc | 0.62 | 1.36 | – | – | – | 3.4 | 126 | – | 8 | 4 | – | – | – | – | 1.8 | 2.7 | 0.0 | 0.0 | – | – | – | – | – | – | 1.1 | 86 | 1.5 | 21 |
+| 6 Colors with Gradients | two-stop gradient, three-stop gradient in a disc | 0.62 | 1.34 | – | – | – | 1.2 | 60 | – | 0 | 0 | – | – | – | – | 1.6 | 1.2 | 0.0 | 0.0 | – | – | – | – | – | – | 0.9 | 86 | 1.5 | 21 |
 | High Fidelity Photo, no Gradients | two-stop gradient, three-stop gradient in a disc | 0.79 | 2.98 | – | – | – | 38.1 | 3827 | – | 31 | 30 | – | – | – | – | 0.0 | – | 1.1 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
-| High Fidelity Photo with Gradients | two-stop gradient, three-stop gradient in a disc | 0.46 | 1.31 | – | – | – | 20.6 | 759 | – | 9 | 5 | – | – | – | – | 0.0 | – | 2.9 | 0.0 | – | – | – | – | – | – | 1.0 | 86 | 1.5 | 21 |
+| High Fidelity Photo with Gradients | two-stop gradient, three-stop gradient in a disc | 0.46 | 1.29 | – | – | – | 8.2 | 545 | – | 1 | 0 | – | – | – | – | 0.0 | – | 0.8 | 0.0 | – | – | – | – | – | – | 0.9 | 86 | 1.5 | 21 |
 | Default, enhanced | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.60 | 9.88 | 0.083 | 1.00 | 2.18 | 1.9 | 16 | 1.59 | 36 | 6 | 83 | 0.4 | – | – | 0.3 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.02 | 14 | 0.0 | – | – | – |
 | Auto Color, enhanced | two touching halves, four-colour badge | 0.55 | 5.00 | 0.139 | 1.33 | 1.00 | 4.0 | 48 | 3.03 | 41 | 16 | 100 | 6.0 | 0.0 | 0 | 1.3 | 1.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
 | High Fidelity Photo, enhanced | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
@@ -356,7 +356,7 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | 6 Colors with Gradients | askew shapes | 0.19 | 3.72 | 0.058 | 0.73 | 36.06 | 4.0 | 25 | 1.06 | 90 | 3 | – | – | 0.3 | 11 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | 6 Colors with Gradients | plain shapes | 0.10 | 2.07 | 0.043 | 0.30 | 0.26 | 6.0 | 42 | 1.41 | 59 | 49 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 0 | 0.00 | – | 0.0 | – | – | – |
 | 6 Colors with Gradients | flat colour art | 0.13 | 2.72 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Gradients | gradient, photo | 4.52 | 4.86 | – | – | – | 16.3 | 919 | – | 36 | 26 | – | – | – | – | 8.8 | 12.1 | 0.0 | 0.0 | – | – | – | – | – | – | 0.7 | – | – | – |
+| 6 Colors with Gradients | gradient, photo | 4.49 | 4.84 | – | – | – | 15.0 | 909 | – | 36 | 27 | – | – | – | – | 9.7 | 12.0 | 0.0 | 0.0 | – | – | – | – | – | – | 0.7 | – | – | – |
 | 6 Colors with Gradients | linear gradients | 0.40 | 1.09 | – | – | – | 1.3 | 39 | – | 0 | 0 | – | – | – | – | 0.5 | 1.1 | 0.0 | 0.0 | – | – | – | – | – | – | 0.8 | 83 | 0.2 | 5 |
 | High Fidelity Photo, no Gradients | curved shapes | 0.04 | 1.63 | 0.026 | 0.15 | 0.15 | 1.2 | 19 | 2.11 | 21 | 21 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | High Fidelity Photo, no Gradients | polygons | 0.06 | 2.33 | 0.039 | 0.50 | 1.32 | 1.7 | 17 | 1.47 | 88 | 7 | 93 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
@@ -372,7 +372,7 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | High Fidelity Photo with Gradients | askew shapes | 0.17 | 3.97 | 0.100 | 0.94 | 1.73 | 8.7 | 157 | 6.54 | 71 | 5 | – | – | 4.3 | 3998 | 0.0 | – | 1.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | High Fidelity Photo with Gradients | plain shapes | 0.08 | 1.66 | 0.035 | 0.25 | 0.28 | 6.0 | 50 | 1.68 | 62 | 51 | – | – | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | 0 | 0.00 | – | 0.0 | – | – | – |
 | High Fidelity Photo with Gradients | flat colour art | 0.14 | 4.16 | 0.029 | 0.20 | 0.20 | 3.5 | 73 | 4.59 | 35 | 34 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| High Fidelity Photo with Gradients | gradient, photo | 1.80 | 2.04 | – | – | – | 140.7 | 10844 | – | 41 | 39 | – | – | – | – | 0.0 | – | 10.0 | 0.0 | – | – | – | – | – | – | 0.8 | – | – | – |
+| High Fidelity Photo with Gradients | gradient, photo | 1.79 | 2.04 | – | – | – | 138.0 | 11156 | – | 40 | 39 | – | – | – | – | 0.0 | – | 9.2 | 0.0 | – | – | – | – | – | – | 0.8 | – | – | – |
 | High Fidelity Photo with Gradients | linear gradients | 0.23 | 1.19 | – | – | – | 6.0 | 252 | – | 0 | 0 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 0.8 | 83 | 0.2 | 5 |
 | Default, enhanced | curved shapes | 0.08 | 3.21 | 0.056 | 0.38 | 0.38 | 1.8 | 13 | 1.44 | 14 | 14 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
 | Default, enhanced | polygons | 0.07 | 2.58 | 0.045 | 0.50 | 1.26 | 2.0 | 13 | 1.16 | 97 | 5 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
@@ -598,9 +598,9 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | 6 Colors, no Gradients | scanned | 2.16 | 2.41 | – | – | – | 6.0 | 776 | – | 20 | 12 | – | – | – | – | 9.8 | 30.4 | 0.0 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
 | 6 Colors with Gradients | clean | 0.40 | 1.09 | – | – | – | 1.3 | 39 | – | 0 | 0 | – | – | – | – | 0.5 | 1.1 | 0.0 | 0.0 | – | – | – | – | – | – | 0.8 | 83 | 0.2 | 5 |
 | 6 Colors with Gradients | aliased | 0.22 | 0.77 | – | – | – | 0.5 | 6 | – | 0 | 0 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.2 | 5 |
-| 6 Colors with Gradients | blurred | 0.33 | 2.29 | – | – | – | 3.0 | 161 | – | 8 | 0 | – | – | – | – | 2.3 | 5.1 | 0.0 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.3 | 6 |
-| 6 Colors with Gradients | noisy | 1.01 | 1.36 | – | – | – | 11.0 | 321 | – | 9 | 1 | – | – | – | – | 5.6 | 8.0 | 0.0 | 0.0 | – | – | – | – | – | – | 2.5 | 100 | 0.2 | 8 |
-| 6 Colors with Gradients | scanned | 1.57 | 1.82 | – | – | – | 5.5 | 279 | – | 23 | 14 | – | – | – | – | 3.2 | 2.4 | 0.0 | 0.0 | – | – | – | – | – | – | 0.5 | 50 | 1.5 | 21 |
+| 6 Colors with Gradients | blurred | 0.33 | 2.23 | – | – | – | 0.5 | 24 | – | 0 | 0 | – | – | – | – | 7.1 | 3.7 | 0.0 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.3 | 6 |
+| 6 Colors with Gradients | noisy | 1.02 | 1.27 | – | – | – | 0.5 | 14 | – | 0 | 0 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.2 | 8 |
+| 6 Colors with Gradients | scanned | 1.57 | 1.82 | – | – | – | 3.0 | 264 | – | 3 | 0 | – | – | – | – | 2.8 | 1.6 | 0.0 | 0.0 | – | – | – | – | – | – | 0.5 | 50 | 1.5 | 21 |
 | High Fidelity Photo, no Gradients | clean | 0.64 | 3.29 | – | – | – | 34.5 | 4318 | – | 32 | 31 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
 | High Fidelity Photo, no Gradients | aliased | 0.67 | 3.46 | – | – | – | 37.5 | 3184 | – | 32 | 31 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
 | High Fidelity Photo, no Gradients | blurred | 0.72 | 3.25 | – | – | – | 33.5 | 3324 | – | 32 | 31 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
@@ -608,9 +608,9 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | High Fidelity Photo, no Gradients | scanned | 1.05 | 1.62 | – | – | – | 54.5 | 3858 | – | 29 | 28 | – | – | – | – | 0.0 | – | 7.5 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
 | High Fidelity Photo with Gradients | clean | 0.23 | 1.19 | – | – | – | 6.0 | 252 | – | 0 | 0 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 0.8 | 83 | 0.2 | 5 |
 | High Fidelity Photo with Gradients | aliased | 0.21 | 0.52 | – | – | – | 0.5 | 24 | – | 0 | 0 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.2 | 5 |
-| High Fidelity Photo with Gradients | blurred | 0.33 | 2.29 | – | – | – | 55.5 | 940 | – | 4 | 0 | – | – | – | – | 0.0 | – | 13.5 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.3 | 6 |
-| High Fidelity Photo with Gradients | noisy | 1.00 | 1.24 | – | – | – | 23.5 | 652 | – | 21 | 7 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | – | – | 2.0 | 100 | 0.2 | 8 |
-| High Fidelity Photo with Gradients | scanned | 0.97 | 1.55 | – | – | – | 46.5 | 2942 | – | 18 | 15 | – | – | – | – | 0.0 | – | 6.0 | 0.0 | – | – | – | – | – | – | 0.5 | 50 | 1.5 | 21 |
+| High Fidelity Photo with Gradients | blurred | 0.33 | 2.20 | – | – | – | 0.5 | 48 | – | 1 | 0 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.3 | 6 |
+| High Fidelity Photo with Gradients | noisy | 1.02 | 1.21 | – | – | – | 1.5 | 116 | – | 0 | 0 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.2 | 8 |
+| High Fidelity Photo with Gradients | scanned | 0.97 | 1.55 | – | – | – | 37.0 | 2868 | – | 5 | 3 | – | – | – | – | 0.0 | – | 5.5 | 0.0 | – | – | – | – | – | – | 0.5 | 50 | 1.5 | 21 |
 | Default, enhanced | clean | 0.08 | 2.94 | 0.051 | 0.50 | 1.26 | 1.9 | 13 | 1.32 | 50 | 10 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 14 | 0.0 | – | – | – |
 | Default, enhanced | aliased | 0.36 | 19.23 | 0.194 | 1.00 | 1.35 | 1.9 | 14 | 1.42 | 28 | 8 | 98 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.14 | 14 | 0.0 | – | – | – |
 | Default, enhanced | blurred | 0.81 | 16.50 | 0.073 | 0.98 | 2.18 | 1.9 | 22 | 2.15 | 17 | 5 | 38 | 1.3 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 14 | 0.0 | – | – | – |
@@ -722,27 +722,27 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 
 | preset | image | megapixels | result |
 |:--|:--|--:|:--|
-| Default | photo-like | 1 | 0.07 s, 29 paths, 6278 anchors, 12 MB |
-| Default | four-colour badge | 1 | 0.04 s, 3 paths, 64 anchors, 12 MB |
-| Auto Color | photo-like | 1 | 0.19 s, 732 paths, 45265 anchors, 23 MB |
-| Auto Color | four-colour badge | 1 | 0.08 s, 5 paths, 84 anchors, 12 MB |
-| High Fidelity Photo | photo-like | 1 | 0.24 s, 968 paths, 117041 anchors, 151 MB |
-| High Fidelity Photo | four-colour badge | 1 | 0.08 s, 6 paths, 172 anchors, 23 MB |
-| Low Fidelity Photo | photo-like | 1 | 0.21 s, 129 paths, 23014 anchors, 106 MB |
-| Low Fidelity Photo | four-colour badge | 1 | 0.08 s, 6 paths, 136 anchors, 23 MB |
+| Default | photo-like | 1 | 0.04 s, 29 paths, 6278 anchors, 12 MB |
+| Default | four-colour badge | 1 | 0.02 s, 3 paths, 64 anchors, 12 MB |
+| Auto Color | photo-like | 1 | 0.17 s, 732 paths, 45265 anchors, 24 MB |
+| Auto Color | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
+| High Fidelity Photo | photo-like | 1 | 0.22 s, 968 paths, 117041 anchors, 171 MB |
+| High Fidelity Photo | four-colour badge | 1 | 0.06 s, 6 paths, 172 anchors, 23 MB |
+| Low Fidelity Photo | photo-like | 1 | 0.12 s, 129 paths, 23014 anchors, 105 MB |
+| Low Fidelity Photo | four-colour badge | 1 | 0.05 s, 6 paths, 136 anchors, 23 MB |
 | 3 Colors | photo-like | 1 | 0.09 s, 9 paths, 3341 anchors, 18 MB |
-| 3 Colors | four-colour badge | 1 | 0.07 s, 4 paths, 88 anchors, 13 MB |
-| 6 Colors | photo-like | 1 | 0.12 s, 78 paths, 9076 anchors, 23 MB |
-| 6 Colors | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 12 MB |
-| 16 Colors | photo-like | 1 | 0.11 s, 178 paths, 20470 anchors, 31 MB |
+| 3 Colors | four-colour badge | 1 | 0.05 s, 4 paths, 88 anchors, 13 MB |
+| 6 Colors | photo-like | 1 | 0.10 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
+| 16 Colors | photo-like | 1 | 0.11 s, 178 paths, 20470 anchors, 26 MB |
 | 16 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 88 anchors, 12 MB |
-| Shades of Gray | photo-like | 1 | 0.09 s, 81 paths, 6698 anchors, 40 MB |
-| Shades of Gray | four-colour badge | 1 | 0.07 s, 10 paths, 725 anchors, 34 MB |
-| Black and White Logo | photo-like | 1 | 0.06 s, 71 paths, 4933 anchors, 8 MB |
+| Shades of Gray | photo-like | 1 | 0.10 s, 81 paths, 6698 anchors, 41 MB |
+| Shades of Gray | four-colour badge | 1 | 0.06 s, 10 paths, 725 anchors, 34 MB |
+| Black and White Logo | photo-like | 1 | 0.04 s, 71 paths, 4933 anchors, 8 MB |
 | Black and White Logo | four-colour badge | 1 | 0.02 s, 1 paths, 47 anchors, 6 MB |
-| Sketched Art | photo-like | 1 | 0.05 s, 5 paths, 2873 anchors, 8 MB |
-| Sketched Art | four-colour badge | 1 | 0.03 s, 2 paths, 114 anchors, 6 MB |
-| Silhouettes | photo-like | 1 | 0.04 s, 2 paths, 556 anchors, 9 MB |
+| Sketched Art | photo-like | 1 | 0.04 s, 5 paths, 2873 anchors, 8 MB |
+| Sketched Art | four-colour badge | 1 | 0.02 s, 2 paths, 114 anchors, 6 MB |
+| Silhouettes | photo-like | 1 | 0.03 s, 2 paths, 556 anchors, 9 MB |
 | Silhouettes | four-colour badge | 1 | 0.02 s, 1 paths, 24 anchors, 6 MB |
 | Line Art | photo-like | 1 | 0.04 s, 54 paths, 4495 anchors, 8 MB |
 | Line Art | four-colour badge | 1 | 0.02 s, 1 paths, 38 anchors, 6 MB |
@@ -750,42 +750,42 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 | Technical Drawing | four-colour badge | 1 | 0.02 s, 1 paths, 47 anchors, 6 MB |
 | Outline | photo-like | 1 | 0.05 s, 45 paths, 4110 anchors, 16 MB |
 | Outline | four-colour badge | 1 | 0.03 s, 1 paths, 38 anchors, 11 MB |
-| Flat Logo | photo-like | 1 | refused after 0.12 s (not flat art), 40 MB |
+| Flat Logo | photo-like | 1 | refused after 0.14 s (not flat art), 40 MB |
 | Flat Logo | four-colour badge | 1 | 0.66 s, 5 paths, 78 anchors, 146 MB |
 | Default with Shapes | photo-like | 1 | 0.05 s, 29 paths, 6278 anchors, 12 MB |
 | Default with Shapes | four-colour badge | 1 | 0.02 s, 3 paths, 62 anchors, 12 MB |
-| 6 Colors with Shapes | photo-like | 1 | 0.12 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors with Shapes | photo-like | 1 | 0.11 s, 78 paths, 9076 anchors, 24 MB |
 | 6 Colors with Shapes | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
-| 6 Colors with Auto Grouping | photo-like | 1 | 0.11 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors with Auto Grouping | photo-like | 1 | 0.10 s, 78 paths, 9076 anchors, 24 MB |
 | 6 Colors with Auto Grouping | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
-| Shades of Gray with Auto Grouping | photo-like | 1 | 0.10 s, 81 paths, 6698 anchors, 43 MB |
+| Shades of Gray with Auto Grouping | photo-like | 1 | 0.10 s, 81 paths, 6698 anchors, 41 MB |
 | Shades of Gray with Auto Grouping | four-colour badge | 1 | 0.06 s, 10 paths, 725 anchors, 34 MB |
-| High Fidelity Photo with Auto Grouping | photo-like | 1 | 0.27 s, 968 paths, 117041 anchors, 170 MB |
+| High Fidelity Photo with Auto Grouping | photo-like | 1 | 0.24 s, 968 paths, 117041 anchors, 169 MB |
 | High Fidelity Photo with Auto Grouping | four-colour badge | 1 | 0.05 s, 6 paths, 172 anchors, 23 MB |
-| 6 Colors, no Gradients | photo-like | 1 | 0.08 s, 78 paths, 9076 anchors, 24 MB |
-| 6 Colors, no Gradients | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
-| 6 Colors with Gradients | photo-like | 1 | 0.16 s, 78 paths, 9076 anchors, 32 MB |
-| 6 Colors with Gradients | four-colour badge | 1 | 0.12 s, 5 paths, 84 anchors, 12 MB |
-| High Fidelity Photo, no Gradients | photo-like | 1 | 0.25 s, 968 paths, 117041 anchors, 153 MB |
-| High Fidelity Photo, no Gradients | four-colour badge | 1 | 0.08 s, 6 paths, 172 anchors, 23 MB |
-| High Fidelity Photo with Gradients | photo-like | 1 | 0.30 s, 968 paths, 117041 anchors, 157 MB |
-| High Fidelity Photo with Gradients | four-colour badge | 1 | 0.11 s, 6 paths, 172 anchors, 23 MB |
-| Default, enhanced | photo-like | 1 | 0.10 s, 29 paths, 6278 anchors, 12 MB |
-| Default, enhanced | four-colour badge | 1 | 0.03 s, 3 paths, 62 anchors, 12 MB |
-| Auto Color, enhanced | photo-like | 1 | 0.18 s, 732 paths, 45260 anchors, 24 MB |
-| Auto Color, enhanced | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 12 MB |
+| 6 Colors, no Gradients | photo-like | 1 | 0.09 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors, no Gradients | four-colour badge | 1 | 0.07 s, 5 paths, 84 anchors, 12 MB |
+| 6 Colors with Gradients | photo-like | 1 | 0.15 s, 78 paths, 9076 anchors, 32 MB |
+| 6 Colors with Gradients | four-colour badge | 1 | 0.08 s, 5 paths, 84 anchors, 12 MB |
+| High Fidelity Photo, no Gradients | photo-like | 1 | 0.23 s, 968 paths, 117041 anchors, 170 MB |
+| High Fidelity Photo, no Gradients | four-colour badge | 1 | 0.06 s, 6 paths, 172 anchors, 23 MB |
+| High Fidelity Photo with Gradients | photo-like | 1 | 0.26 s, 968 paths, 117041 anchors, 169 MB |
+| High Fidelity Photo with Gradients | four-colour badge | 1 | 0.09 s, 6 paths, 172 anchors, 23 MB |
+| Default, enhanced | photo-like | 1 | 0.05 s, 29 paths, 6278 anchors, 12 MB |
+| Default, enhanced | four-colour badge | 1 | 0.02 s, 3 paths, 62 anchors, 12 MB |
+| Auto Color, enhanced | photo-like | 1 | 0.17 s, 732 paths, 45260 anchors, 27 MB |
+| Auto Color, enhanced | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
 | High Fidelity Photo, enhanced | photo-like | 1 | 0.26 s, 968 paths, 117041 anchors, 169 MB |
 | High Fidelity Photo, enhanced | four-colour badge | 1 | 0.05 s, 6 paths, 172 anchors, 23 MB |
-| Low Fidelity Photo, enhanced | photo-like | 1 | 0.12 s, 129 paths, 23014 anchors, 105 MB |
+| Low Fidelity Photo, enhanced | photo-like | 1 | 0.14 s, 129 paths, 23014 anchors, 105 MB |
 | Low Fidelity Photo, enhanced | four-colour badge | 1 | 0.05 s, 6 paths, 116 anchors, 23 MB |
-| 3 Colors, enhanced | photo-like | 1 | 0.08 s, 9 paths, 3341 anchors, 18 MB |
+| 3 Colors, enhanced | photo-like | 1 | 0.09 s, 9 paths, 3341 anchors, 18 MB |
 | 3 Colors, enhanced | four-colour badge | 1 | 0.05 s, 4 paths, 76 anchors, 13 MB |
-| 6 Colors, enhanced | photo-like | 1 | 0.18 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors, enhanced | photo-like | 1 | 0.10 s, 78 paths, 9076 anchors, 24 MB |
 | 6 Colors, enhanced | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
-| 16 Colors, enhanced | photo-like | 1 | 0.11 s, 178 paths, 20467 anchors, 31 MB |
+| 16 Colors, enhanced | photo-like | 1 | 0.13 s, 178 paths, 20467 anchors, 31 MB |
 | 16 Colors, enhanced | four-colour badge | 1 | 0.05 s, 5 paths, 88 anchors, 12 MB |
-| Shades of Gray, enhanced | photo-like | 1 | 0.09 s, 81 paths, 6698 anchors, 42 MB |
-| Shades of Gray, enhanced | four-colour badge | 1 | 0.06 s, 10 paths, 623 anchors, 34 MB |
+| Shades of Gray, enhanced | photo-like | 1 | 0.10 s, 81 paths, 6698 anchors, 40 MB |
+| Shades of Gray, enhanced | four-colour badge | 1 | 0.06 s, 10 paths, 623 anchors, 35 MB |
 | Black and White Logo, enhanced | photo-like | 1 | 0.05 s, 71 paths, 4933 anchors, 8 MB |
 | Black and White Logo, enhanced | four-colour badge | 1 | 0.02 s, 1 paths, 46 anchors, 6 MB |
 | Sketched Art, enhanced | photo-like | 1 | 0.04 s, 5 paths, 2873 anchors, 8 MB |
@@ -798,163 +798,164 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 | Technical Drawing, enhanced | four-colour badge | 1 | 0.02 s, 1 paths, 46 anchors, 6 MB |
 | Outline, enhanced | photo-like | 1 | 0.05 s, 45 paths, 4110 anchors, 16 MB |
 | Outline, enhanced | four-colour badge | 1 | 0.03 s, 1 paths, 38 anchors, 11 MB |
-| Default | photo-like | 4 | 0.18 s, 48 paths, 14438 anchors, 49 MB |
+| Default | photo-like | 4 | 0.20 s, 48 paths, 14438 anchors, 49 MB |
 | Default | four-colour badge | 4 | 0.10 s, 3 paths, 72 anchors, 48 MB |
-| Auto Color | photo-like | 4 | 0.44 s, 1469 paths, 149389 anchors, 113 MB |
-| Auto Color | four-colour badge | 4 | 0.18 s, 5 paths, 92 anchors, 46 MB |
-| High Fidelity Photo | photo-like | 4 | 0.71 s, 4479 paths, 337884 anchors, 636 MB |
+| Auto Color | photo-like | 4 | 0.44 s, 1469 paths, 149389 anchors, 105 MB |
+| Auto Color | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 47 MB |
+| High Fidelity Photo | photo-like | 4 | 0.80 s, 4479 paths, 337884 anchors, 636 MB |
 | High Fidelity Photo | four-colour badge | 4 | 0.25 s, 6 paths, 200 anchors, 94 MB |
-| Low Fidelity Photo | photo-like | 4 | 0.37 s, 299 paths, 61601 anchors, 400 MB |
-| Low Fidelity Photo | four-colour badge | 4 | 0.22 s, 6 paths, 152 anchors, 94 MB |
-| 3 Colors | photo-like | 4 | 0.29 s, 20 paths, 8473 anchors, 73 MB |
-| 3 Colors | four-colour badge | 4 | 0.19 s, 4 paths, 122 anchors, 53 MB |
-| 6 Colors | photo-like | 4 | 0.26 s, 115 paths, 23295 anchors, 100 MB |
-| 6 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
-| 16 Colors | photo-like | 4 | 0.29 s, 353 paths, 52770 anchors, 119 MB |
-| 16 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 96 anchors, 46 MB |
-| Shades of Gray | photo-like | 4 | 0.28 s, 137 paths, 18823 anchors, 161 MB |
-| Shades of Gray | four-colour badge | 4 | 0.27 s, 10 paths, 1256 anchors, 134 MB |
+| Low Fidelity Photo | photo-like | 4 | 0.40 s, 299 paths, 61601 anchors, 395 MB |
+| Low Fidelity Photo | four-colour badge | 4 | 0.41 s, 6 paths, 152 anchors, 97 MB |
+| 3 Colors | photo-like | 4 | 0.79 s, 20 paths, 8473 anchors, 73 MB |
+| 3 Colors | four-colour badge | 4 | 0.30 s, 4 paths, 122 anchors, 53 MB |
+| 6 Colors | photo-like | 4 | 0.34 s, 115 paths, 23295 anchors, 100 MB |
+| 6 Colors | four-colour badge | 4 | 0.22 s, 5 paths, 92 anchors, 46 MB |
+| 16 Colors | photo-like | 4 | 0.34 s, 353 paths, 52770 anchors, 129 MB |
+| 16 Colors | four-colour badge | 4 | 0.22 s, 5 paths, 96 anchors, 47 MB |
+| Shades of Gray | photo-like | 4 | 0.32 s, 137 paths, 18823 anchors, 156 MB |
+| Shades of Gray | four-colour badge | 4 | 0.28 s, 10 paths, 1256 anchors, 136 MB |
 | Black and White Logo | photo-like | 4 | 0.20 s, 208 paths, 13546 anchors, 32 MB |
 | Black and White Logo | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
-| Sketched Art | photo-like | 4 | 0.19 s, 9 paths, 5387 anchors, 32 MB |
-| Sketched Art | four-colour badge | 4 | 0.08 s, 2 paths, 196 anchors, 24 MB |
+| Sketched Art | photo-like | 4 | 0.20 s, 9 paths, 5387 anchors, 32 MB |
+| Sketched Art | four-colour badge | 4 | 0.09 s, 2 paths, 196 anchors, 24 MB |
 | Silhouettes | photo-like | 4 | 0.21 s, 2 paths, 1465 anchors, 36 MB |
 | Silhouettes | four-colour badge | 4 | 0.08 s, 1 paths, 28 anchors, 24 MB |
-| Line Art | photo-like | 4 | 0.19 s, 127 paths, 11330 anchors, 32 MB |
-| Line Art | four-colour badge | 4 | 0.08 s, 1 paths, 42 anchors, 24 MB |
-| Technical Drawing | photo-like | 4 | 0.19 s, 931 paths, 20628 anchors, 32 MB |
+| Line Art | photo-like | 4 | 0.20 s, 127 paths, 11330 anchors, 32 MB |
+| Line Art | four-colour badge | 4 | 0.09 s, 1 paths, 42 anchors, 24 MB |
+| Technical Drawing | photo-like | 4 | 0.20 s, 931 paths, 20628 anchors, 32 MB |
 | Technical Drawing | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
-| Outline | photo-like | 4 | 0.24 s, 113 paths, 10815 anchors, 64 MB |
+| Outline | photo-like | 4 | 0.25 s, 113 paths, 10815 anchors, 64 MB |
 | Outline | four-colour badge | 4 | 0.13 s, 1 paths, 42 anchors, 44 MB |
 | Flat Logo | photo-like | 4 | refused after 0.14 s (not flat art), 40 MB |
 | Flat Logo | four-colour badge | 4 | 0.67 s, 5 paths, 69 anchors, 146 MB |
-| Default with Shapes | photo-like | 4 | 0.59 s, 48 paths, 14438 anchors, 49 MB |
-| Default with Shapes | four-colour badge | 4 | 0.09 s, 3 paths, 72 anchors, 48 MB |
-| 6 Colors with Shapes | photo-like | 4 | 0.30 s, 115 paths, 23292 anchors, 100 MB |
+| Default with Shapes | photo-like | 4 | 0.22 s, 48 paths, 14438 anchors, 49 MB |
+| Default with Shapes | four-colour badge | 4 | 0.10 s, 3 paths, 72 anchors, 48 MB |
+| 6 Colors with Shapes | photo-like | 4 | 0.31 s, 115 paths, 23292 anchors, 100 MB |
 | 6 Colors with Shapes | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
-| 6 Colors with Auto Grouping | photo-like | 4 | 0.27 s, 115 paths, 23295 anchors, 100 MB |
-| 6 Colors with Auto Grouping | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
-| Shades of Gray with Auto Grouping | photo-like | 4 | 0.29 s, 137 paths, 18823 anchors, 170 MB |
-| Shades of Gray with Auto Grouping | four-colour badge | 4 | 0.28 s, 10 paths, 1256 anchors, 136 MB |
-| High Fidelity Photo with Auto Grouping | photo-like | 4 | 1.00 s, 4479 paths, 337884 anchors, 629 MB |
-| High Fidelity Photo with Auto Grouping | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 93 MB |
+| 6 Colors with Auto Grouping | photo-like | 4 | 0.34 s, 115 paths, 23295 anchors, 100 MB |
+| 6 Colors with Auto Grouping | four-colour badge | 4 | 0.21 s, 5 paths, 92 anchors, 47 MB |
+| Shades of Gray with Auto Grouping | photo-like | 4 | 0.32 s, 137 paths, 18823 anchors, 155 MB |
+| Shades of Gray with Auto Grouping | four-colour badge | 4 | 0.30 s, 10 paths, 1256 anchors, 136 MB |
+| High Fidelity Photo with Auto Grouping | photo-like | 4 | 0.85 s, 4479 paths, 337884 anchors, 639 MB |
+| High Fidelity Photo with Auto Grouping | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 94 MB |
 | 6 Colors, no Gradients | photo-like | 4 | 0.27 s, 115 paths, 23295 anchors, 100 MB |
 | 6 Colors, no Gradients | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
-| 6 Colors with Gradients | photo-like | 4 | 0.63 s, 115 paths, 23295 anchors, 128 MB |
-| 6 Colors with Gradients | four-colour badge | 4 | 0.29 s, 5 paths, 92 anchors, 46 MB |
-| High Fidelity Photo, no Gradients | photo-like | 4 | 0.70 s, 4479 paths, 337884 anchors, 640 MB |
+| 6 Colors with Gradients | photo-like | 4 | 0.78 s, 115 paths, 23295 anchors, 128 MB |
+| 6 Colors with Gradients | four-colour badge | 4 | 0.49 s, 5 paths, 92 anchors, 48 MB |
+| High Fidelity Photo, no Gradients | photo-like | 4 | 0.72 s, 4479 paths, 337884 anchors, 633 MB |
 | High Fidelity Photo, no Gradients | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 97 MB |
-| High Fidelity Photo with Gradients | photo-like | 4 | 1.50 s, 4479 paths, 337884 anchors, 359 MB |
-| High Fidelity Photo with Gradients | four-colour badge | 4 | 0.59 s, 6 paths, 200 anchors, 97 MB |
-| Default, enhanced | photo-like | 4 | 0.39 s, 48 paths, 14438 anchors, 49 MB |
-| Default, enhanced | four-colour badge | 4 | 0.17 s, 3 paths, 72 anchors, 48 MB |
-| Auto Color, enhanced | photo-like | 4 | 0.79 s, 1469 paths, 149374 anchors, 115 MB |
-| Auto Color, enhanced | four-colour badge | 4 | 0.20 s, 5 paths, 92 anchors, 47 MB |
-| High Fidelity Photo, enhanced | photo-like | 4 | 0.84 s, 4479 paths, 337884 anchors, 625 MB |
+| High Fidelity Photo with Gradients | photo-like | 4 | 1.06 s, 4479 paths, 337884 anchors, 642 MB |
+| High Fidelity Photo with Gradients | four-colour badge | 4 | 0.34 s, 6 paths, 200 anchors, 96 MB |
+| Default, enhanced | photo-like | 4 | 0.22 s, 48 paths, 14438 anchors, 49 MB |
+| Default, enhanced | four-colour badge | 4 | 0.10 s, 3 paths, 72 anchors, 48 MB |
+| Auto Color, enhanced | photo-like | 4 | 0.49 s, 1469 paths, 149374 anchors, 113 MB |
+| Auto Color, enhanced | four-colour badge | 4 | 0.18 s, 5 paths, 92 anchors, 46 MB |
+| High Fidelity Photo, enhanced | photo-like | 4 | 0.83 s, 4479 paths, 337884 anchors, 638 MB |
 | High Fidelity Photo, enhanced | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 93 MB |
-| Low Fidelity Photo, enhanced | photo-like | 4 | 0.39 s, 299 paths, 61598 anchors, 399 MB |
+| Low Fidelity Photo, enhanced | photo-like | 4 | 0.39 s, 299 paths, 61598 anchors, 408 MB |
 | Low Fidelity Photo, enhanced | four-colour badge | 4 | 0.23 s, 6 paths, 128 anchors, 93 MB |
-| 3 Colors, enhanced | photo-like | 4 | 0.29 s, 20 paths, 8471 anchors, 73 MB |
+| 3 Colors, enhanced | photo-like | 4 | 0.28 s, 20 paths, 8471 anchors, 73 MB |
 | 3 Colors, enhanced | four-colour badge | 4 | 0.19 s, 4 paths, 84 anchors, 51 MB |
-| 6 Colors, enhanced | photo-like | 4 | 0.29 s, 115 paths, 23292 anchors, 100 MB |
+| 6 Colors, enhanced | photo-like | 4 | 0.30 s, 115 paths, 23292 anchors, 100 MB |
 | 6 Colors, enhanced | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
-| 16 Colors, enhanced | photo-like | 4 | 0.32 s, 353 paths, 52772 anchors, 125 MB |
+| 16 Colors, enhanced | photo-like | 4 | 0.33 s, 353 paths, 52772 anchors, 126 MB |
 | 16 Colors, enhanced | four-colour badge | 4 | 0.19 s, 5 paths, 96 anchors, 46 MB |
-| Shades of Gray, enhanced | photo-like | 4 | 0.32 s, 137 paths, 18823 anchors, 161 MB |
-| Shades of Gray, enhanced | four-colour badge | 4 | 0.27 s, 10 paths, 1056 anchors, 137 MB |
+| Shades of Gray, enhanced | photo-like | 4 | 0.30 s, 137 paths, 18823 anchors, 163 MB |
+| Shades of Gray, enhanced | four-colour badge | 4 | 0.26 s, 10 paths, 1056 anchors, 137 MB |
 | Black and White Logo, enhanced | photo-like | 4 | 0.21 s, 208 paths, 13546 anchors, 32 MB |
-| Black and White Logo, enhanced | four-colour badge | 4 | 0.09 s, 1 paths, 57 anchors, 24 MB |
-| Sketched Art, enhanced | photo-like | 4 | 0.20 s, 9 paths, 5387 anchors, 32 MB |
-| Sketched Art, enhanced | four-colour badge | 4 | 0.09 s, 2 paths, 38 anchors, 24 MB |
+| Black and White Logo, enhanced | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
+| Sketched Art, enhanced | photo-like | 4 | 0.19 s, 9 paths, 5387 anchors, 32 MB |
+| Sketched Art, enhanced | four-colour badge | 4 | 0.08 s, 2 paths, 38 anchors, 24 MB |
 | Silhouettes, enhanced | photo-like | 4 | 0.22 s, 2 paths, 1465 anchors, 36 MB |
 | Silhouettes, enhanced | four-colour badge | 4 | 0.08 s, 1 paths, 8 anchors, 24 MB |
-| Line Art, enhanced | photo-like | 4 | 0.20 s, 127 paths, 11330 anchors, 32 MB |
-| Line Art, enhanced | four-colour badge | 4 | 0.08 s, 1 paths, 42 anchors, 24 MB |
+| Line Art, enhanced | photo-like | 4 | 0.21 s, 127 paths, 11330 anchors, 32 MB |
+| Line Art, enhanced | four-colour badge | 4 | 0.09 s, 1 paths, 42 anchors, 24 MB |
 | Technical Drawing, enhanced | photo-like | 4 | 0.21 s, 931 paths, 20628 anchors, 32 MB |
 | Technical Drawing, enhanced | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
-| Outline, enhanced | photo-like | 4 | 0.25 s, 113 paths, 10815 anchors, 64 MB |
-| Outline, enhanced | four-colour badge | 4 | 0.13 s, 1 paths, 42 anchors, 44 MB |
-| Default | photo-like | 16 | 1.06 s, 127 paths, 34034 anchors, 199 MB |
-| Default | four-colour badge | 16 | 0.49 s, 3 paths, 88 anchors, 184 MB |
-| Auto Color | photo-like | 16 | 1.66 s, 5390 paths, 454670 anchors, 283 MB |
-| Auto Color | four-colour badge | 16 | 0.81 s, 5 paths, 112 anchors, 184 MB |
-| High Fidelity Photo | photo-like | 16 | 3.73 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo | four-colour badge | 16 | 1.06 s, 6 paths, 264 anchors, 257 MB |
-| Low Fidelity Photo | photo-like | 16 | 1.90 s, 2036 paths, 182778 anchors, 754 MB |
-| Low Fidelity Photo | four-colour badge | 16 | 1.11 s, 6 paths, 180 anchors, 257 MB |
-| 3 Colors | photo-like | 16 | 1.66 s, 76 paths, 23024 anchors, 290 MB |
-| 3 Colors | four-colour badge | 16 | 1.50 s, 4 paths, 190 anchors, 205 MB |
-| 6 Colors | photo-like | 16 | 2.07 s, 470 paths, 60831 anchors, 298 MB |
-| 6 Colors | four-colour badge | 16 | 0.88 s, 5 paths, 112 anchors, 184 MB |
-| 16 Colors | photo-like | 16 | 1.16 s, 1973 paths, 145642 anchors, 304 MB |
-| 16 Colors | four-colour badge | 16 | 1.05 s, 5 paths, 114 anchors, 184 MB |
-| Shades of Gray | photo-like | 16 | 2.07 s, 686 paths, 53654 anchors, 407 MB |
-| Shades of Gray | four-colour badge | 16 | 1.69 s, 9 paths, 2208 anchors, 270 MB |
-| Black and White Logo | photo-like | 16 | 1.27 s, 1128 paths, 45273 anchors, 129 MB |
-| Black and White Logo | four-colour badge | 16 | 0.46 s, 1 paths, 69 anchors, 88 MB |
-| Sketched Art | photo-like | 16 | 1.22 s, 15 paths, 11486 anchors, 128 MB |
+| Outline, enhanced | photo-like | 4 | 0.24 s, 113 paths, 10815 anchors, 64 MB |
+| Outline, enhanced | four-colour badge | 4 | 0.12 s, 1 paths, 42 anchors, 44 MB |
+| Default | photo-like | 16 | 1.08 s, 127 paths, 34034 anchors, 199 MB |
+| Default | four-colour badge | 16 | 0.51 s, 3 paths, 88 anchors, 184 MB |
+| Auto Color | photo-like | 16 | 1.66 s, 5390 paths, 454670 anchors, 277 MB |
+| Auto Color | four-colour badge | 16 | 0.84 s, 5 paths, 112 anchors, 184 MB |
+| High Fidelity Photo | photo-like | 16 | 4.31 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo | four-colour badge | 16 | 1.10 s, 6 paths, 264 anchors, 257 MB |
+| Low Fidelity Photo | photo-like | 16 | 1.98 s, 2036 paths, 182778 anchors, 754 MB |
+| Low Fidelity Photo | four-colour badge | 16 | 1.09 s, 6 paths, 180 anchors, 257 MB |
+| 3 Colors | photo-like | 16 | 1.50 s, 76 paths, 23024 anchors, 290 MB |
+| 3 Colors | four-colour badge | 16 | 1.05 s, 4 paths, 190 anchors, 213 MB |
+| 6 Colors | photo-like | 16 | 1.57 s, 470 paths, 60831 anchors, 298 MB |
+| 6 Colors | four-colour badge | 16 | 1.07 s, 5 paths, 112 anchors, 184 MB |
+| 16 Colors | photo-like | 16 | 1.68 s, 1973 paths, 145642 anchors, 303 MB |
+| 16 Colors | four-colour badge | 16 | 1.09 s, 5 paths, 114 anchors, 188 MB |
+| Shades of Gray | photo-like | 16 | 2.48 s, 686 paths, 53654 anchors, 407 MB |
+| Shades of Gray | four-colour badge | 16 | 1.96 s, 9 paths, 2208 anchors, 270 MB |
+| Black and White Logo | photo-like | 16 | 1.37 s, 1128 paths, 45273 anchors, 129 MB |
+| Black and White Logo | four-colour badge | 16 | 0.47 s, 1 paths, 69 anchors, 88 MB |
+| Sketched Art | photo-like | 16 | 1.19 s, 15 paths, 11486 anchors, 128 MB |
 | Sketched Art | four-colour badge | 16 | 0.52 s, 2 paths, 361 anchors, 88 MB |
-| Silhouettes | photo-like | 16 | 1.54 s, 3 paths, 3350 anchors, 144 MB |
-| Silhouettes | four-colour badge | 16 | 0.53 s, 1 paths, 32 anchors, 95 MB |
-| Line Art | photo-like | 16 | 1.21 s, 713 paths, 37370 anchors, 129 MB |
-| Line Art | four-colour badge | 16 | 0.53 s, 1 paths, 49 anchors, 88 MB |
+| Silhouettes | photo-like | 16 | 1.45 s, 3 paths, 3350 anchors, 144 MB |
+| Silhouettes | four-colour badge | 16 | 0.48 s, 1 paths, 32 anchors, 95 MB |
+| Line Art | photo-like | 16 | 1.23 s, 713 paths, 37370 anchors, 129 MB |
+| Line Art | four-colour badge | 16 | 0.50 s, 1 paths, 49 anchors, 88 MB |
 | Technical Drawing | photo-like | 16 | 1.58 s, 4577 paths, 76559 anchors, 130 MB |
-| Technical Drawing | four-colour badge | 16 | 0.56 s, 1 paths, 69 anchors, 88 MB |
-| Outline | photo-like | 16 | 1.79 s, 632 paths, 34884 anchors, 256 MB |
-| Outline | four-colour badge | 16 | 0.81 s, 1 paths, 49 anchors, 176 MB |
-| Flat Logo | photo-like | 16 | refused after 0.18 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 16 | 0.96 s, 5 paths, 67 anchors, 146 MB |
-| Default with Shapes | photo-like | 16 | 1.23 s, 127 paths, 34034 anchors, 199 MB |
-| Default with Shapes | four-colour badge | 16 | 0.55 s, 3 paths, 88 anchors, 184 MB |
-| 6 Colors with Shapes | photo-like | 16 | 1.59 s, 470 paths, 60823 anchors, 298 MB |
-| 6 Colors with Shapes | four-colour badge | 16 | 1.21 s, 5 paths, 112 anchors, 185 MB |
-| 6 Colors with Auto Grouping | photo-like | 16 | 1.82 s, 470 paths, 60831 anchors, 298 MB |
-| 6 Colors with Auto Grouping | four-colour badge | 16 | 1.30 s, 5 paths, 112 anchors, 185 MB |
-| Shades of Gray with Auto Grouping | photo-like | 16 | 2.24 s, 686 paths, 53654 anchors, 407 MB |
-| Shades of Gray with Auto Grouping | four-colour badge | 16 | 3.67 s, 9 paths, 2208 anchors, 263 MB |
-| High Fidelity Photo with Auto Grouping | photo-like | 16 | 9.11 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo with Auto Grouping | four-colour badge | 16 | 1.15 s, 6 paths, 264 anchors, 257 MB |
-| 6 Colors, no Gradients | photo-like | 16 | 1.64 s, 470 paths, 60831 anchors, 298 MB |
-| 6 Colors, no Gradients | four-colour badge | 16 | 1.12 s, 5 paths, 112 anchors, 184 MB |
-| 6 Colors with Gradients | photo-like | 16 | 3.23 s, 470 paths, 60831 anchors, 512 MB |
-| 6 Colors with Gradients | four-colour badge | 16 | 1.66 s, 5 paths, 112 anchors, 185 MB |
-| High Fidelity Photo, no Gradients | photo-like | 16 | 5.24 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo, no Gradients | four-colour badge | 16 | 2.11 s, 6 paths, 264 anchors, 257 MB |
-| High Fidelity Photo with Gradients | photo-like | 16 | 6.50 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo with Gradients | four-colour badge | 16 | 2.09 s, 6 paths, 264 anchors, 263 MB |
-| Default, enhanced | photo-like | 16 | 1.29 s, 127 paths, 34034 anchors, 199 MB |
-| Default, enhanced | four-colour badge | 16 | 0.64 s, 3 paths, 88 anchors, 184 MB |
-| Auto Color, enhanced | photo-like | 16 | 2.81 s, 5390 paths, 454626 anchors, 274 MB |
-| Auto Color, enhanced | four-colour badge | 16 | 1.20 s, 5 paths, 112 anchors, 188 MB |
-| High Fidelity Photo, enhanced | photo-like | 16 | 7.90 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo, enhanced | four-colour badge | 16 | 1.21 s, 6 paths, 264 anchors, 257 MB |
-| Low Fidelity Photo, enhanced | photo-like | 16 | 1.94 s, 2036 paths, 182770 anchors, 754 MB |
-| Low Fidelity Photo, enhanced | four-colour badge | 16 | 1.07 s, 6 paths, 149 anchors, 257 MB |
-| 3 Colors, enhanced | photo-like | 16 | 1.30 s, 76 paths, 23019 anchors, 290 MB |
-| 3 Colors, enhanced | four-colour badge | 16 | 0.91 s, 4 paths, 98 anchors, 205 MB |
-| 6 Colors, enhanced | photo-like | 16 | 1.21 s, 470 paths, 60823 anchors, 298 MB |
-| 6 Colors, enhanced | four-colour badge | 16 | 0.84 s, 5 paths, 112 anchors, 184 MB |
-| 16 Colors, enhanced | photo-like | 16 | 1.22 s, 1973 paths, 145623 anchors, 293 MB |
-| 16 Colors, enhanced | four-colour badge | 16 | 0.84 s, 5 paths, 114 anchors, 184 MB |
-| Shades of Gray, enhanced | photo-like | 16 | 1.67 s, 686 paths, 53648 anchors, 407 MB |
-| Shades of Gray, enhanced | four-colour badge | 16 | 1.35 s, 9 paths, 1989 anchors, 270 MB |
-| Black and White Logo, enhanced | photo-like | 16 | 1.15 s, 1128 paths, 45272 anchors, 129 MB |
-| Black and White Logo, enhanced | four-colour badge | 16 | 0.40 s, 1 paths, 69 anchors, 88 MB |
-| Sketched Art, enhanced | photo-like | 16 | 1.11 s, 15 paths, 11486 anchors, 128 MB |
-| Sketched Art, enhanced | four-colour badge | 16 | 0.41 s, 2 paths, 44 anchors, 88 MB |
-| Silhouettes, enhanced | photo-like | 16 | 1.40 s, 3 paths, 3350 anchors, 144 MB |
-| Silhouettes, enhanced | four-colour badge | 16 | 0.43 s, 1 paths, 8 anchors, 95 MB |
-| Line Art, enhanced | photo-like | 16 | 1.17 s, 713 paths, 37370 anchors, 129 MB |
-| Line Art, enhanced | four-colour badge | 16 | 0.42 s, 1 paths, 49 anchors, 88 MB |
-| Technical Drawing, enhanced | photo-like | 16 | 1.34 s, 4577 paths, 76558 anchors, 130 MB |
-| Technical Drawing, enhanced | four-colour badge | 16 | 0.39 s, 1 paths, 69 anchors, 88 MB |
-| Outline, enhanced | photo-like | 16 | 1.38 s, 632 paths, 34884 anchors, 256 MB |
-| Outline, enhanced | four-colour badge | 16 | 0.77 s, 1 paths, 49 anchors, 176 MB |
+| Technical Drawing | four-colour badge | 16 | 0.44 s, 1 paths, 69 anchors, 88 MB |
+| Outline | photo-like | 16 | 1.47 s, 632 paths, 34884 anchors, 256 MB |
+| Outline | four-colour badge | 16 | 0.75 s, 1 paths, 49 anchors, 176 MB |
+| Flat Logo | photo-like | 16 | refused after 0.20 s (not flat art), 40 MB |
+| Flat Logo | four-colour badge | 16 | 0.80 s, 5 paths, 67 anchors, 146 MB |
+| Default with Shapes | photo-like | 16 | 1.19 s, 127 paths, 34034 anchors, 199 MB |
+| Default with Shapes | four-colour badge | 16 | 0.54 s, 3 paths, 88 anchors, 184 MB |
+| 6 Colors with Shapes | photo-like | 16 | 1.40 s, 470 paths, 60823 anchors, 298 MB |
+| 6 Colors with Shapes | four-colour badge | 16 | 1.00 s, 5 paths, 112 anchors, 185 MB |
+| 6 Colors with Auto Grouping | photo-like | 16 | 1.64 s, 470 paths, 60831 anchors, 298 MB |
+| 6 Colors with Auto Grouping | four-colour badge | 16 | 1.04 s, 5 paths, 112 anchors, 185 MB |
+| Shades of Gray with Auto Grouping | photo-like | 16 | 2.19 s, 686 paths, 53654 anchors, 407 MB |
+| Shades of Gray with Auto Grouping | four-colour badge | 16 | 1.63 s, 9 paths, 2208 anchors, 270 MB |
+| High Fidelity Photo with Auto Grouping | photo-like | 16 | 9.72 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo with Auto Grouping | four-colour badge | 16 | 1.64 s, 6 paths, 264 anchors, 257 MB |
+| 6 Colors, no Gradients | photo-like | 16 | 1.66 s, 470 paths, 60831 anchors, 298 MB |
+| 6 Colors, no Gradients | four-colour badge | 16 | 1.13 s, 5 paths, 112 anchors, 184 MB |
+| 6 Colors with Gradients | photo-like | 16 | 3.71 s, 470 paths, 60831 anchors, 512 MB |
+| 6 Colors with Gradients | four-colour badge | 16 | 1.71 s, 5 paths, 112 anchors, 188 MB |
+| High Fidelity Photo, no Gradients | photo-like | 16 | 4.87 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo, no Gradients | four-colour badge | 16 | 1.50 s, 6 paths, 264 anchors, 257 MB |
+| High Fidelity Photo with Gradients | photo-like | 16 | 6.74 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo with Gradients | four-colour badge | 16 | 1.68 s, 6 paths, 264 anchors, 257 MB |
+| Default, enhanced | photo-like | 16 | 1.18 s, 127 paths, 34034 anchors, 199 MB |
+| Default, enhanced | four-colour badge | 16 | 0.57 s, 3 paths, 88 anchors, 184 MB |
+| Auto Color, enhanced | photo-like | 16 | 2.31 s, 5390 paths, 454626 anchors, 283 MB |
+| Auto Color, enhanced | four-colour badge | 16 | 0.98 s, 5 paths, 112 anchors, 188 MB |
+| High Fidelity Photo, enhanced | photo-like | 16 | 9.09 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo, enhanced | four-colour badge | 16 | 1.47 s, 6 paths, 264 anchors, 263 MB |
+| Low Fidelity Photo, enhanced | photo-like | 16 | 2.70 s, 2036 paths, 182770 anchors, 754 MB |
+| Low Fidelity Photo, enhanced | four-colour badge | 16 | 1.60 s, 6 paths, 149 anchors, 257 MB |
+| 3 Colors, enhanced | photo-like | 16 | 1.82 s, 76 paths, 23019 anchors, 290 MB |
+| 3 Colors, enhanced | four-colour badge | 16 | 1.24 s, 4 paths, 98 anchors, 205 MB |
+| 6 Colors, enhanced | photo-like | 16 | 2.20 s, 470 paths, 60823 anchors, 298 MB |
+| 6 Colors, enhanced | four-colour badge | 16 | 2.19 s, 5 paths, 112 anchors, 185 MB |
+| 16 Colors, enhanced | photo-like | 16 | 2.03 s, 1973 paths, 145623 anchors, 303 MB |
+| 16 Colors, enhanced | four-colour badge | 16 | 1.13 s, 5 paths, 114 anchors, 188 MB |
+| Shades of Gray, enhanced | photo-like | 16 | 2.76 s, 686 paths, 53648 anchors, 407 MB |
+| Shades of Gray, enhanced | four-colour badge | 16 | 3.36 s, 9 paths, 1989 anchors, 270 MB |
+| Black and White Logo, enhanced | photo-like | 16 | 1.58 s, 1128 paths, 45272 anchors, 129 MB |
+| Black and White Logo, enhanced | four-colour badge | 16 | 0.59 s, 1 paths, 69 anchors, 88 MB |
+| Sketched Art, enhanced | photo-like | 16 | 1.52 s, 15 paths, 11486 anchors, 128 MB |
+| Sketched Art, enhanced | four-colour badge | 16 | 0.54 s, 2 paths, 44 anchors, 88 MB |
+| Silhouettes, enhanced | photo-like | 16 | 1.82 s, 3 paths, 3350 anchors, 144 MB |
+| Silhouettes, enhanced | four-colour badge | 16 | 0.56 s, 1 paths, 8 anchors, 95 MB |
+| Line Art, enhanced | photo-like | 16 | 1.43 s, 713 paths, 37370 anchors, 129 MB |
+| Line Art, enhanced | four-colour badge | 16 | 0.58 s, 1 paths, 49 anchors, 88 MB |
+| Technical Drawing, enhanced | photo-like | 16 | 1.76 s, 4577 paths, 76558 anchors, 130 MB |
+| Technical Drawing, enhanced | four-colour badge | 16 | 0.52 s, 1 paths, 69 anchors, 88 MB |
+| Outline, enhanced | photo-like | 16 | 1.64 s, 632 paths, 34884 anchors, 256 MB |
+| Outline, enhanced | four-colour badge | 16 | 0.73 s, 1 paths, 49 anchors, 176 MB |
 
 ## Revision history
 
 | date | change |
 |:--|:--|
+| 2026-10-14 | Gradients: a gradient that noise or a soft rim broke into pieces is found in its largest piece and grown over the rest (blurred and noisy linear gradients: 3 to 11 paths beside the gradient down to 0.5 with 6 Colors, 24 to 56 down to 0.5 to 1.5 with High Fidelity Photo) |
 | 2026-10-14 | Enhanced versions of the presets (Auto Grouping, and Shapes in all but High Fidelity Photo; Flat Logo has none), each measured beside its preset; a hole that one colour fills is the same shape as what fills it, rectangles are sized by where their sides lie, and a group keeps its paths in the order they were traced in (grouped, a letter with a counter was painted with a light seam: Default with Auto Grouping, edge ΔE 10.24 to 9.88) |
 | 2026-10-14 | Create: Strokes: a line whose ink is cut square at its ends gets square caps, and a wide line whose skeleton hooks towards a corner of its end ends on the line it was following (Outline: largest distance 2.94 px to 0.88; aliased lines 0.88 to 0.81) |
 | 2026-10-13 | Shapes: corners that anti-aliasing or blur took a little off are corners, a rounded rectangle gets the radius that fits, a polygon its sides from the outline itself, hard-edged outlines a little more room (plain shapes found: 57 to 62% up to 98 to 100%); a "false shapes" column |
