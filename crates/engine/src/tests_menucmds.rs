@@ -1579,6 +1579,119 @@ fn guides_and_art_are_shift_selected_together() {
     assert_eq!(guides(&s).len(), 2);
 }
 
+/// When ruler guides and art are selected together, moving the art moves the guides as well;
+/// copy leaves both in place and moves the copies; single undo reverts both.
+#[test]
+fn guides_and_art_move_together_when_selected() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+
+    // Select art and both guides.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0, 1], "toggle": true})).unwrap();
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![a], vec![0, 1]));
+
+    // 1. Moving via object.transform moves both art and guides in one step.
+    let n = undo_len(&s);
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 25, 35]})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (35.0, 45.0));
+    assert_eq!(guides(&s), vec![(true, 225.0), (false, 335.0)]);
+    assert_eq!(undo_len(&s), n + 1);
+
+    // Undo restores both in one step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (10.0, 10.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+
+    // Redo reapplies both.
+    s.execute("edit.redo", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (35.0, 45.0));
+    assert_eq!(guides(&s), vec![(true, 225.0), (false, 335.0)]);
+
+    // Undo back to start.
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 2. object.move also moves both.
+    s.execute("object.move", &json!({"dx": 15, "dy": 20})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (25.0, 30.0));
+    assert_eq!(guides(&s), vec![(true, 215.0), (false, 320.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 3. Arrow-key nudge moves both.
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0})).unwrap();
+    let k = s.prefs.keyboard_increment;
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!(b.x0, 10.0 + k);
+    assert_eq!(guides(&s)[0], (true, 200.0 + k));
+    assert_eq!(guides(&s)[1], (false, 300.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 4. Copy (e.g. Alt-drag) duplicates both art and guides, leaving originals in place.
+    let res = s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 50, 60], "copy": true})).unwrap();
+    let copied_id = NodeId(res["ids"][0].as_u64().unwrap());
+    assert_ne!(copied_id, a);
+    let b_orig = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    let b_copy = s.doc().unwrap().doc.bounds_of(&[copied_id], false).unwrap();
+    assert_eq!((b_orig.x0, b_orig.y0), (10.0, 10.0));
+    assert_eq!((b_copy.x0, b_copy.y0), (60.0, 70.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0), (true, 250.0), (false, 360.0)]);
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![copied_id], vec![2, 3]));
+
+    // Undo takes back both copies in one step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+    assert!(s.doc().unwrap().doc.node(copied_id).is_none());
+    assert!(s.doc().unwrap().doc.node(a).is_some());
+
+    // 5. Explicit ids: only the specified art moves, guides stay put.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0, 1], "toggle": true})).unwrap();
+    s.execute("object.transform", &json!({"ids": [a.0], "matrix": [1, 0, 0, 1, 40, 50]})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (50.0, 60.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 6. Interactive preview copies: dragging with Alt previews the copies and commit keeps them.
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 10, 20], "copy": true})).unwrap();
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 30, 40], "copy": true})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(guides(&s).len(), 4);
+    assert_eq!(guides(&s)[2], (true, 230.0));
+    assert_eq!(guides(&s)[3], (false, 340.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+
+    // 7. Dragging a guide (guide.move) when art is also selected moves both art and guides.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0, 1], "toggle": true})).unwrap();
+    s.execute("guide.move", &json!({"dx": 10, "dy": 20})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (20.0, 30.0));
+    assert_eq!(guides(&s), vec![(true, 210.0), (false, 320.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (10.0, 10.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+
+    // 8. Copy-dragging a guide (guide.move { copy: true }) when art is also selected duplicates both.
+    s.execute("guide.move", &json!({"dx": 10, "dy": 20, "copy": true})).unwrap();
+    assert_eq!(guides(&s).len(), 4);
+    assert_eq!(guides(&s)[2], (true, 210.0));
+    assert_eq!(guides(&s)[3], (false, 320.0));
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+}
+
 /// #451: an artboard guide (`guide.add {artboard}`) runs across its artboard only, and is moved,
 /// copied and deleted with it; canvas guides stay put.
 #[test]
