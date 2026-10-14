@@ -68,8 +68,14 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     Ok(json!({ "background": true, "status": status }))
 }
 
-/// Open the files that are ready (each frame).
+/// Open the files that are ready (each frame). Not while a dialog is open: a document that opens
+/// becomes the active one, and the dialog's OK acts on the active document (#1694: Save As
+/// options confirmed after another file had finished opening saved that file's art under the
+/// first one's name). The files wait, their status line too, until the dialog is closed.
 pub fn poll(app: &mut VectorcraftApp) {
+    if app.ui.dialog.is_some() {
+        return;
+    }
     let mut i = 0;
     while let Some(p) = app.opening.pending.get(i) {
         let r = match p.done.try_recv() {
@@ -107,6 +113,32 @@ mod tests {
 
     use super::*;
     use crate::Services;
+
+    /// #1694: a file that finishes opening while a dialog is up waits for it to close, so the
+    /// dialog's document stays the active one.
+    #[test]
+    fn a_file_ready_while_a_dialog_is_open_waits_for_it_to_close() {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+        let (first, before) = (app.session.doc().unwrap().uid, app.session.documents().len());
+        app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({"path": "/art/First.vectorcraft"})));
+        start(&mut app, "/art/Second.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+        let t0 = std::time::Instant::now();
+        while t0.elapsed().as_millis() < 400 {
+            poll(&mut app);
+            std::thread::yield_now();
+        }
+        assert_eq!((app.session.documents().len(), app.session.doc().unwrap().uid), (before, first), "still the dialog's document");
+        assert_eq!(app.opening.pending.len(), 1);
+        app.ui.dialog = None;
+        let t0 = std::time::Instant::now();
+        while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
+            poll(&mut app);
+            std::thread::yield_now();
+        }
+        assert_eq!(app.session.documents().len(), before + 1);
+        assert_eq!(app.session.doc().unwrap().path.as_deref(), Some("/art/Second.vectorcraft"));
+    }
 
     #[test]
     fn a_file_read_off_the_ui_thread_opens_as_one_read_at_once() {

@@ -306,6 +306,14 @@ pub struct UiState {
     pub dock: bool,
     pub view: ViewFlags,
     pub dialog: Option<Dialog>,
+    /// Messages to show in a dialog once the open one is closed (`dialogs::confirm::tell`), in
+    /// the order they came.
+    #[serde(skip)]
+    pub told: Vec<Dialog>,
+    /// A control request is being answered: its caller gets what fails as its reply, so no
+    /// dialog says it too (`io::report_write_error`).
+    #[serde(skip)]
+    pub answering_control: bool,
     /// Toolbar group whose flyout is open.
     pub flyout: Option<usize>,
     /// Last tool shown for each toolbar group (flyout selection sticks).
@@ -681,6 +689,8 @@ impl Default for UiState {
             dock: true,
             view: ViewFlags::default(),
             dialog: None,
+            told: vec![],
+            answering_control: false,
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             status: String::new(),

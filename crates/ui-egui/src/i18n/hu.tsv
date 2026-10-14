@@ -485,6 +485,8 @@
 	Calligraphic	Kalligrafikus
 	Calligraphic Brush Options	Kalligrafikus ecset beállításai
 	Can't open “{name}”.	Nem nyitható meg: „{name}”.
+	Can't save “{name}”.	Nem menthető: „{name}”.
+	Can't export “{name}”.	Nem exportálható: „{name}”.
 	Can't print these settings: see the Summary	Ezekkel a beállításokkal nem lehet nyomtatni: lásd az Összegzést
 	Cancel	Mégse
 	Cancel Key Object	Kulcsobjektum megszüntetése

@@ -268,7 +268,10 @@ mod tests {
         let written = Written::default();
         let w = written.clone();
         let services = Services {
-            download: Some(Box::new(move |name: &str, b: &[u8]| w.borrow_mut().push((name.to_string(), b.to_vec())))),
+            download: Some(Box::new(move |name: &str, b: &[u8]| {
+                w.borrow_mut().push((name.to_string(), b.to_vec()));
+                Ok(())
+            })),
             ..Default::default()
         };
         (with_art(services), written)

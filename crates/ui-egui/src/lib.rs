@@ -188,7 +188,9 @@ pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 pub type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
-pub type DownloadFn = Box<dyn FnMut(&str, &[u8])>;
+/// Starts a browser download of the bytes under a file name; an error when it couldn't be started
+/// (the save or export then fails as a refused write does: #1693).
+pub type DownloadFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
 /// Opens a URL in the system browser.
 pub type OpenUrlFn = Box<dyn FnMut(&str)>;
@@ -778,7 +780,10 @@ impl VectorcraftApp {
             let reply = req.reply.clone();
             // Guarded per request: a panic must not drop the channel (taken out of `self` above).
             let roots = self.automation_roots.clone();
-            let outcome = match file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req))) {
+            self.ui.answering_control = true;
+            let answer = file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req)));
+            self.ui.answering_control = false;
+            let outcome = match answer {
                 Ok(outcome) => outcome,
                 Err(msg) => {
                     self.picks.recover();
