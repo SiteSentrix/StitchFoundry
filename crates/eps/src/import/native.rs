@@ -881,11 +881,13 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, tr
             Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
         };
         let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
-        if (art_box.width() - page_rect.width()).abs() > 0.5 || (art_box.height() - page_rect.height()).abs() > 0.5 {
+        // The layers' art in the document's terms: a Large Canvas editing copy is written at 1/N
+        // scale, which `to_doc` carries, so its art and the page reach the same size (#2031).
+        let rect = to_doc.transform_rect_bbox(art_box);
+        if (rect.width() - page_rect.width()).abs() > 0.5 || (rect.height() - page_rect.height()).abs() > 0.5 {
             return Err("its editing data is for a different page".into());
         }
         // The page's area in the layers' document, and the page's type moved there.
-        let rect = to_doc.transform_rect_bbox(art_box);
         let shift = Affine::translate(Vec2::new(rect.x0 - page_rect.x0, rect.y0 - page_rect.y0));
         for l in &visible.layers {
             if let Some(c) = l.children() {

@@ -34,6 +34,15 @@ fn native(layers: &str) -> String {
     )
 }
 
+/// The editing copy of a Large Canvas file (#2031): art and boxes written at 1/`scale`, declared
+/// with `%AI24_LargeCanvasScale` as Illustrator writes it. The file's page is `size × scale`
+/// points.
+fn native_large_canvas(size: f64, scale: f64, layers: &str) -> String {
+    format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 {size} {size}\n%%HiResBoundingBox: 0 0 {size} {size}\n%AI3_Cropmarks: 0 0 {size} {size}\n%AI24_LargeCanvasScale: {scale}\n%AI5_NumLayers: 1\n{layers}%%Trailer\n"
+    )
+}
+
 /// A layer as the format writes it.
 fn layer(name: &str, visible: bool, body: &str) -> String {
     format!("%AI5_BeginLayer\n{} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n", u8::from(visible))
@@ -237,6 +246,29 @@ fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     let (d, w, _) = crate::layered_ai(&private(&other), pdf.clone(), vec![], false, false);
     assert_eq!(names(&d), names(&pdf));
     assert!(w.iter().any(|w| w.contains("different page")), "{w:?}");
+}
+
+/// #2031: a Large Canvas editing copy (`%AI24_LargeCanvasScale: 10`) writes its art and boxes at
+/// 1/10 scale; the import scales them back, so its layers are read instead of being rejected as
+/// another page's — with the art at the page's size. Art that doesn't match the page at that
+/// scale is still another page's.
+#[test]
+fn a_large_canvas_eps_keeps_its_layers_at_the_pages_size() {
+    // 10 art units for the page's 100 points: a 0.4-unit square at (5, 5) is the page's 4-point
+    // square at (50, 50).
+    let art = native_large_canvas(10.0, 10.0, &layer("Art", true, "0 0 1 0 k\n5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\nf"));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    let d = &r.document;
+    assert_eq!(names(d), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let b = d.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    assert!((b.x0 - 50.0).abs() < 1e-6 && (b.y0 - 46.0).abs() < 1e-6, "at the page's place: {b:?}");
+    assert!((b.width() - 4.0).abs() < 1e-6 && (b.height() - 4.0).abs() < 1e-6, "at the page's size: {b:?}");
+    // A declared scale the art doesn't fit still makes it another page's.
+    let art = native_large_canvas(20.0, 10.0, &layer("Art", true, &square(10, 10)));
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("different page")), "{:?}", r.warnings);
 }
 
 /// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its

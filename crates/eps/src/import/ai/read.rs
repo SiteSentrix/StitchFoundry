@@ -391,6 +391,9 @@ struct Reader<'a> {
     /// The artboard's size and centre in files without artboards or crop marks.
     art_size: Option<(f64, f64)>,
     template_center: Option<(f64, f64)>,
+    /// `%AI24_LargeCanvasScale`: a Large Canvas document's editing data is written at 1/N scale
+    /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one.
+    large_canvas: f64,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
     pattern: Option<PatternHead>,
     /// The tile's top left (y down) of each pattern read, by name.
@@ -525,6 +528,7 @@ impl<'a> Reader<'a> {
             slot_names: HashMap::new(),
             art_size: None,
             template_center: None,
+            large_canvas: 1.0,
             pattern: None,
             pattern_tiles: HashMap::new(),
             text: None,
@@ -660,6 +664,16 @@ impl<'a> Reader<'a> {
         } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:") {
             self.template_center = two(v);
             self.template = four(v).or(self.template);
+        } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
+            // Illustrator's Large Canvas writes the editing data (art and boxes) at 1/N scale, N
+            // being this; the printed page applies the same factor, so the art reaches the page's
+            // size once it is applied to the art space ([`Self::ensure_space`]). A value outside
+            // the range Illustrator writes is left alone.
+            if let Ok(n) = v.trim().parse::<f64>()
+                && (1.0..=100.0).contains(&n)
+            {
+                self.large_canvas = n;
+            }
         } else if let Some(v) = line.strip_prefix("AI9_ColorModel:") {
             self.color_model = Some(v.trim() == "2");
         }
@@ -1858,14 +1872,17 @@ impl<'a> Reader<'a> {
         Some(Rect::new(x0, y0, x1, y1)).filter(|r| r.width() > 0.0 && r.height() > 0.0)
     }
 
-    /// Art space → the document (fixed when the art starts, from the artboards read by then).
+    /// Art space → the document (fixed when the art starts, from the artboards read by then). A
+    /// Large Canvas editing copy is written at 1/N scale ([`Self::large_canvas`]): the factor makes
+    /// its art and boxes reach the page's size, which is what the page it is opened beside holds.
     fn ensure_space(&mut self) -> Affine {
         if let Some(m) = self.to_doc {
             return m;
         }
         let first = self.first_board().or_else(|| self.bbox_board());
         let top_left = first.map_or(Point::new(0.0, 792.0), |r| Point::new(r.x0, r.y1));
-        let m = Affine::new([1.0, 0.0, 0.0, -1.0, -top_left.x, top_left.y]);
+        let s = self.large_canvas;
+        let m = Affine::new([s, 0.0, 0.0, -s, -s * top_left.x, s * top_left.y]);
         self.to_doc = Some(m);
         m
     }
