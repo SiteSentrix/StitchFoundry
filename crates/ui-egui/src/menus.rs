@@ -173,6 +173,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Break Apart", "embroidery.breakApart"),
         c("Automatic Knife", "embroidery.knife"),
         c("Check Design", "ui.embroideryCheck"),
+        c("Density Map", "ui.embroideryDensity"),
         Sep,
         c("Freeze Stitches", "embroidery.freeze"),
         c("Regenerate Stitches", "embroidery.regenerate"),
@@ -213,6 +214,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Check Design",
         "",
         "{} run embroidery.check and list what it finds in the Embroidery panel (click a finding to select its objects) → {count}",
+    ),
+    (
+        "ui.embroideryDensity",
+        "Density Map",
+        "",
+        "{on?: bool} colour the design by how deep the thread lies (embroidery.densityMap): blue one layer, green and yellow deeper, red as deep as Check Design calls dense (toggle) → on",
     ),
     (
         "ui.designFromPrompt",
@@ -1133,6 +1140,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("cancelled".into()),
         });
     }
+    if id == "ui.embroideryDensity" {
+        let on = p.get("on").and_then(Value::as_bool).unwrap_or(!app.embroidery.density_map);
+        app.embroidery.density_map = on;
+        return Some(Ok(json!(on)));
+    }
     if id == "ui.embroideryWidget" {
         if app.session.active().is_none() {
             return Some(Err("no document".into()));
@@ -1704,6 +1716,9 @@ fn go_to_artboard(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
+    if id == "ui.embroideryDensity" {
+        return Some(app.embroidery.density_map);
+    }
     if id == "ui.embroideryWidget" {
         return Some(app.embroidery.widget.open);
     }

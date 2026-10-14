@@ -117,6 +117,10 @@ pub struct EmbroideryUi {
     pub art: ArtView,
     pub connectors: bool,
     pub needle_points: bool,
+    /// Colour the canvas by how deep the thread lies (View › Density Map).
+    pub density_map: bool,
+    /// The density map's layers, for the plan it was measured on.
+    pub density: Option<(usize, std::sync::Arc<vectorcraft_embroidery::sf_core::density::LayerGrid>)>,
     /// Show the selected objects' start and stop beads.
     pub beads: bool,
     /// Show the selected objects' inclination lines with any tool.
@@ -273,6 +277,8 @@ impl Default for EmbroideryUi {
             art: ArtView::Dimmed,
             connectors: false,
             needle_points: false,
+            density_map: false,
+            density: None,
             beads: true,
             guides: false,
             fabric: Color32::from_rgb(246, 243, 236),
