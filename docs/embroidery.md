@@ -10,6 +10,7 @@ Everything is a command (`embroidery.*`), so the same features work from the men
 the control channel, the CLI and the MCP server.
 
 - [Quick start](#quick-start)
+- [Digitizing basics](#digitizing-basics)
 - [Stitch types](#stitch-types)
 - [Stitch direction: automatic, then editable](#stitch-direction-automatic-then-editable)
 - [The digitizing widget and brush](#the-digitizing-widget-and-brush)
@@ -45,6 +46,68 @@ guide is the same text as this file (`help.topics`, `help.topic`, `help.forTool`
 4. Fix the stitch direction where needed with the **Inclination tool** (below).
 5. Use **File › Export › Machine Embroidery File** (or **Embroidery › Export Machine File**) and
    pick a format.
+
+## Digitizing basics
+
+Digitizing is planning how a machine sews art: which stitches cover each part, how long and how
+close they are, what goes under them, and the order the needle takes, so the design sews cleanly,
+without needless trims, on the fabric it is for. StitchFoundry makes these choices for you and
+shows them; this is what they mean and where to change them.
+
+**Three stitch kinds.** A **run** is a line of single stitches: outlines, details and the travel
+between parts. **Satin** zigzags across a narrow column, its threads lying side by side for a
+smooth, raised look: borders and lettering. A **fill** (tatami) covers an area in rows of shorter
+stitches, staggered so no lines show. See [Stitch types](#stitch-types).
+
+**Stitch length.** The machine needs some room between needle holes, and long threads on top can
+catch.
+
+- Runs: about 2–2.5 mm sews smoothly (the default 2.5 mm). Under about 0.5 mm the needle keeps
+  going into the same spot and can cut or break the thread.
+- On clothing, keep any stitch under about 7 mm, since longer ones snag when worn and washed. On
+  bags, towels and other items up to about 12 mm is fine; beyond that most machines trim.
+- Satin: columns from about 1 mm to 6–7 mm wide. Narrower satin sinks into the fabric (sew it
+  as a run); wider satin is split (**Auto split**) or sewn as a fill.
+- Fills: stitches of about 4 mm (the default). Much shorter fill stitches make the fabric ripple
+  after washing.
+
+**Check Design** flags all of these, with **Sewn on clothing** choosing 7 or 12.1 mm
+([Design settings](#design-settings-hoop-fabric-threads)).
+
+**Density** is the gap between rows or zigzags: 0.4 mm by default. Closer for pile (towels,
+fleece) so the stitches sit on top of the loops; more open for leather and vinyl, where too many
+holes cut the material. Fabric presets set it.
+
+**Underlay** is the stitching sewn first, under the stitches you see: it holds the fabric down
+and gives the top stitches something to sit on.
+
+- A **centre run** goes down the middle of a column.
+- An **edge run** (contour) goes just inside the outline.
+- A **zigzag** goes back and forth across a column.
+- A sparse **tatami** goes across a fill at right angles to its rows.
+
+Knits and pile want the most (an edge run and a zigzag); light and see-through fabrics the
+least. Each one is switched in the Embroidery panel, and fabric presets choose them.
+
+**Compensation.** Thread pulls the fabric in across the stitches and pushes it out along them.
+So a satin sewn exactly as drawn comes out narrower and longer. **Pull compensation** widens
+satin and lengthens fill rows to make up for it; **push compensation** shortens satin at its
+open ends and keeps fill rows back from the edges across them.
+
+**Order and registration.** Parts sewn in a sensible order meet where they should: what lies
+behind first, outlines last over the fills they edge, each part starting near where the last one
+ended. Badly ordered designs show gaps and misaligned outlines. **Auto Sequence**, the start and
+stop points of each object, and branching (several parts sewn as one path, the thread carried
+under later stitching) plan it ([Stitch Sequence](#stitch-sequence-and-the-stitch-player)).
+
+**Colour changes and trims.** Every trim stops the machine to cut, move and start again, and every
+colour change needs the operator. Sew a colour's parts together, and travel under stitching still
+to come instead of trimming. An extra colour change is sometimes worth it to sew in a better
+order. **Merge Colours** and **Sort by Thread Color** help.
+
+**Fabric recipes.** The best density, underlay and compensation depend on the fabric, so the
+**Fabric** presets (T-shirt, polo, fleece, towel, denim, leather, cap, silk, woven) set them all
+at once, with the stabiliser to hoop under it. Make your own for the fabrics you sew most.
 
 ## Stitch types
 
