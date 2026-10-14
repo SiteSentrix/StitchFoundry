@@ -276,7 +276,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BAS-16 | Design information (stitches, size, colours, time, thread, cost) | Done | The Design section: size, stitches, colours, trims, time, thread and bobbin, and the cost a piece (OUT-05) | 0 |
 | BAS-17 | Print preview of designs | Done | **Print Stitch View** (`embroidery.printView`): the stitches as they sew, life size over pages or fitted to one, to print or export; worksheets (RP-*) | 0 |
 | BAS-18 | Thread palette, assign and edit thread colours | Done | Panel colour + chart picker | – |
-| BAS-19 | Create and edit thread charts (custom charts, import/export) | Done | Built-in generic/PEC/JEF; charts of one's own from CSV, from the design or thread by thread, exported as CSV, used everywhere a chart is | 0 |
+| BAS-19 | Create and edit thread charts (custom charts, import/export) | Done | Built-in generic/PEC/JEF; charts of one's own from CSV or a GIMP palette (.gpl, D6), from the design or thread by thread, exported as CSV, used everywhere a chart is | 0 |
 
 ### 6.2 Settings and hardware
 
@@ -371,7 +371,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SE-05 | Manual stitches | Done | | – |
 | SE-06 | Convert selected stitches to objects (recognise runs/satin/fill from stitch data) | Done | Embroidery › Convert Stitches to Objects (`embroidery.stitchesToObjects`): an opened machine file's manual stitches cut where the needle turns back, single swings side to side read as satin (rails and angles), side-by-side rows of several stitches as tatami (outline, angle, spacing, length), the rest as runs; same threads and order, one undo step | 0 |
 | RE-01 | Backtrack / repeat outlines | Done | Passes 1–9 on every run style; 2 = backtrack | 1 |
-| RE-02 | Reverse stitch direction | Done | `embroidery.reverse` swaps where sewing starts and stops | 1 |
+| RE-02 | Reverse stitch direction | Done | `embroidery.reverse` swaps where sewing starts and stops; Swap Satin Sides (`embroidery.swapSides`, D4) starts a satin column's zigzag on its other side so it ends on the other side; Convert to Satin Column (`embroidery.toColumn`, D3) turns a closed turning-satin shape into a column between two editable rails; Density Map (`embroidery.densityMap`, D2) colours the design by thread layers | 1 |
 | RE-03 | Automatic underlay | Done | | – |
 | RE-04 | Underlay by shape (choose per object), double zigzag | Done | Centre/edge/zigzag/double zigzag/tatami, automatic by width; per-type underlay presets through the current properties (SYS-02) | 1 |
 | RE-05 | Pull compensation, twin-sided (different per side) | Done | Pull compensation per side (`pull_comp_2`) | 1 |
