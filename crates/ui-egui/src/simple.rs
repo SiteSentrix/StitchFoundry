@@ -137,7 +137,9 @@ pub fn keep_safe(app: &mut VectorcraftApp) {
     if cfg!(target_arch = "wasm32") || !active(app) || app.session.active().is_none() {
         return;
     }
-    match app.session.execute("file.keepSafe", &json!({})) {
+    // My Designs: the preference, else Documents/StitchFoundry Designs
+    let Some(folder) = vectorcraft_engine::cmd::embroidery_safe::designs_folder(&app.session) else { return };
+    match app.session.execute("file.keepSafe", &json!({ "folder": folder.to_string_lossy() })) {
         Ok(r) => {
             if let Some(path) = r["saved"].as_str() {
                 app.simple.kept = Some(path.to_string());
