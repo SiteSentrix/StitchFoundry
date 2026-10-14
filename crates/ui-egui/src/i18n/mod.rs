@@ -182,15 +182,15 @@ pub static LANGUAGES: [LangInfo; 17] = [
     // keeping the same names in English as Spanish; every `pl-*` locale (including `pl-PL`)
     // resolves here.
     LangInfo { code: "pl", name: "Polski", source: include_str!("pl.tsv"), plural: plural_polish, complete_menus: true, catalog: OnceLock::new() },
-    // Brazilian Portuguese: every menu label (`menu_catalogs_translate_every_menu_label`), every
-    // `tl!` literal and the plural messages; left English on purpose are the `MENU_KEEP_AS_IS`
-    // strings (product name, language names, workspace names, perspective grid presets).
+    // Brazilian Portuguese: the whole interface and the status and error messages, keeping the
+    // same names in English as Spanish; every `pt-BR` / `pt_BR` locale resolves here (see
+    // `candidates`: `pt-br` then `pt`).
     LangInfo {
         code: "pt-br",
         name: "Português (Brasil)",
         source: include_str!("pt-br.tsv"),
         plural: plural_one_other,
-        complete_menus: false,
+        complete_menus: true,
         catalog: OnceLock::new(),
     },
     // Traditional Chinese in the vocabulary used in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*`
