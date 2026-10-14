@@ -1,9 +1,9 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use hayro_syntax::object::{Dict, Stream};
-use hayro_syntax::page::Page;
-use hayro_syntax::{DecryptionError, LoadPdfError, Pdf};
+use craft_pdf::syntax::object::{Dict, Stream};
+use craft_pdf::syntax::page::Page;
+use craft_pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
@@ -33,9 +33,10 @@ pub fn is_postscript(bytes: &[u8]) -> bool {
     bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
 }
 
-/// The deepest a file's arrays and dictionaries may nest. The PDF reader (hayro) reads them by
-/// recursion, without a cap of its own: a file nested deeply enough overflows the stack, which is
-/// an abort, not an error. Far beyond what a PDF writer makes.
+/// The application's preflight threshold for arrays and dictionaries in raw or decoded PDF
+/// content. Preserve this 256-level diagnostic guard independently of the shared parser's
+/// 128-level direct-container cap; passing this preflight does not guarantee the reader accepts
+/// every shallower object.
 const MAX_OBJECT_NESTING: usize = 256;
 
 fn too_deep() -> PdfError {
@@ -97,6 +98,16 @@ fn nests_too_deep(pdf: &[u8]) -> bool {
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
 /// password opens a file too.
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
+    open_with_options(bytes, password, &open_options())
+}
+
+/// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
+/// uses the shared reader's immutable per-document limits, and its input copy is fallible.
+pub(crate) fn open_options() -> craft_pdf::OpenOptions {
+    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, ..Default::default() }
+}
+
+pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
     }
@@ -104,27 +115,135 @@ pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError
         return Err(too_deep());
     }
     let password = password.unwrap_or_default();
-    let read = |pw: &str| Pdf::new_with_password(bytes.to_vec(), pw);
+    let read = |pw: &str| craft_pdf::open_slice_with_options(bytes, Some(pw), options);
     read(password)
         .or_else(|e| match e {
             // The reader takes only the open password of RC4 and 128-bit AES files: the
             // permissions password gives it.
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if !password.is_empty() => {
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if !password.is_empty() => {
                 crate::encrypt::user_password(bytes, password).map_or(Err(e), |user| read(&user))
             }
             e => Err(e),
         })
         .map_err(|e| match e {
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if password.is_empty() => PdfError::NeedsPassword,
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) => PdfError::WrongPassword,
-            e => PdfError::Parse(format!("{e:?}")),
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if password.is_empty() => {
+                PdfError::NeedsPassword
+            }
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
+            e => PdfError::Parse(e.to_string()),
         })
 }
 
-/// The error of a page whose content, decoded, nests arrays and dictionaries too deep (see
-/// [`MAX_OBJECT_NESTING`]): its operands are read the same way as the file's objects.
+/// The error of a page whose decoded operands nest too deeply. Read the same content as the
+/// scanner and interpreter: bare Flate streams can exceed an ordinary materialization limit.
 pub(crate) fn content_too_deep(page: &Page<'_>) -> Result<(), PdfError> {
-    if page.page_stream().is_some_and(nests_too_deep) { Err(too_deep()) } else { Ok(()) }
+    const WINDOW: usize = 64 << 10;
+    let mut content = page.content_reader();
+    let mut window = Vec::new();
+    window.try_reserve_exact(WINDOW).map_err(|_| crate::import_scan::incomplete_content())?;
+    let mut nesting = ContentNesting::default();
+    loop {
+        window.clear();
+        if content.read_into(&mut window, WINDOW) == 0 {
+            break;
+        }
+        if nesting.feed(&window) {
+            return Err(too_deep());
+        }
+    }
+    if content.truncated() {
+        return Err(crate::import_scan::incomplete_content());
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Default)]
+enum ContentToken {
+    #[default]
+    Normal,
+    Comment,
+    Literal {
+        depth: usize,
+        escaped: bool,
+    },
+    Hex,
+    Less,
+    Greater,
+}
+
+/// Only lexical nesting is needed before the recursive operand parser runs. Keep state across
+/// content windows and streams, including a dictionary delimiter split between the two bytes.
+#[derive(Default)]
+struct ContentNesting {
+    depth: usize,
+    token: ContentToken,
+}
+
+impl ContentNesting {
+    fn feed(&mut self, bytes: &[u8]) -> bool {
+        for &byte in bytes {
+            match self.token {
+                ContentToken::Comment => {
+                    if matches!(byte, b'\r' | b'\n') {
+                        self.token = ContentToken::Normal;
+                    }
+                    continue;
+                }
+                ContentToken::Literal { mut depth, escaped } => {
+                    if escaped {
+                        self.token = ContentToken::Literal { depth, escaped: false };
+                    } else if byte == b'\\' {
+                        self.token = ContentToken::Literal { depth, escaped: true };
+                    } else {
+                        if byte == b'(' {
+                            depth = depth.saturating_add(1);
+                        } else if byte == b')' {
+                            depth = depth.saturating_sub(1);
+                        }
+                        self.token = if depth == 0 { ContentToken::Normal } else { ContentToken::Literal { depth, escaped: false } };
+                    }
+                    continue;
+                }
+                ContentToken::Hex => {
+                    if byte == b'>' {
+                        self.token = ContentToken::Normal;
+                    }
+                    continue;
+                }
+                ContentToken::Less => {
+                    self.token = if byte == b'<' || byte == b'>' { ContentToken::Normal } else { ContentToken::Hex };
+                    if byte == b'<' {
+                        self.depth = self.depth.saturating_add(1);
+                        if self.depth > MAX_OBJECT_NESTING {
+                            return true;
+                        }
+                    }
+                    continue;
+                }
+                ContentToken::Greater => {
+                    self.token = ContentToken::Normal;
+                    if byte == b'>' {
+                        self.depth = self.depth.saturating_sub(1);
+                        continue;
+                    }
+                }
+                ContentToken::Normal => {}
+            }
+            match byte {
+                b'%' => self.token = ContentToken::Comment,
+                b'(' => self.token = ContentToken::Literal { depth: 1, escaped: false },
+                b'<' => self.token = ContentToken::Less,
+                b'>' => self.token = ContentToken::Greater,
+                b'[' => self.depth = self.depth.saturating_add(1),
+                b']' => self.depth = self.depth.saturating_sub(1),
+                _ => {}
+            }
+            if self.depth > MAX_OBJECT_NESTING {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 /// The pages and their boxes. An encrypted PDF needs its `password`
@@ -137,10 +256,10 @@ pub fn info(bytes: &[u8], password: Option<&str>) -> Result<PdfInfo, PdfError> {
         .map(|page| {
             let (w, h) = page.render_dimensions();
             let rotation = match page.rotation() {
-                hayro_syntax::page::Rotation::None => 0,
-                hayro_syntax::page::Rotation::Horizontal => 90,
-                hayro_syntax::page::Rotation::Flipped => 180,
-                hayro_syntax::page::Rotation::FlippedHorizontal => 270,
+                craft_pdf::syntax::page::Rotation::None => 0,
+                craft_pdf::syntax::page::Rotation::Horizontal => 90,
+                craft_pdf::syntax::page::Rotation::Flipped => 180,
+                craft_pdf::syntax::page::Rotation::FlippedHorizontal => 270,
             };
             let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c))).collect();
             PageInfo { width: w as f64, height: h as f64, rotation, boxes }
@@ -169,7 +288,7 @@ pub(crate) fn picked(opts: &ImportOptions, count: usize) -> Result<Vec<usize>, P
     Ok(v)
 }
 
-fn rect(r: hayro_syntax::object::Rect) -> Rect {
+fn rect(r: craft_pdf::syntax::object::Rect) -> Rect {
     Rect::new(r.x0, r.y0, r.x1, r.y1).abs()
 }
 
@@ -186,7 +305,7 @@ pub(crate) fn page_box(page: &Page<'_>, which: CropTo) -> Rect {
         CropTo::Trim => b"TrimBox",
         CropTo::Art => b"ArtBox",
     };
-    page.raw().get::<hayro_syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
+    page.raw().get::<craft_pdf::syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
 }
 
 /// Where `page` draws on its artboard: the page transform (PDF user space → y-down page space
@@ -284,4 +403,38 @@ fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
             })
     }
     page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, prefixes, 0))
+}
+
+#[cfg(test)]
+mod content_depth_tests {
+    use super::{ContentNesting, MAX_OBJECT_NESTING, nests_too_deep};
+
+    #[test]
+    fn lexical_nesting_survives_every_two_piece_split() {
+        let n = MAX_OBJECT_NESTING;
+        let cases = [
+            (format!("{}0{}", "[".repeat(n), "]".repeat(n)), false),
+            (format!("{}0{}", "[".repeat(n + 1), "]".repeat(n + 1)), true),
+            (format!("{}0{}", "<< /A ".repeat(n), ">> ".repeat(n)), false),
+            (format!("{}0{}", "<< /A ".repeat(n + 1), ">> ".repeat(n + 1)), true),
+            (format!("% {}\r\n[0]", "[<<".repeat(n + 1)), false),
+            (format!("% {}\r{}0{}", "[<<".repeat(n + 1), "[".repeat(n + 1), "]".repeat(n + 1)), true),
+            (format!("({}\\({}\\) (nested) \\\\) [0]", "[<<".repeat(n + 1), ">>]".repeat(n + 1)), false),
+            (format!("<{}> [0]", "3c3c5b".repeat(n + 1)), false),
+            (format!("<> {}0{}", "[".repeat(n + 1), "]".repeat(n + 1)), true),
+        ];
+        for (text, expected) in cases {
+            let bytes = text.as_bytes();
+            assert_eq!(nests_too_deep(bytes), expected, "raw guard agreement");
+            for split in 0..=bytes.len() {
+                let (first, last) = bytes.split_at(split);
+                let mut nesting = ContentNesting::default();
+                assert_eq!(nesting.feed(first) || nesting.feed(last), expected, "split={split}");
+            }
+            for size in [1, 2, 3, 7, 31, 64] {
+                let mut nesting = ContentNesting::default();
+                assert_eq!(bytes.chunks(size).any(|part| nesting.feed(part)), expected, "chunk={size}");
+            }
+        }
+    }
 }

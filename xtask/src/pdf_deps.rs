@@ -1,12 +1,13 @@
-//! Verify that PDF writing uses one immutable shared crate and its patched writer backend.
+//! Verify that PDF reading and writing use one immutable shared crate and patched backends.
 
 use std::path::Path;
 use std::process::Command;
 
 use serde_json::Value;
 
-const REV: &str = "c3487320b2d1de657b860b3c8abb44e1f2b32bd8";
-const PACKAGES: &[(&str, &str)] = &[("craft-pdf", "0.1.0"), ("krilla", "0.8.2")];
+const REV: &str = "89dcbb3060377a26c99a6d80caa16084366704c4";
+const PACKAGES: &[(&str, &str)] =
+    &[("craft-pdf", "0.1.0"), ("krilla", "0.8.2"), ("hayro-syntax", "0.7.2"), ("hayro-interpret", "0.7.0"), ("hayro-jbig2", "0.3.0")];
 
 pub fn run(root: &Path) -> Result<(), String> {
     let output = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
@@ -19,7 +20,7 @@ pub fn run(root: &Path) -> Result<(), String> {
     }
     let metadata: Value = serde_json::from_slice(&output.stdout).map_err(|e| format!("cargo metadata: {e}"))?;
     validate(&metadata)?;
-    println!("PDF writer: shared crate and patched backend resolve once to {REV}");
+    println!("PDF: shared crate and patched backends resolve once to {REV}");
     Ok(())
 }
 
@@ -58,17 +59,17 @@ mod tests {
     }
 
     #[test]
-    fn accepts_the_pinned_writer_without_changing_reader_sources() {
+    fn accepts_pinned_pdf_packages_without_changing_printer_transport() {
         let mut m = metadata();
         m["packages"]
             .as_array_mut()
             .unwrap()
-            .push(json!({"name":"hayro-syntax", "version":"0.7.2", "source":"registry+https://github.com/rust-lang/crates.io-index"}));
+            .push(json!({"name":"craft-print", "version":"0.1.0", "source":"git+https://github.com/storytold/craft-libs?rev=d991bf6792f8ade99c51358bf3c1d902c8cd96b5#d991bf6792f8ade99c51358bf3c1d902c8cd96b5"}));
         assert!(validate(&m).is_ok());
     }
 
     #[test]
-    fn rejects_missing_or_duplicate_writer_packages() {
+    fn rejects_missing_or_duplicate_pdf_packages() {
         for index in 0..PACKAGES.len() {
             let mut m = metadata();
             m["packages"].as_array_mut().unwrap().remove(index);

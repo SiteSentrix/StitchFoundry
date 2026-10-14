@@ -1,6 +1,6 @@
 # Architecture
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (shared PDF writer; app output policy and existing reader retained; verified PngSuite downloads, #1729; synthetic control-input budgets, #1709; desktop printing uses craft-print; Windows 7 fallback retained) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (shared PDF reader and writer; app output policy and editable-import adapter retained; verified PngSuite downloads, #1729; synthetic control-input budgets, #1709; desktop printing uses craft-print; Windows 7 fallback retained) · **Target:** Adobe Illustrator 2026 (30.x)
 
 How VectorCraft is built today. The design rationale lives in the local, gitignored `plan/architecture.md`;
 this file describes what is committed. Day-to-day rules (clean-room, never crash, quality gates) are in
@@ -61,9 +61,11 @@ its target excludes the shared backend because Windows.Data.Pdf is unavailable t
 
 PDF writing uses the optional `craft-pdf` writer at an immutable craft-libs revision. Shared
 configuration, metadata, font preparation and guarded serialization leave drawing, colour
-policy, layers, editing data and print composition in this app. The reader keeps its existing
-Hayro dependencies. `cargo xtask pdf-deps` verifies the shared writer and patched Krilla source;
-see [pdf-backend.md](pdf-backend.md).
+policy, layers, editing data and print composition in this app. `cargo xtask pdf-deps` verifies
+the shared facade and patched Krilla and Hayro sources at the same revision.
+The reader facade opens the PDF with per-document decode limits; the app scans layer and
+overprint content in windows and rejects known incomplete content before returning a document.
+See [pdf-backend.md](pdf-backend.md).
 
 ## Agent control
 
@@ -90,6 +92,7 @@ saves copies in the background. See [development.md](development.md#robustness-v
 |---|---|---|
 | 2026-10-13 | minor | Pinned PngSuite HTTPS files verified by SHA-256 before publication; bounded downloads replace archive extraction (#1729). Scores and hours unchanged. |
 | 2026-10-13 | minor | Bounded synthetic control input (#1709): counts and queued events validated before mutation; control-channel bursts yield between frames. Scores and hours unchanged. |
+| 2026-10-13 | minor | PDF.R1: editable PDF import uses the shared pinned reader; layer and overprint scans preserve state across content windows and reject known incomplete input. Synthetic streaming, decoder-limit and dependency-source regressions added; scores and hours unchanged. |
 | 2026-10-13 | minor | PDF writer setup and guarded finalization use craft-pdf; drawing and output policy remain app-owned. |
 | 2026-10-12 | minor | Desktop PDF spooler shared through craft-print; exact physical sizes, composed copies and Windows 7 fallback retained. Scores and remaining gaps unchanged. |
 | 2026-10-10 | minor | Added the `three-d` crate |

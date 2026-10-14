@@ -289,3 +289,6 @@ mod tests_strokeout;
 mod tests_textstroke;
 #[cfg(test)]
 mod tests_webview;
+
+#[cfg(test)]
+mod tests_reader_streaming;

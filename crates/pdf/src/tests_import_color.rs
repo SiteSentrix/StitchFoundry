@@ -195,7 +195,7 @@ fn ink_names_never_clash_with_the_document_swatches() {
 
 #[test]
 fn colour_spaces_are_read_from_the_interpreters_debug_form() {
-    let pdf = hayro_syntax::Pdf::new(pdf(&[PdfPage::new(10.0, 10.0, "")], None)).unwrap();
+    let pdf = craft_pdf::syntax::Pdf::new(pdf(&[PdfPage::new(10.0, 10.0, "")], None)).unwrap();
     let mut c = Colors::new(&pdf, vec![]);
     for (text, n, want) in [
         ("ColorSpace(DeviceCmyk)", 4, Space::Cmyk),

@@ -65,7 +65,8 @@ try {
   $Stage = Join-Path $TargetDir ('windows7-portable-' + [Guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Force $Stage | Out-Null
   Copy-Item (Join-Path $Bin 'vectorcraft.exe'), (Join-Path $Bin 'vectorcraft-cli.exe') $Stage
-  Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE $Stage
+  Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, ASSETS.md $Stage
+  Copy-Item -Recurse licenses $Stage
   Copy-Item vendor/windows-link/license-mit (Join-Path $Stage 'LICENSE-windows-link-MIT')
   Copy-Item vendor/windows-link/license-apache-2.0 (Join-Path $Stage 'LICENSE-windows-link-Apache-2.0')
   Copy-Item docs/windows7.md (Join-Path $Stage 'WINDOWS7.md')

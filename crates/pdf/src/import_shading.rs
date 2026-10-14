@@ -6,8 +6,8 @@
 
 use std::sync::Arc;
 
-use hayro_interpret::pattern::ShadingPattern;
-use hayro_interpret::shading::{ShadingFunction, ShadingType};
+use craft_pdf::interpret::pattern::ShadingPattern;
+use craft_pdf::interpret::shading::{ShadingFunction, ShadingType};
 use kurbo::{BezPath, Circle, Point, Rect, Shape, Vec2};
 use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::live::{GradientMesh, lerp_color};

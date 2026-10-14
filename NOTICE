@@ -72,3 +72,23 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Shared PDF backend
+
+The patched hayro-interpret 0.7.0, hayro-syntax 0.7.2 and hayro-jbig2 0.3.0
+are fetched from https://github.com/storytold/craft-libs at revision
+89dcbb3060377a26c99a6d80caa16084366704c4. Their upstream project is
+https://github.com/LaurenzV/hayro, licensed MIT OR Apache-2.0. The snapshot retains each
+crate's upstream licence files. The patch ledger is at
+https://github.com/storytold/craft-libs/blob/89dcbb3060377a26c99a6d80caa16084366704c4/vendor/README.craft-reader.md.
+
+Assets already bundled through Hayro's default features retain their licences:
+- Foxit standard-14 substitutes: Copyright 2014 PDFium Authors. All rights reserved.
+  Original code copyright 2014 Foxit Software Inc. BSD-3-Clause; see
+  licenses/pdf-backend/hayro-interpret/assets/LICENSE_FOXIT.
+- CGATS001Compat-v2-micro.icc: CC0-1.0, Clinton Ingram; see
+  licenses/pdf-backend/hayro-interpret/assets/CGATS_LICENSE.txt.
+- Predefined CMaps: Copyright 1990-2023 Adobe. All rights reserved. BSD-3-Clause,
+  non-visual character-mapping data; see licenses/pdf-backend/hayro-cmap/LICENSE.txt.
+  Adobe and contributor names do not endorse or promote this product.
+Per-file hashes and sources are recorded in ASSETS.md.

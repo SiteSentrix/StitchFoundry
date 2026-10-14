@@ -315,15 +315,15 @@ fn thousands_of_layers_hidden_ones_included_all_come_in() {
 }
 
 /// Import `bytes` with the scan's operator limit lowered to `n`.
-fn import_with_max_ops(bytes: &[u8], n: usize) -> ImportReport {
+fn import_with_max_ops(bytes: &[u8], n: usize) -> Result<ImportReport, PdfError> {
     let old = crate::import_scan::TEST_MAX_OPS.replace(n);
     let r = import_with_report(bytes, &ImportOptions::default());
     crate::import_scan::TEST_MAX_OPS.set(old);
-    r.unwrap()
+    r
 }
 
 #[test]
-fn art_past_the_scan_limit_never_shows_a_hidden_layer() {
+fn art_past_the_scan_limit_is_rejected_with_hidden_layers() {
     // "Shapes" draws 100 operators before its square, then "Hidden" (off, not printed) its own.
     let (objs, catalog, ids) = groups(1, "/OFF [{B}]");
     let filler = "q Q ".repeat(50);
@@ -338,33 +338,16 @@ fn art_past_the_scan_limit_never_shows_a_hidden_layer() {
     let bytes = pdf_with_catalog(&[page], &[&objs[0], &objs[1]], &catalog, None);
     // Within the limit, every group is told apart.
     assert_eq!(names(&import(&bytes).unwrap()), ["Shapes", "Hidden", "Page 1"]);
-    let r = import_with_max_ops(&bytes, 60);
-    let d = &r.document;
-    assert_eq!(names(d), ["Shapes", "Page 1 (unsorted)", "Page 1"], "{:?}", r.warnings);
-    // The art drawn past the limit in a group already open stays in it.
-    assert!(d.layers[0].visible);
-    assert_eq!(colors(&d.layers[0]), [Color::rgb(1.0, 0.0, 0.0)]);
-    // The hidden group's art, past it, can't be told apart: it neither shows nor prints.
-    let unsorted = &d.layers[1];
-    assert!(!unsorted.visible && !printable(unsorted));
-    assert_eq!(colors(unsorted), [Color::rgb(0.0, 0.0, 1.0)]);
-    // Art outside any group is the page's, as before.
-    assert!(d.layers[2].visible && printable(&d.layers[2]));
-    assert_eq!(colors(&d.layers[2]), [Color::rgb(0.0, 1.0, 0.0)]);
-    assert!(r.warnings.iter().any(|w| w.contains("more than can be read") && w.contains("hidden, non-printing")), "{:?}", r.warnings);
+    let error = import_with_max_ops(&bytes, 60).unwrap_err();
+    assert!(error.to_string().contains("no document was imported"));
 }
 
 #[test]
-fn art_past_the_scan_limit_of_shown_layers_stays_shown() {
-    // Every group shows and prints: what can't be told apart goes to the page's layer, shown.
+fn art_past_the_scan_limit_is_rejected_with_shown_layers() {
     let bytes = three_groups([&ocg("A", ""), &ocg("B", ""), &ocg("C", "")], &[], "");
-    let r = import_with_max_ops(&bytes, 4);
-    let d = &r.document;
-    assert_eq!(names(d), ["A", "Page 1"], "{:?}", r.warnings);
-    assert_eq!(colors(&d.layers[0]), [Color::rgb(1.0, 0.0, 0.0)]);
-    assert!(d.layers[1].visible && printable(&d.layers[1]));
-    assert_eq!(colors(&d.layers[1]), [Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0)]);
-    assert!(r.warnings.iter().any(|w| w.contains("went to its page's layer")), "{:?}", r.warnings);
+    assert_eq!(names(&import(&bytes).unwrap()), ["A", "B", "C"]);
+    let error = import_with_max_ops(&bytes, 4).unwrap_err();
+    assert!(error.to_string().contains("no document was imported"));
 }
 
 /// Art reaching past the page keeps a clip to it in a plain PDF (as viewers show it), but not in
