@@ -202,6 +202,21 @@ fn patterns_are_pattern_swatches_and_fill_with_them() {
     assert!(s.warnings.is_empty(), "{:?}", s.warnings);
 }
 
+/// Where a definition draws its tile doesn't move the fill: the tile's lower left is the pattern's
+/// origin, so the same dots drawn at 30..38 × 40..48 tile as they do at 0..8 × 0..8.
+#[test]
+fn a_pattern_tiles_from_its_lower_left_wherever_its_definition_drew_it() {
+    let moved = DOTS
+        .replace("(Dots) 0 0 8 8", "(Dots) 30 40 38 48")
+        .replace("%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L", "%_30 48 m\n%_38 48 L\n%_38 40 L\n%_30 40 L\n%_30 48 L")
+        .replace("%_4 4 m\n%_4 4 L", "%_34 44 m\n%_34 44 L");
+    let body = format!("{moved}{}", layer(&format!("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0))));
+    let s = read_ok(&body);
+    assert_eq!(s.doc.pattern("Dots").unwrap().tile, Rect::new(30.0, -48.0, 38.0, -40.0));
+    let Paint::Pattern { xf, .. } = fill(&art(&s.doc)[0]) else { panic!() };
+    assert_eq!(xf * Point::ZERO, Point::new(0.0, 92.0));
+}
+
 /// A pattern whose definition it can't read whole isn't kept: a fill with it is something the file
 /// has that isn't read, where it shows. Its definition costs nothing else.
 #[test]
