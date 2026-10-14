@@ -409,7 +409,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // Artboard edges and names. The Artboard tool labels its active artboard itself (following
     // a move or resize): that one isn't named twice.
-    let active_ab = 0;
+    let active_ab = crate::panels::artboards::selected(app, doc.artboards.len());
     let artboard_tool = app.session.tool_id() == "artboard";
     let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
     for (i, ab) in doc.artboards.iter().enumerate() {
@@ -2572,6 +2572,56 @@ mod tests {
         assert_eq!(lefts(&app), [boards[2].x0; 2], "the left edges are on the active artboard's");
         app.run("object.align", json!({"horizontal": "left", "to": "artboard", "artboard": 1})).unwrap();
         assert_eq!(lefts(&app), [boards[1].x0; 2], "an artboard the caller names is kept");
+    }
+
+    /// The canvas outlines the active artboard in black, 1 px wide, and outlines the other
+    /// artboards in gray, 0.6 px wide. In the test, the active artboard is Artboard 1 at first,
+    /// then the one Go to Artboard went to, and then, with several artboards selected by the
+    /// Artboard tool, the tool's active one (the one Shift-clicked last).
+    #[test]
+    fn the_active_artboard_is_outlined_in_black() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        let ctx = egui::Context::default();
+        // → each artboard's edge as drawn: (width, color).
+        let edges = |app: &mut VectorcraftApp| {
+            let s = shapes(app, &ctx);
+            let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+            let on = |p: &[Pos2], q: &[Pos2]| p.len() == q.len() && p.iter().zip(q).all(|(a, b)| (*a - *b).length() < 0.01);
+            let boards: Vec<Rect> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+            boards
+                .iter()
+                .map(|r| {
+                    let q = xf.quad(*r);
+                    s.iter()
+                        .find_map(|s| match s {
+                            Shape::Path(p) if p.closed && p.fill == Color32::TRANSPARENT && on(&p.points, &q) => {
+                                Some((p.stroke.width, p.stroke.color.clone()))
+                            }
+                            _ => None,
+                        })
+                        .expect("the artboard's edge")
+                })
+                .collect::<Vec<_>>()
+        };
+        let (black, gray) = (egui::epaint::ColorMode::Solid(Color32::from_gray(0)), egui::epaint::ColorMode::Solid(Color32::from_gray(120)));
+        let active = |i: usize| -> Vec<(f32, egui::epaint::ColorMode)> {
+            (0..3).map(|j| if j == i { (1.0, black.clone()) } else { (0.6, gray.clone()) }).collect()
+        };
+        assert_eq!(edges(&mut app), active(0));
+        app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+        assert_eq!(edges(&mut app), active(1), "Artboard 2 is active: its edge is black and Artboard 1's edge is gray");
+        // The Artboard tool starts on Artboard 2; a Shift-click on Artboard 3 selects it too and
+        // makes it the active one.
+        app.select_tool("artboard");
+        let at = app.session.active().unwrap().doc.artboards[2].rect.center();
+        let view = app.view_info();
+        let shift = Mods { shift: true, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, pressure: 1.0 }, view);
+        }
+        assert_eq!(app.session.tool_options()["selected"], json!([2, 1]));
+        assert_eq!(edges(&mut app), active(2), "Artboard 3 is the active one of the two selected");
     }
 
     /// Enable Touch Gestures (#585): a two-finger tap undoes and a three-finger one redoes, and the
