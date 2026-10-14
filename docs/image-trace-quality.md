@@ -1,6 +1,6 @@
 # Image Trace quality
 
-> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (stroke ends: square caps where the ink is cut square; Outline's largest distance 2.94 px to 0.88)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (enhanced versions of the presets, each measured beside its preset)
 
 What Image Trace (`crates/trace`) makes of images whose right answer is known, measured by a harness and
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
@@ -52,10 +52,13 @@ The letters are drawn by hand from lines and curves: the repository has no font 
 | centre off, width off, anchors a stroke | stroked centre lines (Create: Strokes) against the thin lines they trace: mean distance (px) from the true line's centre line, mean error (px) of the stroke width, anchors per stroked path |
 | shapes % | with Shapes on, the share of the plain shapes that came out as that shape (a shape, not a path, whose outline lies within 0.6 px of the true one) |
 | false shapes | with Shapes on, paths made a shape whose outline strays more than 0.6 px from the art (a shape the art does not have, or one put where it is not) |
-| grouped % | with Auto Grouping on, the share of the paths that were put inside another (the picture is painted in the grouped order for every other measure of that row, so a ΔE equal to the row without the option says grouping changed nothing that shows) |
+| grouped % | with Auto Grouping on, the share of the paths that were put inside another (the picture is painted as the app groups it for every other measure of that row: each path together with those inside it, in the order they were traced in; a ΔE equal to the row without the option says grouping changed nothing that shows) |
 | gradient paths | paths filled with a linear gradient (on inputs that are flat colour, every one would be a gradient that is not there) |
 | found %, angle off, ramp off | on the linear-gradient inputs: the share of them in which a gradient was found; and for those found, the largest angle (degrees) between the true gradient line and the traced one, and the largest difference (levels of a channel, 0 to 255) between the true colours and the traced gradient's at 17 points along the true line |
 | outside px | how far the trace reaches outside the image: a curve that strays |
+
+Rows named "…, enhanced" are that preset's enhanced version (Auto Grouping on; Shapes on in all but High
+Fidelity Photo) on the same inputs as the row of the preset itself. Flat Logo has no enhanced version.
 
 Black-and-white presets trace black: on the scanned variant their ΔE includes the paper's and ink's own
 colours. Silhouettes has its threshold at 200, not 128: its outline lies where the image
@@ -85,7 +88,7 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Technical Drawing | polygons, star, letter A, lines, askew shapes and lines | 2.73 | 13.67 | 0.210 | 1.43 | 105.76 | 4.7 | 31 | 2.01 | 100 | 9 | 85 | 5.9 | – | – | – | – | 0.1 | 0.0 | – | – | – |
 | Flat Logo | two touching halves, four-colour badge | 0.43 | 3.53 | 3.106 | 88.50 | 0.78 | 69.9 | 352 | 38.92 | 38 | 10 | 80 | 237.0 | 0.0 | 0 | 13.8 | – | 59.1 | 0.2 | – | – | – |
 
-### Now (with stroke caps)
+### Now (with the enhanced presets)
 
 | preset | inputs | ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px | centre off | width off | anchors a stroke | shapes % | false shapes | grouped % | gradient paths | found % | angle off | ramp off |
 |:--|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -104,8 +107,8 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Technical Drawing | polygons, star, letter A, lines, askew shapes and lines | 2.65 | 10.88 | 0.126 | 1.46 | 105.64 | 4.7 | 38 | 2.55 | 81 | 19 | 78 | 0.8 | – | – | – | – | 0.5 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | Outline | lines | 2.61 | 9.39 | 0.050 | 0.88 | 105.74 | 5.0 | 10 | 0.52 | 99 | 4 | – | – | – | – | – | – | 0.0 | 0.0 | 0.039 | 0.02 | 2.0 | – | 0.00 | – | 0.0 | – | – | – |
 | Flat Logo | two touching halves, four-colour badge | 0.48 | 3.47 | 0.090 | 0.82 | 0.78 | 3.9 | 49 | 3.85 | 40 | 10 | 80 | 2.6 | 0.0 | 0 | 10.6 | – | 0.9 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | plain shapes | 3.25 | 10.48 | 0.115 | 1.00 | 0.90 | 6.0 | 30 | 1.01 | 65 | 39 | – | – | – | – | 30.0 | 120.5 | 0.0 | 0.0 | – | – | – | 98 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | plain shapes | 0.92 | 6.89 | 0.090 | 0.99 | 0.52 | 6.0 | 30 | 1.00 | 67 | 39 | – | – | 0.0 | 0 | 23.5 | 91.2 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | plain shapes | 3.16 | 9.22 | 0.085 | 0.90 | 0.90 | 6.0 | 30 | 1.01 | 65 | 40 | – | – | – | – | 0.5 | 0.0 | 0.0 | 0.0 | – | – | – | 98 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | plain shapes | 0.90 | 6.64 | 0.077 | 0.60 | 0.60 | 6.0 | 30 | 1.00 | 67 | 39 | – | – | 0.0 | 0 | 2.1 | 1.3 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | two touching halves, four-colour badge | 0.55 | 4.99 | 0.140 | 1.34 | 1.19 | 4.0 | 49 | 3.07 | 39 | 16 | 91 | 6.1 | 0.0 | 0 | 0.3 | 0.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
 | Shades of Gray with Auto Grouping | gradient, photo-like | 9.26 | 9.06 | – | – | – | 16.6 | 700 | – | 51 | 40 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | – | 47 | 0.0 | – | – | – |
 | High Fidelity Photo with Auto Grouping | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
@@ -113,8 +116,22 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | 6 Colors with Gradients | two-stop gradient, three-stop gradient in a disc | 0.62 | 1.36 | – | – | – | 3.4 | 126 | – | 8 | 4 | – | – | – | – | 1.8 | 2.7 | 0.0 | 0.0 | – | – | – | – | – | – | 1.1 | 86 | 1.5 | 21 |
 | High Fidelity Photo, no Gradients | two-stop gradient, three-stop gradient in a disc | 0.79 | 2.98 | – | – | – | 38.1 | 3827 | – | 31 | 30 | – | – | – | – | 0.0 | – | 1.1 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
 | High Fidelity Photo with Gradients | two-stop gradient, three-stop gradient in a disc | 0.46 | 1.31 | – | – | – | 20.6 | 759 | – | 9 | 5 | – | – | – | – | 0.0 | – | 2.9 | 0.0 | – | – | – | – | – | – | 1.0 | 86 | 1.5 | 21 |
+| Default, enhanced | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.60 | 9.88 | 0.083 | 1.00 | 2.18 | 1.9 | 16 | 1.59 | 36 | 6 | 83 | 0.4 | – | – | 0.3 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.02 | 14 | 0.0 | – | – | – |
+| Auto Color, enhanced | two touching halves, four-colour badge | 0.55 | 5.00 | 0.139 | 1.33 | 1.00 | 4.0 | 48 | 3.03 | 41 | 16 | 100 | 6.0 | 0.0 | 0 | 1.3 | 1.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | gradient, photo-like | 2.45 | 2.69 | – | – | – | 37.1 | 2134 | – | 43 | 37 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 63 | 0.0 | – | – | – |
+| 3 Colors, enhanced | two touching halves | 0.42 | 3.98 | 0.104 | 0.91 | 0.91 | 2.0 | 11 | 1.81 | 39 | 6 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 6 Colors, enhanced | two touching halves, four-colour badge | 0.55 | 4.99 | 0.139 | 1.34 | 1.00 | 4.0 | 45 | 2.91 | 41 | 16 | 100 | 6.1 | 0.0 | 0 | 0.2 | 0.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
+| 16 Colors, enhanced | two touching halves, four-colour badge | 0.55 | 4.91 | 0.141 | 1.31 | 1.00 | 4.2 | 59 | 3.68 | 42 | 17 | 100 | 7.7 | 0.0 | 0 | 0.4 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | 28 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | gradient, photo-like | 9.26 | 9.06 | – | – | – | 16.6 | 700 | – | 51 | 40 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | 0.00 | 47 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.59 | 9.49 | 0.065 | 1.00 | 2.17 | 1.4 | 21 | 2.14 | 46 | 11 | 83 | 0.3 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.02 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | circle, ellipses, badge with a hole, letter D, lines | 2.71 | 11.80 | 0.178 | 1.00 | 105.61 | 1.8 | 15 | 1.32 | 19 | 8 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.03 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | circle, ellipses, badge with a hole, letter D | 2.97 | 18.98 | 0.515 | 2.19 | 2.19 | 1.2 | 13 | 1.57 | 12 | 10 | 93 | 0.4 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.11 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | lines | 2.62 | 9.50 | 0.055 | 0.99 | 105.72 | 5.4 | 42 | 2.11 | 42 | 0 | – | – | – | – | – | – | 0.1 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | polygons, star, letter A, lines, askew shapes and lines | 2.65 | 10.93 | 0.128 | 1.46 | 105.64 | 4.7 | 34 | 2.26 | 86 | 19 | 86 | 0.8 | – | – | – | – | 0.5 | 0.0 | – | – | – | – | 0.09 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | lines | 2.61 | 9.39 | 0.050 | 0.88 | 105.74 | 5.0 | 10 | 0.52 | 99 | 4 | – | – | – | – | – | – | 0.0 | 0.0 | 0.039 | 0.02 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
 
-The sections below are the numbers now (with stroke caps).
+The sections below are the numbers now (with the enhanced presets).
 
 ## 1. Each preset on the inputs it is meant for
 
@@ -137,8 +154,8 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Technical Drawing | polygons, star, letter A, lines, askew shapes and lines | 2.65 | 10.88 | 0.126 | 1.46 | 105.64 | 4.7 | 38 | 2.55 | 81 | 19 | 78 | 0.8 | – | – | – | – | 0.5 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | Outline | lines | 2.61 | 9.39 | 0.050 | 0.88 | 105.74 | 5.0 | 10 | 0.52 | 99 | 4 | – | – | – | – | – | – | 0.0 | 0.0 | 0.039 | 0.02 | 2.0 | – | 0.00 | – | 0.0 | – | – | – |
 | Flat Logo | two touching halves, four-colour badge | 0.48 | 3.47 | 0.090 | 0.82 | 0.78 | 3.9 | 49 | 3.85 | 40 | 10 | 80 | 2.6 | 0.0 | 0 | 10.6 | – | 0.9 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | plain shapes | 3.25 | 10.48 | 0.115 | 1.00 | 0.90 | 6.0 | 30 | 1.01 | 65 | 39 | – | – | – | – | 30.0 | 120.5 | 0.0 | 0.0 | – | – | – | 98 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | plain shapes | 0.92 | 6.89 | 0.090 | 0.99 | 0.52 | 6.0 | 30 | 1.00 | 67 | 39 | – | – | 0.0 | 0 | 23.5 | 91.2 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | plain shapes | 3.16 | 9.22 | 0.085 | 0.90 | 0.90 | 6.0 | 30 | 1.01 | 65 | 40 | – | – | – | – | 0.5 | 0.0 | 0.0 | 0.0 | – | – | – | 98 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | plain shapes | 0.90 | 6.64 | 0.077 | 0.60 | 0.60 | 6.0 | 30 | 1.00 | 67 | 39 | – | – | 0.0 | 0 | 2.1 | 1.3 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | two touching halves, four-colour badge | 0.55 | 4.99 | 0.140 | 1.34 | 1.19 | 4.0 | 49 | 3.07 | 39 | 16 | 91 | 6.1 | 0.0 | 0 | 0.3 | 0.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
 | Shades of Gray with Auto Grouping | gradient, photo-like | 9.26 | 9.06 | – | – | – | 16.6 | 700 | – | 51 | 40 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | – | 47 | 0.0 | – | – | – |
 | High Fidelity Photo with Auto Grouping | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
@@ -146,6 +163,20 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | 6 Colors with Gradients | two-stop gradient, three-stop gradient in a disc | 0.62 | 1.36 | – | – | – | 3.4 | 126 | – | 8 | 4 | – | – | – | – | 1.8 | 2.7 | 0.0 | 0.0 | – | – | – | – | – | – | 1.1 | 86 | 1.5 | 21 |
 | High Fidelity Photo, no Gradients | two-stop gradient, three-stop gradient in a disc | 0.79 | 2.98 | – | – | – | 38.1 | 3827 | – | 31 | 30 | – | – | – | – | 0.0 | – | 1.1 | 0.0 | – | – | – | – | – | – | 0.0 | 0 | – | – |
 | High Fidelity Photo with Gradients | two-stop gradient, three-stop gradient in a disc | 0.46 | 1.31 | – | – | – | 20.6 | 759 | – | 9 | 5 | – | – | – | – | 0.0 | – | 2.9 | 0.0 | – | – | – | – | – | – | 1.0 | 86 | 1.5 | 21 |
+| Default, enhanced | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.60 | 9.88 | 0.083 | 1.00 | 2.18 | 1.9 | 16 | 1.59 | 36 | 6 | 83 | 0.4 | – | – | 0.3 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.02 | 14 | 0.0 | – | – | – |
+| Auto Color, enhanced | two touching halves, four-colour badge | 0.55 | 5.00 | 0.139 | 1.33 | 1.00 | 4.0 | 48 | 3.03 | 41 | 16 | 100 | 6.0 | 0.0 | 0 | 1.3 | 1.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | gradient, photo-like | 1.75 | 1.98 | – | – | – | 120.7 | 9929 | – | 38 | 36 | – | – | – | – | 0.0 | – | 10.1 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | gradient, photo-like | 2.45 | 2.69 | – | – | – | 37.1 | 2134 | – | 43 | 37 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 63 | 0.0 | – | – | – |
+| 3 Colors, enhanced | two touching halves | 0.42 | 3.98 | 0.104 | 0.91 | 0.91 | 2.0 | 11 | 1.81 | 39 | 6 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 6 Colors, enhanced | two touching halves, four-colour badge | 0.55 | 4.99 | 0.139 | 1.34 | 1.00 | 4.0 | 45 | 2.91 | 41 | 16 | 100 | 6.1 | 0.0 | 0 | 0.2 | 0.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
+| 16 Colors, enhanced | two touching halves, four-colour badge | 0.55 | 4.91 | 0.141 | 1.31 | 1.00 | 4.2 | 59 | 3.68 | 42 | 17 | 100 | 7.7 | 0.0 | 0 | 0.4 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | 28 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | gradient, photo-like | 9.26 | 9.06 | – | – | – | 16.6 | 700 | – | 51 | 40 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | 0.00 | 47 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.59 | 9.49 | 0.065 | 1.00 | 2.17 | 1.4 | 21 | 2.14 | 46 | 11 | 83 | 0.3 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.02 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | circle, ellipses, badge with a hole, letter D, lines | 2.71 | 11.80 | 0.178 | 1.00 | 105.61 | 1.8 | 15 | 1.32 | 19 | 8 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.03 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | circle, ellipses, badge with a hole, letter D | 2.97 | 18.98 | 0.515 | 2.19 | 2.19 | 1.2 | 13 | 1.57 | 12 | 10 | 93 | 0.4 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.11 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | lines | 2.62 | 9.50 | 0.055 | 0.99 | 105.72 | 5.4 | 42 | 2.11 | 42 | 0 | – | – | – | – | – | – | 0.1 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | polygons, star, letter A, lines, askew shapes and lines | 2.65 | 10.93 | 0.128 | 1.46 | 105.64 | 4.7 | 34 | 2.26 | 86 | 19 | 86 | 0.8 | – | – | – | – | 0.5 | 0.0 | – | – | – | – | 0.09 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | lines | 2.61 | 9.39 | 0.050 | 0.88 | 105.74 | 5.0 | 10 | 0.52 | 99 | 4 | – | – | – | – | – | – | 0.0 | 0.0 | 0.039 | 0.02 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
 
 ## 2. Each preset on each kind of input (clean, three sizes)
 
@@ -271,24 +302,24 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Flat Logo | flat colour art | 0.07 | 1.53 | 0.065 | 0.31 | 0.27 | 3.0 | 36 | 3.51 | 47 | 11 | 100 | 0.0 | 0.0 | 0 | 6.8 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | Flat Logo | gradient, photo | refused | | | | | | | | | | | | | | | | | | | | | | | | | | | |
 | Flat Logo | linear gradients | 6.49 | 6.47 | – | – | – | 484.0 | 4773 | – | 58 | 0 | – | – | – | – | 146.0 | – | 446.7 | 0.1 | – | – | – | – | – | – | 0.0 | 0 | – | – |
-| Default with Shapes | curved shapes | 0.08 | 3.19 | 0.058 | 0.38 | 0.38 | 1.8 | 13 | 1.44 | 14 | 14 | 100 | 0.0 | – | – | 12.2 | 7.4 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | polygons | 0.07 | 2.63 | 0.043 | 0.50 | 1.26 | 2.0 | 13 | 1.16 | 97 | 5 | 100 | 0.0 | – | – | 5.6 | 7.8 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | thin lines | 0.54 | 4.53 | 0.049 | 0.52 | 105.72 | 3.3 | 25 | 1.27 | 40 | 0 | – | – | – | – | 0.0 | 18.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | askew shapes | 0.17 | 3.85 | 0.050 | 0.37 | 36.06 | 3.7 | 23 | 0.94 | 100 | 3 | – | – | – | – | 0.0 | 42.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | plain shapes | 0.19 | 3.95 | 0.067 | 0.43 | 0.34 | 6.0 | 30 | 1.00 | 66 | 54 | – | – | – | – | 25.1 | 75.9 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | flat colour art | 19.91 | 17.91 | 0.176 | 0.51 | 179.34 | 1.5 | 16 | 1.01 | 14 | 14 | 0 | 0.0 | – | – | 14.0 | 7.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | curved shapes | 0.08 | 3.21 | 0.056 | 0.38 | 0.38 | 1.8 | 13 | 1.44 | 14 | 14 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | polygons | 0.07 | 2.58 | 0.045 | 0.50 | 1.26 | 2.0 | 13 | 1.16 | 97 | 5 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | thin lines | 0.54 | 4.50 | 0.049 | 0.47 | 105.72 | 3.3 | 25 | 1.27 | 40 | 0 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | askew shapes | 0.16 | 3.24 | 0.041 | 0.37 | 36.06 | 3.7 | 23 | 0.94 | 100 | 3 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | plain shapes | 0.11 | 2.30 | 0.049 | 0.28 | 0.28 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | flat colour art | 19.91 | 17.94 | 0.180 | 0.39 | 179.45 | 1.5 | 16 | 1.01 | 14 | 14 | 0 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | Default with Shapes | gradient, photo | 39.03 | 38.64 | – | – | – | 3.2 | 595 | – | 55 | 41 | – | – | – | – | 18.8 | 35.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | Default with Shapes | linear gradients | 25.64 | 29.86 | – | – | – | 2.0 | 43 | – | 33 | 32 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | 0 | – | – |
-| 6 Colors with Shapes | curved shapes | 0.05 | 2.24 | 0.041 | 0.27 | 0.28 | 1.8 | 15 | 1.59 | 16 | 16 | 100 | 0.0 | 0.0 | 0 | 9.7 | 5.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | polygons | 0.05 | 2.24 | 0.039 | 0.42 | 1.39 | 2.0 | 14 | 1.27 | 94 | 7 | 99 | 0.0 | 0.0 | 0 | 2.1 | 8.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | thin lines | 0.49 | 4.78 | 0.108 | 0.70 | 45.31 | 4.0 | 30 | 1.50 | 63 | 19 | – | – | 1.7 | 413 | 0.0 | 10.8 | 0.0 | 0.0 | – | – | – | – | 0.33 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | askew shapes | 0.20 | 4.24 | 0.064 | 0.73 | 36.06 | 4.0 | 25 | 1.03 | 99 | 3 | – | – | 0.3 | 11 | 0.0 | 49.7 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | plain shapes | 0.16 | 3.03 | 0.050 | 0.34 | 0.24 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 15.5 | 43.8 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | flat colour art | 0.13 | 2.71 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.5 | 9.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | gradient, photo | 5.00 | 5.27 | – | – | – | 13.0 | 828 | – | 37 | 28 | – | – | – | – | 7.3 | 13.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | curved shapes | 0.05 | 2.25 | 0.039 | 0.27 | 0.28 | 1.8 | 15 | 1.59 | 16 | 16 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | polygons | 0.06 | 2.28 | 0.042 | 0.63 | 1.39 | 2.0 | 14 | 1.27 | 94 | 7 | 99 | 0.0 | 0.0 | 0 | 2.0 | 2.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | thin lines | 0.49 | 4.79 | 0.108 | 0.70 | 45.31 | 4.0 | 30 | 1.50 | 63 | 19 | – | – | 1.7 | 413 | 8.1 | 2.3 | 0.0 | 0.0 | – | – | – | – | 0.33 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | askew shapes | 0.18 | 3.59 | 0.053 | 0.73 | 36.06 | 4.0 | 25 | 1.03 | 99 | 3 | – | – | 0.3 | 11 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | plain shapes | 0.09 | 1.88 | 0.039 | 0.29 | 0.29 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | flat colour art | 0.13 | 2.72 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | gradient, photo | 5.00 | 5.28 | – | – | – | 13.0 | 828 | – | 37 | 28 | – | – | – | – | 7.5 | 10.6 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | 6 Colors with Shapes | linear gradients | 2.07 | 3.07 | – | – | – | 6.2 | 266 | – | 20 | 14 | – | – | – | – | 2.4 | 9.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | 0 | – | – |
-| 6 Colors with Auto Grouping | curved shapes | 0.08 | 3.46 | 0.043 | 0.27 | 0.28 | 1.8 | 16 | 1.77 | 16 | 16 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
-| 6 Colors with Auto Grouping | polygons | 0.07 | 2.87 | 0.041 | 0.42 | 1.39 | 2.0 | 16 | 1.45 | 86 | 7 | 93 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
+| 6 Colors with Auto Grouping | curved shapes | 0.06 | 2.43 | 0.043 | 0.27 | 0.28 | 1.8 | 16 | 1.77 | 16 | 16 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
+| 6 Colors with Auto Grouping | polygons | 0.06 | 2.40 | 0.041 | 0.42 | 1.39 | 2.0 | 16 | 1.45 | 86 | 7 | 93 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | thin lines | 0.49 | 4.76 | 0.108 | 0.70 | 45.31 | 4.0 | 30 | 1.50 | 63 | 19 | – | – | 1.7 | 413 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | askew shapes | 0.19 | 3.72 | 0.058 | 0.73 | 36.06 | 4.0 | 25 | 1.06 | 90 | 3 | – | – | 0.3 | 11 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | plain shapes | 0.10 | 2.07 | 0.043 | 0.30 | 0.26 | 6.0 | 42 | 1.41 | 59 | 49 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 0 | 0.00 | 0 | 0.0 | – | – | – |
@@ -343,6 +374,118 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | High Fidelity Photo with Gradients | flat colour art | 0.14 | 4.16 | 0.029 | 0.20 | 0.20 | 3.5 | 73 | 4.59 | 35 | 34 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | High Fidelity Photo with Gradients | gradient, photo | 1.80 | 2.04 | – | – | – | 140.7 | 10844 | – | 41 | 39 | – | – | – | – | 0.0 | – | 10.0 | 0.0 | – | – | – | – | – | – | 0.8 | – | – | – |
 | High Fidelity Photo with Gradients | linear gradients | 0.23 | 1.19 | – | – | – | 6.0 | 252 | – | 0 | 0 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | – | 0.8 | 83 | 0.2 | 5 |
+| Default, enhanced | curved shapes | 0.08 | 3.21 | 0.056 | 0.38 | 0.38 | 1.8 | 13 | 1.44 | 14 | 14 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
+| Default, enhanced | polygons | 0.07 | 2.58 | 0.045 | 0.50 | 1.26 | 2.0 | 13 | 1.16 | 97 | 5 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
+| Default, enhanced | thin lines | 0.54 | 4.50 | 0.049 | 0.47 | 105.72 | 3.3 | 25 | 1.27 | 40 | 0 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Default, enhanced | askew shapes | 0.16 | 3.24 | 0.041 | 0.37 | 36.06 | 3.7 | 23 | 0.94 | 100 | 3 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Default, enhanced | plain shapes | 0.11 | 2.30 | 0.049 | 0.28 | 0.28 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| Default, enhanced | flat colour art | 19.91 | 17.94 | 0.180 | 0.39 | 179.45 | 1.5 | 16 | 1.01 | 14 | 14 | 0 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
+| Default, enhanced | gradient, photo | 39.03 | 38.64 | – | – | – | 3.2 | 595 | – | 55 | 41 | – | – | – | – | 18.8 | 35.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | 15 | 0.0 | – | – | – |
+| Default, enhanced | linear gradients | 25.64 | 29.86 | – | – | – | 2.0 | 43 | – | 33 | 32 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| Auto Color, enhanced | curved shapes | 0.05 | 2.25 | 0.039 | 0.27 | 0.28 | 1.8 | 15 | 1.59 | 16 | 16 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
+| Auto Color, enhanced | polygons | 0.06 | 2.30 | 0.042 | 0.63 | 1.39 | 2.0 | 14 | 1.25 | 95 | 7 | 99 | 0.0 | 0.0 | 0 | 2.0 | 2.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
+| Auto Color, enhanced | thin lines | 0.70 | 5.57 | 0.067 | 1.08 | 105.72 | 5.0 | 38 | 1.88 | 43 | 3 | – | – | 4.0 | 3225 | 5.2 | 4.6 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Auto Color, enhanced | askew shapes | 0.64 | 3.72 | 0.044 | 0.36 | 9.49 | 4.0 | 24 | 1.00 | 100 | 3 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Auto Color, enhanced | plain shapes | 0.09 | 1.88 | 0.039 | 0.29 | 0.29 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| Auto Color, enhanced | flat colour art | 0.13 | 2.72 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| Auto Color, enhanced | gradient, photo | 2.08 | 2.39 | – | – | – | 159.3 | 4439 | – | 22 | 9 | – | – | – | – | 41.7 | 51.9 | 0.0 | 0.5 | – | – | – | – | 0.00 | 8 | 0.0 | – | – | – |
+| Auto Color, enhanced | linear gradients | 1.02 | 1.74 | – | – | – | 15.7 | 1272 | – | 12 | 8 | – | – | – | – | 9.1 | 7.4 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| High Fidelity Photo, enhanced | curved shapes | 0.04 | 1.63 | 0.026 | 0.15 | 0.15 | 1.2 | 19 | 2.11 | 21 | 21 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | polygons | 0.06 | 2.33 | 0.039 | 0.50 | 1.32 | 1.7 | 17 | 1.47 | 88 | 7 | 93 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | thin lines | 0.35 | 6.05 | 0.085 | 0.90 | 4.35 | 40.3 | 348 | 17.42 | 35 | 9 | – | – | 27.3 | 4505 | 0.0 | – | 19.0 | 0.0 | – | – | – | – | 0.00 | 23 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | askew shapes | 0.17 | 3.97 | 0.100 | 0.94 | 1.73 | 8.7 | 157 | 6.54 | 71 | 5 | – | – | 4.3 | 3998 | 0.0 | – | 1.0 | 0.0 | – | – | – | – | 0.00 | 18 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | plain shapes | 0.08 | 1.66 | 0.035 | 0.25 | 0.28 | 6.0 | 50 | 1.68 | 62 | 51 | – | – | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | 0 | 0.00 | 0 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | flat colour art | 0.14 | 4.16 | 0.029 | 0.20 | 0.20 | 3.5 | 73 | 4.59 | 35 | 34 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 25 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | gradient, photo | 1.80 | 2.05 | – | – | – | 134.7 | 11212 | – | 39 | 37 | – | – | – | – | 0.0 | – | 7.3 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | linear gradients | 0.64 | 3.29 | – | – | – | 34.5 | 4318 | – | 32 | 31 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | – | 72 | 0.0 | 0 | – | – |
+| Low Fidelity Photo, enhanced | curved shapes | 0.06 | 2.52 | 0.043 | 0.31 | 0.31 | 1.2 | 12 | 1.29 | 18 | 18 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 0 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | polygons | 0.06 | 2.34 | 0.039 | 0.42 | 1.39 | 1.7 | 12 | 1.13 | 95 | 7 | 99 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 0 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | thin lines | 0.49 | 5.73 | 0.082 | 0.68 | 45.31 | 7.0 | 53 | 2.63 | 53 | 11 | – | – | 4.0 | 3989 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.67 | 0 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | askew shapes | 0.23 | 4.54 | 0.055 | 0.70 | 21.55 | 6.0 | 40 | 1.68 | 94 | 3 | – | – | 2.3 | 2630 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 3 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | plain shapes | 0.10 | 2.02 | 0.042 | 0.27 | 0.27 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | 100 | 1.00 | 0 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | flat colour art | 0.15 | 4.19 | 0.042 | 0.28 | 0.20 | 3.5 | 48 | 2.93 | 32 | 31 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 25 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | gradient, photo | 2.53 | 2.80 | – | – | – | 42.7 | 2307 | – | 43 | 37 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 60 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | linear gradients | 0.69 | 3.09 | – | – | – | 24.3 | 1045 | – | 31 | 31 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 79 | 0.0 | 0 | – | – |
+| 3 Colors, enhanced | curved shapes | 0.06 | 2.52 | 0.043 | 0.31 | 0.31 | 1.8 | 14 | 1.53 | 15 | 15 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
+| 3 Colors, enhanced | polygons | 0.06 | 2.34 | 0.043 | 0.63 | 1.39 | 2.0 | 14 | 1.26 | 94 | 7 | 99 | 0.0 | 0.0 | 0 | 2.0 | 2.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
+| 3 Colors, enhanced | thin lines | 0.43 | 4.49 | 0.117 | 1.04 | 45.31 | 5.0 | 41 | 2.05 | 57 | 13 | – | – | 2.0 | 308 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.33 | 0 | 0.0 | – | – | – |
+| 3 Colors, enhanced | askew shapes | 0.18 | 3.53 | 0.052 | 0.70 | 14.59 | 4.0 | 25 | 1.04 | 97 | 3 | – | – | 0.7 | 23 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 3 Colors, enhanced | plain shapes | 0.10 | 2.02 | 0.042 | 0.27 | 0.27 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| 3 Colors, enhanced | flat colour art | 1.31 | 3.58 | 0.124 | 0.90 | 60.11 | 2.5 | 23 | 1.77 | 45 | 20 | 100 | 0.0 | 1.0 | 9912 | 9.0 | 9.0 | 0.0 | 0.0 | – | – | – | – | 0.33 | 25 | 0.0 | – | – | – |
+| 3 Colors, enhanced | gradient, photo | 7.49 | 7.60 | – | – | – | 5.7 | 524 | – | 48 | 40 | – | – | – | – | 7.0 | 8.8 | 0.0 | 0.0 | – | – | – | – | 0.00 | 20 | 0.0 | – | – | – |
+| 3 Colors, enhanced | linear gradients | 4.45 | 5.79 | – | – | – | 3.0 | 78 | – | 28 | 24 | – | – | – | – | 10.3 | 1.9 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| 6 Colors, enhanced | curved shapes | 0.05 | 2.25 | 0.039 | 0.27 | 0.28 | 1.8 | 15 | 1.59 | 16 | 16 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
+| 6 Colors, enhanced | polygons | 0.06 | 2.28 | 0.042 | 0.63 | 1.39 | 2.0 | 14 | 1.27 | 94 | 7 | 99 | 0.0 | 0.0 | 0 | 2.0 | 2.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
+| 6 Colors, enhanced | thin lines | 0.49 | 4.79 | 0.108 | 0.70 | 45.31 | 4.0 | 30 | 1.50 | 63 | 19 | – | – | 1.7 | 413 | 8.1 | 2.3 | 0.0 | 0.0 | – | – | – | – | 0.33 | 0 | 0.0 | – | – | – |
+| 6 Colors, enhanced | askew shapes | 0.18 | 3.59 | 0.053 | 0.73 | 36.06 | 4.0 | 25 | 1.03 | 99 | 3 | – | – | 0.3 | 11 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 6 Colors, enhanced | plain shapes | 0.09 | 1.88 | 0.039 | 0.29 | 0.29 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| 6 Colors, enhanced | flat colour art | 0.13 | 2.72 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 6 Colors, enhanced | gradient, photo | 5.00 | 5.28 | – | – | – | 13.0 | 828 | – | 37 | 28 | – | – | – | – | 7.5 | 10.6 | 0.0 | 0.0 | – | – | – | – | 0.00 | 13 | 0.0 | – | – | – |
+| 6 Colors, enhanced | linear gradients | 2.07 | 3.07 | – | – | – | 6.2 | 266 | – | 20 | 14 | – | – | – | – | 2.4 | 9.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| 16 Colors, enhanced | curved shapes | 0.05 | 2.06 | 0.034 | 0.24 | 0.25 | 1.8 | 16 | 1.64 | 16 | 16 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 17 | 0.0 | – | – | – |
+| 16 Colors, enhanced | polygons | 0.05 | 2.22 | 0.041 | 0.63 | 1.39 | 2.0 | 14 | 1.28 | 94 | 7 | 99 | 0.0 | 0.0 | 0 | 2.0 | 2.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 11 | 0.0 | – | – | – |
+| 16 Colors, enhanced | thin lines | 0.39 | 3.93 | 0.113 | 0.70 | 23.53 | 8.7 | 52 | 2.58 | 56 | 17 | – | – | 5.7 | 322 | 8.1 | 2.3 | 0.0 | 0.0 | – | – | – | – | 0.33 | 0 | 0.0 | – | – | – |
+| 16 Colors, enhanced | askew shapes | 0.17 | 3.52 | 0.058 | 0.73 | 21.55 | 4.3 | 27 | 1.14 | 95 | 3 | – | – | 0.7 | 17 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 16 Colors, enhanced | plain shapes | 0.08 | 1.70 | 0.035 | 0.13 | 0.13 | 6.0 | 30 | 1.00 | 67 | 55 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| 16 Colors, enhanced | flat colour art | 0.12 | 2.53 | 0.052 | 0.31 | 0.30 | 3.0 | 28 | 2.11 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 16 Colors, enhanced | gradient, photo | 3.00 | 3.30 | – | – | – | 47.2 | 2126 | – | 30 | 16 | – | – | – | – | 15.2 | 19.6 | 0.0 | 0.0 | – | – | – | – | 0.00 | 15 | 0.0 | – | – | – |
+| 16 Colors, enhanced | linear gradients | 0.98 | 1.67 | – | – | – | 15.8 | 1340 | – | 8 | 6 | – | – | – | – | 13.9 | 15.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| Shades of Gray, enhanced | curved shapes | 0.06 | 2.53 | 0.044 | 0.31 | 0.31 | 1.2 | 12 | 1.29 | 18 | 18 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 0 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | polygons | 0.07 | 2.49 | 0.042 | 0.50 | 1.26 | 1.7 | 11 | 1.03 | 99 | 5 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 0 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | thin lines | 0.56 | 7.12 | 0.089 | 0.68 | 45.31 | 10.3 | 73 | 3.65 | 55 | 11 | – | – | 8.0 | 4322 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 0 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | askew shapes | 0.25 | 4.88 | 0.046 | 0.73 | 21.52 | 6.0 | 39 | 1.61 | 95 | 3 | – | – | 2.3 | 2638 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 3 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | plain shapes | 0.09 | 1.97 | 0.042 | 0.25 | 0.25 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 | – | – | – | 100 | 1.00 | 0 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | flat colour art | 7.33 | 11.09 | 0.244 | 1.47 | 179.46 | 4.7 | 161 | 13.44 | 24 | 24 | 50 | 0.0 | 3.7 | 173377 | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 1.33 | 36 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | gradient, photo | 9.71 | 9.55 | – | – | – | 18.3 | 753 | – | 51 | 41 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | 0.00 | 53 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | linear gradients | 5.25 | 8.40 | – | – | – | 9.0 | 474 | – | 31 | 31 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 63 | 0.0 | 0 | – | – |
+| Black and White Logo, enhanced | curved shapes | 0.03 | 1.46 | 0.022 | 0.16 | 0.16 | 1.2 | 16 | 1.67 | 21 | 21 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | polygons | 0.07 | 2.68 | 0.046 | 0.50 | 1.26 | 1.7 | 11 | 1.03 | 99 | 8 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | thin lines | 0.60 | 6.03 | 0.105 | 0.50 | 77.21 | 10.3 | 44 | 2.18 | 90 | 10 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | askew shapes | 0.49 | 11.08 | 0.232 | 1.46 | 9.63 | 4.0 | 25 | 1.03 | 98 | 70 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.67 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | plain shapes | 0.08 | 1.73 | 0.033 | 0.24 | 0.24 | 6.0 | 30 | 1.00 | 67 | 55 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | flat colour art | 19.90 | 17.76 | 0.171 | 0.30 | 179.47 | 1.0 | 18 | 1.12 | 23 | 23 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | gradient, photo | 38.97 | 38.53 | – | – | – | 9.0 | 634 | – | 73 | 54 | – | – | – | – | – | – | 1.2 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | linear gradients | 25.62 | 29.78 | – | – | – | 1.5 | 127 | – | 46 | 33 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| Sketched Art, enhanced | curved shapes | 0.13 | 5.38 | 0.103 | 0.46 | 0.46 | 1.2 | 11 | 1.24 | 16 | 16 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | polygons | 0.13 | 5.02 | 0.090 | 0.49 | 1.08 | 1.7 | 12 | 1.07 | 94 | 5 | 98 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | thin lines | 0.47 | 5.72 | 0.114 | 0.96 | 52.59 | 4.3 | 29 | 1.45 | 64 | 3 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.33 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | askew shapes | 0.32 | 6.06 | 0.092 | 0.45 | 35.94 | 3.3 | 23 | 0.94 | 96 | 4 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | plain shapes | 0.31 | 5.96 | 0.105 | 0.25 | 0.25 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | flat colour art | 20.24 | 19.33 | 0.158 | 0.83 | 179.59 | 1.5 | 15 | 1.00 | 16 | 16 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.50 | 25 | 0.0 | – | – | – |
+| Sketched Art, enhanced | gradient, photo | 45.42 | 45.21 | – | – | – | 1.0 | 244 | – | 46 | 35 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | linear gradients | 29.20 | 33.47 | – | – | – | 1.5 | 54 | – | 35 | 34 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| Silhouettes, enhanced | curved shapes | 0.35 | 14.33 | 0.277 | 0.69 | 0.69 | 1.2 | 11 | 1.24 | 16 | 16 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | polygons | 0.35 | 13.66 | 0.255 | 0.74 | 1.67 | 1.7 | 13 | 1.20 | 82 | 6 | 93 | 0.1 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.11 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | thin lines | 0.99 | 13.79 | 0.267 | 1.08 | 18.26 | 5.0 | 30 | 1.50 | 67 | 12 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 1.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | askew shapes | 0.58 | 14.94 | 0.298 | 0.57 | 0.55 | 4.0 | 24 | 1.01 | 95 | 3 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | plain shapes | 0.76 | 15.32 | 0.293 | 0.63 | 0.63 | 6.0 | 30 | 1.00 | 67 | 50 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | 94 | 0.33 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | flat colour art | 23.82 | 32.43 | 0.189 | 0.35 | 188.27 | 1.0 | 6 | 0.53 | 37 | 37 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | gradient, photo | 61.57 | 61.32 | – | – | – | 0.2 | 2 | – | 47 | 21 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | linear gradients | 39.85 | 46.48 | – | – | – | 1.0 | 37 | – | 1 | 0 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| Line Art, enhanced | curved shapes | 0.04 | 1.76 | 0.029 | 0.22 | 0.22 | 1.2 | 14 | 1.46 | 20 | 20 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | polygons | 0.07 | 2.38 | 0.040 | 0.50 | 1.26 | 1.7 | 11 | 1.04 | 98 | 5 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | thin lines | 0.52 | 4.12 | 0.040 | 0.47 | 105.72 | 3.3 | 29 | 1.45 | 40 | 0 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | askew shapes | 0.12 | 3.08 | 0.042 | 0.48 | 9.60 | 4.0 | 24 | 1.01 | 98 | 3 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | plain shapes | 0.07 | 1.55 | 0.032 | 0.13 | 0.13 | 6.0 | 30 | 1.00 | 67 | 55 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | flat colour art | 19.90 | 17.84 | 0.168 | 0.30 | 179.50 | 1.0 | 16 | 1.03 | 21 | 21 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | gradient, photo | 38.98 | 38.54 | – | – | – | 7.7 | 472 | – | 58 | 44 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | linear gradients | 25.63 | 29.80 | – | – | – | 1.5 | 95 | – | 33 | 32 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| Technical Drawing, enhanced | curved shapes | 0.03 | 1.46 | 0.022 | 0.16 | 0.16 | 1.2 | 16 | 1.67 | 21 | 21 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | polygons | 0.07 | 2.68 | 0.046 | 0.50 | 1.26 | 1.7 | 11 | 1.02 | 100 | 8 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | thin lines | 0.50 | 5.50 | 0.110 | 0.50 | 55.93 | 15.3 | 62 | 3.12 | 86 | 14 | – | – | – | – | – | – | 3.3 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | askew shapes | 0.48 | 11.01 | 0.230 | 1.46 | 2.11 | 4.3 | 26 | 1.08 | 98 | 69 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.67 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | plain shapes | 0.08 | 1.81 | 0.035 | 0.24 | 0.24 | 6.0 | 30 | 1.00 | 67 | 55 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | 100 | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | flat colour art | 19.90 | 17.76 | 0.171 | 0.30 | 179.47 | 1.0 | 18 | 1.12 | 23 | 23 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | gradient, photo | 38.94 | 38.51 | – | – | – | 20.0 | 659 | – | 73 | 51 | – | – | – | – | – | – | 11.7 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | linear gradients | 25.62 | 29.80 | – | – | – | 1.5 | 118 | – | 49 | 33 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
+| Outline, enhanced | curved shapes | 23.38 | 44.76 | 0.499 | 0.71 | 0.52 | 1.2 | 16 | 1.70 | 20 | 20 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | polygons | 17.94 | 44.26 | 0.494 | 0.94 | 0.76 | 1.7 | 14 | 1.26 | 89 | 5 | 95 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | thin lines | 0.51 | 3.57 | 0.028 | 0.41 | 105.74 | 3.3 | 7 | 0.33 | 100 | 7 | – | – | – | – | – | – | 0.0 | 0.0 | 0.020 | 0.02 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | askew shapes | 23.68 | 36.53 | 0.422 | 0.62 | 6.62 | 4.0 | 20 | 0.83 | 100 | 3 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | plain shapes | 34.32 | 43.23 | 0.495 | 0.73 | 0.51 | 6.0 | 47 | 1.56 | 56 | 51 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | 0 | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | flat colour art | 26.69 | 32.18 | 0.494 | 0.92 | 178.93 | 1.0 | 18 | 1.30 | 21 | 21 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | gradient, photo | 39.38 | 39.18 | – | – | – | 7.5 | 445 | – | 59 | 43 | – | – | – | – | – | – | 3.3 | 0.5 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | linear gradients | 25.08 | 30.80 | – | – | – | 1.5 | 92 | – | 33 | 32 | – | – | – | – | – | – | 0.0 | 0.5 | – | – | – | – | 0.00 | 0 | 0.0 | 0 | – | – |
 
 ## 3. Each preset on its inputs, by variant (256 px)
 
@@ -423,16 +566,16 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Flat Logo | blurred | 0.54 | 8.33 | 0.052 | 0.62 | 0.78 | 3.0 | 28 | 1.78 | 43 | 16 | 50 | 0.0 | 0.0 | 0 | 5.8 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | Flat Logo | noisy | 0.81 | 1.77 | 0.076 | 0.39 | 0.32 | 3.5 | 44 | 2.63 | 31 | 0 | 100 | 1.0 | 0.0 | 0 | 6.9 | – | 0.5 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
 | Flat Logo | scanned | 1.68 | 3.76 | 0.088 | 0.82 | 0.66 | 8.5 | 128 | 10.04 | 23 | 0 | 62 | 17.0 | 0.0 | 0 | 35.1 | – | 5.5 | 0.0 | – | – | – | – | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | clean | 0.19 | 3.95 | 0.067 | 0.43 | 0.34 | 6.0 | 30 | 1.00 | 66 | 54 | – | – | – | – | 25.1 | 75.9 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | aliased | 0.54 | 14.09 | 0.238 | 1.00 | 0.90 | 6.0 | 33 | 1.10 | 56 | 43 | – | – | – | – | 58.1 | 211.4 | 0.0 | 0.0 | – | – | – | 83 | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | blurred | 1.72 | 17.70 | 0.123 | 0.81 | 0.32 | 6.0 | 30 | 1.00 | 66 | 54 | – | – | – | – | 29.7 | 146.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | noisy | 2.70 | 5.97 | 0.074 | 0.38 | 0.32 | 6.0 | 30 | 1.00 | 67 | 0 | – | – | – | – | 16.1 | 79.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| Default with Shapes | scanned | 17.22 | 23.75 | 0.165 | 0.52 | 0.46 | 6.0 | 30 | 1.00 | 66 | 17 | – | – | – | – | 30.5 | 179.7 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | clean | 0.16 | 3.03 | 0.050 | 0.34 | 0.24 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 15.5 | 43.8 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | aliased | 0.46 | 12.25 | 0.206 | 0.99 | 0.52 | 6.0 | 30 | 1.00 | 67 | 55 | – | – | 0.0 | 0 | 56.6 | 271.4 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | blurred | 1.55 | 15.53 | 0.115 | 0.57 | 0.22 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 26.3 | 66.2 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | noisy | 1.85 | 4.49 | 0.062 | 0.36 | 0.29 | 6.0 | 30 | 1.00 | 66 | 0 | – | – | 0.0 | 0 | 14.6 | 64.5 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
-| 6 Colors with Shapes | scanned | 2.11 | 6.85 | 0.099 | 0.53 | 0.27 | 6.0 | 30 | 1.00 | 67 | 0 | – | – | 0.0 | 0 | 20.6 | 105.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | clean | 0.11 | 2.30 | 0.049 | 0.28 | 0.28 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | aliased | 0.60 | 15.40 | 0.205 | 0.90 | 0.90 | 6.0 | 33 | 1.10 | 55 | 43 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 83 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | blurred | 1.57 | 15.87 | 0.074 | 0.39 | 0.39 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | noisy | 2.62 | 4.76 | 0.056 | 0.16 | 0.16 | 6.0 | 30 | 1.00 | 67 | 0 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| Default with Shapes | scanned | 17.00 | 21.65 | 0.112 | 0.24 | 0.23 | 6.0 | 30 | 1.00 | 67 | 17 | – | – | – | – | 3.3 | 0.3 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | clean | 0.09 | 1.88 | 0.039 | 0.29 | 0.29 | 6.0 | 30 | 1.00 | 67 | 54 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | aliased | 0.59 | 15.23 | 0.180 | 0.60 | 0.60 | 6.0 | 30 | 1.00 | 68 | 55 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | blurred | 1.56 | 15.56 | 0.118 | 0.23 | 0.23 | 6.0 | 30 | 1.00 | 67 | 55 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | noisy | 1.78 | 3.31 | 0.041 | 0.11 | 0.11 | 6.0 | 30 | 1.00 | 67 | 0 | – | – | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
+| 6 Colors with Shapes | scanned | 2.10 | 6.74 | 0.085 | 0.30 | 0.24 | 6.0 | 30 | 1.00 | 67 | 0 | – | – | 0.0 | 0 | 14.7 | 8.7 | 0.0 | 0.0 | – | – | – | 100 | 0.00 | – | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | clean | 0.13 | 2.72 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | aliased | 0.29 | 10.43 | 0.298 | 1.00 | 1.00 | 3.0 | 27 | 2.05 | 43 | 43 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
 | 6 Colors with Auto Grouping | blurred | 0.62 | 9.31 | 0.208 | 1.34 | 1.19 | 6.0 | 100 | 5.61 | 41 | 11 | 50 | 21.5 | 0.0 | 0 | 0.8 | 0.4 | 0.0 | 0.0 | – | – | – | – | 0.00 | 23 | 0.0 | – | – | – |
@@ -468,6 +611,76 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | High Fidelity Photo with Gradients | blurred | 0.33 | 2.29 | – | – | – | 55.5 | 940 | – | 4 | 0 | – | – | – | – | 0.0 | – | 13.5 | 0.0 | – | – | – | – | – | – | 1.0 | 100 | 0.3 | 6 |
 | High Fidelity Photo with Gradients | noisy | 1.00 | 1.24 | – | – | – | 23.5 | 652 | – | 21 | 7 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | – | – | 2.0 | 100 | 0.2 | 8 |
 | High Fidelity Photo with Gradients | scanned | 0.97 | 1.55 | – | – | – | 46.5 | 2942 | – | 18 | 15 | – | – | – | – | 0.0 | – | 6.0 | 0.0 | – | – | – | – | – | – | 0.5 | 50 | 1.5 | 21 |
+| Default, enhanced | clean | 0.08 | 2.94 | 0.051 | 0.50 | 1.26 | 1.9 | 13 | 1.32 | 50 | 10 | 100 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 14 | 0.0 | – | – | – |
+| Default, enhanced | aliased | 0.36 | 19.23 | 0.194 | 1.00 | 1.35 | 1.9 | 14 | 1.42 | 28 | 8 | 98 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.14 | 14 | 0.0 | – | – | – |
+| Default, enhanced | blurred | 0.81 | 16.50 | 0.073 | 0.98 | 2.18 | 1.9 | 22 | 2.15 | 17 | 5 | 38 | 1.3 | – | – | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 14 | 0.0 | – | – | – |
+| Default, enhanced | noisy | 1.74 | 4.45 | 0.053 | 0.46 | 1.25 | 1.9 | 13 | 1.36 | 44 | 0 | 100 | 0.0 | – | – | 1.2 | 0.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | 14 | 0.0 | – | – | – |
+| Default, enhanced | scanned | 15.06 | 20.14 | 0.111 | 0.74 | 2.14 | 1.9 | 22 | 2.23 | 13 | 0 | 43 | 1.3 | – | – | 1.0 | 3.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 14 | 0.0 | – | – | – |
+| Auto Color, enhanced | clean | 0.13 | 2.72 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| Auto Color, enhanced | aliased | 0.29 | 10.42 | 0.293 | 1.00 | 1.00 | 3.0 | 29 | 2.15 | 43 | 43 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| Auto Color, enhanced | blurred | 0.62 | 9.36 | 0.208 | 1.33 | 0.72 | 6.0 | 112 | 6.21 | 46 | 16 | 100 | 21.0 | 0.0 | 0 | 0.2 | 0.4 | 0.0 | 0.0 | – | – | – | – | 0.00 | 23 | 0.0 | – | – | – |
+| Auto Color, enhanced | noisy | 0.85 | 2.62 | 0.073 | 0.32 | 0.32 | 3.0 | 27 | 1.99 | 35 | 0 | 100 | 0.0 | 0.0 | 0 | 0.3 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| Auto Color, enhanced | scanned | 1.73 | 4.43 | 0.229 | 1.20 | 0.68 | 7.0 | 84 | 4.87 | 39 | 0 | 100 | 21.0 | 0.0 | 0 | 8.9 | 6.9 | 0.0 | 0.0 | – | – | – | – | 0.00 | 15 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | clean | 1.80 | 2.05 | – | – | – | 134.7 | 11212 | – | 39 | 37 | – | – | – | – | 0.0 | – | 7.3 | 0.0 | – | – | – | – | – | 69 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | aliased | 1.78 | 2.01 | – | – | – | 73.0 | 8021 | – | 40 | 38 | – | – | – | – | 0.0 | – | 5.5 | 0.0 | – | – | – | – | – | 65 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | blurred | 1.59 | 1.95 | – | – | – | 72.0 | 7450 | – | 40 | 39 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | – | 65 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | noisy | 2.02 | 2.19 | – | – | – | 155.5 | 10670 | – | 33 | 31 | – | – | – | – | 0.0 | – | 18.5 | 0.0 | – | – | – | – | – | 72 | 0.0 | – | – | – |
+| High Fidelity Photo, enhanced | scanned | 1.45 | 1.55 | – | – | – | 140.5 | 9723 | – | 36 | 35 | – | – | – | – | 0.0 | – | 24.5 | 0.0 | – | – | – | – | – | 75 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | clean | 2.53 | 2.80 | – | – | – | 42.7 | 2307 | – | 43 | 37 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 60 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | aliased | 2.53 | 2.78 | – | – | – | 36.5 | 1505 | – | 46 | 38 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 68 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | blurred | 2.35 | 2.75 | – | – | – | 29.0 | 1990 | – | 44 | 37 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 74 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | noisy | 2.70 | 2.86 | – | – | – | 32.0 | 1972 | – | 43 | 38 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 57 | 0.0 | – | – | – |
+| Low Fidelity Photo, enhanced | scanned | 1.95 | 2.05 | – | – | – | 34.5 | 2550 | – | 42 | 33 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 61 | 0.0 | – | – | – |
+| 3 Colors, enhanced | clean | 0.06 | 2.00 | 0.070 | 0.31 | 0.30 | 2.0 | 11 | 1.78 | 39 | 0 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 3 Colors, enhanced | aliased | 0.13 | 8.77 | 0.242 | 0.91 | 0.91 | 2.0 | 12 | 2.00 | 39 | 39 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 3 Colors, enhanced | blurred | 0.34 | 7.83 | 0.073 | 0.24 | 0.24 | 2.0 | 9 | 1.50 | 39 | 0 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 3 Colors, enhanced | noisy | 0.71 | 2.03 | 0.114 | 0.32 | 0.32 | 2.0 | 11 | 1.83 | 39 | 0 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 3 Colors, enhanced | scanned | 1.57 | 3.22 | 0.089 | 0.30 | 0.30 | 2.0 | 12 | 2.00 | 39 | 0 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| 6 Colors, enhanced | clean | 0.13 | 2.72 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 6 Colors, enhanced | aliased | 0.29 | 10.42 | 0.293 | 1.00 | 1.00 | 3.0 | 29 | 2.15 | 43 | 43 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 6 Colors, enhanced | blurred | 0.62 | 9.33 | 0.205 | 1.34 | 0.68 | 6.0 | 94 | 5.31 | 46 | 16 | 100 | 21.5 | 0.0 | 0 | 0.8 | 0.4 | 0.0 | 0.0 | – | – | – | – | 0.00 | 23 | 0.0 | – | – | – |
+| 6 Colors, enhanced | noisy | 0.85 | 2.59 | 0.073 | 0.32 | 0.32 | 3.0 | 27 | 1.99 | 35 | 0 | 100 | 0.0 | 0.0 | 0 | 0.3 | 0.3 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 6 Colors, enhanced | scanned | 1.74 | 4.42 | 0.228 | 1.20 | 0.68 | 7.0 | 85 | 4.95 | 39 | 0 | 100 | 21.0 | 0.0 | 0 | 0.0 | 1.1 | 0.0 | 0.0 | – | – | – | – | 0.00 | 15 | 0.0 | – | – | – |
+| 16 Colors, enhanced | clean | 0.12 | 2.53 | 0.052 | 0.31 | 0.30 | 3.0 | 28 | 2.11 | 43 | 19 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 16 Colors, enhanced | aliased | 0.29 | 10.38 | 0.289 | 1.00 | 1.00 | 3.0 | 30 | 2.20 | 43 | 43 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 16 Colors, enhanced | blurred | 0.62 | 9.37 | 0.213 | 1.31 | 0.74 | 7.0 | 133 | 7.23 | 48 | 17 | 100 | 25.5 | 0.0 | 0 | 0.2 | 0.5 | 0.0 | 0.0 | – | – | – | – | 0.00 | 27 | 0.0 | – | – | – |
+| 16 Colors, enhanced | noisy | 0.85 | 2.57 | 0.072 | 0.32 | 0.32 | 3.0 | 28 | 2.10 | 34 | 0 | 100 | 0.0 | 0.0 | 0 | 0.2 | 0.2 | 0.0 | 0.0 | – | – | – | – | 0.00 | 30 | 0.0 | – | – | – |
+| 16 Colors, enhanced | scanned | 1.72 | 4.44 | 0.257 | 1.09 | 0.80 | 7.5 | 140 | 7.91 | 41 | 0 | 100 | 28.5 | 0.0 | 0 | 2.6 | 3.0 | 0.0 | 0.0 | – | – | – | – | 0.00 | 18 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | clean | 9.71 | 9.55 | – | – | – | 18.3 | 753 | – | 51 | 41 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | 0.00 | 53 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | aliased | 9.71 | 9.52 | – | – | – | 11.0 | 647 | – | 57 | 41 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | 0.00 | 54 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | blurred | 9.66 | 9.32 | – | – | – | 11.5 | 585 | – | 55 | 41 | – | – | – | – | 0.0 | – | 0.5 | 0.0 | – | – | – | – | 0.00 | 47 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | noisy | 9.74 | 9.44 | – | – | – | 19.5 | 648 | – | 46 | 37 | – | – | – | – | 0.0 | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 28 | 0.0 | – | – | – |
+| Shades of Gray, enhanced | scanned | 6.58 | 6.46 | – | – | – | 19.0 | 764 | – | 47 | 37 | – | – | – | – | 0.0 | – | 1.0 | 0.0 | – | – | – | – | 0.00 | 37 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | clean | 0.05 | 1.98 | 0.032 | 0.50 | 1.26 | 1.4 | 14 | 1.39 | 55 | 15 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | aliased | 0.38 | 20.07 | 0.166 | 1.00 | 1.35 | 1.4 | 20 | 2.13 | 54 | 14 | 98 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.14 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | blurred | 0.80 | 16.27 | 0.056 | 0.83 | 2.17 | 1.4 | 31 | 3.07 | 30 | 12 | 38 | 1.1 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | noisy | 1.73 | 4.16 | 0.038 | 0.46 | 1.25 | 1.4 | 14 | 1.41 | 47 | 7 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Black and White Logo, enhanced | scanned | 15.05 | 19.98 | 0.097 | 0.76 | 2.07 | 1.4 | 43 | 4.19 | 24 | 1 | 43 | 1.1 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | clean | 0.20 | 5.45 | 0.105 | 0.96 | 52.59 | 1.9 | 15 | 1.28 | 26 | 14 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.07 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | aliased | 0.45 | 19.03 | 0.194 | 1.00 | 105.54 | 1.6 | 11 | 1.06 | 26 | 9 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | blurred | 1.03 | 18.97 | 0.226 | 0.81 | 105.58 | 1.6 | 16 | 1.39 | 13 | 8 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | noisy | 1.75 | 5.97 | 0.108 | 0.97 | 1.06 | 2.0 | 16 | 1.34 | 17 | 0 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Sketched Art, enhanced | scanned | 15.10 | 22.30 | 0.403 | 0.78 | 105.61 | 1.6 | 20 | 1.64 | 2 | 0 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | clean | 0.35 | 14.33 | 0.277 | 0.69 | 0.69 | 1.2 | 11 | 1.24 | 16 | 16 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | aliased | 0.37 | 20.27 | 0.243 | 1.00 | 1.00 | 1.2 | 10 | 1.32 | 12 | 9 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | blurred | 1.23 | 28.51 | 0.809 | 1.41 | 1.41 | 1.2 | 12 | 1.34 | 13 | 10 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.50 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | noisy | 2.11 | 11.00 | 0.281 | 0.68 | 0.69 | 1.2 | 11 | 1.24 | 9 | 0 | 100 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Silhouettes, enhanced | scanned | 16.04 | 30.10 | 1.440 | 2.19 | 2.19 | 1.2 | 26 | 3.36 | 3 | 0 | 50 | 2.8 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.25 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | clean | 0.52 | 4.12 | 0.040 | 0.47 | 105.72 | 3.3 | 29 | 1.45 | 40 | 0 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | aliased | 0.67 | 14.44 | 0.112 | 0.73 | 55.44 | 14.0 | 59 | 2.95 | 87 | 1 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | blurred | 1.56 | 16.08 | 0.057 | 0.99 | 105.72 | 3.0 | 49 | 2.45 | 38 | 0 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | noisy | 1.03 | 4.10 | 0.035 | 0.44 | 56.07 | 8.0 | 50 | 2.50 | 43 | 0 | – | – | – | – | – | – | 1.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Line Art, enhanced | scanned | 13.54 | 19.55 | 0.062 | 0.92 | 105.68 | 3.0 | 51 | 2.55 | 8 | 0 | – | – | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | clean | 0.24 | 4.91 | 0.095 | 1.46 | 55.93 | 4.9 | 24 | 1.45 | 97 | 21 | 100 | 0.0 | – | – | – | – | 0.7 | 0.0 | – | – | – | – | 0.13 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | aliased | 0.50 | 19.31 | 0.229 | 1.37 | 55.44 | 6.2 | 31 | 1.79 | 98 | 23 | 97 | 0.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.20 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | blurred | 1.06 | 16.55 | 0.138 | 1.16 | 105.64 | 2.4 | 41 | 3.21 | 60 | 13 | 51 | 2.7 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | noisy | 1.59 | 5.75 | 0.103 | 1.17 | 31.79 | 7.0 | 32 | 1.86 | 97 | 21 | 100 | 0.0 | – | – | – | – | 1.4 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Technical Drawing, enhanced | scanned | 14.69 | 20.14 | 0.138 | 1.17 | 105.57 | 2.4 | 63 | 4.62 | 59 | 12 | 57 | 3.0 | – | – | – | – | 0.0 | 0.0 | – | – | – | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | clean | 0.51 | 3.57 | 0.028 | 0.41 | 105.74 | 3.3 | 7 | 0.33 | 100 | 7 | – | – | – | – | – | – | 0.0 | 0.0 | 0.020 | 0.02 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | aliased | 0.74 | 16.02 | 0.164 | 0.81 | 55.55 | 11.0 | 25 | 1.25 | 92 | 9 | – | – | – | – | – | – | 0.0 | 0.0 | 0.158 | 0.01 | 2.3 | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | blurred | 1.57 | 16.26 | 0.032 | 0.86 | 105.74 | 3.0 | 6 | 0.30 | 100 | 0 | – | – | – | – | – | – | 0.0 | 0.0 | 0.013 | 0.03 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | noisy | 0.94 | 3.36 | 0.024 | 0.41 | 55.94 | 8.0 | 16 | 0.80 | 100 | 2 | – | – | – | – | – | – | 0.0 | 0.0 | 0.011 | 0.02 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
+| Outline, enhanced | scanned | 13.53 | 19.37 | 0.045 | 0.88 | 105.64 | 3.0 | 6 | 0.30 | 100 | 0 | – | – | – | – | – | – | 0.0 | 0.0 | 0.027 | 0.03 | 2.0 | – | 0.00 | 0 | 0.0 | – | – | – |
 
 ## 4. Yardstick
 
@@ -509,155 +722,240 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 
 | preset | image | megapixels | result |
 |:--|:--|--:|:--|
-| Default | photo-like | 1 | 0.05 s, 29 paths, 6278 anchors, 12 MB |
-| Default | four-colour badge | 1 | 0.03 s, 3 paths, 64 anchors, 12 MB |
-| Auto Color | photo-like | 1 | 0.18 s, 732 paths, 45265 anchors, 23 MB |
-| Auto Color | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 13 MB |
-| High Fidelity Photo | photo-like | 1 | 0.26 s, 968 paths, 117041 anchors, 145 MB |
-| High Fidelity Photo | four-colour badge | 1 | 0.06 s, 6 paths, 172 anchors, 23 MB |
-| Low Fidelity Photo | photo-like | 1 | 0.15 s, 129 paths, 23014 anchors, 104 MB |
-| Low Fidelity Photo | four-colour badge | 1 | 0.07 s, 6 paths, 136 anchors, 23 MB |
-| 3 Colors | photo-like | 1 | 0.11 s, 9 paths, 3341 anchors, 18 MB |
-| 3 Colors | four-colour badge | 1 | 0.06 s, 4 paths, 88 anchors, 12 MB |
-| 6 Colors | photo-like | 1 | 0.10 s, 78 paths, 9076 anchors, 24 MB |
-| 6 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
-| 16 Colors | photo-like | 1 | 0.13 s, 178 paths, 20470 anchors, 31 MB |
-| 16 Colors | four-colour badge | 1 | 0.06 s, 5 paths, 88 anchors, 12 MB |
-| Shades of Gray | photo-like | 1 | 0.11 s, 81 paths, 6698 anchors, 40 MB |
-| Shades of Gray | four-colour badge | 1 | 0.07 s, 10 paths, 725 anchors, 35 MB |
-| Black and White Logo | photo-like | 1 | 0.05 s, 71 paths, 4933 anchors, 8 MB |
-| Black and White Logo | four-colour badge | 1 | 0.03 s, 1 paths, 47 anchors, 6 MB |
+| Default | photo-like | 1 | 0.07 s, 29 paths, 6278 anchors, 12 MB |
+| Default | four-colour badge | 1 | 0.04 s, 3 paths, 64 anchors, 12 MB |
+| Auto Color | photo-like | 1 | 0.19 s, 732 paths, 45265 anchors, 23 MB |
+| Auto Color | four-colour badge | 1 | 0.08 s, 5 paths, 84 anchors, 12 MB |
+| High Fidelity Photo | photo-like | 1 | 0.24 s, 968 paths, 117041 anchors, 151 MB |
+| High Fidelity Photo | four-colour badge | 1 | 0.08 s, 6 paths, 172 anchors, 23 MB |
+| Low Fidelity Photo | photo-like | 1 | 0.21 s, 129 paths, 23014 anchors, 106 MB |
+| Low Fidelity Photo | four-colour badge | 1 | 0.08 s, 6 paths, 136 anchors, 23 MB |
+| 3 Colors | photo-like | 1 | 0.09 s, 9 paths, 3341 anchors, 18 MB |
+| 3 Colors | four-colour badge | 1 | 0.07 s, 4 paths, 88 anchors, 13 MB |
+| 6 Colors | photo-like | 1 | 0.12 s, 78 paths, 9076 anchors, 23 MB |
+| 6 Colors | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 12 MB |
+| 16 Colors | photo-like | 1 | 0.11 s, 178 paths, 20470 anchors, 31 MB |
+| 16 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 88 anchors, 12 MB |
+| Shades of Gray | photo-like | 1 | 0.09 s, 81 paths, 6698 anchors, 40 MB |
+| Shades of Gray | four-colour badge | 1 | 0.07 s, 10 paths, 725 anchors, 34 MB |
+| Black and White Logo | photo-like | 1 | 0.06 s, 71 paths, 4933 anchors, 8 MB |
+| Black and White Logo | four-colour badge | 1 | 0.02 s, 1 paths, 47 anchors, 6 MB |
 | Sketched Art | photo-like | 1 | 0.05 s, 5 paths, 2873 anchors, 8 MB |
 | Sketched Art | four-colour badge | 1 | 0.03 s, 2 paths, 114 anchors, 6 MB |
 | Silhouettes | photo-like | 1 | 0.04 s, 2 paths, 556 anchors, 9 MB |
 | Silhouettes | four-colour badge | 1 | 0.02 s, 1 paths, 24 anchors, 6 MB |
-| Line Art | photo-like | 1 | 0.05 s, 54 paths, 4495 anchors, 8 MB |
+| Line Art | photo-like | 1 | 0.04 s, 54 paths, 4495 anchors, 8 MB |
 | Line Art | four-colour badge | 1 | 0.02 s, 1 paths, 38 anchors, 6 MB |
-| Technical Drawing | photo-like | 1 | 0.05 s, 221 paths, 6258 anchors, 8 MB |
-| Technical Drawing | four-colour badge | 1 | 0.03 s, 1 paths, 47 anchors, 6 MB |
-| Outline | photo-like | 1 | 0.07 s, 45 paths, 4110 anchors, 16 MB |
+| Technical Drawing | photo-like | 1 | 0.04 s, 221 paths, 6258 anchors, 8 MB |
+| Technical Drawing | four-colour badge | 1 | 0.02 s, 1 paths, 47 anchors, 6 MB |
+| Outline | photo-like | 1 | 0.05 s, 45 paths, 4110 anchors, 16 MB |
 | Outline | four-colour badge | 1 | 0.03 s, 1 paths, 38 anchors, 11 MB |
-| Flat Logo | photo-like | 1 | refused after 0.15 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 1 | 0.85 s, 5 paths, 78 anchors, 146 MB |
-| Default with Shapes | photo-like | 1 | 0.07 s, 29 paths, 6278 anchors, 12 MB |
-| Default with Shapes | four-colour badge | 1 | 0.03 s, 3 paths, 63 anchors, 12 MB |
-| 6 Colors with Shapes | photo-like | 1 | 0.11 s, 78 paths, 9076 anchors, 24 MB |
-| 6 Colors with Shapes | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 12 MB |
+| Flat Logo | photo-like | 1 | refused after 0.12 s (not flat art), 40 MB |
+| Flat Logo | four-colour badge | 1 | 0.66 s, 5 paths, 78 anchors, 146 MB |
+| Default with Shapes | photo-like | 1 | 0.05 s, 29 paths, 6278 anchors, 12 MB |
+| Default with Shapes | four-colour badge | 1 | 0.02 s, 3 paths, 62 anchors, 12 MB |
+| 6 Colors with Shapes | photo-like | 1 | 0.12 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors with Shapes | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
 | 6 Colors with Auto Grouping | photo-like | 1 | 0.11 s, 78 paths, 9076 anchors, 24 MB |
-| 6 Colors with Auto Grouping | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 12 MB |
-| Shades of Gray with Auto Grouping | photo-like | 1 | 0.12 s, 81 paths, 6698 anchors, 44 MB |
-| Shades of Gray with Auto Grouping | four-colour badge | 1 | 0.08 s, 10 paths, 725 anchors, 34 MB |
-| High Fidelity Photo with Auto Grouping | photo-like | 1 | 0.29 s, 968 paths, 117041 anchors, 135 MB |
-| High Fidelity Photo with Auto Grouping | four-colour badge | 1 | 0.06 s, 6 paths, 172 anchors, 24 MB |
-| 6 Colors, no Gradients | photo-like | 1 | 0.11 s, 78 paths, 9076 anchors, 24 MB |
-| 6 Colors, no Gradients | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 12 MB |
-| 6 Colors with Gradients | photo-like | 1 | 0.15 s, 78 paths, 9076 anchors, 32 MB |
-| 6 Colors with Gradients | four-colour badge | 1 | 0.10 s, 5 paths, 84 anchors, 12 MB |
-| High Fidelity Photo, no Gradients | photo-like | 1 | 0.26 s, 968 paths, 117041 anchors, 146 MB |
-| High Fidelity Photo, no Gradients | four-colour badge | 1 | 0.07 s, 6 paths, 172 anchors, 23 MB |
-| High Fidelity Photo with Gradients | photo-like | 1 | 0.31 s, 968 paths, 117041 anchors, 155 MB |
-| High Fidelity Photo with Gradients | four-colour badge | 1 | 0.10 s, 6 paths, 172 anchors, 23 MB |
-| Default | photo-like | 4 | 0.23 s, 48 paths, 14438 anchors, 49 MB |
-| Default | four-colour badge | 4 | 0.11 s, 3 paths, 72 anchors, 48 MB |
-| Auto Color | photo-like | 4 | 0.53 s, 1469 paths, 149389 anchors, 110 MB |
-| Auto Color | four-colour badge | 4 | 0.23 s, 5 paths, 92 anchors, 46 MB |
-| High Fidelity Photo | photo-like | 4 | 0.81 s, 4479 paths, 337884 anchors, 630 MB |
-| High Fidelity Photo | four-colour badge | 4 | 0.27 s, 6 paths, 200 anchors, 97 MB |
-| Low Fidelity Photo | photo-like | 4 | 0.43 s, 299 paths, 61601 anchors, 396 MB |
-| Low Fidelity Photo | four-colour badge | 4 | 0.26 s, 6 paths, 152 anchors, 94 MB |
-| 3 Colors | photo-like | 4 | 0.34 s, 20 paths, 8473 anchors, 73 MB |
-| 3 Colors | four-colour badge | 4 | 0.22 s, 4 paths, 122 anchors, 53 MB |
-| 6 Colors | photo-like | 4 | 0.35 s, 115 paths, 23295 anchors, 100 MB |
-| 6 Colors | four-colour badge | 4 | 0.22 s, 5 paths, 92 anchors, 46 MB |
-| 16 Colors | photo-like | 4 | 0.35 s, 353 paths, 52770 anchors, 130 MB |
-| 16 Colors | four-colour badge | 4 | 0.22 s, 5 paths, 96 anchors, 46 MB |
-| Shades of Gray | photo-like | 4 | 0.35 s, 137 paths, 18823 anchors, 168 MB |
-| Shades of Gray | four-colour badge | 4 | 0.30 s, 10 paths, 1256 anchors, 137 MB |
-| Black and White Logo | photo-like | 4 | 0.25 s, 208 paths, 13546 anchors, 32 MB |
-| Black and White Logo | four-colour badge | 4 | 0.10 s, 1 paths, 57 anchors, 24 MB |
-| Sketched Art | photo-like | 4 | 0.22 s, 9 paths, 5387 anchors, 32 MB |
-| Sketched Art | four-colour badge | 4 | 0.10 s, 2 paths, 196 anchors, 24 MB |
-| Silhouettes | photo-like | 4 | 0.22 s, 2 paths, 1465 anchors, 36 MB |
-| Silhouettes | four-colour badge | 4 | 0.10 s, 1 paths, 28 anchors, 24 MB |
-| Line Art | photo-like | 4 | 0.23 s, 127 paths, 11330 anchors, 32 MB |
-| Line Art | four-colour badge | 4 | 0.09 s, 1 paths, 42 anchors, 24 MB |
-| Technical Drawing | photo-like | 4 | 0.23 s, 931 paths, 20628 anchors, 32 MB |
-| Technical Drawing | four-colour badge | 4 | 0.10 s, 1 paths, 57 anchors, 24 MB |
-| Outline | photo-like | 4 | 0.31 s, 113 paths, 10815 anchors, 64 MB |
-| Outline | four-colour badge | 4 | 0.15 s, 1 paths, 42 anchors, 44 MB |
-| Flat Logo | photo-like | 4 | refused after 0.19 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 4 | 0.86 s, 5 paths, 69 anchors, 146 MB |
-| Default with Shapes | photo-like | 4 | 0.28 s, 48 paths, 14438 anchors, 49 MB |
-| Default with Shapes | four-colour badge | 4 | 0.10 s, 3 paths, 72 anchors, 48 MB |
-| 6 Colors with Shapes | photo-like | 4 | 0.34 s, 115 paths, 23295 anchors, 100 MB |
-| 6 Colors with Shapes | four-colour badge | 4 | 0.24 s, 5 paths, 92 anchors, 46 MB |
-| 6 Colors with Auto Grouping | photo-like | 4 | 0.37 s, 115 paths, 23295 anchors, 100 MB |
-| 6 Colors with Auto Grouping | four-colour badge | 4 | 0.22 s, 5 paths, 92 anchors, 46 MB |
-| Shades of Gray with Auto Grouping | photo-like | 4 | 0.38 s, 137 paths, 18823 anchors, 156 MB |
-| Shades of Gray with Auto Grouping | four-colour badge | 4 | 0.34 s, 10 paths, 1256 anchors, 138 MB |
-| High Fidelity Photo with Auto Grouping | photo-like | 4 | 0.96 s, 4479 paths, 337884 anchors, 636 MB |
-| High Fidelity Photo with Auto Grouping | four-colour badge | 4 | 0.26 s, 6 paths, 200 anchors, 97 MB |
-| 6 Colors, no Gradients | photo-like | 4 | 0.32 s, 115 paths, 23295 anchors, 100 MB |
-| 6 Colors, no Gradients | four-colour badge | 4 | 0.31 s, 5 paths, 92 anchors, 46 MB |
-| 6 Colors with Gradients | photo-like | 4 | 0.65 s, 115 paths, 23295 anchors, 128 MB |
-| 6 Colors with Gradients | four-colour badge | 4 | 0.48 s, 5 paths, 92 anchors, 46 MB |
-| High Fidelity Photo, no Gradients | photo-like | 4 | 0.81 s, 4479 paths, 337884 anchors, 645 MB |
-| High Fidelity Photo, no Gradients | four-colour badge | 4 | 0.33 s, 6 paths, 200 anchors, 94 MB |
-| High Fidelity Photo with Gradients | photo-like | 4 | 1.14 s, 4479 paths, 337884 anchors, 644 MB |
-| High Fidelity Photo with Gradients | four-colour badge | 4 | 0.39 s, 6 paths, 200 anchors, 97 MB |
-| Default | photo-like | 16 | 1.13 s, 127 paths, 34034 anchors, 199 MB |
-| Default | four-colour badge | 16 | 0.55 s, 3 paths, 88 anchors, 184 MB |
-| Auto Color | photo-like | 16 | 2.20 s, 5390 paths, 454670 anchors, 280 MB |
-| Auto Color | four-colour badge | 16 | 1.71 s, 5 paths, 112 anchors, 190 MB |
-| High Fidelity Photo | photo-like | 16 | 5.39 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo | four-colour badge | 16 | 1.26 s, 6 paths, 264 anchors, 257 MB |
-| Low Fidelity Photo | photo-like | 16 | 2.12 s, 2036 paths, 182778 anchors, 754 MB |
-| Low Fidelity Photo | four-colour badge | 16 | 1.22 s, 6 paths, 180 anchors, 257 MB |
-| 3 Colors | photo-like | 16 | 1.41 s, 76 paths, 23024 anchors, 290 MB |
-| 3 Colors | four-colour badge | 16 | 0.83 s, 4 paths, 190 anchors, 205 MB |
-| 6 Colors | photo-like | 16 | 1.24 s, 470 paths, 60831 anchors, 298 MB |
-| 6 Colors | four-colour badge | 16 | 0.87 s, 5 paths, 112 anchors, 184 MB |
-| 16 Colors | photo-like | 16 | 1.14 s, 1973 paths, 145642 anchors, 298 MB |
-| 16 Colors | four-colour badge | 16 | 0.86 s, 5 paths, 114 anchors, 184 MB |
-| Shades of Gray | photo-like | 16 | 1.66 s, 686 paths, 53654 anchors, 407 MB |
-| Shades of Gray | four-colour badge | 16 | 1.38 s, 9 paths, 2208 anchors, 270 MB |
-| Black and White Logo | photo-like | 16 | 1.13 s, 1128 paths, 45273 anchors, 129 MB |
-| Black and White Logo | four-colour badge | 16 | 0.39 s, 1 paths, 69 anchors, 88 MB |
-| Sketched Art | photo-like | 16 | 1.14 s, 15 paths, 11486 anchors, 128 MB |
-| Sketched Art | four-colour badge | 16 | 0.40 s, 2 paths, 361 anchors, 88 MB |
-| Silhouettes | photo-like | 16 | 1.38 s, 3 paths, 3350 anchors, 144 MB |
-| Silhouettes | four-colour badge | 16 | 0.43 s, 1 paths, 32 anchors, 95 MB |
-| Line Art | photo-like | 16 | 1.13 s, 713 paths, 37370 anchors, 129 MB |
-| Line Art | four-colour badge | 16 | 0.40 s, 1 paths, 49 anchors, 88 MB |
-| Technical Drawing | photo-like | 16 | 1.27 s, 4577 paths, 76559 anchors, 130 MB |
-| Technical Drawing | four-colour badge | 16 | 0.39 s, 1 paths, 69 anchors, 88 MB |
-| Outline | photo-like | 16 | 1.32 s, 632 paths, 34884 anchors, 256 MB |
-| Outline | four-colour badge | 16 | 0.59 s, 1 paths, 49 anchors, 176 MB |
-| Flat Logo | photo-like | 16 | refused after 0.16 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 16 | 0.68 s, 5 paths, 67 anchors, 146 MB |
-| Default with Shapes | photo-like | 16 | 1.20 s, 127 paths, 34034 anchors, 199 MB |
-| Default with Shapes | four-colour badge | 16 | 0.54 s, 3 paths, 88 anchors, 184 MB |
-| 6 Colors with Shapes | photo-like | 16 | 1.61 s, 470 paths, 60831 anchors, 298 MB |
-| 6 Colors with Shapes | four-colour badge | 16 | 1.02 s, 5 paths, 112 anchors, 185 MB |
-| 6 Colors with Auto Grouping | photo-like | 16 | 1.32 s, 470 paths, 60831 anchors, 298 MB |
-| 6 Colors with Auto Grouping | four-colour badge | 16 | 0.91 s, 5 paths, 112 anchors, 184 MB |
-| Shades of Gray with Auto Grouping | photo-like | 16 | 1.72 s, 686 paths, 53654 anchors, 407 MB |
-| Shades of Gray with Auto Grouping | four-colour badge | 16 | 1.39 s, 9 paths, 2208 anchors, 270 MB |
-| High Fidelity Photo with Auto Grouping | photo-like | 16 | 6.71 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo with Auto Grouping | four-colour badge | 16 | 1.42 s, 6 paths, 264 anchors, 257 MB |
-| 6 Colors, no Gradients | photo-like | 16 | 1.78 s, 470 paths, 60831 anchors, 298 MB |
-| 6 Colors, no Gradients | four-colour badge | 16 | 0.89 s, 5 paths, 112 anchors, 184 MB |
-| 6 Colors with Gradients | photo-like | 16 | 3.33 s, 470 paths, 60831 anchors, 512 MB |
-| 6 Colors with Gradients | four-colour badge | 16 | 1.64 s, 5 paths, 112 anchors, 185 MB |
-| High Fidelity Photo, no Gradients | photo-like | 16 | 4.39 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo, no Gradients | four-colour badge | 16 | 1.26 s, 6 paths, 264 anchors, 257 MB |
-| High Fidelity Photo with Gradients | photo-like | 16 | 5.99 s, 31139 paths, 1192715 anchors, 880 MB |
-| High Fidelity Photo with Gradients | four-colour badge | 16 | 2.03 s, 6 paths, 264 anchors, 257 MB |
+| 6 Colors with Auto Grouping | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
+| Shades of Gray with Auto Grouping | photo-like | 1 | 0.10 s, 81 paths, 6698 anchors, 43 MB |
+| Shades of Gray with Auto Grouping | four-colour badge | 1 | 0.06 s, 10 paths, 725 anchors, 34 MB |
+| High Fidelity Photo with Auto Grouping | photo-like | 1 | 0.27 s, 968 paths, 117041 anchors, 170 MB |
+| High Fidelity Photo with Auto Grouping | four-colour badge | 1 | 0.05 s, 6 paths, 172 anchors, 23 MB |
+| 6 Colors, no Gradients | photo-like | 1 | 0.08 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors, no Gradients | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
+| 6 Colors with Gradients | photo-like | 1 | 0.16 s, 78 paths, 9076 anchors, 32 MB |
+| 6 Colors with Gradients | four-colour badge | 1 | 0.12 s, 5 paths, 84 anchors, 12 MB |
+| High Fidelity Photo, no Gradients | photo-like | 1 | 0.25 s, 968 paths, 117041 anchors, 153 MB |
+| High Fidelity Photo, no Gradients | four-colour badge | 1 | 0.08 s, 6 paths, 172 anchors, 23 MB |
+| High Fidelity Photo with Gradients | photo-like | 1 | 0.30 s, 968 paths, 117041 anchors, 157 MB |
+| High Fidelity Photo with Gradients | four-colour badge | 1 | 0.11 s, 6 paths, 172 anchors, 23 MB |
+| Default, enhanced | photo-like | 1 | 0.10 s, 29 paths, 6278 anchors, 12 MB |
+| Default, enhanced | four-colour badge | 1 | 0.03 s, 3 paths, 62 anchors, 12 MB |
+| Auto Color, enhanced | photo-like | 1 | 0.18 s, 732 paths, 45260 anchors, 24 MB |
+| Auto Color, enhanced | four-colour badge | 1 | 0.06 s, 5 paths, 84 anchors, 12 MB |
+| High Fidelity Photo, enhanced | photo-like | 1 | 0.26 s, 968 paths, 117041 anchors, 169 MB |
+| High Fidelity Photo, enhanced | four-colour badge | 1 | 0.05 s, 6 paths, 172 anchors, 23 MB |
+| Low Fidelity Photo, enhanced | photo-like | 1 | 0.12 s, 129 paths, 23014 anchors, 105 MB |
+| Low Fidelity Photo, enhanced | four-colour badge | 1 | 0.05 s, 6 paths, 116 anchors, 23 MB |
+| 3 Colors, enhanced | photo-like | 1 | 0.08 s, 9 paths, 3341 anchors, 18 MB |
+| 3 Colors, enhanced | four-colour badge | 1 | 0.05 s, 4 paths, 76 anchors, 13 MB |
+| 6 Colors, enhanced | photo-like | 1 | 0.18 s, 78 paths, 9076 anchors, 24 MB |
+| 6 Colors, enhanced | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
+| 16 Colors, enhanced | photo-like | 1 | 0.11 s, 178 paths, 20467 anchors, 31 MB |
+| 16 Colors, enhanced | four-colour badge | 1 | 0.05 s, 5 paths, 88 anchors, 12 MB |
+| Shades of Gray, enhanced | photo-like | 1 | 0.09 s, 81 paths, 6698 anchors, 42 MB |
+| Shades of Gray, enhanced | four-colour badge | 1 | 0.06 s, 10 paths, 623 anchors, 34 MB |
+| Black and White Logo, enhanced | photo-like | 1 | 0.05 s, 71 paths, 4933 anchors, 8 MB |
+| Black and White Logo, enhanced | four-colour badge | 1 | 0.02 s, 1 paths, 46 anchors, 6 MB |
+| Sketched Art, enhanced | photo-like | 1 | 0.04 s, 5 paths, 2873 anchors, 8 MB |
+| Sketched Art, enhanced | four-colour badge | 1 | 0.02 s, 2 paths, 37 anchors, 6 MB |
+| Silhouettes, enhanced | photo-like | 1 | 0.04 s, 2 paths, 556 anchors, 9 MB |
+| Silhouettes, enhanced | four-colour badge | 1 | 0.02 s, 1 paths, 8 anchors, 6 MB |
+| Line Art, enhanced | photo-like | 1 | 0.05 s, 54 paths, 4495 anchors, 8 MB |
+| Line Art, enhanced | four-colour badge | 1 | 0.02 s, 1 paths, 37 anchors, 6 MB |
+| Technical Drawing, enhanced | photo-like | 1 | 0.05 s, 221 paths, 6258 anchors, 8 MB |
+| Technical Drawing, enhanced | four-colour badge | 1 | 0.02 s, 1 paths, 46 anchors, 6 MB |
+| Outline, enhanced | photo-like | 1 | 0.05 s, 45 paths, 4110 anchors, 16 MB |
+| Outline, enhanced | four-colour badge | 1 | 0.03 s, 1 paths, 38 anchors, 11 MB |
+| Default | photo-like | 4 | 0.18 s, 48 paths, 14438 anchors, 49 MB |
+| Default | four-colour badge | 4 | 0.10 s, 3 paths, 72 anchors, 48 MB |
+| Auto Color | photo-like | 4 | 0.44 s, 1469 paths, 149389 anchors, 113 MB |
+| Auto Color | four-colour badge | 4 | 0.18 s, 5 paths, 92 anchors, 46 MB |
+| High Fidelity Photo | photo-like | 4 | 0.71 s, 4479 paths, 337884 anchors, 636 MB |
+| High Fidelity Photo | four-colour badge | 4 | 0.25 s, 6 paths, 200 anchors, 94 MB |
+| Low Fidelity Photo | photo-like | 4 | 0.37 s, 299 paths, 61601 anchors, 400 MB |
+| Low Fidelity Photo | four-colour badge | 4 | 0.22 s, 6 paths, 152 anchors, 94 MB |
+| 3 Colors | photo-like | 4 | 0.29 s, 20 paths, 8473 anchors, 73 MB |
+| 3 Colors | four-colour badge | 4 | 0.19 s, 4 paths, 122 anchors, 53 MB |
+| 6 Colors | photo-like | 4 | 0.26 s, 115 paths, 23295 anchors, 100 MB |
+| 6 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
+| 16 Colors | photo-like | 4 | 0.29 s, 353 paths, 52770 anchors, 119 MB |
+| 16 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 96 anchors, 46 MB |
+| Shades of Gray | photo-like | 4 | 0.28 s, 137 paths, 18823 anchors, 161 MB |
+| Shades of Gray | four-colour badge | 4 | 0.27 s, 10 paths, 1256 anchors, 134 MB |
+| Black and White Logo | photo-like | 4 | 0.20 s, 208 paths, 13546 anchors, 32 MB |
+| Black and White Logo | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
+| Sketched Art | photo-like | 4 | 0.19 s, 9 paths, 5387 anchors, 32 MB |
+| Sketched Art | four-colour badge | 4 | 0.08 s, 2 paths, 196 anchors, 24 MB |
+| Silhouettes | photo-like | 4 | 0.21 s, 2 paths, 1465 anchors, 36 MB |
+| Silhouettes | four-colour badge | 4 | 0.08 s, 1 paths, 28 anchors, 24 MB |
+| Line Art | photo-like | 4 | 0.19 s, 127 paths, 11330 anchors, 32 MB |
+| Line Art | four-colour badge | 4 | 0.08 s, 1 paths, 42 anchors, 24 MB |
+| Technical Drawing | photo-like | 4 | 0.19 s, 931 paths, 20628 anchors, 32 MB |
+| Technical Drawing | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
+| Outline | photo-like | 4 | 0.24 s, 113 paths, 10815 anchors, 64 MB |
+| Outline | four-colour badge | 4 | 0.13 s, 1 paths, 42 anchors, 44 MB |
+| Flat Logo | photo-like | 4 | refused after 0.14 s (not flat art), 40 MB |
+| Flat Logo | four-colour badge | 4 | 0.67 s, 5 paths, 69 anchors, 146 MB |
+| Default with Shapes | photo-like | 4 | 0.59 s, 48 paths, 14438 anchors, 49 MB |
+| Default with Shapes | four-colour badge | 4 | 0.09 s, 3 paths, 72 anchors, 48 MB |
+| 6 Colors with Shapes | photo-like | 4 | 0.30 s, 115 paths, 23292 anchors, 100 MB |
+| 6 Colors with Shapes | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
+| 6 Colors with Auto Grouping | photo-like | 4 | 0.27 s, 115 paths, 23295 anchors, 100 MB |
+| 6 Colors with Auto Grouping | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
+| Shades of Gray with Auto Grouping | photo-like | 4 | 0.29 s, 137 paths, 18823 anchors, 170 MB |
+| Shades of Gray with Auto Grouping | four-colour badge | 4 | 0.28 s, 10 paths, 1256 anchors, 136 MB |
+| High Fidelity Photo with Auto Grouping | photo-like | 4 | 1.00 s, 4479 paths, 337884 anchors, 629 MB |
+| High Fidelity Photo with Auto Grouping | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 93 MB |
+| 6 Colors, no Gradients | photo-like | 4 | 0.27 s, 115 paths, 23295 anchors, 100 MB |
+| 6 Colors, no Gradients | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
+| 6 Colors with Gradients | photo-like | 4 | 0.63 s, 115 paths, 23295 anchors, 128 MB |
+| 6 Colors with Gradients | four-colour badge | 4 | 0.29 s, 5 paths, 92 anchors, 46 MB |
+| High Fidelity Photo, no Gradients | photo-like | 4 | 0.70 s, 4479 paths, 337884 anchors, 640 MB |
+| High Fidelity Photo, no Gradients | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 97 MB |
+| High Fidelity Photo with Gradients | photo-like | 4 | 1.50 s, 4479 paths, 337884 anchors, 359 MB |
+| High Fidelity Photo with Gradients | four-colour badge | 4 | 0.59 s, 6 paths, 200 anchors, 97 MB |
+| Default, enhanced | photo-like | 4 | 0.39 s, 48 paths, 14438 anchors, 49 MB |
+| Default, enhanced | four-colour badge | 4 | 0.17 s, 3 paths, 72 anchors, 48 MB |
+| Auto Color, enhanced | photo-like | 4 | 0.79 s, 1469 paths, 149374 anchors, 115 MB |
+| Auto Color, enhanced | four-colour badge | 4 | 0.20 s, 5 paths, 92 anchors, 47 MB |
+| High Fidelity Photo, enhanced | photo-like | 4 | 0.84 s, 4479 paths, 337884 anchors, 625 MB |
+| High Fidelity Photo, enhanced | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 93 MB |
+| Low Fidelity Photo, enhanced | photo-like | 4 | 0.39 s, 299 paths, 61598 anchors, 399 MB |
+| Low Fidelity Photo, enhanced | four-colour badge | 4 | 0.23 s, 6 paths, 128 anchors, 93 MB |
+| 3 Colors, enhanced | photo-like | 4 | 0.29 s, 20 paths, 8471 anchors, 73 MB |
+| 3 Colors, enhanced | four-colour badge | 4 | 0.19 s, 4 paths, 84 anchors, 51 MB |
+| 6 Colors, enhanced | photo-like | 4 | 0.29 s, 115 paths, 23292 anchors, 100 MB |
+| 6 Colors, enhanced | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
+| 16 Colors, enhanced | photo-like | 4 | 0.32 s, 353 paths, 52772 anchors, 125 MB |
+| 16 Colors, enhanced | four-colour badge | 4 | 0.19 s, 5 paths, 96 anchors, 46 MB |
+| Shades of Gray, enhanced | photo-like | 4 | 0.32 s, 137 paths, 18823 anchors, 161 MB |
+| Shades of Gray, enhanced | four-colour badge | 4 | 0.27 s, 10 paths, 1056 anchors, 137 MB |
+| Black and White Logo, enhanced | photo-like | 4 | 0.21 s, 208 paths, 13546 anchors, 32 MB |
+| Black and White Logo, enhanced | four-colour badge | 4 | 0.09 s, 1 paths, 57 anchors, 24 MB |
+| Sketched Art, enhanced | photo-like | 4 | 0.20 s, 9 paths, 5387 anchors, 32 MB |
+| Sketched Art, enhanced | four-colour badge | 4 | 0.09 s, 2 paths, 38 anchors, 24 MB |
+| Silhouettes, enhanced | photo-like | 4 | 0.22 s, 2 paths, 1465 anchors, 36 MB |
+| Silhouettes, enhanced | four-colour badge | 4 | 0.08 s, 1 paths, 8 anchors, 24 MB |
+| Line Art, enhanced | photo-like | 4 | 0.20 s, 127 paths, 11330 anchors, 32 MB |
+| Line Art, enhanced | four-colour badge | 4 | 0.08 s, 1 paths, 42 anchors, 24 MB |
+| Technical Drawing, enhanced | photo-like | 4 | 0.21 s, 931 paths, 20628 anchors, 32 MB |
+| Technical Drawing, enhanced | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
+| Outline, enhanced | photo-like | 4 | 0.25 s, 113 paths, 10815 anchors, 64 MB |
+| Outline, enhanced | four-colour badge | 4 | 0.13 s, 1 paths, 42 anchors, 44 MB |
+| Default | photo-like | 16 | 1.06 s, 127 paths, 34034 anchors, 199 MB |
+| Default | four-colour badge | 16 | 0.49 s, 3 paths, 88 anchors, 184 MB |
+| Auto Color | photo-like | 16 | 1.66 s, 5390 paths, 454670 anchors, 283 MB |
+| Auto Color | four-colour badge | 16 | 0.81 s, 5 paths, 112 anchors, 184 MB |
+| High Fidelity Photo | photo-like | 16 | 3.73 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo | four-colour badge | 16 | 1.06 s, 6 paths, 264 anchors, 257 MB |
+| Low Fidelity Photo | photo-like | 16 | 1.90 s, 2036 paths, 182778 anchors, 754 MB |
+| Low Fidelity Photo | four-colour badge | 16 | 1.11 s, 6 paths, 180 anchors, 257 MB |
+| 3 Colors | photo-like | 16 | 1.66 s, 76 paths, 23024 anchors, 290 MB |
+| 3 Colors | four-colour badge | 16 | 1.50 s, 4 paths, 190 anchors, 205 MB |
+| 6 Colors | photo-like | 16 | 2.07 s, 470 paths, 60831 anchors, 298 MB |
+| 6 Colors | four-colour badge | 16 | 0.88 s, 5 paths, 112 anchors, 184 MB |
+| 16 Colors | photo-like | 16 | 1.16 s, 1973 paths, 145642 anchors, 304 MB |
+| 16 Colors | four-colour badge | 16 | 1.05 s, 5 paths, 114 anchors, 184 MB |
+| Shades of Gray | photo-like | 16 | 2.07 s, 686 paths, 53654 anchors, 407 MB |
+| Shades of Gray | four-colour badge | 16 | 1.69 s, 9 paths, 2208 anchors, 270 MB |
+| Black and White Logo | photo-like | 16 | 1.27 s, 1128 paths, 45273 anchors, 129 MB |
+| Black and White Logo | four-colour badge | 16 | 0.46 s, 1 paths, 69 anchors, 88 MB |
+| Sketched Art | photo-like | 16 | 1.22 s, 15 paths, 11486 anchors, 128 MB |
+| Sketched Art | four-colour badge | 16 | 0.52 s, 2 paths, 361 anchors, 88 MB |
+| Silhouettes | photo-like | 16 | 1.54 s, 3 paths, 3350 anchors, 144 MB |
+| Silhouettes | four-colour badge | 16 | 0.53 s, 1 paths, 32 anchors, 95 MB |
+| Line Art | photo-like | 16 | 1.21 s, 713 paths, 37370 anchors, 129 MB |
+| Line Art | four-colour badge | 16 | 0.53 s, 1 paths, 49 anchors, 88 MB |
+| Technical Drawing | photo-like | 16 | 1.58 s, 4577 paths, 76559 anchors, 130 MB |
+| Technical Drawing | four-colour badge | 16 | 0.56 s, 1 paths, 69 anchors, 88 MB |
+| Outline | photo-like | 16 | 1.79 s, 632 paths, 34884 anchors, 256 MB |
+| Outline | four-colour badge | 16 | 0.81 s, 1 paths, 49 anchors, 176 MB |
+| Flat Logo | photo-like | 16 | refused after 0.18 s (not flat art), 40 MB |
+| Flat Logo | four-colour badge | 16 | 0.96 s, 5 paths, 67 anchors, 146 MB |
+| Default with Shapes | photo-like | 16 | 1.23 s, 127 paths, 34034 anchors, 199 MB |
+| Default with Shapes | four-colour badge | 16 | 0.55 s, 3 paths, 88 anchors, 184 MB |
+| 6 Colors with Shapes | photo-like | 16 | 1.59 s, 470 paths, 60823 anchors, 298 MB |
+| 6 Colors with Shapes | four-colour badge | 16 | 1.21 s, 5 paths, 112 anchors, 185 MB |
+| 6 Colors with Auto Grouping | photo-like | 16 | 1.82 s, 470 paths, 60831 anchors, 298 MB |
+| 6 Colors with Auto Grouping | four-colour badge | 16 | 1.30 s, 5 paths, 112 anchors, 185 MB |
+| Shades of Gray with Auto Grouping | photo-like | 16 | 2.24 s, 686 paths, 53654 anchors, 407 MB |
+| Shades of Gray with Auto Grouping | four-colour badge | 16 | 3.67 s, 9 paths, 2208 anchors, 263 MB |
+| High Fidelity Photo with Auto Grouping | photo-like | 16 | 9.11 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo with Auto Grouping | four-colour badge | 16 | 1.15 s, 6 paths, 264 anchors, 257 MB |
+| 6 Colors, no Gradients | photo-like | 16 | 1.64 s, 470 paths, 60831 anchors, 298 MB |
+| 6 Colors, no Gradients | four-colour badge | 16 | 1.12 s, 5 paths, 112 anchors, 184 MB |
+| 6 Colors with Gradients | photo-like | 16 | 3.23 s, 470 paths, 60831 anchors, 512 MB |
+| 6 Colors with Gradients | four-colour badge | 16 | 1.66 s, 5 paths, 112 anchors, 185 MB |
+| High Fidelity Photo, no Gradients | photo-like | 16 | 5.24 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo, no Gradients | four-colour badge | 16 | 2.11 s, 6 paths, 264 anchors, 257 MB |
+| High Fidelity Photo with Gradients | photo-like | 16 | 6.50 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo with Gradients | four-colour badge | 16 | 2.09 s, 6 paths, 264 anchors, 263 MB |
+| Default, enhanced | photo-like | 16 | 1.29 s, 127 paths, 34034 anchors, 199 MB |
+| Default, enhanced | four-colour badge | 16 | 0.64 s, 3 paths, 88 anchors, 184 MB |
+| Auto Color, enhanced | photo-like | 16 | 2.81 s, 5390 paths, 454626 anchors, 274 MB |
+| Auto Color, enhanced | four-colour badge | 16 | 1.20 s, 5 paths, 112 anchors, 188 MB |
+| High Fidelity Photo, enhanced | photo-like | 16 | 7.90 s, 31139 paths, 1192715 anchors, 880 MB |
+| High Fidelity Photo, enhanced | four-colour badge | 16 | 1.21 s, 6 paths, 264 anchors, 257 MB |
+| Low Fidelity Photo, enhanced | photo-like | 16 | 1.94 s, 2036 paths, 182770 anchors, 754 MB |
+| Low Fidelity Photo, enhanced | four-colour badge | 16 | 1.07 s, 6 paths, 149 anchors, 257 MB |
+| 3 Colors, enhanced | photo-like | 16 | 1.30 s, 76 paths, 23019 anchors, 290 MB |
+| 3 Colors, enhanced | four-colour badge | 16 | 0.91 s, 4 paths, 98 anchors, 205 MB |
+| 6 Colors, enhanced | photo-like | 16 | 1.21 s, 470 paths, 60823 anchors, 298 MB |
+| 6 Colors, enhanced | four-colour badge | 16 | 0.84 s, 5 paths, 112 anchors, 184 MB |
+| 16 Colors, enhanced | photo-like | 16 | 1.22 s, 1973 paths, 145623 anchors, 293 MB |
+| 16 Colors, enhanced | four-colour badge | 16 | 0.84 s, 5 paths, 114 anchors, 184 MB |
+| Shades of Gray, enhanced | photo-like | 16 | 1.67 s, 686 paths, 53648 anchors, 407 MB |
+| Shades of Gray, enhanced | four-colour badge | 16 | 1.35 s, 9 paths, 1989 anchors, 270 MB |
+| Black and White Logo, enhanced | photo-like | 16 | 1.15 s, 1128 paths, 45272 anchors, 129 MB |
+| Black and White Logo, enhanced | four-colour badge | 16 | 0.40 s, 1 paths, 69 anchors, 88 MB |
+| Sketched Art, enhanced | photo-like | 16 | 1.11 s, 15 paths, 11486 anchors, 128 MB |
+| Sketched Art, enhanced | four-colour badge | 16 | 0.41 s, 2 paths, 44 anchors, 88 MB |
+| Silhouettes, enhanced | photo-like | 16 | 1.40 s, 3 paths, 3350 anchors, 144 MB |
+| Silhouettes, enhanced | four-colour badge | 16 | 0.43 s, 1 paths, 8 anchors, 95 MB |
+| Line Art, enhanced | photo-like | 16 | 1.17 s, 713 paths, 37370 anchors, 129 MB |
+| Line Art, enhanced | four-colour badge | 16 | 0.42 s, 1 paths, 49 anchors, 88 MB |
+| Technical Drawing, enhanced | photo-like | 16 | 1.34 s, 4577 paths, 76558 anchors, 130 MB |
+| Technical Drawing, enhanced | four-colour badge | 16 | 0.39 s, 1 paths, 69 anchors, 88 MB |
+| Outline, enhanced | photo-like | 16 | 1.38 s, 632 paths, 34884 anchors, 256 MB |
+| Outline, enhanced | four-colour badge | 16 | 0.77 s, 1 paths, 49 anchors, 176 MB |
 
 ## Revision history
 
 | date | change |
 |:--|:--|
+| 2026-10-14 | Enhanced versions of the presets (Auto Grouping, and Shapes in all but High Fidelity Photo; Flat Logo has none), each measured beside its preset; a hole that one colour fills is the same shape as what fills it, rectangles are sized by where their sides lie, and a group keeps its paths in the order they were traced in (grouped, a letter with a counter was painted with a light seam: Default with Auto Grouping, edge ΔE 10.24 to 9.88) |
 | 2026-10-14 | Create: Strokes: a line whose ink is cut square at its ends gets square caps, and a wide line whose skeleton hooks towards a corner of its end ends on the line it was following (Outline: largest distance 2.94 px to 0.88; aliased lines 0.88 to 0.81) |
 | 2026-10-13 | Shapes: corners that anti-aliasing or blur took a little off are corners, a rounded rectangle gets the radius that fits, a polygon its sides from the outline itself, hard-edged outlines a little more room (plain shapes found: 57 to 62% up to 98 to 100%); a "false shapes" column |
 | 2026-10-13 | Flat Logo: the tones a scan's uneven paper makes of one colour are one colour (scans: 470 paths and 21 px off to 8.5 paths and 0.09 px) |

@@ -64,6 +64,7 @@ static ALLOC: Counting = Counting;
 
 /// Whether `input` is what `preset` is meant for.
 fn target(preset: &str, input: &Input) -> bool {
+    let preset = preset.strip_suffix(", enhanced").unwrap_or(preset);
     let classes: &[Class] = match preset {
         "High Fidelity Photo"
         | "Low Fidelity Photo"
@@ -265,6 +266,11 @@ fn report() -> String {
         ("High Fidelity Photo with Gradients", "High Fidelity Photo", true),
     ] {
         presets.push((name, TraceParams { gradients, ..vectorcraft_trace::preset(base).unwrap() }));
+    }
+    // Each preset's enhanced version, on that preset's own inputs.
+    for name in vectorcraft_trace::PRESET_NAMES {
+        let enhanced: &'static str = Box::leak(format!("{name}, enhanced").into_boxed_str());
+        presets.extend(vectorcraft_trace::enhanced_preset(name).map(|p| (enhanced, p)));
     }
     let inputs = inputs();
     let drawn = draw_all(&inputs);

@@ -737,6 +737,18 @@ fn image_trace_auto_grouping_groups_what_is_inside() {
         (0..120).flat_map(|x| (0..80).map(move |y| (x, y))).map(|(x, y)| img.pixel(x, y)).collect::<Vec<_>>()
     };
     assert_eq!(shot(&s), shot(&flat));
+    // In black and white too, where the white inside the ring is a path traced before the ring:
+    // it stays under the ring in their group (over it, the ring's inner edge would show a seam).
+    let bw = |grouping: bool| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let r = s.execute("imageTrace.make", &json!({"params": {"autoGrouping": grouping}})).unwrap();
+        let groups = traced_paths(&node(&s, NodeId(r["id"].as_u64().unwrap()))).iter().filter(|n| matches!(n.kind, NodeKind::Group { .. })).count();
+        (s, groups)
+    };
+    let (grouped, flat) = (bw(true), bw(false));
+    assert!(grouped.1 > 0 && flat.1 == 0);
+    assert_eq!(shot(&grouped.0), shot(&flat.0));
     // Traced again without the option, it is flat again; expanded, the groups stay.
     let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": {"ignoreWhite": true}})).unwrap();
     assert_eq!(traced_paths(&node(&s, NodeId(r["id"].as_u64().unwrap()))).len(), 3);
@@ -771,6 +783,29 @@ fn image_trace_gradients_fills_with_a_gradient() {
     assert!((a.x - 50.0).abs() < 3.0 && (b.x - 250.0).abs() < 3.0 && (a.y - b.y).abs() < 2.0, "{geom:?}");
     let flat = make(false);
     assert!(flat.len() > 1 && flat.iter().all(|n| matches!(n.appearance.fill_paint(), Paint::Solid { .. })));
+}
+
+/// A preset's enhanced version: the preset with Auto Grouping and Shapes, under the preset's name.
+#[test]
+fn image_trace_enhanced_presets() {
+    let mut s = session();
+    image_doc(&mut s);
+    let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors", "enhanced": true})).unwrap();
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    let stored = n.extras().trace.clone().unwrap();
+    assert_eq!(stored["preset"], "6 Colors");
+    assert_eq!((stored["params"]["shapes"].as_bool(), stored["params"]["autoGrouping"].as_bool()), (Some(true), Some(true)));
+    // The disc of the test image is a live ellipse, in a group with nothing (it has nothing inside).
+    let shapes: Vec<_> = traced_paths(&n).into_iter().filter(|c| matches!(&c.kind, NodeKind::Path { live: Some(_), .. })).collect();
+    assert_eq!(shapes.len(), 1);
+    // Listed with each preset; the legacy preset is as it was.
+    let list = s.execute("imageTrace.presets", &json!({})).unwrap();
+    let six = list["presets"].as_array().unwrap().iter().find(|p| p["name"] == "6 Colors").unwrap().clone();
+    assert_eq!((six["params"]["shapes"].as_bool(), six["enhanced"]["shapes"].as_bool()), (Some(false), Some(true)));
+    assert_eq!(list["presets"].as_array().unwrap().iter().find(|p| p["name"] == "High Fidelity Photo").unwrap()["enhanced"]["shapes"], false);
+    assert!(s.execute("imageTrace.make", &json!({"preset": "No Such", "enhanced": true})).is_err());
+    // Flat Logo, a preset of our own, has no enhanced version.
+    assert!(list["presets"].as_array().unwrap().iter().find(|p| p["name"] == "Flat Logo").unwrap()["enhanced"].is_null());
 }
 
 #[test]
