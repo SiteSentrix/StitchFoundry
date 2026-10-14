@@ -92,25 +92,31 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.horizontal_top(|ui| {
                 // the topics down the left
                 egui::ScrollArea::vertical().id_salt("help-topics").max_width(230.0).auto_shrink([false, false]).show(ui, |ui| {
-                    ui.set_width(220.0);
-                    if topics.is_empty() {
-                        ui.label(egui::RichText::new(tl!("Nothing found")).color(t.text_dim));
-                    }
-                    for (id, title) in &topics {
-                        if ui.selectable_label(*id == app.ui.help.topic, title).clicked() {
-                            go = Some(id.clone());
+                    // the window lays out side by side: the list goes down
+                    ui.vertical(|ui| {
+                        ui.set_width(220.0);
+                        if topics.is_empty() {
+                            ui.label(egui::RichText::new(tl!("Nothing found")).color(t.text_dim));
                         }
-                    }
+                        for (id, title) in &topics {
+                            if ui.selectable_label(*id == app.ui.help.topic, title).clicked() {
+                                go = Some(id.clone());
+                            }
+                        }
+                    });
                 });
                 ui.separator();
                 // the topic
                 let page = app.session.execute("help.topic", &json!({ "id": app.ui.help.topic })).unwrap_or_default();
                 egui::ScrollArea::vertical().id_salt(("help-page", app.ui.help.topic.clone())).auto_shrink([false, false]).show(ui, |ui| {
-                    ui.label(egui::RichText::new(page["title"].as_str().unwrap_or_default()).font(theme::semibold(20.0)).color(t.text));
-                    ui.add_space(6.0);
-                    if let Some(link) = markdown(ui, page["text"].as_str().unwrap_or_default(), &t) {
-                        go = Some(link);
-                    }
+                    ui.vertical(|ui| {
+                        ui.set_max_width(ui.available_width().min(680.0));
+                        ui.label(egui::RichText::new(page["title"].as_str().unwrap_or_default()).font(theme::semibold(20.0)).color(t.text));
+                        ui.add_space(6.0);
+                        if let Some(link) = markdown(ui, page["text"].as_str().unwrap_or_default(), &t) {
+                            go = Some(link);
+                        }
+                    });
                 });
             });
         });
@@ -133,13 +139,15 @@ fn tips_tab(app: &mut VectorcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     let mine = all.iter().filter(|(k, _)| *k == tool);
     let rest = all.iter().filter(|(k, _)| k.is_empty());
     egui::ScrollArea::vertical().id_salt("help-tips").auto_shrink([false, false]).show(ui, |ui| {
-        for (_, tip) in mine.chain(rest) {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(egui::RichText::new("•").color(t.accent));
-                ui.label(*tip);
-            });
-            ui.add_space(6.0);
-        }
+        ui.vertical(|ui| {
+            for (_, tip) in mine.chain(rest) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new("•").color(t.accent));
+                    ui.label(*tip);
+                });
+                ui.add_space(6.0);
+            }
+        });
     });
 }
 
