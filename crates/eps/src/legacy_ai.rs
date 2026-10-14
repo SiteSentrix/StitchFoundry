@@ -51,10 +51,9 @@
 //! Windows-1252, vertical type, inline graphics, gradient or pattern fills) is written as its
 //! outlines, and all type with [`LegacyAiOptions::outline_text`].
 //!
-//! The prolog defines the one procedure the script calls that isn't an operator of the format,
-//! the page trailer's `annotatepage` ([`PROLOG`]); the format's operators are left to the app that
-//! reads the file, so PostScript printers can't print it, as the `.ai` files other apps write in
-//! this format.
+//! The prolog is a procedure set of the writer's own ([`PROLOG`]) that gives the operators their
+//! meaning in PostScript, so the file also prints and previews as a PostScript program (its
+//! gradients flat, without its type, which apps that read the format draw).
 
 use std::fmt::Write;
 use std::sync::Arc;
@@ -198,7 +197,7 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     let _ = writeln!(s, "%AI5_ArtSize: {} {}", ps::num(width), ps::num(height));
     s.push_str("%AI5_RulerUnits: 2\n");
     let _ = writeln!(s, "%AI5_NumLayers: {layers}");
-    s.push_str("%%DocumentSuppliedResources: procset VectorCraft_Legacy 1 0\n");
+    let _ = writeln!(s, "%%DocumentSuppliedResources: procset {PROCSET}");
     s.push_str("%%EndComments\n%%BeginProlog\n");
     s.push_str(PROLOG);
     s.push_str("%%EndProlog\n%%BeginSetup\n");
@@ -242,15 +241,89 @@ fn fonts(s: &mut String, fonts: &[(String, bool)]) {
     }
 }
 
+/// The prolog's procedure set, as `%%DocumentSuppliedResources` names it: a file that has it is
+/// read from its program when its layers are asked for ([`crate::import_with`]).
+pub(crate) const PROCSET: &str = "VectorCraft_Legacy 1 0";
+
 /// The prolog: a procedure set of this writer's own (`VectorCraft_Legacy 1 0`), in a dictionary
 /// (`VCLegacy`) the setup begins and the trailer ends (§1.2: the prolog holds definitions only,
-/// the setup activates them, the trailer deactivates them). The page trailer of the
-/// specification's script (§3, Script Setup: `gsave annotatepage grestore showpage`) calls
-/// `annotatepage`, which marks nothing here.
+/// the setup activates them, the trailer deactivates them). It gives each operator the script
+/// uses its meaning in PostScript, so that the file prints and previews as a PostScript program,
+/// written from the PostScript Language Reference and this format's specification (no other
+/// application's procedure set): paths and their painting with the fill and stroke colours,
+/// compound paths painted as one path, clipping groups, guides that don't print, layers that are
+/// hidden or don't print marking nothing, and images drawn from the samples on the comment lines
+/// that follow `XI`. Gradients fill with the colour set before them (the writer sets the first
+/// stop's), and type marks nothing: apps that read the format draw both. The page trailer's
+/// `annotatepage` (§3, Script Setup: `gsave annotatepage grestore showpage`) marks nothing.
 const PROLOG: &str = "%%BeginResource: procset VectorCraft_Legacy 1 0
-/VCLegacy 8 dict def
+/VCLegacy 96 dict def
 VCLegacy begin
-/annotatepage {} bind def
+/bd {bind def} bind def
+% State: the fill and stroke colours (procedures that set them), their overprints, the fill rule,
+% a clip to make at the next painting operator, a compound path being built, a guide being
+% drawn, whether the layer prints, and what the compound path is painted with.
+/_fc {0 setgray} def /_sc {0 setgray} def
+/_fo false def /_so false def /_eo false def /_w false def /_cp false def /_g false def
+/_on true def /_rf false def /_rs false def
+% Painting: a fill and a stroke that keep the path; the path painted as _rf and _rs say (after
+% the clip W asked for), then ended.
+/_fill {gsave _fc _fo setoverprint _eo {eofill} {fill} ifelse grestore} bd
+/_stroke {gsave _sc _so setoverprint stroke grestore} bd
+/_draw {_w {_eo {eoclip} {clip} ifelse /_w false def} if
+ _on _g not and {_rf {_fill} if _rs {_stroke} if} if newpath} bd
+% close? fill? stroke? _r: paints now, or at the end of the compound path being built.
+/_r {/_rs exch def /_rf exch def {closepath} if _cp not {_draw} if} bd
+% Path construction (section 5.3.2) and painting (5.3.3).
+/m {moveto} bd /l {lineto} bd /L {lineto} bd /c {curveto} bd /C {curveto} bd
+/N {false false false _r} bd /n {true false false _r} bd
+/F {false true false _r} bd /f {true true false _r} bd
+/S {false false true _r} bd /s {true false true _r} bd
+/B {false true true _r} bd /b {true true true _r} bd
+/XR {1 eq /_eo exch def} bd
+% Compound paths (5.3.5): one path, painted at its end.
+/*u {/_cp true def} bd /*U {/_cp false def _draw} bd
+% Groups, clipping groups and masks (5.6), locking (5.1), guides (6.1).
+/u {} bd /U {} bd /q {gsave} bd /Q {grestore} bd
+/H {} bd /h {closepath} bd /W {/_w true def} bd
+/A {pop} bd
+/* {pop _g {newpath /_g false def} {/_g true def} ifelse} bd
+% Colours (5.4): fill and stroke colours, overprints; a custom colour as its CMYK equivalent at
+% its tint (tint 0 is the full colour).
+/g {/setgray load 2 array astore cvx /_fc exch def} bd
+/G {/setgray load 2 array astore cvx /_sc exch def} bd
+/k {/setcmykcolor load 5 array astore cvx /_fc exch def} bd
+/K {/setcmykcolor load 5 array astore cvx /_sc exch def} bd
+/Xa {/setrgbcolor load 4 array astore cvx /_fc exch def} bd
+/XA {/setrgbcolor load 4 array astore cvx /_sc exch def} bd
+/_tint {1 exch sub /_t exch def pop 4 {_t mul 4 1 roll} repeat} bd
+/x {_tint k} bd /X {_tint K} bd
+/O {1 eq /_fo exch def} bd /R {1 eq /_so exch def} bd
+/w {setlinewidth} bd /J {setlinecap} bd /j {setlinejoin} bd /M {setmiterlimit} bd /d {setdash} bd
+% Gradients (3.5): definitions are skipped; an instance fills with the colour set before it
+% (the writer sets its first stop's), and BB strokes the path as its flag says.
+/Bn {pop} bd /Bd {pop pop pop} bd /BD {cleartomark} bd
+/Bb {gsave} bd /Bg {12 {pop} repeat} bd /Bh {pop pop pop pop} bd
+/BB {grestore _cp {0 gt {/_rs true def} if}
+ {dup 2 eq {closepath} if 0 gt _on and {_stroke} if newpath} ifelse} bd
+% Layers (9): a layer that is hidden or doesn't print marks nothing.
+/Lb {6 {pop} repeat exch pop exch pop 1 eq exch 1 eq and /_on exch def} bd
+/Ln {pop} bd /LB {/_on true def} bd
+% Images (8): the samples, in hex on the comment lines that follow XI, read a line at a time.
+/_l 256 string def /_s 128 string def
+/_row {{currentfile _l readline not {exit} if dup length 1 gt {exit} if pop} loop
+ dup length 1 gt {dup length 1 sub 1 exch getinterval /ASCIIHexDecode filter _s readstring pop} {pop ()} ifelse} bd
+/XI {pop pop pop pop /_ic exch def /_ib exch def /_ih exch def /_iw exch def pop pop pop pop
+ aload pop neg 6 array astore [1 0 0 -1 0 0] matrix concatmatrix
+ _on {gsave concat _iw _ih _ib [1 0 0 1 0 0] /_row load false _ic 1 eq {1} {_ic} ifelse colorimage grestore} {pop} ifelse} bd
+% Type (15) is set by the app that reads the file: its operators take their operands and mark
+% nothing; encodings (3.3) are skipped.
+/TE {cleartomark} bd /TZ {cleartomark} bd
+/To {pop} bd /Tp {7 {pop} repeat} bd /TP {} bd /TO {} bd
+/Tr {pop} bd /Tf {pop pop pop pop} bd /Ts {pop} bd /Tz {pop pop} bd /Tt {pop} bd /TA {pop} bd
+/Tl {pop pop} bd /Ta {pop} bd /Ti {pop pop pop} bd /Tx {pop} bd
+% The page trailer (3): annotatepage marks nothing.
+/annotatepage {} bd
 end
 %%EndResource
 ";

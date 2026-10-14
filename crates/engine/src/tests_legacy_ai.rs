@@ -250,6 +250,16 @@ fn a_transparent_image_is_flattened_with_the_art_under_it_which_stays() {
     }
     assert_eq!(colour_at(d, 20.0, 30.0), [255, 0, 0], "the square outside the image");
     assert_eq!(colour_at(d, 80.0, 30.0), [255, 255, 255], "nothing beyond the image");
+    // Run as a PostScript program (the file's prolog draws it), it prints the same: two images
+    // and the square, on a page that is the art's box (10 pt in from the artboard's top left).
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"], "editingData": false})).unwrap();
+    let page = &s.doc().unwrap().doc;
+    assert_eq!(images(page).0, 2);
+    let printed = [colour_at(page, 30.0, 20.0), colour_at(page, 50.0, 20.0)];
+    for (a, b) in before.iter().zip(&printed) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 3), "{before:?} {printed:?}");
+    }
+    assert_eq!(colour_at(page, 10.0, 20.0), [255, 0, 0], "the square outside the image");
 }
 
 #[test]
