@@ -5113,3 +5113,5 @@ machine	Stop	Parada
 	Everything, with job orders and batch output	Todo, con pedidos y salida por lotes
 	How do you work?	¿Cómo trabaja?
 @msg	`level` is beginner, digitizer, business or all	`level` es beginner, digitizer, business o all
+	Echo Quilting	Acolchado en eco
+	Background Quilting	Acolchado de fondo

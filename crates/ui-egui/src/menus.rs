@@ -173,6 +173,8 @@ fn embroidery_menu() -> Vec<Item> {
         c("Redwork", "embroidery.redwork"),
         c("Break Apart", "embroidery.breakApart"),
         c("Automatic Knife", "embroidery.knife"),
+        cp("Echo Quilting", "embroidery.outlineAround", json!({ "kind": "echo" })),
+        cp("Background Quilting", "embroidery.outlineAround", json!({ "kind": "stipple" })),
         c("Check Design", "ui.embroideryCheck"),
         c("Density Map", "ui.embroideryDensity"),
         Sep,

@@ -5111,3 +5111,5 @@ machine	Stop	Остановка
 	Everything, with job orders and batch output	Всё, включая заказы и пакетный вывод
 	How do you work?	Как вы работаете?
 @msg	`level` is beginner, digitizer, business or all	`level` — beginner, digitizer, business или all
+	Echo Quilting	Эхо-стёжка
+	Background Quilting	Фоновая стёжка
