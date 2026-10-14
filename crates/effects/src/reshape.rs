@@ -86,7 +86,7 @@ pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
         _ if vectorcraft_doc::live::is_live(n) => vectorcraft_doc::live::expand_deep(n, Some(hook)),
         _ => return None,
     };
-    outline_nested_text(&mut art);
+    outline_nested_text(&mut art, false);
     art.opacity = 1.0;
     art.blend = Default::default();
     art.isolate = false;
@@ -97,22 +97,33 @@ pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     Some(art)
 }
 
-/// Replace type anywhere inside `n` by its outlines.
-fn outline_nested_text(n: &mut Node) {
+/// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
+/// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
+/// its plain outlines ([`outline_text`]) with its visibility, which is what
+/// [`crate::clip_outline`] clips by.
+fn outline_nested_text(n: &mut Node, clipping: bool) {
+    let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
-    for c in ch.iter_mut() {
-        if let Some(o) = outline_text(c) {
+    for (i, c) in ch.iter_mut().enumerate() {
+        let clipping = clipping || (clips && i == 0);
+        let art = match &c.kind {
+            NodeKind::Text(_) if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
+            NodeKind::Text(_) => as_art(c, None),
+            _ => None,
+        };
+        if let Some(o) = art {
             *c = Arc::new(o);
         } else if c.children().is_some() {
-            outline_nested_text(Arc::make_mut(c));
+            outline_nested_text(Arc::make_mut(c), clipping);
         }
     }
 }
 
-/// `n` (see [`needs_outline`]) with its object-level geometry effects applied: its [`outline_art`]
-/// reshaped as one piece, or for an image the image clipped by its reshaped frame. The result is
-/// a group with `n`'s id, name, transparency, opacity mask and remaining (raster) effects; `None`
-/// when `n` has no visible geometry effect or no art (a symbol instance without `symbol_art`).
+/// `n` (see [`needs_outline`]) with its object-level geometry effects and its perspective applied:
+/// its [`outline_art`] reshaped as one piece, or for an image the image clipped by its reshaped
+/// frame. The result is a group with `n`'s id, name, visibility, transparency, opacity mask and
+/// remaining (raster) effects; `None` when `n` has neither a visible geometry effect nor a
+/// perspective, or has no art (a symbol instance without `symbol_art`).
 pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     if (geometry_effects(n).is_empty() && n.projection().is_none()) || !needs_outline(n) {
         return None;
@@ -154,11 +165,13 @@ pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     // The art is a group with `n`'s id (a clip group for an image).
     let mut out = art;
     out.name = n.name.clone();
+    out.visible = n.visible;
     out.opacity = n.opacity;
     out.blend = n.blend;
     out.isolate = n.isolate;
     // One element: its pieces never knock each other out.
     out.knockout = vectorcraft_doc::Knockout::Off;
+    out.knockout_shape = n.knockout_shape;
     out.extras_mut().mask = n.extras().mask.clone();
     out.appearance.effects = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
     Some(out)
@@ -281,7 +294,7 @@ fn image_count(n: &Node) -> usize {
 pub(crate) fn outlined_members(n: &Node) -> Node {
     let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
     let mut art = vectorcraft_doc::live::expand_deep(n, Some(hook));
-    outline_nested_text(&mut art);
+    outline_nested_text(&mut art, false);
     art
 }
 

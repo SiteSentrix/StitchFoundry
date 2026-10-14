@@ -330,6 +330,40 @@ mod tests {
         assert!((b.0 - a.0 - 5.0).abs() < 1e-9 && (b.1 - a.1).abs() < 1e-9, "{a:?} {b:?}");
     }
 
+    /// What [`evaluate_container`] makes of black 40 pt type "IIII" (id 3), changed by `style`,
+    /// in a group with a square and Offset Path 0, which leaves every path as it is.
+    fn type_in_group(style: impl FnOnce(&mut Node)) -> Node {
+        let ts = vectorcraft_doc::CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(5.0, 60.0), "IIII", ts);
+        let mut t = Node::new(NodeId(3), NodeKind::Text(Box::new(text)));
+        style(&mut t);
+        let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::BLACK), Arc::new(t)]);
+        g.appearance.effects.push(Effect { id: "path.offsetPath".into(), params: serde_json::json!({"offset": 0}), visible: true });
+        let art = evaluate_container(&g).unwrap();
+        (*art.children().unwrap()[1]).clone()
+    }
+
+    #[test]
+    fn type_in_a_group_keeps_its_look_when_the_groups_geometry_effects_outline_it() {
+        use vectorcraft_color::BlendMode;
+        let art = type_in_group(|t| (t.opacity, t.blend) = (0.5, BlendMode::Multiply));
+        assert!(art.id == NodeId(3) && !matches!(art.kind, NodeKind::Text(_)), "{art:?}");
+        assert_eq!((art.opacity, art.blend), (0.5, BlendMode::Multiply));
+        // Its opacity mask, its own shadow, its knockout shape option and its visibility stay.
+        let mask_art = Node::path(NodeId(4), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default());
+        let mask = vectorcraft_doc::OpacityMask::new(mask_art, true);
+        assert_eq!(type_in_group(|t| t.extras_mut().mask = Some(Box::new(mask.clone()))).extras().mask.as_deref(), Some(&mask));
+        let shadow = Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({}), visible: true };
+        assert_eq!(type_in_group(|t| t.appearance.effects.push(shadow.clone())).appearance.effects, vec![shadow]);
+        assert!(type_in_group(|t| t.knockout_shape = true).knockout_shape);
+        assert!(!type_in_group(|t| t.visible = false).visible);
+        // Its own Transform moves its outlines 30 pt before the group's effect reshapes them.
+        let x0 = |n: Node| n.geometric_bounds().unwrap().x0;
+        let transform = Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true };
+        let moved = x0(type_in_group(|t| t.appearance.effects.push(transform)));
+        assert!((moved - x0(type_in_group(|_| {})) - 30.0).abs() < 1e-6, "{moved}");
+    }
+
     #[test]
     fn hidden_effect_or_plain_group_is_untouched() {
         let mut g = group_with("pathfinder.add");

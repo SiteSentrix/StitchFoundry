@@ -149,3 +149,41 @@ fn group_appearance_round_trips_and_expands() {
     // Moved down 50 pt; the outlined 1 pt stroke reaches half a point beyond.
     assert!((n.geometric_bounds().unwrap().y0 - 69.5).abs() < 1e-6);
 }
+
+#[test]
+fn type_in_a_group_with_a_geometry_effect_exports_and_expands_with_its_look() {
+    let mut s = session();
+    let square = id_of(&run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})));
+    let t = id_of(&run(&mut s, "text.create", json!({"x": 20, "y": 100, "text": "Hi"})));
+    run(&mut s, "transparency.set", json!({"ids": [t.0], "opacity": 50}));
+    run(&mut s, "select.set", json!({"ids": [square.0, t.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 0}}));
+    // SVG export writes the type's outlines at its opacity, and none of them while it is hidden.
+    let svg = |s: &Session| vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    let shown = svg(&s);
+    assert!(!shown.contains("<text") && shown.contains("opacity=\"0.5\""), "{shown}");
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "object.hide", json!({}));
+    let hidden = svg(&s);
+    assert_eq!(hidden.matches("<path").count() + 1, shown.matches("<path").count(), "{hidden}");
+    // Expand Appearance keeps the type's opacity and visibility on its outlines.
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, g);
+    let outlines = &n.children().unwrap()[1];
+    assert!(!matches!(outlines.kind, NodeKind::Text(_)) && (outlines.opacity - 0.5).abs() < 1e-6 && !outlines.visible, "{outlines:?}");
+}
+
+#[test]
+fn hidden_type_with_a_geometry_effect_is_left_out_of_svg_export() {
+    let mut s = session();
+    let t = id_of(&run(&mut s, "text.create", json!({"x": 20, "y": 100, "text": "Hi"})));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 0}, "ids": [t.0]}));
+    let svg = |s: &Session| vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    let shown = svg(&s);
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "object.hide", json!({}));
+    let hidden = svg(&s);
+    assert_eq!((shown.matches("<path").count(), hidden.matches("<path").count()), (1, 0), "{hidden}");
+}
