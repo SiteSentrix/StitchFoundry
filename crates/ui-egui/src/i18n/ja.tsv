@@ -5207,3 +5207,12 @@ machine	Stop	停止
 	Save for My Machine writes the file your machine sews, to its USB stick.	「マイミシン用に保存」で、ミシンが縫うファイルをUSBメモリーに書き出します。
 	Save Design keeps a copy you can open and change later.	「デザインを保存」で、あとで開いて直せるコピーを残します。
 	Save Design…	デザインを保存…
+	Put back what Undo took back	元に戻した変更をやり直します
+	Start Over…	最初からやり直す…
+	Clear the design and begin again	デザインを消して最初から始めます
+	Text size	文字の大きさ
+	Saved for you automatically in My Designs:	マイデザインに自動で保存しました：
+	Start Over	最初からやり直す
+	Clear everything in this design and begin again?	このデザインをすべて消して、最初からやり直しますか？
+	You can still get it back with Undo.	「元に戻す」で取り戻せます。
+	Keep It	そのままにする

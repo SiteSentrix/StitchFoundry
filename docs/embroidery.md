@@ -588,7 +588,10 @@ with a one-line hint:
   fabric, then sews it down (`embroidery.addShape {name, applique: true}`).
 - **Add a Picture…**: places a photo or drawing; **Turn Into Stitches** then digitizes it in your
   thread colours.
-- **Watch It Sew** plays the design stitch by stitch; **Undo** takes back the last change.
+- **Watch It Sew** plays the design stitch by stitch; **Undo** takes back the last change and
+  **Redo** puts it back.
+- **Start Over…** asks first, then clears everything in the design, keeping its hoop
+  (`embroidery.startOver`); Undo still brings it back.
 - **Save for My Machine** (below) writes the design for the machine.
 
 **Your Design** on the right shows, with nothing chosen, the design's size (mm and inches),
@@ -597,6 +600,18 @@ part chosen it asks how to **Sew it as** (Filled, Smooth edge (satin), Just the 
 or Not sewn), its thread colour, **Smaller**, **Bigger** and **Delete**. The menus keep only File,
 Edit, View and Help items a beginner needs; **Help › Show Everything** (or the link under the
 buttons) goes back to the full program.
+
+Simple mode also keeps the words plain and the screen calm: the document tab shows just the
+design's name, the keyboard hints under the canvas are hidden, and three **A** buttons under the
+column set the **Text size** of the whole window (normal, larger, largest: the UI Scaling
+preference, 1×, 1.25× and 1.5×).
+
+**Saved automatically.** Every few minutes (the Data Recovery interval), a design with changes is
+saved on its own (`file.keepSafe`): in place when it is a StitchFoundry design already, else as
+a new design in **My Designs** (Documents/StitchFoundry Designs, or the `myDesignsFolder`
+preference): "My design 1", "My design 2"…, or the name of the machine file it was opened from,
+which is never written over. Your Design shows where it went. Data Recovery's copies still cover
+a crash in between.
 
 ## Life size on screen
 

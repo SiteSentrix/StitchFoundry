@@ -86,6 +86,8 @@ pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
             return 0;
         }
     }
+    // simple mode also saves the design itself (Keep Safe)
+    crate::simple::keep_safe(app);
     write(app, &store, |_| true)
 }
 
