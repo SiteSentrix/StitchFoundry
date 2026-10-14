@@ -25,6 +25,15 @@ pub fn specs() -> Vec<CommandSpec> {
             reverse
         ),
         cmd!(
+            "embroidery.swapSides",
+            "Swap Satin Sides",
+            [],
+            None,
+            "{ids?} the selected satin columns start their zigzag on the other side (and so end on the other side too): a shorter way on to what is sewn next. Choosing it again swaps back → {ids}",
+            has_selection,
+            swap_sides
+        ),
+        cmd!(
             "embroidery.removeHoles",
             "Remove Holes",
             [],
@@ -117,6 +126,31 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(ids_json(&ends.iter().map(|e| e.0).collect::<Vec<_>>()))
+}
+
+// ---------- swap satin sides ----------
+
+fn swap_sides(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.swapSides";
+    let ids = stitched_targets(s, p)?;
+    let satin: Vec<NodeId> = {
+        let d = &s.doc()?.doc;
+        ids.into_iter()
+            .filter(|id| matches!(d.node(*id).and_then(|n| n.embroidery.as_deref()).map(|e| &e.stitch), Some(sf_core::attr::StitchType::Satin(_))))
+            .collect()
+    };
+    if satin.is_empty() {
+        return Err(bad(CMD, "select satin columns"));
+    }
+    s.edit("Swap Satin Sides", |d, _| {
+        for id in &satin {
+            if let Some(sf_core::attr::StitchType::Satin(sp)) = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery.as_deref_mut().map(|e| &mut e.stitch) {
+                sp.swap_sides = !sp.swap_sides;
+            }
+        }
+        Ok(())
+    })?;
+    Ok(ids_json(&satin))
 }
 
 // ---------- holes ----------

@@ -101,7 +101,8 @@ pub(crate) fn zigzag_points(pairs: &[(Point, Point)], params: &SatinParams, pull
     let nominal = params.spacing.max(0.1);
     let mut pts: Vec<Point> = Vec::with_capacity(comp.len());
     for (j, &(a, b)) in comp.iter().enumerate() {
-        let on_a = j % 2 == 0;
+        // side 1 first, or side 2 with the sides swapped
+        let on_a = (j % 2 == 0) != params.swap_sides;
         let mut p = if on_a { a } else { b };
         if short {
             // Same-side neighbour penetrations: if they crowd together (inside of a
@@ -599,6 +600,26 @@ mod tests {
         let (a0, b0) = span(&bare);
         let (a1, b1) = span(&SatinParams { push_comp: 0.5, ..bare.clone() });
         assert!(a1 - a0 > 0.4 && b0 - b1 > 0.4, "{a0} {b0} → {a1} {b1}");
+    }
+
+    /// D4: swapped sides start the zigzag on side 2 and end the column on the other side; side 1
+    /// keeps its own settings.
+    #[test]
+    fn swapped_sides_start_on_side_two() {
+        let col = straight(4.0, 20.0);
+        let side = |p: &Point| if p.y < 2.0 { 1 } else { 2 };
+        use crate::model::{Jagged, JaggedSides};
+        let base = SatinParams::default();
+        let plain = zigzag_points(&sample_pairs(&col, |_| 0.2), &base, (0.0, 0.0), false);
+        let swapped_params = SatinParams { swap_sides: true, ..base.clone() };
+        let swapped = zigzag_points(&sample_pairs(&col, |_| 0.2), &swapped_params, (0.0, 0.0), false);
+        assert_eq!(plain.len(), swapped.len());
+        assert_eq!((side(&plain[0]), side(&swapped[0])), (1, 2));
+        assert_ne!(side(&plain[plain.len() - 1]), side(&swapped[swapped.len() - 1]));
+        // a jagged side 1 stays side 1
+        let jag = Some(Jagged { sides: JaggedSides::First, depth: 1.5 });
+        let pts = zigzag_points(&sample_pairs(&col, |_| 0.2), &SatinParams { jagged: jag, ..swapped_params }, (0.0, 0.0), false);
+        assert!(pts.iter().filter(|p| p.y >= 2.0).all(|p| (p.y - 4.0).abs() < 1e-9), "side 2 clean");
     }
 
     #[test]

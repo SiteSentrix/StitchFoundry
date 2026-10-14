@@ -4442,6 +4442,7 @@ machine	Stop	停止
 	Pull comp., side 2	縮み補正 (側 2)
 	Remove Holes	穴を削除
 	Reverse Stitch Direction	縫い方向を反転
+	Swap Satin Sides	サテンの左右を入れ替え
 	Stem Stitch	ステムステッチ
 	Stem stitch	ステムステッチ
 	Stitches up to {n} mm long can snag	最長 {n} mm のステッチは引っかかることがあります

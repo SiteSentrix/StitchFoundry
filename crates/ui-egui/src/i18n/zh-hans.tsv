@@ -4030,6 +4030,7 @@ machine	Stop	停止
 	Pull comp., side 2	拉力补偿（侧 2）
 	Remove Holes	移除孔洞
 	Reverse Stitch Direction	反转针迹方向
+	Swap Satin Sides	交换缎纹两侧
 	Stem Stitch	轮廓绣
 	Stem stitch	轮廓绣
 	Stitches up to {n} mm long can snag	长达 {n} mm 的针迹可能会勾线

@@ -327,6 +327,11 @@ Editing:
 **Reverse Stitch Direction** (Embroidery menu) swaps where the selected objects start and stop
 sewing.
 
+**Swap Satin Sides** (Embroidery menu, `embroidery.swapSides`; the `swap_sides` setting) starts the
+selected satin columns' zigzag on their other side, so each column also ends on the other side:
+a shorter way on to what is sewn next. Each side keeps its own settings (twin pull compensation,
+jagged edges). Choose it again to swap back.
+
 **Holes:** **Embroidery › Remove Holes** deletes the holes of the selected shapes (all of them, or
 with the `maxArea` parameter only small ones, handy after tracing). **Fill Holes** adds an object
 in each hole, sewn right after its shape, so a hole can be sewn in another thread. To add a hole,
