@@ -1240,7 +1240,10 @@ impl VectorcraftApp {
         }
         if self.ui.status_bar && self.ui.screen_mode < 3 {
             chrome::status_bar(self, ui);
-            chrome::hint_bar(self, ui);
+            // simple mode: no keyboard and modifier hints
+            if !simple {
+                chrome::hint_bar(self, ui);
+            }
         }
         if simple && self.ui.screen_mode < 3 {
             simple::left_bar(self, ui);

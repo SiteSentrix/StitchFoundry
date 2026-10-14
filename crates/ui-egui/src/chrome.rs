@@ -371,7 +371,12 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         .enumerate()
         .map(|(i, d)| {
             let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
-            let title = tab_title(d, zoom, app.ui.view.outline);
+            // simple mode: the design's name, without zoom and colour mode
+            let title = if crate::simple::active(app) {
+                format!("{}{}", d.title(), if d.is_dirty() { "*" } else { "" })
+            } else {
+                tab_title(d, zoom, app.ui.view.outline)
+            };
             let color = if Some(i) == active { t.text_strong } else { t.text_dim };
             (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
         })
