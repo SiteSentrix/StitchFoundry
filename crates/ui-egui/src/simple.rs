@@ -56,7 +56,10 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             if big(ui, tl!("Add a Shape…"), false).on_hover_text(tl!("A heart, a star, a flower and more, ready to sew")).clicked() {
                 app.simple.shapes = Some(false);
             }
-            if big(ui, tl!("Add Appliqué…"), false).on_hover_text(tl!("A fabric shape: the machine stops for you to lay the fabric, then sews it down")).clicked() {
+            if big(ui, tl!("Add Appliqué…"), false)
+                .on_hover_text(tl!("A fabric shape: the machine stops for you to lay the fabric, then sews it down"))
+                .clicked()
+            {
                 app.simple.shapes = Some(true);
             }
             if big(ui, tl!("Add a Picture…"), false).on_hover_text(tl!("A photo or drawing to turn into stitches")).clicked() {
@@ -71,7 +74,8 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("edit.undo", json!({})).ok();
             }
             ui.add_space(6.0);
-            if big(ui, tl!("Save for My Machine"), true).on_hover_text(tl!("Write the design for your machine to its USB stick or folder")).clicked() {
+            if big(ui, tl!("Save for My Machine"), true).on_hover_text(tl!("Write the design for your machine to its USB stick or folder")).clicked()
+            {
                 app.run("ui.saveForMyMachine", json!({})).ok();
             }
         });
@@ -87,7 +91,8 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// How a part sews, as simple mode names it: label, stitch type id.
-const SEW_AS: [(&str, &str); 5] = [("Filled", "fill"), ("Smooth edge (satin)", "satin"), ("Outline", "run"), ("Appliqué", "applique"), ("Not sewn", "none")];
+const SEW_AS: [(&str, &str); 5] =
+    [("Filled", "fill"), ("Smooth edge (satin)", "satin"), ("Outline", "run"), ("Appliqué", "applique"), ("Not sewn", "none")];
 
 /// The right column: the chosen part, else the whole design.
 pub fn right_panel(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -186,7 +191,9 @@ fn design_summary(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     let info = app.session.execute("embroidery.info", &json!({})).unwrap_or_default();
     let stitches = info["stitches"].as_u64().unwrap_or(0);
     if stitches == 0 {
-        ui.label(RichText::new(tl!("Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.")).size(14.0).color(t.text_dim));
+        ui.label(
+            RichText::new(tl!("Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.")).size(14.0).color(t.text_dim),
+        );
     } else {
         let row = |ui: &mut Ui, k: &str, v: String| {
             ui.horizontal(|ui| {

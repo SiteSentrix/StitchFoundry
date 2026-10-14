@@ -75,12 +75,30 @@ fn add_words(s: &mut Session, p: &Value) -> Result<Value> {
     s.execute("select.set", &json!({ "ids": [id] }))?;
     s.execute("embroidery.set", &json!({ "type": "satin" }))?;
     s.execute("embroidery.setThread", &json!({ "color": color, "ids": [id] }))?;
-    let b = {
-        let d = &s.doc()?.doc;
-        d.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.bounds_in(kurbo::Affine::IDENTITY, false))
-    };
-    let mm = |v: f64| (v / PT_PER_MM * 10.0).round() / 10.0;
-    Ok(json!({ "id": id, "widthMm": b.map(|b| mm(b.width())), "heightMm": b.map(|b| mm(b.height())) }))
+    // the type's frame is taller than its letters: size by the stitches the letters sew
+    if let Some((_, ink)) = sewn_size(s, id).filter(|(_, h)| *h > 0.5) {
+        let f = height / ink;
+        if f.is_finite() && (f - 1.0).abs() > 0.02 {
+            s.execute("object.scale", &json!({ "sx": f * 100.0 }))?;
+            centre(s, id, r.center())?;
+        }
+    }
+    let round = |v: f64| (v * 10.0).round() / 10.0;
+    let (w, h) = sewn_size(s, id).unwrap_or_default();
+    Ok(json!({ "id": id, "widthMm": round(w), "heightMm": round(h) }))
+}
+
+/// How wide and tall (mm) the stitches node `id` sews are.
+fn sewn_size(s: &Session, id: u64) -> Option<(f64, f64)> {
+    let plan = s.embroidery_plan()?;
+    let node = vectorcraft_doc::NodeId(id);
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for (i, st) in plan.pattern().stitches.iter().enumerate() {
+        if st.cmd == sf_core::Cmd::Stitch && plan.node_at_record(i) == Some(node) {
+            (x0, y0, x1, y1) = (x0.min(st.x), y0.min(st.y), x1.max(st.x), y1.max(st.y));
+        }
+    }
+    (x1 >= x0 && y1 >= y0).then(|| (x1 - x0, y1 - y0))
 }
 
 fn add_shape(s: &mut Session, p: &Value) -> Result<Value> {
@@ -118,7 +136,7 @@ mod tests {
         let mut s = session();
         let r = s.execute("embroidery.addWords", &json!({"text": "Emma", "height": 25})).unwrap();
         let h = r["heightMm"].as_f64().unwrap();
-        assert!((20.0..34.0).contains(&h), "{r}");
+        assert!((23.0..27.0).contains(&h), "{r}");
         let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
         let d = &s.doc().unwrap().doc;
         let n = d.node(id).unwrap();
