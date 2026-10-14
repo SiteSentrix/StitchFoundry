@@ -71,7 +71,7 @@ fn make_design(s: &mut Session, p: &Value) -> Result<Value> {
         }
         "ith" => {
             let mut q = json!({ "project": p.get("project").cloned().unwrap_or(Value::Null) });
-            for k in ["hoop", "text", "shape", "height"] {
+            for k in ["hoop", "text", "shape", "height", "ribbon", "vinyl", "button"] {
                 if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
                     q[k] = v.clone();
                 }

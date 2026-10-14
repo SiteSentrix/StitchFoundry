@@ -638,6 +638,25 @@ machine stops between steps and its screen says what comes next. The supplies wi
 sizes (inches and millimetres, ¼″ seams) and the steps are kept as the design's notes, printed on
 its worksheet: in simple mode **Print the Steps…** under Your Design.
 
+**Ribbon, vinyl and a button** (`ribbon`, `vinyl`, `button`; tick boxes in Make a Design):
+- **Ribbon**: on a piece finished in the hoop, a hanging loop at the top: a mark shows where the
+  folded ribbon's ends go (the loop out beyond the edge, taped out of the way), then the machine
+  tacks the ends down and the backing covers them. On a pillow front, a ribbon band across the panel
+  below the design: a line for its top edge, then both its edges sewn down.
+- **Clear vinyl on top** (pieces finished in the hoop): after the design, lay clear vinyl over the
+  piece and tape it outside the stitching; it is tacked with long stitches, which don't tear it,
+  for a wipe-clean mug rug or coaster.
+- **A button mark**: a small cross where a button is sewn on by hand afterwards.
+
+Each is a step of its own, with its own named thread, and goes into the supplies (ribbon width and
+length, vinyl size, the button).
+
+**Cutting templates** (`embroidery.ith.templates`, or **Print the Cutting Templates…** at the end
+of Make a Design): every piece to cut (top fabric, batting, backing, vinyl, the trimmed panel, the
+borders, the envelope back) drawn life size on Letter pages with its name and size, a 1″ square on
+each page to check the print is at 100%; a piece bigger than the page is drawn smaller with its
+true size written.
+
 **Designs you bought.** Your Design lists any design's steps, its threads in sewing order by the
 names the file gives them, so an in-the-hoop design from a kit reads as its steps; and Smaller or
 Bigger asks first on a design that stops for fabric (or carries a project's cut sizes), since a new
