@@ -405,6 +405,44 @@ fn add_text_justify_anchors_point_type_on_x() {
     assert!((r + rw - 300.0).abs() < 1.0, "{r} {rw}");
 }
 
+/// add_text forwards writing direction to both text-creation commands, keeping horizontal as the default.
+#[test]
+fn add_text_sets_writing_direction_for_every_kind() {
+    let tools = tool_definitions();
+    let definition = tools.iter().find(|t| t["name"] == "add_text").unwrap();
+    assert_eq!(definition["inputSchema"]["properties"]["vertical"]["type"], "boolean");
+    for mode in ["point", "area", "pathArea", "onPath"] {
+        for vertical in [None, Some(false), Some(true)] {
+            let mut s = server();
+            let mut args = json!({"text": "AB", "size": 24});
+            if mode == "point" || mode == "area" {
+                args["x"] = json!(100);
+                args["y"] = json!(100);
+                if mode == "area" {
+                    args["width"] = json!(180);
+                    args["height"] = json!(160);
+                }
+            } else {
+                let path = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 40, "y": 40, "width": 180, "height": 160}));
+                assert_eq!(path["isError"], false, "{path}");
+                args["path"] = serde_json::from_str::<Value>(&text_of(&path)).unwrap()["id"].clone();
+                args["mode"] = json!(if mode == "pathArea" { "area" } else { "onPath" });
+            }
+            if let Some(value) = vertical {
+                args["vertical"] = json!(value);
+            }
+            let made = call(&mut s, 2, "add_text", args);
+            assert_eq!(made["isError"], false, "{mode} {vertical:?}: {made}");
+            let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].clone();
+            let node = call(&mut s, 3, "run_command", json!({"command": "document.node", "params": {"id": id}}));
+            assert_eq!(node["isError"], false, "{node}");
+            let node: Value = serde_json::from_str(&text_of(&node)).unwrap();
+            assert_eq!(node["kind"]["type"], "text", "{node}");
+            assert_eq!(node["kind"]["vertical"].as_bool().unwrap_or(false), vertical.unwrap_or(false), "{mode}: {node}");
+        }
+    }
+}
+
 /// save_file says it saves in the document's own format or the one the path's extension picks.
 #[test]
 fn save_file_describes_the_formats_it_writes() {
