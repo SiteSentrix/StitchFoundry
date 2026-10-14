@@ -44,7 +44,7 @@ const EDGE: (&str, &str) = ("#1f2933", "Edge: satin all round");
 const FRAME: (&str, &str) = ("#1f2933", "Frame");
 const VINYL: (&str, &str) = ("#b9c4cc", "Vinyl: lay clear vinyl over the piece and tape it");
 const RIBBON_MARK: (&str, &str) = ("#c9a227", "Ribbon: lay it over the mark and tape it");
-const RIBBON_TACK: (&str, &str) = ("#c9a227", "Ribbon: tacked down");
+const RIBBON_TACK: (&str, &str) = ("#a8862a", "Ribbon: tacked down");
 const BUTTON: (&str, &str) = ("#6b4f3a", "Button: the spot to sew it on by hand");
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -428,7 +428,7 @@ fn templates(s: &mut Session, p: &Value) -> Result<Value> {
         s.execute("paint.default", &json!({}))?;
         s.execute("paint.setFill", &json!({ "none": true }))?;
         let label =
-            if k < 1.0 { format!("{piece}\n{} (drawn smaller: cut to this size)", size(*w, *h)) } else { format!("{piece}\n{}", size(*w, *h)) };
+            if k < 1.0 { format!("{piece}\n{}\n(drawn smaller: cut to this size)", size(*w, *h)) } else { format!("{piece}\n{}", size(*w, *h)) };
         s.execute("text.create", &json!({ "x": px + 6.0, "y": py + 14.0, "text": label, "size": 9.0 }))?;
         x += dw + 6.0;
         shelf = shelf.max(dh);
