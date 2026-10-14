@@ -5197,3 +5197,35 @@ fn print_and_foil_are_shown_and_never_sewn() {
         assert!(!plan.pattern().stitches.iter().any(|st| st.cmd == sf_core::Cmd::Stop), "{name}: no stop");
     }
 }
+
+#[test]
+fn default_properties_saved_for_every_design() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let satin_pull = |s: &Session, id: NodeId| -> f64 {
+        let e = s.doc().unwrap().doc.node(id).unwrap().embroidery.clone().unwrap();
+        let sf_core::attr::StitchType::Satin(p) = &e.stitch else { panic!("satin") };
+        p.pull_comp
+    };
+    // nothing to save before the design has its own
+    assert!(s.execute("embroidery.current.saveAsDefault", &json!({})).is_err());
+    s.execute("embroidery.current.setParams", &json!({"type": "satin", "params": {"pullComp": 0.7}})).unwrap();
+    assert_eq!(s.execute("embroidery.current.saveAsDefault", &json!({"type": "satin"})).unwrap()["saved"], json!(["satin"]));
+    // a new design: its satin takes 0.7 without setting anything
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = rect(&mut s, 10.0 * PT, 10.0 * PT, 5.0 * PT, 40.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    assert!((satin_pull(&s, a) - 0.7).abs() < 1e-9);
+    assert_eq!(s.execute("embroidery.current", &json!({})).unwrap()["defaults"]["satin"]["stitch"]["pull_comp"], json!(0.7));
+    // the design's own properties come first
+    s.execute("embroidery.current.setParams", &json!({"type": "satin", "params": {"pullComp": 0.3}})).unwrap();
+    let b = rect(&mut s, 30.0 * PT, 10.0 * PT, 5.0 * PT, 40.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    assert!((satin_pull(&s, b) - 0.3).abs() < 1e-9);
+    // cleared: the built-in value again
+    assert_eq!(s.execute("embroidery.current.clearDefault", &json!({})).unwrap()["cleared"], 1);
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let c = rect(&mut s, 10.0 * PT, 10.0 * PT, 5.0 * PT, 40.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    assert!((satin_pull(&s, c) - 0.7).abs() > 1e-6);
+}

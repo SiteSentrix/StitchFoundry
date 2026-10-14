@@ -5065,3 +5065,7 @@ machine	Stop	Parada
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Comprobar diseño, en el menú Bordado, encuentra capas densas, puntadas largas y texto demasiado pequeño.
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Vea coser el diseño con el reproductor de la Secuencia de puntadas antes de enviarlo.
 	Export with Embroidery › Export Machine File and pick your machine's format.	Exporte con Bordado › Exportar archivo de máquina y elija el formato de su máquina.
+	Save as Default	Guardar como predeterminado
+	Clear Default	Quitar predeterminado
+	Every new design starts with these properties	Cada diseño nuevo empieza con estas propiedades
+	New designs take the built-in properties again	Los diseños nuevos vuelven a tomar las propiedades integradas

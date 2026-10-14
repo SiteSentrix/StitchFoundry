@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Current Properties",
             [],
             None,
-            "{} the properties new objects take, by stitch type (the types `embroidery.set` takes) → {current: {type: properties}}",
+            "{} the properties new objects take, by stitch type (the types `embroidery.set` takes): the design's own, and the defaults saved for every design (used where the design has none) → {current: {type: properties}, defaults: {type: properties}}",
             has_doc,
             current
         ),
@@ -48,6 +48,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{type?} new objects of a stitch type (else of every type) take the default properties again → {reset}",
             has_doc,
             current_reset
+        ),
+        cmd!(
+            "embroidery.current.saveAsDefault",
+            "Save as Default",
+            [],
+            None,
+            "{type?} the design's Properties for New Objects (of one stitch type, else of every type set) become the defaults for every design, kept with the app's preferences → {saved: [type]}",
+            has_doc,
+            save_default
+        ),
+        cmd!(
+            "embroidery.current.clearDefault",
+            "Clear Default",
+            [],
+            None,
+            "{type?} forget the defaults saved for every design (of one stitch type, else all): new objects take the built-in properties again → {cleared}",
+            always,
+            clear_default
         ),
         cmd!(
             query "embroidery.style.list",
@@ -161,7 +179,40 @@ fn free_name(cfg: &DocEmbroidery, base: &str) -> String {
 fn current(s: &mut Session, _p: &Value) -> Result<Value> {
     let cfg = config(s)?;
     let map: Map<String, Value> = cfg.current.iter().map(|(k, e)| (k.clone(), serde_json::to_value(e).unwrap_or(Value::Null))).collect();
-    Ok(json!({ "current": map }))
+    let defaults: Map<String, Value> =
+        s.prefs.embroidery_default_properties.iter().map(|(k, e)| (k.clone(), serde_json::to_value(e).unwrap_or(Value::Null))).collect();
+    Ok(json!({ "current": map, "defaults": defaults }))
+}
+
+fn save_default(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.current.saveAsDefault";
+    let key = str_param(p, "type").map(|t| typed(t, CMD).map(|st| st.type_name())).transpose()?;
+    let cfg = config(s)?;
+    let mut saved = Vec::new();
+    for (k, e) in &cfg.current {
+        if key.is_none_or(|want| want == k) && e.stitch.type_name() == k {
+            s.prefs.embroidery_default_properties.insert(k.clone(), e.properties());
+            saved.push(k.clone());
+        }
+    }
+    if saved.is_empty() {
+        return Err(bad(CMD, "set Properties for New Objects first (embroidery.current.setParams or Make Current)"));
+    }
+    Ok(json!({ "saved": saved }))
+}
+
+fn clear_default(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.current.clearDefault";
+    let key = str_param(p, "type").map(|t| typed(t, CMD).map(|st| st.type_name())).transpose()?;
+    let defaults = &mut s.prefs.embroidery_default_properties;
+    let before = defaults.len();
+    match key {
+        Some(k) => {
+            defaults.remove(k);
+        }
+        None => defaults.clear(),
+    }
+    Ok(json!({ "cleared": before - defaults.len() }))
 }
 
 fn make_current(s: &mut Session, p: &Value) -> Result<Value> {
@@ -189,7 +240,7 @@ fn current_set_params(s: &mut Session, p: &Value) -> Result<Value> {
     let st = typed(str_param(p, "type").ok_or_else(|| bad(CMD, "missing `type`"))?, CMD)?;
     let patch = p.get("params").filter(|v| v.is_object()).ok_or_else(|| bad(CMD, "missing object `params`"))?;
     let key = st.type_name();
-    let start = config(s)?.current_for(key).cloned().unwrap_or_else(|| Embroidery::new(st));
+    let start = super::embroidery::current_props(s, key).unwrap_or_else(|| Embroidery::new(st));
     let e = patched(&start, patch).map_err(|m| bad(CMD, m))?.properties();
     let key = e.stitch.type_name();
     if matches!(e.stitch, StitchType::Manual | StitchType::Branch | StitchType::Lettering(_)) {

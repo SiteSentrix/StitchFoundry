@@ -5067,3 +5067,7 @@ machine	Stop	Arresto
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Controlla disegno nel menu Ricamo trova strati densi, punti lunghi e testo troppo piccolo.
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Guarda il disegno cucire con il lettore in Sequenza punti prima di inviarlo.
 	Export with Embroidery › Export Machine File and pick your machine's format.	Esporta con Ricamo › Esporta file macchina e scegli il formato della tua macchina.
+	Save as Default	Salva come predefinito
+	Clear Default	Cancella predefinito
+	Every new design starts with these properties	Ogni nuovo disegno parte con queste proprietà
+	New designs take the built-in properties again	I nuovi disegni riprendono le proprietà integrate

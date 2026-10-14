@@ -87,7 +87,7 @@ fn merge(s: &mut Session, p: &Value) -> Result<Value> {
     if group {
         s.begin_named_undo_group(Some("Merge Colours".into()));
     }
-    let new = super::embroidery::new_stitching(&s.doc()?.doc);
+    let new = super::embroidery::new_stitching(s);
     let done = s
         .edit("Merge Colours", |d, _| {
             for (id, t) in &changes {

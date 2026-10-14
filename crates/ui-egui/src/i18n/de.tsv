@@ -5021,3 +5021,7 @@ machine	Stop	Stopp
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Motiv prüfen im Menü Stickerei findet dichte Lagen, lange Stiche und zu kleinen Text.
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Sehen Sie dem Motiv mit dem Stichplayer in der Stichfolge beim Sticken zu, bevor Sie es senden.
 	Export with Embroidery › Export Machine File and pick your machine's format.	Exportieren Sie mit Stickerei › Maschinendatei exportieren und wählen Sie das Format Ihrer Maschine.
+	Save as Default	Als Standard speichern
+	Clear Default	Standard löschen
+	Every new design starts with these properties	Jedes neue Motiv beginnt mit diesen Eigenschaften
+	New designs take the built-in properties again	Neue Motive übernehmen wieder die eingebauten Eigenschaften

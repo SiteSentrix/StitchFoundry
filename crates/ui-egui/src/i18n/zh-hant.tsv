@@ -4426,3 +4426,7 @@ machine	Stop	停止
 	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	刺繡選單中的「檢查設計」可找出過密的層、過長的針跡和太小的文字。
 	Watch the design sew with the stitch player in Stitch Sequence before you send it.	傳送之前，用針跡順序中的針跡播放器觀看設計的縫製過程。
 	Export with Embroidery › Export Machine File and pick your machine's format.	透過 刺繡 › 匯出機器檔案 匯出，並選擇你的機器格式。
+	Save as Default	儲存為預設值
+	Clear Default	清除預設值
+	Every new design starts with these properties	每個新設計都以這些屬性開始
+	New designs take the built-in properties again	新設計重新使用內建屬性
