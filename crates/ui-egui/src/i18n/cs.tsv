@@ -5125,3 +5125,18 @@ machine	Stop	Zastavení
 	Use This Size	Použít tuto velikost
 	Screen Points per Inch at Life Size	Bodů obrazovky na palec ve skutečné velikosti
 @msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` je číslo od 40 do 400
+	Experience	Zkušenosti
+	New to Embroidery	Začínám s vyšíváním
+	Digitizer	Digitalizátor
+	Embroidery Business	Vyšívací firma
+	Everything	Vše
+	Showing the basics.	Zobrazeny jsou základy.
+	Show everything	Zobrazit vše
+	New to embroidery	Začínám s vyšíváním
+	I digitize designs	Digitalizuji motivy
+	I run an embroidery business	Vedu vyšívací firmu
+	The basic tools and everyday sections, nothing more	Základní nástroje a každodenní oddíly, nic víc
+	Every digitizing tool, rulers and the control bar	Všechny nástroje digitalizace, pravítka a ovládací panel
+	Everything, with job orders and batch output	Vše, včetně zakázek a dávkového výstupu
+	How do you work?	Jak pracujete?
+@msg	`level` is beginner, digitizer, business or all	`level` je beginner, digitizer, business nebo all

@@ -4674,3 +4674,18 @@ machine	Stop	停止
 	Use This Size	使用此尺寸
 	Screen Points per Inch at Life Size	实物尺寸时的每英寸屏幕点数
 @msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` 是 40 到 400 之间的数字
+	Experience	经验
+	New to Embroidery	刺绣新手
+	Digitizer	制版师
+	Embroidery Business	刺绣业务
+	Everything	全部
+	Showing the basics.	仅显示基础功能。
+	Show everything	显示全部
+	New to embroidery	刺绣新手
+	I digitize designs	我制作刺绣图案
+	I run an embroidery business	我经营刺绣业务
+	The basic tools and everyday sections, nothing more	仅基础工具和日常功能区
+	Every digitizing tool, rulers and the control bar	全部制版工具、标尺和控制栏
+	Everything, with job orders and batch output	全部功能，包括工单和批量输出
+	How do you work?	您如何工作？
+@msg	`level` is beginner, digitizer, business or all	`level` 为 beginner、digitizer、business 或 all

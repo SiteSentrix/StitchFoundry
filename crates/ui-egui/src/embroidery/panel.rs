@@ -160,19 +160,41 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         templates_body(app, ui);
         return;
     }
+    // the sections shown follow Window › Experience (a font document always has its Font Creator)
+    let level = app.ui.experience;
+    if !level.advanced() {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new(tl!("Showing the basics.")).color(t.text_dim));
+            if ui.link(tl!("Show everything")).clicked() {
+                app.run("window.experience", json!({ "level": "all" })).ok();
+            }
+        });
+    }
     digitize_row(app, ui);
-    font_rows(app, ui);
+    if level.advanced() || font_design(app).is_some() {
+        font_rows(app, ui);
+    }
     lettering_rows(app, ui);
-    team_name_rows(app, ui);
+    if level.advanced() {
+        team_name_rows(app, ui);
+    }
     monogram_rows(app, ui);
     egui::CollapsingHeader::new(tl!("Design Templates")).id_salt("emb-templates").show(ui, |ui| templates_body(app, ui));
     egui::CollapsingHeader::new(tl!("Design Library")).id_salt("emb-library").show(ui, |ui| library_body(app, ui));
     egui::CollapsingHeader::new(tl!("Clipart")).id_salt("emb-clipart").show(ui, |ui| clipart_body(app, ui));
-    buttonhole_rows(app, ui);
+    if level.advanced() {
+        buttonhole_rows(app, ui);
+    }
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
-    egui::CollapsingHeader::new(tl!("Batch Output")).id_salt("emb-output").show(ui, |ui| output_body(app, ui));
-    egui::CollapsingHeader::new(tl!("Exports")).id_salt("emb-exports").show(ui, |ui| exports_body(app, ui));
-    egui::CollapsingHeader::new(tl!("Job Orders")).id_salt("emb-jobs").show(ui, |ui| jobs_body(app, ui));
+    if level.business() {
+        egui::CollapsingHeader::new(tl!("Batch Output")).id_salt("emb-output").show(ui, |ui| output_body(app, ui));
+    }
+    if level.advanced() {
+        egui::CollapsingHeader::new(tl!("Exports")).id_salt("emb-exports").show(ui, |ui| exports_body(app, ui));
+    }
+    if level.business() {
+        egui::CollapsingHeader::new(tl!("Job Orders")).id_salt("emb-jobs").show(ui, |ui| jobs_body(app, ui));
+    }
     ui.add_space(6.0);
     object_section(app, ui);
     ui.add_space(6.0);
