@@ -1,10 +1,22 @@
 # Image Trace quality
 
-> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (Gradients: grown over noise and soft rims)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (tiny fitted contours retain islands and holes; Gradients: grown over noise and soft rims)
 
 What Image Trace (`crates/trace`) makes of images whose right answer is known, measured by a harness and
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
 with any other product except the open tracer named under [Yardstick](#4-yardstick).
+
+## Tiny closed contours
+
+A coarse fit can reduce a small closed outline to one cubic, which the editable-path builder cannot
+represent as a closed subpath with two anchors. Previously that dropped the component or hole after
+it survived Noise. The fitter now retains the positioned contour without further simplification when
+that minimum is not met. Corners and Noise defaults are unchanged.
+
+Three source-generated regressions cover a one-pixel island, a one-pixel hole with opposite winding,
+and a stepped seven-pixel region across Corners values. They also check that Noise still removes the
+island and fills the hole when its threshold requests that. These are survival and winding checks,
+not a new quality-harness baseline or a general claim about small-feature fidelity.
 
 ## How it is measured
 
@@ -955,6 +967,7 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 
 | date | change |
 |:--|:--|
+| 2026-10-14 | Tiny closed fits retain their positioned outlines instead of losing islands/holes; three generated regression tests; quality-harness baseline unchanged |
 | 2026-10-14 | Gradients: a gradient that noise or a soft rim broke into pieces is found in its largest piece and grown over the rest (blurred and noisy linear gradients: 3 to 11 paths beside the gradient down to 0.5 with 6 Colors, 24 to 56 down to 0.5 to 1.5 with High Fidelity Photo) |
 | 2026-10-14 | Enhanced versions of the presets (Auto Grouping, and Shapes in all but High Fidelity Photo; Flat Logo has none), each measured beside its preset; a hole that one colour fills is the same shape as what fills it, rectangles are sized by where their sides lie, and a group keeps its paths in the order they were traced in (grouped, a letter with a counter was painted with a light seam: Default with Auto Grouping, edge ΔE 10.24 to 9.88) |
 | 2026-10-14 | Create: Strokes: a line whose ink is cut square at its ends gets square caps, and a wide line whose skeleton hooks towards a corner of its end ends on the line it was following (Outline: largest distance 2.94 px to 0.88; aliased lines 0.88 to 0.81) |

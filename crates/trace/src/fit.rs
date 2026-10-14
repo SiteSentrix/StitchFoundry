@@ -139,6 +139,13 @@ pub(crate) fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
     if stats.reverted > 0 && !all_within(&sample_cubics(&segs, 0.25), &resample_closed(&pts, 0.5).map_or_else(|| pts.clone(), |(p, _)| p), 1.5) {
         segs = polygon(&pts, style.tol);
     }
+    // A coarse fit of a tiny loop can be a single cubic. A closed editable
+    // subpath needs at least two anchors, so that fit would silently discard
+    // a component (or hole) which survived Noise. Keep the positioned outline
+    // instead; do not simplify it again with the tolerance that collapsed it.
+    if segs.len() < 2 {
+        segs = polygon(&pts, 0.0);
+    }
     if style.upright {
         snap_upright(&mut segs, true, false);
     }
@@ -243,4 +250,63 @@ fn polygon(pts: &[Point], tol: f64) -> Vec<Cubic> {
     rdp(&ext, far, n, tol, &mut keep);
     let kept: Vec<Point> = (0..n).filter(|&i| keep[i]).map(|i| pts[i]).collect();
     (0..kept.len()).map(|i| [kept[i], kept[i], kept[(i + 1) % kept.len()], kept[(i + 1) % kept.len()]]).collect()
+}
+
+#[cfg(test)]
+mod component_survival_tests {
+    use crate::{Raster, TraceParams, preset, trace};
+
+    fn params(corners: f64, noise: u32) -> TraceParams {
+        TraceParams { paths: 50.0, corners, noise, ignore_white: true, ..preset("Black and White Logo").unwrap() }
+    }
+
+    #[test]
+    fn a_one_pixel_component_survives_fitting_at_every_corner_setting() {
+        let image = Raster::from_fn(32, 32, |x, y| if x == 16 && y == 16 { [0, 0, 0, 255] } else { [255; 4] });
+        for corners in [0.0, 25.0, 50.0, 75.0, 100.0] {
+            for noise in [0, 1] {
+                let result = trace(&image, &params(corners, noise));
+                assert_eq!(result.paths.len(), 1, "corners={corners}, noise={noise}");
+                assert!(result.paths[0].path.subpaths[0].area().abs() > 0.1);
+            }
+            assert!(trace(&image, &params(corners, 2)).paths.is_empty(), "Noise must still remove the one-pixel component");
+        }
+    }
+
+    #[test]
+    fn a_one_pixel_hole_survives_fitting_without_overriding_noise() {
+        let image =
+            Raster::from_fn(
+                32,
+                32,
+                |x, y| if (4..28).contains(&x) && (4..28).contains(&y) && (x, y) != (16, 16) { [0, 0, 0, 255] } else { [255; 4] },
+            );
+        for corners in [0.0, 25.0, 50.0, 75.0, 100.0] {
+            for noise in [0, 1] {
+                let result = trace(&image, &params(corners, noise));
+                assert_eq!(result.paths.len(), 1);
+                assert_eq!(result.paths[0].path.subpaths.len(), 2, "hole lost at corners={corners}, noise={noise}");
+                let subs = &result.paths[0].path.subpaths;
+                assert!(subs[0].area() * subs[1].area() < 0.0, "hole must keep opposite winding");
+            }
+            let cleaned = trace(&image, &params(corners, 2));
+            assert_eq!(cleaned.paths.len(), 1);
+            assert_eq!(cleaned.paths[0].path.subpaths.len(), 1, "Noise must still fill the one-pixel hole");
+        }
+    }
+
+    #[test]
+    fn a_small_stepped_component_is_not_dropped_by_low_corners() {
+        let image =
+            Raster::from_fn(
+                32,
+                32,
+                |x, y| if (10..14).contains(&x) && y == 10 || (10..13).contains(&x) && y == 11 { [0, 0, 0, 255] } else { [255; 4] },
+            );
+        for corners in [0.0, 25.0, 50.0, 75.0, 100.0] {
+            let result = trace(&image, &params(corners, 1));
+            assert_eq!(result.paths.len(), 1, "stepped region lost at corners={corners}");
+            assert!(result.paths[0].path.subpaths[0].area().abs() > 1.0);
+        }
+    }
 }
