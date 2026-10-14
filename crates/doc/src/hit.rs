@@ -160,7 +160,7 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) 
         if !(edits_contents(c)
             || c.shaper.is_some() && c.children().and_then(|children| children.first()).is_some_and(|source| Some(source.id) == opt.scope))
             && let Some(b) = c.reach_bounds()
-            && !b.inflate(opt.tol, opt.tol).contains(p)
+            && !b.inflate(opt.tol + stitch_reach(c), opt.tol + stitch_reach(c)).contains(p)
         {
             continue;
         }
@@ -195,6 +195,47 @@ fn hit_stroke(n: &Node, bp: &vectorcraft_geom::BezPath, rule: vectorcraft_geom::
     stroke_contains(bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
 }
 
+/// Document points per millimetre (embroidery settings are in mm).
+const PT_PER_MM: f64 = 72.0 / 25.4;
+
+/// How far a stitched path's stitches reach beyond its art (pt): half a satin line's width.
+fn stitch_reach(n: &Node) -> f64 {
+    n.embroidery.as_deref().and_then(|e| e.width).filter(|w| w.is_finite() && *w > 0.0).map_or(0.0, |w| (w * PT_PER_MM / 2.0).min(1000.0))
+}
+
+/// A click on what a stitched path sews, which often covers more than its art: inside the
+/// closed outlines of a fill, appliqué, filled satin or decoration; within half the satin's width
+/// of a satin line; within half a millimetre of a run or of hand-placed (imported) stitches. So a
+/// satin drawn on a hairline, a machine file's thin lines and art hidden under its stitches are
+/// clicked where the stitches are, not passed through to the object behind.
+fn hit_stitches(
+    n: &Node,
+    bp: &vectorcraft_geom::BezPath,
+    rule: vectorcraft_geom::FillRule,
+    closed: bool,
+    p: Point,
+    opt: HitOptions,
+) -> Option<HitKind> {
+    use sf_core::attr::StitchType;
+    let e = n.embroidery.as_deref()?;
+    let inside = || fill_contains(bp, rule, p).then_some(HitKind::Fill);
+    let along = |width_pt: f64| stroke_contains(bp, width_pt, opt.tol, p).then_some(HitKind::Stroke);
+    match &e.stitch {
+        StitchType::Fill(_) | StitchType::Applique(_) | StitchType::Decoration(_) if closed => inside(),
+        StitchType::Satin(_) => {
+            // a closed shape filled across (painted with a fill), else a satin line along the path
+            let filled = !n.appearance.fill_paint().is_none();
+            if closed && (filled || e.width.is_none() && n.appearance.stroke_width() <= 0.0) {
+                return inside();
+            }
+            let w = e.width.filter(|w| w.is_finite() && *w > 0.0).map_or(n.appearance.stroke_width(), |w| w * PT_PER_MM);
+            along(w.max(PT_PER_MM))
+        }
+        StitchType::Run(_) | StitchType::Redwork(_) | StitchType::Manual | StitchType::Decoration(_) => along(PT_PER_MM),
+        _ => None,
+    }
+}
+
 fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
     match &n.kind {
         NodeKind::Path { path, rule, .. } => {
@@ -205,6 +246,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
             let filled = !n.appearance.fill_paint().is_none();
             if !opt.outline && !opt.path_only && filled && fill_contains(&bp, *rule, p) {
                 return Some(HitKind::Fill);
+            }
+            if !opt.outline && !opt.path_only {
+                let closed = path.subpaths.iter().any(|sp| sp.closed);
+                return hit_stitches(n, &bp, *rule, closed, p, opt);
             }
             None
         }
@@ -373,6 +418,34 @@ mod tests {
         .unwrap();
         assert!(hit_test(&d, Point::new(25.0, 25.0), HitOptions::default()).is_none());
         assert!(hit_test(&d, Point::new(50.5, 25.0), HitOptions::default()).is_some());
+    }
+
+    /// R2: stitched objects are clicked where their stitches are, not only on their art.
+    #[test]
+    fn stitched_paths_hit_where_they_sew() {
+        use sf_core::attr::{Embroidery, StitchType};
+        let mut d = Document::new(300.0, 300.0);
+        let l = d.layers[0].id;
+        // behind: a filled square; in front: a hairline open path across it, sewn as a 6 mm satin
+        let back = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(back, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Appearance::default_art())).unwrap();
+        let line = d.alloc_id();
+        let path = shapes::line(Point::new(20.0, 100.0), Point::new(180.0, 100.0));
+        let mut n = Node::path(line, path, Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 0.25));
+        n.embroidery = Some(Box::new(Embroidery { width: Some(6.0), ..Embroidery::new(StitchType::from_name("satin").unwrap()) }));
+        d.insert(Some(l), 9, n).unwrap();
+        // 6 pt off the hairline: inside the 17 pt wide satin, so the satin, not the square behind
+        assert_eq!(hit_test(&d, Point::new(100.0, 106.0), HitOptions::default()).map(|h| h.leaf), Some(line));
+        assert_eq!(hit_test(&d, Point::new(100.0, 120.0), HitOptions::default()).map(|h| h.leaf), Some(back));
+        // an unfilled closed outline sewn as tatami: its inside hits
+        let ring = d.alloc_id();
+        let mut r =
+            Node::path(ring, shapes::rectangle(Rect::new(220.0, 0.0, 280.0, 60.0)), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 0.25));
+        r.embroidery = Some(Box::new(Embroidery::new(StitchType::from_name("fill").unwrap())));
+        d.insert(Some(l), 9, r).unwrap();
+        assert_eq!(hit_test(&d, Point::new(250.0, 30.0), HitOptions::default()).map(|h| h.leaf), Some(ring));
+        // outline mode and path-only selection still go by the path
+        assert_eq!(hit_test(&d, Point::new(250.0, 30.0), HitOptions { outline: true, ..Default::default() }).map(|h| h.leaf), None);
     }
 
     /// #1103: a marquee drawn over a background picks what is on it, not the background, whose
