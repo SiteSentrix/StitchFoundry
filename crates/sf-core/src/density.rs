@@ -52,10 +52,8 @@ impl LayerGrid {
                             let k = ((len / 0.2).ceil() as usize).clamp(1, 1000);
                             let add = (len / k as f64 * THREAD / (cell * cell)) as f32;
                             for m in 0..k {
-                                if let Some(c) = at(p.lerp(q, (m as f64 + 0.5) / k as f64)) {
-                                    if let Some(v) = layers.get_mut(c) {
-                                        *v += add;
-                                    }
+                                if let Some(v) = at(p.lerp(q, (m as f64 + 0.5) / k as f64)).and_then(|c| layers.get_mut(c)) {
+                                    *v += add;
                                 }
                             }
                         }
