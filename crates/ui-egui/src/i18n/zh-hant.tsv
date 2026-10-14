@@ -4574,3 +4574,12 @@ machine	Stop	停止
 	Save for My Machine writes the file your machine sews, to its USB stick.	「為我的機器儲存」會把機器要繡的檔案寫到它的隨身碟。
 	Save Design keeps a copy you can open and change later.	「儲存圖案」會留一份以後可以開啟修改的副本。
 	Save Design…	儲存圖案…
+	Put back what Undo took back	重做復原掉的變更
+	Start Over…	重新開始…
+	Clear the design and begin again	清空圖案，重新開始
+	Text size	文字大小
+	Saved for you automatically in My Designs:	已自動儲存到「我的圖案」：
+	Start Over	重新開始
+	Clear everything in this design and begin again?	清除這個圖案裡的所有內容，重新開始嗎？
+	You can still get it back with Undo.	仍可用「復原」找回來。
+	Keep It	保留

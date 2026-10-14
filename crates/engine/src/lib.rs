@@ -704,6 +704,9 @@ pub struct Prefs {
     /// hoop and Save for My Machine its format.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub my_machine: String,
+    /// Where Keep Safe saves a beginner's new designs (`file.keepSafe`; empty: Documents/StitchFoundry Designs).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub my_designs_folder: String,
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/StitchFoundry Templates`).
     pub templates_folder: String,
@@ -896,6 +899,7 @@ impl Default for Prefs {
             embroidery_kiosk: Default::default(),
             embroidery_send_dirs: vec![],
             my_machine: String::new(),
+            my_designs_folder: String::new(),
             templates_folder: String::new(),
             append_converted: true,
             use_compression: false,

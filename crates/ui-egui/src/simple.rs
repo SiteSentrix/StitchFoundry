@@ -29,6 +29,10 @@ pub struct SimpleState {
     pub words: Option<(String, f64)>,
     /// The shape picker is open, for appliqué or not.
     pub shapes: Option<bool>,
+    /// Start Over is asking to be sure.
+    pub start_over: bool,
+    /// Where Keep Safe last saved the design.
+    pub kept: Option<String>,
 }
 
 /// The text sizes simple mode offers (UI scaling).
@@ -78,8 +82,19 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let p = &mut app.embroidery.player;
                 (p.active, p.playing, p.pos) = (true, true, 0.0);
             }
-            if big(ui, tl!("Undo"), false).on_hover_text(tl!("Take back the last change")).clicked() {
-                app.run("edit.undo", json!({})).ok();
+            ui.horizontal(|ui| {
+                let half = vec2((ui.available_width() - 8.0) / 2.0, 40.0);
+                let undo = egui::Button::new(RichText::new(tl!("Undo")).size(15.0)).min_size(half).corner_radius(6.0);
+                if ui.add(undo).on_hover_text(tl!("Take back the last change")).clicked() {
+                    app.run("edit.undo", json!({})).ok();
+                }
+                let redo = egui::Button::new(RichText::new(tl!("Redo")).size(15.0)).min_size(half).corner_radius(6.0);
+                if ui.add(redo).on_hover_text(tl!("Put back what Undo took back")).clicked() {
+                    app.run("edit.redo", json!({})).ok();
+                }
+            });
+            if big(ui, tl!("Start Over…"), false).on_hover_text(tl!("Clear the design and begin again")).clicked() {
+                app.simple.start_over = true;
             }
             ui.add_space(6.0);
             if big(ui, tl!("Save for My Machine"), true).on_hover_text(tl!("Write the design for your machine to its USB stick or folder")).clicked()
@@ -112,6 +127,22 @@ fn text_size(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     ui.label(RichText::new(tl!("Text size")).size(12.0));
+}
+
+/// Keep Safe (E6): in simple mode, a design with changes is saved on its own every few minutes
+/// (with Data Recovery's copies): in place, or as a new design in My Designs. Desktop only.
+pub fn keep_safe(app: &mut VectorcraftApp) {
+    if cfg!(target_arch = "wasm32") || !active(app) || app.session.active().is_none() {
+        return;
+    }
+    match app.session.execute("file.keepSafe", &json!({})) {
+        Ok(r) => {
+            if let Some(path) = r["saved"].as_str() {
+                app.simple.kept = Some(path.to_string());
+            }
+        }
+        Err(e) => app.status(e.to_string()),
+    }
 }
 
 /// How a part sews, as simple mode names it: label, stitch type id.
@@ -257,6 +288,11 @@ fn design_summary(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     }
     ui.add_space(8.0);
     ui.label(RichText::new(tl!("Click a part of the design to change how it sews.")).size(13.0).color(t.text_dim));
+    if let Some(path) = &app.simple.kept {
+        ui.add_space(8.0);
+        ui.label(RichText::new(tl!("Saved for you automatically in My Designs:")).size(12.0).color(t.text_dim));
+        ui.label(RichText::new(path.as_str()).size(12.0).color(t.text_dim));
+    }
 }
 
 /// A Sew It As label in the UI language.
@@ -270,8 +306,34 @@ fn sew_label(label: &str) -> &str {
     }
 }
 
-/// Add Words and the shape picker, while open.
+/// Add Words, the shape picker and Start Over's question, while open.
 pub fn windows(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.simple.start_over {
+        let mut answer: Option<bool> = None;
+        egui::Window::new(tl!("Start Over")).collapsible(false).resizable(false).show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.label(RichText::new(tl!("Clear everything in this design and begin again?")).size(15.0));
+            ui.label(RichText::new(tl!("You can still get it back with Undo.")).size(13.0));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if crate::widgets::primary_button(ui, tl!("Start Over")).clicked() {
+                    answer = Some(true);
+                }
+                if ui.button(tl!("Keep It")).clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            answer = Some(false);
+        }
+        if let Some(yes) = answer {
+            if yes && let Err(e) = app.run("embroidery.startOver", json!({})) {
+                app.status(e);
+            }
+            app.simple.start_over = false;
+        }
+    }
     if let Some((mut text, mut height)) = app.simple.words.clone() {
         let mut open = true;
         let mut action: Option<bool> = None;

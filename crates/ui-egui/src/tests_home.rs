@@ -307,3 +307,53 @@ fn make_a_design_guide_walks_from_words_to_saving() {
     assert_eq!(info["machineFormat"], "vp3");
     assert!(info["stitches"].as_u64().unwrap() > 100);
 }
+
+/// E5 + E6: simple mode's column has Undo, Redo, Start Over and Text size; Start Over asks first;
+/// Keep Safe saves the design in My Designs and Your Design says where.
+#[test]
+fn simple_mode_makes_mistakes_safe_and_text_larger() {
+    fn strings(app: &mut VectorcraftApp, f: impl FnOnce(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| f(app, ui));
+        out.textures_delta.clear();
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+        v
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("window.experience", json!({"level": "beginner"})).unwrap();
+    assert!(crate::simple::active(&app));
+    app.run("embroidery.newDesign", json!({"hoop": "Husqvarna 240 × 150"})).unwrap();
+    app.run("embroidery.addWords", json!({"text": "Liv"})).unwrap();
+    let bar = strings(&mut app, crate::simple::left_bar);
+    for want in ["Make a Design…", "Undo", "Redo", "Start Over…", "Text size", "Save for My Machine"] {
+        assert!(bar.iter().any(|t| t == want), "{want} in {bar:?}");
+    }
+    // Text size: the UI scaling preference
+    app.run("prefs.set", json!({"key": "uiScaling", "value": 1.25})).unwrap();
+    assert!((app.session.prefs.ui_scaling - 1.25).abs() < 1e-9);
+    // Start Over asks first
+    app.simple.start_over = true;
+    let asked = strings(&mut app, |app, ui| crate::simple::windows(app, ui.ctx()));
+    assert!(asked.iter().any(|t| t == "Clear everything in this design and begin again?"), "{asked:?}");
+    // Keep Safe: a new design goes to My Designs, and Your Design says so
+    let dir = std::env::temp_dir().join(format!("sf-my-designs-{}", std::process::id()));
+    std::fs::remove_dir_all(&dir).ok();
+    app.session.prefs.my_designs_folder = dir.to_string_lossy().to_string();
+    crate::simple::keep_safe(&mut app);
+    let kept = app.simple.kept.clone().expect("kept");
+    assert!(kept.ends_with("My design 1.stitchfoundry") && std::path::Path::new(&kept).exists(), "{kept}");
+    app.run("select.none", json!({})).unwrap();
+    let panel = strings(&mut app, crate::simple::right_panel);
+    assert!(panel.iter().any(|t| t == "Saved for you automatically in My Designs:"), "{panel:?}");
+    std::fs::remove_dir_all(&dir).ok();
+}

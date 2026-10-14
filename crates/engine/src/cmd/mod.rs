@@ -53,6 +53,7 @@ pub mod embroidery_props;
 pub mod embroidery_queue;
 pub mod embroidery_recognise;
 pub mod embroidery_recolor;
+pub mod embroidery_safe;
 pub mod embroidery_scatter;
 pub mod embroidery_sequence;
 pub mod embroidery_sheet_setup;
@@ -297,6 +298,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_my_machine::specs());
         v.extend(embroidery_simple::specs());
         v.extend(embroidery_guide::specs());
+        v.extend(embroidery_safe::specs());
         v.extend(embroidery_decor::specs());
         v.extend(embroidery_merge::specs());
         v.extend(embroidery_sheet_setup::specs());
