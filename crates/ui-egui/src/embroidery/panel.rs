@@ -668,11 +668,11 @@ fn chart_rows(app: &mut VectorcraftApp, ui: &mut Ui, chart: &str) {
     ui.horizontal(|ui| {
         if app.services.pick_open.is_some()
             && button(ui, tl!("Import Chart…"))
-                .on_hover_text(tl!("A thread chart of your own from a CSV file: code, name and colour a thread"))
+                .on_hover_text(tl!("A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)"))
                 .clicked()
         {
             crate::picks::button(app, |app| {
-                let pick = crate::FilePick { filters: vec![("CSV", &["csv", "txt"])], ..Default::default() };
+                let pick = crate::FilePick { filters: vec![("CSV, GIMP palette", &["csv", "txt", "gpl"])], ..Default::default() };
                 let Some(path) = crate::picks::open(app, &pick) else { return };
                 let name = std::path::Path::new(&path).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "My chart".into());
                 match app.run("embroidery.chart.import", json!({ "name": name, "path": path })) {
@@ -1244,7 +1244,7 @@ pub(crate) fn team_names_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         && button(ui, tl!("Import Names…")).on_hover_text(tl!("The first column of a CSV table, or a text file of one name a line")).clicked()
     {
         crate::picks::button(app, |app| {
-            let pick = crate::FilePick { filters: vec![("CSV", &["csv", "txt"])], ..Default::default() };
+            let pick = crate::FilePick { filters: vec![("CSV, GIMP palette", &["csv", "txt", "gpl"])], ..Default::default() };
             let Some(path) = crate::picks::open(app, &pick) else { return };
             match app.run("embroidery.teamNames.read", json!({ "path": path })) {
                 Ok(r) => {

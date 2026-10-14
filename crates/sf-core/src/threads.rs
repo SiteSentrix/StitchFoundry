@@ -236,6 +236,51 @@ impl ThreadChart {
         }
         Ok(ThreadChart { name: name.to_string(), threads })
     }
+
+    /// A chart named `name` from a GIMP palette (`.gpl`): after the `GIMP Palette` line and the
+    /// `Name:` and `Columns:` lines, one colour a line as red, green and blue (0–255) and its
+    /// name. A number at the start or end of the name (`1800 Black`, `Black 1800`) is taken as
+    /// the thread's code.
+    pub fn from_gpl(name: &str, text: &str) -> Result<ThreadChart, String> {
+        let mut lines = text.lines();
+        if !lines.next().is_some_and(|l| l.trim_start_matches('\u{feff}').trim().eq_ignore_ascii_case("GIMP Palette")) {
+            return Err("not a GIMP palette: the first line isn't `GIMP Palette`".into());
+        }
+        let mut threads = Vec::new();
+        for line in lines.map(str::trim) {
+            if threads.len() >= MAX_CHART_THREADS {
+                break;
+            }
+            if line.is_empty() || line.starts_with('#') || (line.contains(':') && line.split(':').next().is_some_and(|k| k.chars().all(char::is_alphabetic))) {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            let mut channel = || parts.next().and_then(|v| v.parse::<u8>().ok());
+            let (Some(r), Some(g), Some(b)) = (channel(), channel(), channel()) else { continue };
+            let label: Vec<&str> = parts.collect();
+            let is_code = |w: &&str| w.len() <= 12 && w.chars().any(|c| c.is_ascii_digit()) && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.');
+            let (code, words) = match (label.first(), label.last()) {
+                (Some(w), _) if label.len() > 1 && is_code(w) => (w.to_string(), label.get(1..).unwrap_or_default()),
+                (_, Some(w)) if label.len() > 1 && is_code(w) => (w.to_string(), label.get(..label.len() - 1).unwrap_or_default()),
+                _ => (String::new(), label.as_slice()),
+            };
+            let cut = |s: String| s.chars().take(80).collect::<String>();
+            threads.push(Thread::with_code(Rgb::new(r, g, b), cut(words.join(" ")), cut(code), name));
+        }
+        if threads.is_empty() {
+            return Err("no colours found in the palette".into());
+        }
+        Ok(ThreadChart { name: name.to_string(), threads })
+    }
+
+    /// A chart from a GIMP palette when the text is one, else from CSV.
+    pub fn from_text(name: &str, text: &str) -> Result<ThreadChart, String> {
+        if text.trim_start_matches('\u{feff}').trim_start().starts_with("GIMP Palette") {
+            ThreadChart::from_gpl(name, text)
+        } else {
+            ThreadChart::from_csv(name, text)
+        }
+    }
 }
 
 /// Index of the colour closest (ΔE) to `c`.
@@ -466,6 +511,27 @@ pub fn charts() -> Vec<ThreadChart> {
 
 #[cfg(test)]
 mod tests {
+
+    /// D6: a GIMP palette becomes a thread chart, codes taken from the start or end of a name.
+    #[test]
+    fn gimp_palettes_become_thread_charts() {
+        let gpl = "GIMP Palette\nName: My threads\nColumns: 4\n# a comment\n  0   0   0\t1800 Black\n255 255 255\tWhite 1801\n200  16  46\tPoppy Red\n12 34\tbroken\n";
+        let c = ThreadChart::from_text("Mine", gpl).unwrap();
+        let got: Vec<(String, String, String)> = c.threads.iter().map(|t| (t.color.to_hex(), t.code.clone(), t.name.clone())).collect();
+        assert_eq!(
+            got,
+            [
+                ("#000000".to_string(), "1800".to_string(), "Black".to_string()),
+                ("#ffffff".to_string(), "1801".to_string(), "White".to_string()),
+                ("#c8102e".to_string(), String::new(), "Poppy Red".to_string()),
+            ]
+        );
+        assert!(c.threads.iter().all(|t| t.chart == "Mine"));
+        assert!(ThreadChart::from_gpl("x", "code,name,color\n1,Red,#ff0000").is_err());
+        assert!(ThreadChart::from_text("x", "code,name,color\n1,Red,#ff0000").is_ok());
+        assert!(ThreadChart::from_gpl("x", "GIMP Palette\nName: empty\n").is_err());
+    }
+
     use super::*;
 
     #[test]

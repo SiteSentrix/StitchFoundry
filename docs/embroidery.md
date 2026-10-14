@@ -674,7 +674,9 @@ Besides the built-in charts, the Design section keeps charts of your own: **Impo
 a CSV file (`embroidery.chart.import {name, path | text}`), from a supplier's list or a shop's
 stock: a header naming the columns (`color`, `colour` or `hex`, or `r`, `g` and `b`; `code` or
 `number`; `name` or `description`), or rows of a code, a name and a `#rrggbb` colour, with
-commas, semicolons or tabs between. **Export Chart…** writes the chosen chart as CSV
+commas, semicolons or tabs between. It reads a GIMP palette (`.gpl`) too, the format many
+thread charts are shared in: a colour a line as red, green and blue and a name, a number at the
+start or end of the name (`1800 Black`) taken as the thread's code. **Export Chart…** writes the chosen chart as CSV
 (`embroidery.chart.export`, `code,name,color`). `embroidery.chart.save {name, threads?}` makes a
 chart thread by thread, or from the design's threads when none are given. Charts of your own are
 used like the built-in ones: to pick a thread, to match threads to a chart and to recolour.
