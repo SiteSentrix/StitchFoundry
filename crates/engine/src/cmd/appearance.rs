@@ -560,7 +560,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             };
             if let Some(pa) = &paint {
-                *pp = super::gradient::place_paint(pa, p, bounds);
+                *pp = super::gradient::place_paint(&super::paint::keep_pattern_xf(pa, p, Some(&*pp)), p, bounds);
             }
             if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
                 *op = percent(o);

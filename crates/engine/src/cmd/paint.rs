@@ -457,7 +457,8 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
             if !fill {
                 restore_unpainted_stroke(&mut n.appearance, index, &paint);
             }
-            let placed = place_paint(&paint, p, item_paint_bounds(n, index, fill));
+            let new_paint = keep_pattern_xf(&paint, p, n.appearance.paint_at(index, fill));
+            let placed = place_paint(&new_paint, p, item_paint_bounds(n, index, fill));
             n.appearance.set_paint_at(index, fill, placed);
             Ok(())
         },
@@ -507,6 +508,17 @@ fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
         run_stroke_weight(style);
     }
     style.stroke = paint;
+}
+
+/// `paint` as it replaces `old`: a pattern swatch picked over a pattern keeps the placement that
+/// pattern already had, so only the pattern changes (#1970).
+pub(super) fn keep_pattern_xf(paint: &Paint, p: &Value, old: Option<&Paint>) -> Paint {
+    match (paint, old) {
+        (Paint::Pattern { pattern, xf }, Some(Paint::Pattern { xf: kept, .. })) if p.get("swatch").is_some() && *xf == Affine::IDENTITY => {
+            Paint::Pattern { pattern: pattern.clone(), xf: *kept }
+        }
+        _ => paint.clone(),
+    }
 }
 
 /// Use the existing 1 pt default when adding paint to an unpainted zero-width stroke.
