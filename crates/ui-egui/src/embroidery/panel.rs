@@ -2127,6 +2127,9 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             if let Some(v) = check(ui, tl!("Different on each side"), twin) {
                 set(app, target, json!({ "pull_comp_2": if v { json!(s.pull_comp) } else { Value::Null } }));
             }
+            if let Some(v) = num(ui, tl!("Push compensation"), "spush", s.push_comp, " mm", 2) {
+                set(app, target, json!({ "push_comp": v.clamp(0.0, 5.0) }));
+            }
             // a tatami border: rows across the column split at the stitch length
             if let Some(v) = check(ui, tl!("Tatami stitches"), s.tatami) {
                 let len = if v { TATAMI_LENGTH } else { SatinParams::default().split_length };
@@ -2289,6 +2292,9 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             }
             if let Some(v) = num(ui, tl!("Pull compensation"), "fpc", f.pull_comp, " mm", 2) {
                 set(app, target, json!({ "pull_comp": v }));
+            }
+            if let Some(v) = num(ui, tl!("Push compensation"), "fpush", f.push_comp, " mm", 2) {
+                set(app, target, json!({ "push_comp": v.clamp(0.0, 5.0) }));
             }
             // cross, meander and motif fills are sewn without underlay
             let u = &f.underlay;

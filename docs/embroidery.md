@@ -224,6 +224,11 @@ Underlay is automatic by default (centre run, edge run, zigzag or tatami, chosen
 be set by hand. Choosing a **Fabric** in the Embroidery panel sets density, pull compensation and
 underlay for every stitched object to suit that fabric.
 
+**Push compensation** (`push_comp`, satin and fills; 0 by default, fabric presets set it): stitches
+pull the fabric in across them (pull compensation widens them for it) and push it out along
+them. With push compensation a satin column stops that much short at each open end, and a fill's
+rows stop that much short of the outline across them, so the sewn shape comes out its drawn size.
+
 ## Stitch direction: automatic, then editable
 
 Every stitched object chooses its stitch direction automatically, and the result is stored as
