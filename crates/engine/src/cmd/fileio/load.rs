@@ -273,12 +273,17 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
 /// own): rasters stay linked, SVG files become art, missing ones placeholders (see
 /// [`vectorcraft_svg::ImportOptions`]).
 pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    // The importer reads on a thread of its own (for its stack): what may be read is what may be
+    // read here.
+    let scope = crate::file_access::ScopeHandle::capture();
     let read = |path: &str| {
-        // Only files (not folders or devices) are read.
-        file_stamp(path)?;
-        let bytes = read_file(path).ok()?;
-        let link = crate::cmd::links::link_info(path, &bytes);
-        Some((bytes, link))
+        scope.clone().run(|| {
+            // Only files (not folders or devices) are read.
+            file_stamp(path)?;
+            let bytes = read_file(path).ok()?;
+            let link = crate::cmd::links::link_info(path, &bytes);
+            Some((bytes, link))
+        })
     };
     vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)
 }
