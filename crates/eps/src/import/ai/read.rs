@@ -22,7 +22,8 @@
 //!   (y down, its centre the template box's), where they start at the point of art space's origin,
 //!   the first row the top one. Each is a linked image showing the preview until its file is found.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
-//!   effects, brushes) comes first as that look, drawn (a group), then the object itself on `%_`
+//!   effects, brushes) comes first as that look, drawn (a group, or an image where an effect
+//!   rasterizes it), then the object itself on `%_`
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
 //! - Patterns: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury` (the tile, in the pattern's
 //!   space, y up), the tile's art (on `%_` lines in newer files), `E`, `%AI3_EndPattern`; each is
@@ -1549,9 +1550,10 @@ impl<'a> Reader<'a> {
         let (Some(object), Some(look)) = (n.checked_sub(1).and_then(|i| f.children.get(i)), n.checked_sub(2).and_then(|i| f.children.get(i))) else {
             return;
         };
+        // The look is a group of paths, or one image where an effect (a blur, a shadow) rasterizes it.
         if !self.hidden_ids.contains(&object.id)
             || self.hidden_ids.contains(&look.id) != hidden
-            || !matches!(look.kind, NodeKind::Group { clip: false, .. })
+            || !matches!(look.kind, NodeKind::Group { clip: false, .. } | NodeKind::Image(_))
         {
             return;
         }

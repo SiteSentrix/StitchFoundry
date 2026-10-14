@@ -539,6 +539,21 @@ fn image(matrix: &str, (w, h): (u32, u32), (space, kind, alpha): (&str, u32, u32
     out
 }
 
+/// An effect that rasterizes (a blur) leaves its drawn look as one image, then the object itself on
+/// `%_` lines: the image stands for the object, as for a drawn look that's a group.
+#[test]
+fn a_drawn_look_that_is_an_image_stands_for_its_object() {
+    let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3);
+    let object = format!("%_0 Ae\r\n%_u\r\n%_{}f\r\n%_U\r\n1 (Blurred) XW\r\n", rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\r\n%_"));
+    let at = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap() + 3;
+    data.splice(at..at, object.into_bytes());
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Image(_)), "{:?}", a[0].kind);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+}
+
 fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
