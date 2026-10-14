@@ -641,16 +641,16 @@ impl Tool for DirectSelectionTool {
                 if r.width() < cx.tol(3.0) && r.height() < cx.tol(3.0) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                // Collect anchors inside the rect for every editable path.
+                // Collect anchors inside the rect for every path the marquee can reach.
                 let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
-                cx.doc.walk(|n| {
+                for n in marquee_paths(cx.doc, cx.isolation) {
                     if let NodeKind::Path { path, .. } = &n.kind {
                         let v: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
                         if !v.is_empty() {
                             sel.push((n.id, v));
                         }
                     }
-                });
+                }
                 // Objects without anchors to pick (type, images, symbols…) are selected whole when
                 // the marquee touches them, as with the Selection tool (#927).
                 for id in vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true) {
@@ -749,6 +749,31 @@ impl DirectSelectionTool {
         out.push(Overlay::Anchor { p: a.p, color, filled: true, size: 5.0 });
         out
     }
+}
+
+/// The paths whose anchors a marquee picks, as the Selection tool's marquee reaches objects:
+/// inside the isolated group when there is one, else on the layers that can be edited (not
+/// hidden, locked or template; the pattern being edited alone), through groups, sublayers and
+/// compound paths, but not into an envelope, which draws its contents somewhere else.
+fn marquee_paths(doc: &vectorcraft_doc::Document, scope: Option<NodeId>) -> Vec<&Node> {
+    fn visit<'a>(n: &'a Node, out: &mut Vec<&'a Node>) {
+        match &n.kind {
+            NodeKind::Path { .. } => out.push(n),
+            NodeKind::Envelope { editing: false, .. } => {}
+            _ if n.is_layer() && (!n.visible || n.locked || n.is_template()) => {}
+            _ => n.children().into_iter().flatten().for_each(|c| visit(c, out)),
+        }
+    }
+    let mut out = vec![];
+    match scope.and_then(|s| doc.node(s)) {
+        Some(s) => visit(s, &mut out),
+        None => doc
+            .layers
+            .iter()
+            .filter(|l| l.visible && !l.locked && !l.is_template() && doc.pattern_edit.as_ref().is_none_or(|e| e.layer == l.id))
+            .for_each(|l| visit(l, &mut out)),
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1001,6 +1026,43 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
         assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
     }
+    /// R7: in isolation mode a marquee picks only the isolated group's anchors; template layers'
+    /// anchors are never picked.
+    #[test]
+    fn marquee_anchors_stay_inside_isolation_and_off_template_layers() {
+        let (mut d, rect) = doc_with_rect();
+        let l = d.layers[0].id;
+        // a group holding a second rect beside the first
+        let (g, inner) = (d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 9, Node::new(g, NodeKind::Group { children: vec![], clip: false })).unwrap();
+        d.insert(
+            Some(g),
+            0,
+            Node::path(inner, vectorcraft_geom::shapes::rectangle(Rect::new(220.0, 100.0, 300.0, 200.0)), vectorcraft_doc::Appearance::default_art()),
+        )
+        .unwrap();
+        let s = Selection::default();
+        let p = paint();
+        let marquee = |c: &ToolContext| {
+            let mut t = DirectSelectionTool::new(false);
+            t.pointer(c, &PointerEvent::new(PointerKind::Down, 90.0, 90.0));
+            t.pointer(c, &PointerEvent::new(PointerKind::Drag, 320.0, 210.0));
+            let a = t.pointer(c, &PointerEvent::new(PointerKind::Up, 320.0, 210.0));
+            let Some(Action::Exec(_, v)) = a.first() else { panic!("{a:?}") };
+            v["items"].as_array().unwrap().iter().map(|i| i["id"].as_u64().unwrap()).collect::<Vec<_>>()
+        };
+        let all = marquee(&cx(&d, &s, &p));
+        assert!(all.contains(&rect.0) && all.contains(&inner.0), "{all:?}");
+        let isolated = ToolContext { isolation: Some(g), ..cx(&d, &s, &p) };
+        assert_eq!(marquee(&isolated), vec![inner.0]);
+        // the first layer a template: its anchors are left alone
+        if let NodeKind::Layer { template, .. } = &mut d.node_mut(l).unwrap().kind {
+            *template = true;
+        }
+        let none = marquee(&cx(&d, &s, &p));
+        assert!(none.is_empty(), "{none:?}");
+    }
+
     /// #927: a marquee across type selects the type object whole, beside the anchors it holds.
     #[test]
     fn marquee_selects_type_it_touches() {
