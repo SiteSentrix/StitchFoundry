@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Thread Chart",
             [],
             None,
-            "{name, path | text: CSV} a thread chart of one's own from CSV: a header naming the columns (color/colour/hex or r, g, b; code/number; name/description) or rows of a code, a name and a #rrggbb colour; commas, semicolons or tabs; replaces one of that name; a built-in chart's name can't be taken → {name, threads}",
+            "{name, path | text: CSV or a GIMP palette} a thread chart of one's own from a GIMP palette (.gpl: red, green, blue and a name a line; a number at the start or end of the name is its code) or from CSV: a header naming the columns (color/colour/hex or r, g, b; code/number; name/description) or rows of a code, a name and a #rrggbb colour; commas, semicolons or tabs; replaces one of that name; a built-in chart's name can't be taken → {name, threads}",
             always,
             import
         ),
@@ -117,7 +117,7 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     if text.len() > MAX_CSV {
         return Err(bad(CMD, "the text is larger than 4 MB"));
     }
-    let chart = ThreadChart::from_csv(&name, &text).map_err(|e| bad(CMD, e))?;
+    let chart = ThreadChart::from_text(&name, &text).map_err(|e| bad(CMD, e))?;
     keep(s, chart, CMD)
 }
 
