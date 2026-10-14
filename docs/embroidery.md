@@ -13,6 +13,7 @@ the control channel, the CLI and the MCP server.
 - [Make a Design](#make-a-design)
 - [Simple mode](#simple-mode)
 - [In-the-hoop projects](#in-the-hoop-projects)
+- [Quilting block by block](#quilting-block-by-block)
 - [My Machine](#my-machine)
 - [Digitizing basics](#digitizing-basics)
 - [Stitch types](#stitch-types)
@@ -555,7 +556,7 @@ Embroidery menu and the first button in simple mode) walks through a whole desig
 with Back to change an answer:
 
 1. **What would you like to make?** A name or some words, a shape, an appliqué, a picture, an
-   in-the-hoop project (below), or a sample to try.
+   in-the-hoop project or quilting for a tile (below), or a sample to try.
 2. **Which hoop will you use?** My Machine's hoops (or the usual ones); the design is made to fit
    it. A sample comes with its own hoop.
 3. **The words, the shape or the picture.** Words: what it should say and how tall the capital
@@ -642,6 +643,28 @@ names the file gives them, so an in-the-hoop design from a kit reads as its step
 Bigger asks first on a design that stops for fabric (or carries a project's cut sizes), since a new
 size would no longer match fabric cut to size. Projects and wording here are our own; we don't
 copy any company's designs, files or instructions.
+
+## Quilting block by block
+
+Quilting a whole quilt on an embroidery machine, one hooping at a time, with clear marking tiles
+(the kind sold as tile quilting systems): lay a tile the size of the block on the quilt, mark its
+middle, crosshairs, up arrow, sides and corners with a water-soluble pen, hoop the quilt sandwich
+with the marks centred, and quilt the design that size. **Make a Design › Quilting for a tile**
+(or `embroidery.quiltBlock {width, height, unit?, pattern?, spacing?, stitch?, color?, hoop?}`)
+makes that design:
+
+- the block's rectangle quilted edge to edge in **one running-stitch thread** (no trims), in the
+  smallest of My Machine's hoops it fits, turned the block's way round, top up;
+- patterns: **Stipple** (a wandering meander), **Waves**, **Squares spiral** and **Crosshatch**;
+- every block keeps its lines half a line-spacing in from its edge, so with the same pattern and
+  **Lines apart** for every block, blocks of any size side by side read as one continuous quilting
+  with no lines to match up.
+
+**Make Every Size…** (`embroidery.quiltBlock.set {folder, pattern, sizes?, spacing?, format?}`)
+writes one machine file per block size to a folder or the USB stick, named by size ("Stipple 5x7
+in.vp3"): the usual sizes from 2 × 2″ to 9 × 14″, or the ones you list, so you pick the file that
+matches the size written on the tile. Sizes no hoop of yours takes are left out and said. The
+design's notes say how to mark and hoop. Patterns and wording are our own.
 
 ## Life size on screen
 

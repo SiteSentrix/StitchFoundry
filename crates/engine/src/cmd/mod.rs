@@ -63,6 +63,7 @@ pub mod embroidery_splits;
 pub mod embroidery_start;
 pub mod embroidery_stitches;
 pub mod embroidery_templates;
+pub mod embroidery_tiles;
 pub mod embroidery_visualizer;
 pub mod expand;
 pub mod export_history;
@@ -301,6 +302,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_guide::specs());
         v.extend(embroidery_safe::specs());
         v.extend(embroidery_ith::specs());
+        v.extend(embroidery_tiles::specs());
         v.extend(embroidery_decor::specs());
         v.extend(embroidery_merge::specs());
         v.extend(embroidery_sheet_setup::specs());

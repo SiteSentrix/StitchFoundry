@@ -50,6 +50,10 @@ pub struct GuideState {
     pub project: Option<String>,
     /// The in-the-hoop project's shape, if any.
     pub ith_shape: Option<&'static str>,
+    /// A quilt block: its size (inches), pattern and line spacing (mm).
+    pub block: (f64, f64),
+    pub pattern: &'static str,
+    pub spacing: f64,
     /// The last thing that went wrong, shown under the step.
     pub error: Option<String>,
 }
@@ -68,6 +72,9 @@ impl Default for GuideState {
             picture: None,
             project: None,
             ith_shape: None,
+            block: (5.0, 7.0),
+            pattern: "stipple",
+            spacing: 6.0,
             error: None,
         }
     }
@@ -139,7 +146,7 @@ fn nav(app: &mut VectorcraftApp, ui: &mut Ui) {
     let back = match g.step {
         Step::What => None,
         Step::Hoop => Some(Step::What),
-        Step::Details if matches!(g.what, Some("sample" | "ith")) => Some(Step::What),
+        Step::Details if matches!(g.what, Some("sample" | "ith" | "quilt")) => Some(Step::What),
         Step::Details => Some(Step::Hoop),
         Step::Colours => Some(Step::Details),
         Step::Watch => Some(Step::Colours),
@@ -177,13 +184,14 @@ fn what(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         ("applique", tl!("An appliqué"), tl!("A shape cut from fabric and sewn down")),
         ("picture", tl!("A picture"), tl!("A photo or a drawing turned into stitches")),
         ("ith", tl!("An in-the-hoop project"), tl!("A little pillow front, a mug rug, a coaster or an ornament")),
+        ("quilt", tl!("Quilting for a tile"), tl!("Background quilting the size of a quilting tile, block by block")),
         ("sample", tl!("A sample to try"), tl!("A finished design to sew and learn from")),
     ];
     for (id, title, line) in choices {
         if card(ui, t, title, line, app.guide.what == Some(id)).clicked() {
             app.guide.what = Some(id);
             // a sample brings its hoop, a project picks the one it fits
-            app.guide.step = if matches!(id, "sample" | "ith") { Step::Details } else { Step::Hoop };
+            app.guide.step = if matches!(id, "sample" | "ith" | "quilt") { Step::Details } else { Step::Hoop };
         }
     }
 }
@@ -268,6 +276,49 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                 });
             }
         }
+        "quilt" => {
+            ui.label(RichText::new(tl!("What size is the tile?")).font(theme::semibold(18.0)).color(t.text));
+            ui.label(RichText::new(tl!("Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.")).size(13.0).color(t.text_dim));
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tl!("Width")).size(15.0));
+                ui.add(egui::DragValue::new(&mut app.guide.block.0).range(1.0..=14.0).speed(0.25).suffix(" in"));
+                ui.label(RichText::new(tl!("Height")).size(15.0));
+                ui.add(egui::DragValue::new(&mut app.guide.block.1).range(1.0..=14.0).speed(0.25).suffix(" in"));
+            });
+            ui.label(RichText::new(tl!("Pattern")).size(15.0));
+            ui.horizontal_wrapped(|ui| {
+                for (id, name) in vectorcraft_engine::cmd::embroidery_tiles::PATTERNS {
+                    if ui.selectable_label(app.guide.pattern == *id, RichText::new(pattern_name(name)).size(15.0)).clicked() {
+                        app.guide.pattern = id;
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tl!("Lines apart")).size(15.0));
+                ui.add(egui::Slider::new(&mut app.guide.spacing, 3.0..=12.0).suffix(" mm").fixed_decimals(0));
+            });
+            ui.label(RichText::new(tl!("Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.")).size(13.0).color(t.text_dim));
+            ui.horizontal(|ui| {
+                if crate::widgets::primary_button(ui, tl!("Make It")).clicked() {
+                    let (w, h) = app.guide.block;
+                    make = Some(json!({ "what": "quilt", "width": w, "height": h, "pattern": app.guide.pattern, "spacing": app.guide.spacing }));
+                }
+                if ui.button(RichText::new(tl!("Make Every Size…")).size(15.0)).on_hover_text(tl!("One file for each usual tile size, in a folder or on the USB stick")).clicked() {
+                    crate::picks::button(app, |app| {
+                        if let Some(folder) = crate::picks::folder(app) {
+                            let q = json!({ "folder": folder, "pattern": app.guide.pattern, "spacing": app.guide.spacing });
+                            match app.run("embroidery.quiltBlock.set", q) {
+                                Ok(r) => {
+                                    let n = r["files"].as_array().map_or(0, Vec::len);
+                                    app.status(format!("{} {n}", tl!("Quilt blocks saved:")));
+                                }
+                                Err(e) => app.guide.error = Some(e),
+                            }
+                        }
+                    });
+                }
+            });
+        }
         "ith" => {
             ui.label(RichText::new(tl!("Which project?")).font(theme::semibold(18.0)).color(t.text));
             let list = app.session.execute("embroidery.ith.projects", &json!({})).unwrap_or_default();
@@ -314,10 +365,21 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         }
     }
     if let Some(mut q) = make {
-        if what != "sample" && what != "ith" {
+        if !matches!(what, "sample" | "ith" | "quilt") {
             q["hoop"] = json!(app.guide.hoop);
         }
         make_it(app, q);
+    }
+}
+
+/// A quilting pattern's name in the UI language.
+fn pattern_name(name: &str) -> &str {
+    match name {
+        "Stipple" => tl!("Stipple"),
+        "Waves" => tl!("Waves"),
+        "Squares spiral" => tl!("Squares spiral"),
+        "Crosshatch" => tl!("Crosshatch"),
+        other => other,
     }
 }
 
