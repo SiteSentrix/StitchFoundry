@@ -686,7 +686,8 @@ mod tests {
                 .unwrap_or_else(|e| panic!("{pattern}: {e}"));
             let info = s.execute("embroidery.info", &json!({})).unwrap();
             assert!(info["widthMm"].as_f64().unwrap() <= 3.0 * IN + 0.5 && info["heightMm"].as_f64().unwrap() <= 3.0 * IN + 0.5, "{pattern}: {info}");
-            assert!(info["stitches"].as_u64().unwrap() > 50, "{pattern}: {info}");
+            // a quarter circle half the corner across: a short line
+            assert!(info["stitches"].as_u64().unwrap() > 20, "{pattern}: {info}");
         }
         // the bent row comes in at the right edge's middle and leaves through the bottom's
         let m = motif("waves", 6.0).unwrap();
