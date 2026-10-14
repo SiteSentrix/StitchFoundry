@@ -64,6 +64,7 @@ mod post;
 mod presets;
 mod print;
 mod settings;
+mod streams;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};

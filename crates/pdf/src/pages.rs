@@ -114,6 +114,21 @@ fn procedures_too_deep(o: &Object<'_>) -> bool {
     })
 }
 
+/// The error of a file with a stream the reader would fail on ([`crate::streams`]).
+const STREAM_NOTE: &str = "a stream in it would decode to more than 256 MB, or its decode parameters can't be applied";
+
+/// The error of a file [`nests_without_end`].
+const NESTED_NOTE: &str = "its functions or colour spaces are built on one another without end";
+
+/// Why `pdf` is refused, if it is: a stream the reader would fail on (its own checks come first:
+/// the calculator functions are decoded below), or [`nests_without_end`].
+fn hostile(pdf: &Pdf) -> Option<&'static str> {
+    if pdf.objects().into_iter().any(|o| matches!(&o, Object::Stream(s) if crate::streams::unsafe_stream(s))) {
+        return Some(STREAM_NOTE);
+    }
+    nests_without_end(pdf).then_some(NESTED_NOTE)
+}
+
 /// Does `pdf` hold functions or colour spaces built on one another past [`MAX_LINKS`] (or on
 /// themselves), or a calculator function nested past [`MAX_PROCEDURES`]? Every object is looked
 /// at, wherever it is used from: the interpreter builds them from resources, shadings, images,
@@ -142,10 +157,14 @@ fn nests_without_end(pdf: &Pdf) -> bool {
 /// dictionaries 64 deep and no deeper, wherever they are: the file's text, an object stream, the
 /// content of a page, form, pattern or glyph; and follows a page tree or a chain of object streams
 /// once). What it reads beyond that is left out, as an object it can't read. What the interpreter
-/// builds by recursion with no cap is refused here ([`nests_without_end`]).
+/// builds by recursion with no cap, and streams it would decode without a ceiling or with a
+/// predictor it can't apply, are refused here ([`hostile`], [`crate::streams`]).
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
+    }
+    if crate::streams::unsafe_file_streams(bytes) {
+        return Err(PdfError::Parse(STREAM_NOTE.into()));
     }
     let password = password.unwrap_or_default();
     let read = |pw: &str| Pdf::new_with_password(bytes.to_vec(), pw);
@@ -165,9 +184,9 @@ pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError
         })
         // Twice: looking at every object makes the reader repair a damaged table of objects (once
         // only), and the objects are other ones after that.
-        .and_then(|pdf| match (0..2).any(|_| nests_without_end(&pdf)) {
-            true => Err(PdfError::Parse("its functions or colour spaces are built on one another without end".into())),
-            false => Ok(pdf),
+        .and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
+            Some(why) => Err(PdfError::Parse(why.into())),
+            None => Ok(pdf),
         })
 }
 
