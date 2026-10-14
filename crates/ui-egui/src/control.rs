@@ -24,6 +24,8 @@
 //! - `app.export {path?, format?, …document.export options}`: encoded by the engine, written through
 //!   the host; the document keeps its path. No path → `{dataBase64, format, bytes}` (as headless)
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
@@ -63,12 +65,41 @@ pub struct ControlRequest {
     pub method: String,
     pub params: Value,
     pub reply: Sender<ControlResponse>,
+    state: Arc<AtomicU8>,
+}
+
+/// A request's state: waiting to run, taken by the app ([`ControlRequest::claim`]), or given up
+/// by its caller before that ([`Ticket::give_up`]). It leaves `QUEUED` once, one way or the other.
+const QUEUED: u8 = 0;
+const STARTED: u8 = 1;
+const GIVEN_UP: u8 = 2;
+
+/// The caller's side of a queued [`ControlRequest`].
+pub struct Ticket(Arc<AtomicU8>);
+
+impl Ticket {
+    /// Stop waiting for the request → `true` when it had not started, and so never runs: a caller
+    /// told "timeout" can then retry without the edit being applied twice, or applied later when
+    /// nobody expects it (#1725). `false`: the app is running it (or has); its outcome is unknown.
+    pub fn give_up(&self) -> bool {
+        self.0.compare_exchange(QUEUED, GIVEN_UP, Ordering::SeqCst, Ordering::SeqCst).is_ok()
+    }
 }
 
 impl ControlRequest {
     pub fn new(method: impl Into<String>, params: Value) -> (Self, std::sync::mpsc::Receiver<ControlResponse>) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (Self { method: method.into(), params, reply: tx }, rx)
+        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)) }, rx)
+    }
+
+    /// The caller's handle on this request, to give it up with.
+    pub fn ticket(&self) -> Ticket {
+        Ticket(self.state.clone())
+    }
+
+    /// Take the request to run it → `false` when its caller gave it up meanwhile (don't run it).
+    pub fn claim(&self) -> bool {
+        self.state.compare_exchange(QUEUED, STARTED, Ordering::SeqCst, Ordering::SeqCst).is_ok()
     }
 }
 

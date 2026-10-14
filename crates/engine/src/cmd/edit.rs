@@ -265,7 +265,7 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// under an interaction that would then preview on, or cancel to, the document from before (#1719).
 /// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
 /// document.
-fn settle_interaction(s: &mut Session) -> Result<()> {
+pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
     s.commit_interaction()?;
     if typing {

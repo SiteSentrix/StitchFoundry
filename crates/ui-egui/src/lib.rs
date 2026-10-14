@@ -162,7 +162,7 @@ use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_engine::{Session, ViewInfo};
 
-pub use control::{ControlRequest, ControlResponse};
+pub use control::{ControlRequest, ControlResponse, Ticket as ControlTicket};
 pub use state::{UiState, View};
 pub use sysclip::{ClipboardProbeFactory, SystemClipboard};
 
@@ -769,6 +769,11 @@ impl VectorcraftApp {
         let mut handled = 0;
         while handled < control::MAX_CONTROL_REQUESTS_PER_FRAME {
             let Ok(req) = rx.try_recv() else { break };
+            // Its caller stopped waiting (the app was busy or its window not drawn for too long)
+            // and was told it won't run: an edit applied now would come from nowhere (#1725).
+            if !req.claim() {
+                continue;
+            }
             handled += 1;
             let reply = req.reply.clone();
             // Guarded per request: a panic must not drop the channel (taken out of `self` above).
