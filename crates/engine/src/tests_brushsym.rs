@@ -581,6 +581,7 @@ fn brushes_and_symbols_survive_vectorcraft_round_trip() {
     assert_eq!(vectorcraft_brush::find(&back, "Mine").map(|b| b.kind.type_id()), Some("calligraphic"));
     assert_eq!(back.symbols, doc.symbols);
     assert_eq!(back.unknown.get("symbolSizes"), doc.unknown.get("symbolSizes"));
+    assert_eq!(back.unknown.get(vectorcraft_doc::SYMBOL_REGISTRATION), doc.unknown.get(vectorcraft_doc::SYMBOL_REGISTRATION));
     let bl = back.node(l).unwrap();
     assert_eq!(bl.appearance.stroke().unwrap().brush.as_deref(), Some("Mine"));
     // A reloaded document places instances at the natural size.
@@ -589,4 +590,20 @@ fn brushes_and_symbols_survive_vectorcraft_round_trip() {
     let r = s2.execute("symbol.place", &json!({"name": "Box", "x": 100, "y": 100})).unwrap();
     let b = s2.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
     assert!(close(b, Rect::new(60.0, 80.0, 140.0, 120.0), 1e-9));
+}
+
+/// Symbol Options › Registration: place puts the chosen 9-point grid point on (x, y).
+#[test]
+fn symbol_registration_places_the_chosen_point_on_xy() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 80.0, 40.0);
+    let r = s.execute("symbol.new", &json!({"name": "Corner", "registration": 0})).unwrap();
+    assert_eq!(r["registration"], 0);
+    assert_eq!(s.execute("symbol.list", &json!({})).unwrap()["symbols"][0]["registration"], 0);
+    // Creating kept the art where it was (top-left still at the origin of the selection).
+    let inst = NodeId(r["id"].as_u64().unwrap());
+    assert!(close(bounds(&s, inst), Rect::new(0.0, 0.0, 80.0, 40.0), 1e-9), "{:?}", bounds(&s, inst));
+    let p = NodeId(s.execute("symbol.place", &json!({"name": "Corner", "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    assert!(close(bounds(&s, p), Rect::new(300.0, 200.0, 380.0, 240.0), 1e-9), "{:?}", bounds(&s, p));
+    assert!(s.execute("symbol.new", &json!({"registration": 9})).is_err());
 }

@@ -4858,9 +4858,9 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	Registration:	Registrace:
 # Dimension tool (linked dimension annotations)
 	Display	Zobrazení
-
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Rozměr
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Výkres : skutečná velikost — 1:10 označí 1 jednotku na stránce jako 10.

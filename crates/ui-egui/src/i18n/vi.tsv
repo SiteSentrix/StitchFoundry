@@ -4413,6 +4413,7 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+	Registration:	Điểm đăng ký:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Kích thước
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Bản vẽ : kích thước thực — 1:10 ghi 1 đơn vị trên trang thành 10.

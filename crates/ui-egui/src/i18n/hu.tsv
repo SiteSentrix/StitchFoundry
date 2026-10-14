@@ -4825,7 +4825,7 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
-
+	Registration:	Regisztráció:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Méret
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Rajz : valós méret — 1:10 esetén az oldalon 1 egység 10-ként jelenik meg.

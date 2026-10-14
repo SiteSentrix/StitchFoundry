@@ -11,7 +11,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_brush::{self as brush, Brush};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, Symbol};
+use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, Symbol, SymbolRegistration};
 use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::edit::selected_roots;
@@ -95,13 +95,13 @@ pub fn specs() -> Vec<CommandSpec> {
             brush_freehand
         ),
         // ----- symbols -----
-        cmd!(query "symbol.list", "Symbols", [], None, "{} → {symbols: [{name, instances, size: [w,h]}], current}", has_doc, symbol_list),
+        cmd!(query "symbol.list", "Symbols", [], None, "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8}], current}", has_doc, symbol_list),
         cmd!(
             "symbol.new",
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?} make a symbol from the selection and replace it with an instance → {name, id}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration)} make a symbol from the selection and replace it with an instance → {name, id, registration}",
             has_selection,
             symbol_new
         ),
@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place Symbol Instance",
             [],
             None,
-            "{name?, x?, y?} place an instance centred at (x, y) (default: artboard centre; name default: current) → {id}",
+            "{name?, x?, y?} place an instance so its registration point is at (x, y) (default: artboard centre; name default: current) → {id}",
             has_doc,
             symbol_place
         ),
@@ -511,9 +511,17 @@ fn set_natural_size(d: &mut Document, name: &str, size: Option<(f64, f64)>) {
     }
 }
 
-/// Instance transform for a symbol of natural size `(w, h)` centred at `c`.
-fn place_xf(c: Point, (w, h): (f64, f64)) -> Affine {
+/// Instance transform for a symbol of natural size `(w, h)` whose registration point is at `at`.
+fn place_xf(at: Point, (w, h): (f64, f64), reg: SymbolRegistration) -> Affine {
+    let c = at - reg.offset_from_center(w, h);
     Affine::translate(c.to_vec2()) * Affine::scale_non_uniform(w / (2.0 * HALF), h / (2.0 * HALF))
+}
+
+fn registration_param(p: &Value, cmd: &str) -> Result<SymbolRegistration> {
+    match p.get("registration") {
+        None => Ok(SymbolRegistration::CENTER),
+        Some(v) => v.as_u64().and_then(SymbolRegistration::from_u64).ok_or_else(|| bad(cmd, "registration must be 0..8")),
+    }
 }
 
 /// Normalise art for a symbol definition: returns (art, natural size, centre in the document).
@@ -553,7 +561,12 @@ fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
         .iter()
         .map(|sym| {
             let (w, h) = natural_size(d, &sym.name);
-            json!({"name": sym.name, "instances": instances_of(d, Some(&sym.name)).len(), "size": [w, h]})
+            json!({
+                "name": sym.name,
+                "instances": instances_of(d, Some(&sym.name)).len(),
+                "size": [w, h],
+                "registration": d.symbol_registration(&sym.name).0,
+            })
         })
         .collect();
     Ok(json!({ "symbols": list, "current": current_symbol(d).or_else(|| symbol_names(d).into_iter().next()) }))
@@ -580,16 +593,20 @@ fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
     let (art, size, c) = normalize(art)?;
     let name = s.doc()?.doc.unique_symbol_name(str_param(p, "name").filter(|n| !n.trim().is_empty()).unwrap_or("New Symbol"));
+    let reg = registration_param(p, "symbol.new")?;
+    // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
+    let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
     let id = s.edit("New Symbol", |d, sel| {
         let art = d.reid(&art);
         d.symbols.push(Symbol { name: name.clone(), art: Arc::new(art) });
         set_natural_size(d, &name, Some(size));
+        d.set_symbol_registration(&name, reg);
         d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
-        let id = replace_with_instance(d, &ids, &name, place_xf(c, size))?;
+        let id = replace_with_instance(d, &ids, &name, place)?;
         sel.set([id]);
         Ok(id)
     })?;
-    Ok(json!({ "name": name, "id": id.0 }))
+    Ok(json!({ "name": name, "id": id.0, "registration": reg.0 }))
 }
 
 fn resolve_symbol(d: &Document, p: &Value, cmd: &str) -> Result<String> {
@@ -606,12 +623,13 @@ fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let name = resolve_symbol(d, p, "symbol.place")?;
     let centre = d.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
-    let c = Point::new(f64_or(p, "x", centre.x), f64_or(p, "y", centre.y));
+    let at = Point::new(f64_or(p, "x", centre.x), f64_or(p, "y", centre.y));
     let size = natural_size(d, &name);
+    let reg = d.symbol_registration(&name);
     let parent = s.doc()?.target_parent()?;
     let id = s.edit("Place Symbol Instance", |d, sel| {
         let id = d.alloc_id();
-        d.insert(parent, usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(c, size) }))?;
+        d.insert(parent, usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(at, size, reg) }))?;
         sel.set([id]);
         Ok(id)
     })?;
@@ -720,7 +738,8 @@ fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
                 *xf *= fix;
             }
         }
-        let id = replace_with_instance(d, &ids, &name, place_xf(c, size))?;
+        let reg = d.symbol_registration(&name);
+        let id = replace_with_instance(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
         sel.set([id]);
         Ok(id)
     })?;
@@ -743,6 +762,7 @@ fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
         }
         d.symbols.retain(|x| x.name != name);
         set_natural_size(d, &name, None);
+        d.set_symbol_registration(&name, SymbolRegistration::CENTER);
         if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
             d.unknown.remove(CURRENT_SYMBOL);
         }
@@ -758,10 +778,12 @@ fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let sym = d.symbols.iter().find(|x| x.name == name).cloned().ok_or_else(|| bad(C, format!("no symbol named `{name}`")))?;
     let new = d.unique_symbol_name(str_param(p, "newName").unwrap_or(&format!("{name} copy")));
     let size = natural_size(d, &name);
+    let reg = d.symbol_registration(&name);
     s.edit("Duplicate Symbol", |d, _| {
         let art = d.reid(&sym.art);
         d.symbols.push(Symbol { name: new.clone(), art: Arc::new(art) });
         set_natural_size(d, &new, Some(size));
+        d.set_symbol_registration(&new, reg);
         Ok(())
     })?;
     Ok(json!({ "name": new }))
@@ -882,13 +904,14 @@ fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
         placed.push(c);
     }
     let count = placed.len();
+    let reg = s.doc()?.doc.symbol_registration(&name);
     let id = s.edit("Symbol Sprayer", |d, sel| {
         let mut nodes = vec![];
         for (i, c) in placed.iter().enumerate() {
             let (_, _, js) = jitter(i + 7, *c);
             let k = scale * (1.0 + js * 0.1);
             let id = d.alloc_id();
-            nodes.push(Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(*c, size) * Affine::scale(k) }));
+            nodes.push(Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(*c, size, reg) * Affine::scale(k) }));
         }
         let gid = match set {
             Some(g) => {

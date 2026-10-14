@@ -4427,7 +4427,7 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
-
+	Registration:	Регистрация:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Размер
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Чертёж : реальный размер — при 1:10 1 единица на странице подписывается как 10.

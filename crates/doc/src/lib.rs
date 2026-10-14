@@ -20,8 +20,10 @@ pub mod inks;
 mod inline;
 pub mod intertwine;
 pub mod shared;
+mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
+pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
 pub mod marks;
@@ -1517,6 +1519,30 @@ impl Document {
             return base.to_string();
         }
         (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
+    }
+
+    /// Symbol Options › Registration for `name` (default: centre).
+    pub fn symbol_registration(&self, name: &str) -> SymbolRegistration {
+        self.unknown
+            .get(SYMBOL_REGISTRATION)
+            .and_then(|m| m.get(name))
+            .and_then(|v| v.as_u64())
+            .and_then(SymbolRegistration::from_u64)
+            .unwrap_or_default()
+    }
+
+    /// Set or clear (when centre) the registration point stored for `name`.
+    pub fn set_symbol_registration(&mut self, name: &str, reg: SymbolRegistration) {
+        let m = self.unknown.entry(SYMBOL_REGISTRATION.to_string()).or_insert_with(|| serde_json::json!({}));
+        let Some(o) = m.as_object_mut() else { return };
+        if reg.is_center() {
+            o.remove(name);
+            if o.is_empty() {
+                self.unknown.remove(SYMBOL_REGISTRATION);
+            }
+        } else {
+            o.insert(name.into(), serde_json::json!(reg.0));
+        }
     }
 }
 

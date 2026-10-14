@@ -4425,6 +4425,7 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Registration:	基準点:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	寸法を作成
 	Dimension Tool	寸法ツール
@@ -4434,7 +4435,6 @@ lighting	Light	ライト
 	Precision:	精度:
 	Update Dimensions	寸法を更新
 	Display	表示
-
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	寸法
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	図面 : 実寸 — 1:10 では、ページ上の 1 単位を 10 と表示します。

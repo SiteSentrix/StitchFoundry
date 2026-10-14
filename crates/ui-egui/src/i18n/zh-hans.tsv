@@ -3999,6 +3999,7 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Registration:	对齐点:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	创建尺寸标注
 	Dimension Tool	尺寸标注工具
@@ -4008,7 +4009,6 @@ lighting	Light	光源
 	Precision:	精度：
 	Update Dimensions	更新尺寸标注
 	Display	显示
-
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	尺寸
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	图纸 : 实际尺寸 — 1:10 会将页面上的 1 个单位标注为 10。
