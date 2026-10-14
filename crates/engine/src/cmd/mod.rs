@@ -36,6 +36,7 @@ pub mod embroidery_guide;
 pub mod embroidery_hoops;
 pub mod embroidery_image;
 pub mod embroidery_input;
+pub mod embroidery_ith;
 pub mod embroidery_jobs;
 pub mod embroidery_kiosk;
 pub mod embroidery_laydown;
@@ -299,6 +300,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_simple::specs());
         v.extend(embroidery_guide::specs());
         v.extend(embroidery_safe::specs());
+        v.extend(embroidery_ith::specs());
         v.extend(embroidery_decor::specs());
         v.extend(embroidery_merge::specs());
         v.extend(embroidery_sheet_setup::specs());
