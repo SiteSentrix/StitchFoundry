@@ -259,7 +259,7 @@ fn crosshatch(w: f64, h: f64, gap: f64) -> Vec<(f64, f64)> {
             let c = lo + i as f64 * step;
             if let Some((a, b)) = clip(c, up) {
                 // alternate the direction so each line starts where the last one ended
-                let (a, b) = if pts.len() % 4 == 0 { (a, b) } else { (b, a) };
+                let (a, b) = if pts.len().is_multiple_of(4) { (a, b) } else { (b, a) };
                 pts.push(a);
                 pts.push(b);
             }
