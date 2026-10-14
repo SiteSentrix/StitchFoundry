@@ -6,14 +6,16 @@
 //! with the paint transform mapping pixels → pattern space → document. Tiles are cached per
 //! pattern name and raster scale (and ink plane, see [`crate::ink`]) within
 //! [`lru::PATTERN_BUDGET`]. A tile is used while the pattern's definition is the one it was
-//! rasterized from (art `Arc` identity, tile, tile type, overlap): the pattern's "revision".
+//! rasterized from (art `Arc` identity, tile, tile type, overlap): the pattern's "revision", and,
+//! when its art shows more than itself (a symbol, another pattern, an image, type), while what
+//! the document holds of those is what it held then ([`Deps`]).
 //!
 //! Pattern editing mode (`Document::pattern_edit`) draws only the temporary tile layer, with
 //! dimmed copies of it at the neighbouring tile positions and the tile edge.
 
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use vectorcraft_doc::pattern::{Overlap, PatternDef, TileType};
 use vectorcraft_doc::{Document, Node};
@@ -32,8 +34,46 @@ const MAX_TILE_PX: f64 = 2048.0;
 /// ([`raster_scale`]).
 type TileKey = (String, u64);
 
+/// What a tile was drawn from besides its pattern's own art, for art that shows more than itself:
+/// the art of every pattern and symbol and the pixels of every image in the document, and the
+/// fonts. Editing a symbol leaves the art of a pattern that shows it as it was, so the art alone
+/// kept the tile from before (#1723). Held weakly: a weak reference keeps the allocation, so no
+/// other value gets one of these addresses while the tile is kept.
+struct Deps {
+    art: Vec<Weak<Node>>,
+    pixels: Vec<Weak<Vec<u8>>>,
+    fonts: u64,
+}
+
+impl Deps {
+    fn art(doc: &Document) -> impl Iterator<Item = &Arc<Node>> {
+        doc.patterns.iter().flat_map(|p| &p.art).chain(doc.symbols.iter().map(|s| &s.art))
+    }
+
+    fn pixels(doc: &Document) -> impl Iterator<Item = &Arc<Vec<u8>>> {
+        doc.images.values().flat_map(|b| std::iter::once(&b.bytes).chain(&b.proxy))
+    }
+
+    fn of(doc: &Document) -> Self {
+        Self {
+            art: Self::art(doc).map(Arc::downgrade).collect(),
+            pixels: Self::pixels(doc).map(Arc::downgrade).collect(),
+            fonts: vectorcraft_text::FontDb::global().generation(),
+        }
+    }
+
+    /// Does `doc` hold what the tile was drawn from?
+    fn current(&self, doc: &Document) -> bool {
+        self.fonts == vectorcraft_text::FontDb::global().generation()
+            && self.art.iter().map(Weak::as_ptr).eq(Self::art(doc).map(Arc::as_ptr))
+            && self.pixels.iter().map(Weak::as_ptr).eq(Self::pixels(doc).map(Arc::as_ptr))
+    }
+}
+
 struct TileEntry {
     art: Vec<Arc<Node>>,
+    /// `None` for art that shows only itself.
+    deps: Option<Deps>,
     params: (Rect, TileType, Overlap),
     sx: f64,
     sy: f64,
@@ -163,7 +203,10 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
         let mut c = c.borrow_mut();
         let tiles = &mut c.tiles[ink as usize];
         let t = tiles.tick();
-        tiles.get(&key, t).filter(|e| e.params == params && same_art(&e.art, &def.art)).map(|e| (e.pixmap.clone(), e.sx, e.sy))
+        tiles
+            .get(&key, t)
+            .filter(|e| e.params == params && same_art(&e.art, &def.art) && e.deps.as_ref().is_none_or(|d| d.current(doc)))
+            .map(|e| (e.pixmap.clone(), e.sx, e.sy))
     });
     let (pm, sx, sy) = match hit {
         Some(h) => h,
@@ -176,11 +219,12 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
             };
             let pm = Arc::new(pm);
             let (sx, sy) = (w as f64 / pw, h as f64 / ph);
+            let deps = crate::fx::Reads::of_all(def.art.iter().map(|a| &**a)).any().then(|| Deps::of(doc));
             CACHE.with(|c| {
                 let mut c = c.borrow_mut();
                 let tiles = &mut c.tiles[ink as usize];
                 let (t, bytes) = (tiles.tick(), size_of::<TileEntry>() + w as usize * h as usize * 4);
-                tiles.insert(key, TileEntry { art: def.art.clone(), params, sx, sy, pixmap: pm.clone() }, bytes, t);
+                tiles.insert(key, TileEntry { art: def.art.clone(), deps, params, sx, sy, pixmap: pm.clone() }, bytes, t);
             });
             (pm, sx, sy)
         }

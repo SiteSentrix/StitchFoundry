@@ -940,6 +940,49 @@ fn rasters_draw_pattern_edits() {
     });
 }
 
+/// #1723: a pattern's tile is drawn again when what its art shows changes while the art itself
+/// doesn't: a symbol an instance in it shows, or another pattern it is painted with. So is a
+/// raster effect on an object painted with such a pattern.
+#[test]
+fn pattern_tiles_draw_edits_to_what_their_art_shows() {
+    let _fonts = fonts_steady();
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    use vectorcraft_geom::shapes::rectangle;
+    let tile = |name: &str, art: Node| {
+        let mut def = PatternDef::new(name, vec![Arc::new(art)]);
+        def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+        def
+    };
+    // Pattern `Stamps` shows symbol `S`; pattern `Outer` is a square painted with pattern `Checks`.
+    let doc = |pattern: &str, effects: Vec<vectorcraft_doc::Effect>| {
+        let mut d = Document::new(200.0, 100.0);
+        let art = symbol_art(&mut d);
+        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+        let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((10.0, 10.0)) });
+        d.patterns.push(tile("Stamps", shown));
+        d.patterns.push(checks(Color::rgb(1.0, 0.0, 0.0)));
+        let square = filled(&mut d, rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), pattern_paint("Checks"), vec![]);
+        d.patterns.push(tile("Outer", square));
+        let painted = filled(&mut d, rectangle(Rect::new(10.0, 10.0, 190.0, 90.0)), pattern_paint(pattern), effects);
+        with_art(d, vec![painted])
+    };
+    let new_symbol = |d: &mut Document| {
+        let red = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+        let bar = Node::path(d.alloc_id(), rectangle(Rect::new(-8.0, -2.0, 8.0, 2.0)), red);
+        d.symbols[0].art = Arc::new(bar);
+    };
+    let new_checks = |d: &mut Document| {
+        if let Some(def) = d.pattern_mut("Checks") {
+            def.art = checks(Color::rgb(0.0, 0.0, 1.0)).art;
+        }
+    };
+    let blur = || vec![effect("blur.gaussian", serde_json::json!({"radius": 2.0}))];
+    edit_draws_as_new(doc("Stamps", vec![]), new_symbol);
+    edit_draws_as_new(doc("Stamps", blur()), new_symbol);
+    edit_draws_as_new(doc("Outer", vec![]), new_checks);
+    edit_draws_as_new(doc("Outer", blur()), new_checks);
+}
+
 /// Raster effects are made again when a symbol shown inside another symbol changes (a group's drop
 /// shadow around an instance of the other symbol), when a brush definition changes (a brushed
 /// stroke's drop shadow), and when an image's pixels change under the same key, as when a linked
