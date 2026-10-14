@@ -34,6 +34,15 @@ pub fn specs() -> Vec<CommandSpec> {
             swap_sides
         ),
         cmd!(
+            "embroidery.toColumn",
+            "Convert to Satin Column",
+            [],
+            None,
+            "{ids?} each selected closed shape (long and narrow, without holes) becomes a satin column between two rails: its two sides as open paths you can edit, pointed where its ends were round, the way its stitches turned kept as inclination lines; its satin settings stay (a fill: its satin column settings, else the defaults) → {ids, skipped: [id]}",
+            has_selection,
+            to_column
+        ),
+        cmd!(
             "embroidery.removeHoles",
             "Remove Holes",
             [],
@@ -184,6 +193,114 @@ fn swap_sides(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(ids_json(&satin))
+}
+
+// ---------- convert to satin column ----------
+
+fn to_column(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.toColumn";
+    let ids = stitched_targets(s, p)?;
+    let mut jobs: Vec<(NodeId, PathData, sf_core::attr::Embroidery)> = Vec::new();
+    let mut skipped: Vec<u64> = Vec::new();
+    {
+        let d = &s.doc()?.doc;
+        for id in &ids {
+            let Some(n) = d.node(*id) else { continue };
+            match n.embroidery.as_deref().filter(|_| matches!(n.kind, NodeKind::Path { .. })).and_then(|e| column_of(n, e)) {
+                Some((path, e)) => jobs.push((*id, path, e)),
+                None => skipped.push(id.0),
+            }
+        }
+    }
+    if jobs.is_empty() {
+        return Err(bad(CMD, "select closed shapes without holes, long and narrow enough to sew as a satin column"));
+    }
+    s.edit("Convert to Satin Column", |d, _| {
+        for (id, path, e) in &jobs {
+            let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+            if let NodeKind::Path { path: p, .. } = &mut n.kind {
+                *p = path.clone();
+            }
+            n.embroidery = Some(Box::new(e.clone()));
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "ids": jobs.iter().map(|j| j.0.0).collect::<Vec<_>>(), "skipped": skipped }))
+}
+
+/// A closed shape as a satin column: its outline split into two sides where the automatic
+/// direction (or the shape's own inclination lines) pairs them, each end's round shared out so
+/// both sides meet at its tip, and the pairings kept as inclination lines.
+fn column_of(n: &Node, e: &sf_core::attr::Embroidery) -> Option<(PathData, sf_core::attr::Embroidery)> {
+    use sf_core::direction::{Guide, auto_guides, strip_from_guides};
+    use sf_core::geom::polyline;
+    let regions = vectorcraft_embroidery::regions_mm(n);
+    let [region] = regions.as_slice() else { return None };
+    if !region.holes.is_empty() {
+        return None;
+    }
+    let ring = &region.outer;
+    let mm = 1.0 / PT_PER_MM;
+    let mut guides: Vec<Guide> = e.guides.iter().map(|g| Guide::new(g.a * mm, g.b * mm)).collect();
+    if guides.len() < 2 {
+        guides = auto_guides(ring)?;
+    }
+    let strip = strip_from_guides(ring, &guides)?;
+    // a polyline cut in two halves at half its length
+    let halves = |pts: &[sf_core::Point]| -> (Vec<sf_core::Point>, Vec<sf_core::Point>) {
+        let half = polyline::length(pts) * 0.5;
+        let (mut a, mut b, mut run) = (Vec::new(), Vec::new(), 0.0);
+        for w in pts.windows(2) {
+            let (p, q) = (w[0], w[1]);
+            let len = p.distance(q);
+            if run + len < half {
+                a.push(p);
+            } else if run < half {
+                let tip = p.lerp(q, if len > 1e-12 { (half - run) / len } else { 0.0 });
+                a.extend([p, tip]);
+                b.push(tip);
+            }
+            if run >= half {
+                b.push(p);
+            }
+            run += len;
+        }
+        if let Some(&last) = pts.last() {
+            b.push(last);
+        }
+        (a, b)
+    };
+    // side A: round the start from its tip, along side A, round the far end to its tip; side B the same
+    let (start_a, start_b) = halves(&strip.cap_start);
+    let (end_a, end_b) = halves(&strip.cap_end);
+    let side = |head: Vec<sf_core::Point>, rails: &[Vec<sf_core::Point>], tail: Vec<sf_core::Point>| {
+        let mut out: Vec<sf_core::Point> = Vec::new();
+        for q in head.into_iter().chain(rails.iter().flatten().copied()).chain(tail) {
+            if out.last().is_none_or(|l: &sf_core::Point| l.distance(q) > 1e-6) {
+                out.push(q);
+            }
+        }
+        polyline::simplify(&out, 0.02)
+    };
+    let a = side(start_a.into_iter().rev().collect(), &strip.rails_a, end_a);
+    let b = side(start_b, &strip.rails_b, end_b.into_iter().rev().collect());
+    if a.len() < 2 || b.len() < 2 {
+        return None;
+    }
+    let to_pt = |pts: &[sf_core::Point]| pts.iter().map(|q| vectorcraft_geom::Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM)).collect::<Vec<_>>();
+    let path = PathData::new(vec![SubPath::polyline(&to_pt(&a), false), SubPath::polyline(&to_pt(&b), false)]);
+    let params = match &e.stitch {
+        sf_core::attr::StitchType::Satin(p) => p.clone(),
+        sf_core::attr::StitchType::Fill(f) => f.satin_column.clone().unwrap_or_default(),
+        _ => sf_core::model::SatinParams::default(),
+    };
+    let mut e = e.clone();
+    e.stitch = sf_core::attr::StitchType::Satin(params);
+    e.guides = strip.stations.iter().map(|(p, q)| Guide::new(*p * PT_PER_MM, *q * PT_PER_MM)).collect();
+    e.width = None;
+    e.splits.clear();
+    e.flow.clear();
+    Some((path, e))
 }
 
 // ---------- holes ----------

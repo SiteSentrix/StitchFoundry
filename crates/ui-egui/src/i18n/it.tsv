@@ -4449,6 +4449,7 @@ machine	Stop	Arresto
 	Remove Holes	Rimuovi fori
 	Reverse Stitch Direction	Inverti direzione del punto
 	Swap Satin Sides	Scambia i lati del punto raso
+	Convert to Satin Column	Converti in colonna a punto raso
 	Stem Stitch	Punto erba
 	Stem stitch	Punto erba
 	Stitches up to {n} mm long can snag	I punti fino a {n} mm possono impigliarsi

@@ -4447,6 +4447,7 @@ machine	Stop	Parada
 	Remove Holes	Quitar agujeros
 	Reverse Stitch Direction	Invertir dirección de puntada
 	Swap Satin Sides	Intercambiar lados de la puntada satín
+	Convert to Satin Column	Convertir en columna de satín
 	Stem Stitch	Punto de tallo
 	Stem stitch	Punto de tallo
 	Stitches up to {n} mm long can snag	Las puntadas de hasta {n} mm pueden engancharse
