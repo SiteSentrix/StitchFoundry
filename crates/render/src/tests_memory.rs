@@ -941,8 +941,8 @@ fn rasters_draw_pattern_edits() {
 }
 
 /// #1723: a pattern's tile is drawn again when what its art shows changes while the art itself
-/// doesn't: a symbol an instance in it shows, or another pattern it is painted with. So is a
-/// raster effect on an object painted with such a pattern.
+/// doesn't: a symbol an instance in it shows, another pattern it is painted with, or a brush it is
+/// stroked with. So is a raster effect on an object painted with such a pattern.
 #[test]
 fn pattern_tiles_draw_edits_to_what_their_art_shows() {
     let _fonts = fonts_steady();
@@ -981,6 +981,20 @@ fn pattern_tiles_draw_edits_to_what_their_art_shows() {
     edit_draws_as_new(doc("Stamps", blur()), new_symbol);
     edit_draws_as_new(doc("Outer", vec![]), new_checks);
     edit_draws_as_new(doc("Outer", blur()), new_checks);
+    // Pattern `Brushed` is a line stroked with a calligraphic brush; the brush gets wider.
+    let mut d = Document::new(200.0, 100.0);
+    let mut stroke = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    let brushed = Node::path(d.alloc_id(), vectorcraft_geom::shapes::line((2.0, 10.0).into(), (18.0, 10.0).into()), stroke);
+    d.patterns.push(tile("Brushed", brushed));
+    let painted = filled(&mut d, rectangle(Rect::new(10.0, 10.0, 190.0, 90.0)), pattern_paint("Brushed"), vec![]);
+    edit_draws_as_new(with_art(d, vec![painted]), |d| {
+        let mut lib = vectorcraft_brush::library(d);
+        if let vectorcraft_brush::BrushKind::Calligraphic(c) = &mut lib[0].kind {
+            c.size = 12.0;
+        }
+        vectorcraft_brush::store(d, &lib);
+    });
 }
 
 /// Raster effects are made again when a symbol shown inside another symbol changes (a group's drop
