@@ -260,6 +260,8 @@ fn guide_strings(app: &mut VectorcraftApp) -> Vec<String> {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 1000.0))), ..Default::default() };
+    // a window is measured on its first frame and drawn on the next
+    ctx.run_ui(raw.clone(), |ui| crate::guide::show(app, ui.ctx())).textures_delta.clear();
     let mut out = ctx.run_ui(raw, |ui| crate::guide::show(app, ui.ctx()));
     out.textures_delta.clear();
     let mut v = vec![];
@@ -324,6 +326,8 @@ fn simple_mode_makes_mistakes_safe_and_text_larger() {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
+        // a window is measured on its first frame and drawn on the next
+        ctx.run_ui(raw.clone(), |ui| f(app, ui)).textures_delta.clear();
         let mut out = ctx.run_ui(raw, |ui| f(app, ui));
         out.textures_delta.clear();
         let mut v = vec![];

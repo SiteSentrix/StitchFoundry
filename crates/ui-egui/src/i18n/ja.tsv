@@ -5216,3 +5216,6 @@ machine	Stop	停止
 	Clear everything in this design and begin again?	このデザインをすべて消して、最初からやり直しますか？
 	You can still get it back with Undo.	「元に戻す」で取り戻せます。
 	Keep It	そのままにする
+	Keep Design Safe	デザインを安全に保存
+	In-the-Hoop Projects	枠の中で作るプロジェクト
+	Make In-the-Hoop Project	枠の中で作るプロジェクトを作成
