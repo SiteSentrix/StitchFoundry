@@ -90,9 +90,13 @@ fn map_of(src: &[Arc<Node>]) -> Result<BuilderMap> {
     }
     let arrangement = po::shape_builder(&shapes, true);
     let bounded = |pieces: Vec<po::Shape>| pieces.into_iter().filter_map(|p| p.path.bounds().map(|b| (p, b))).collect();
+    // A Shaper Group's faces are what its shapes fill and what its open paths enclose: the gaps
+    // closed paths enclose are the Shape Builder's only.
+    let open = po::has_open_path(&shapes);
     let regions = arrangement
         .regions
         .into_iter()
+        .filter(|r| open || !r.sources.is_empty())
         .filter_map(|r| {
             let bounds = r.path.bounds()?;
             let path = r.path.to_bezpath();

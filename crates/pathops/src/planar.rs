@@ -307,8 +307,9 @@ pub fn live_paint(shapes: &[Shape]) -> (Vec<Region>, Vec<Shape>) {
     build(shapes).unwrap_or_default()
 }
 
-/// Most segments the Shape Builder sweeps with open paths as edges: the planar map costs far more
-/// than the filled areas' arrangement, so past this only the filled areas count.
+/// Most segments the Shape Builder sweeps into its planar map (open paths as edges, the gaps closed
+/// paths enclose, outline edges): the map costs far more than the filled areas' arrangement, so past
+/// this only the filled areas count.
 pub const SHAPE_BUILDER_MAX_SEGMENTS: usize = 4096;
 
 /// The Shape Builder's arrangement: see [`shape_builder`].
@@ -322,20 +323,26 @@ pub struct BuilderArrangement {
     pub edges: Vec<Shape>,
 }
 
+/// Does any of `shapes` have an open subpath (a cutting edge for the Shape Builder)?
+pub fn has_open_path(shapes: &[Shape]) -> bool {
+    shapes.iter().flat_map(|s| &s.path.subpaths).any(|sp| !sp.closed && sp.anchors.len() >= 2)
+}
+
 /// Shape Builder regions of `shapes` (back → front), the pieces of their open paths and, with
 /// `edges`, the pieces of their outlines (what erasing an edge deletes).
 ///
-/// Closed paths bound regions with their filled areas, as in [`regions`](crate::regions). Open
-/// paths (the caller closes the ones whose fill should count) are cutting edges: a line across a
-/// shape splits it, lines around an area enclose a region nothing fills (empty `sources`), and each
-/// path with no closed subpath comes back cut wherever another path meets it, as pieces keyed by
-/// its index in `shapes`. Outlines are cut the same way. With no open path, more than
+/// Closed paths bound regions with their filled areas, as in [`regions`](crate::regions), and the
+/// gaps they enclose that nothing fills are regions too (empty `sources`), such as the middle of
+/// four circles that touch (#1691). Open paths (the caller closes the ones whose fill should count)
+/// are cutting edges: a line across a shape splits it, lines around an area enclose a region
+/// nothing fills, and each path with no closed subpath comes back cut wherever another path meets
+/// it, as pieces keyed by its index in `shapes`. Outlines are cut the same way. With more than
 /// [`SHAPE_BUILDER_MAX_SEGMENTS`] segments or a map that can't be built, only the filled areas
 /// count and there are no pieces.
 pub fn shape_builder(shapes: &[Shape], edges: bool) -> BuilderArrangement {
-    let has_open = shapes.iter().flat_map(|s| &s.path.subpaths).any(|sp| !sp.closed && sp.anchors.len() >= 2);
+    let has_open = has_open_path(shapes);
     let segments: usize = shapes.iter().flat_map(|s| &s.path.subpaths).map(|sp| sp.segment_count()).sum();
-    let planar = ((has_open || edges) && segments <= SHAPE_BUILDER_MAX_SEGMENTS)
+    let planar = (segments <= SHAPE_BUILDER_MAX_SEGMENTS)
         .then(|| {
             let keyed: Vec<Shape> = shapes.iter().enumerate().map(|(i, s)| Shape::new(s.path.clone(), s.rule, i as u64)).collect();
             live_paint(&keyed)
@@ -346,11 +353,15 @@ pub fn shape_builder(shapes: &[Shape], edges: bool) -> BuilderArrangement {
     };
     let is_line = |i: u64| shapes.get(i as usize).is_some_and(|s| !s.path.subpaths.iter().any(|sp| sp.closed));
     let (lines, outline): (Vec<Shape>, Vec<Shape>) = pieces.into_iter().partition(|e| is_line(e.key));
-    BuilderArrangement {
-        regions: if has_open { faces } else { crate::regions(shapes) },
-        lines: if has_open { lines } else { Vec::new() },
-        edges: if edges { outline } else { Vec::new() },
-    }
+    let regions = if has_open {
+        faces
+    } else {
+        // The filled areas from their arrangement, whose faces merge exactly, then the gaps.
+        let mut regions = crate::regions(shapes);
+        regions.extend(faces.into_iter().filter(|f| f.sources.is_empty()));
+        regions
+    };
+    BuilderArrangement { regions, lines: if has_open { lines } else { Vec::new() }, edges: if edges { outline } else { Vec::new() } }
 }
 
 /// Does `sp`, closed, enclose an area (rather than retrace itself)? The Shape Builder closes the
@@ -1182,6 +1193,43 @@ mod tests {
         assert!((regions.iter().map(area).sum::<f64>() - 10000.0).abs() < 1e-6);
     }
 
+    fn circle(cx: f64, cy: f64, r: f64, key: u64) -> Shape {
+        Shape::new(shapes::ellipse(Rect::new(cx - r, cy - r, cx + r, cy + r)), FillRule::NonZero, key)
+    }
+
+    #[test]
+    fn shape_builder_offers_the_gaps_closed_shapes_enclose() {
+        // Four circles in a 2×2 grid, each touching its neighbours (#1691): the four circles and
+        // the diamond between them, which nothing fills.
+        let s = [circle(50.0, 50.0, 50.0, 0), circle(150.0, 50.0, 50.0, 1), circle(50.0, 150.0, 50.0, 2), circle(150.0, 150.0, 50.0, 3)];
+        let regions = shape_builder(&s, false).regions;
+        assert_eq!(regions.len(), 5, "{regions:?}");
+        let gaps: Vec<&Region> = regions.iter().filter(|r| r.sources.is_empty()).collect();
+        assert_eq!(gaps.len(), 1);
+        assert!(gaps[0].contains(Point::new(100.0, 100.0)) && !gaps[0].contains(Point::new(50.0, 50.0)));
+        let diamond = 10000.0 - std::f64::consts::PI * 2500.0;
+        assert!((area(gaps[0]).abs() - diamond).abs() < 0.01 * diamond, "{}", area(gaps[0]));
+        assert_eq!(shape_builder(&s, true).regions, regions, "the outline edges don't change them");
+        // A ring of four bars that overlap at the corners: the eight pieces of the bars and the
+        // square they enclose.
+        let s =
+            [rect(0.0, 0.0, 300.0, 100.0, 0), rect(200.0, 0.0, 300.0, 300.0, 1), rect(0.0, 200.0, 300.0, 300.0, 2), rect(0.0, 0.0, 100.0, 300.0, 3)];
+        let regions = shape_builder(&s, false).regions;
+        assert_eq!(regions.len(), 9, "{regions:?}");
+        let gaps: Vec<&Region> = regions.iter().filter(|r| r.sources.is_empty()).collect();
+        assert_eq!(gaps.len(), 1);
+        assert!((area(gaps[0]).abs() - 10000.0).abs() < 1e-6 && gaps[0].contains(Point::new(150.0, 150.0)));
+        // The gap merges with a bar in the planar map: the bar's piece and the square, no seam.
+        let merger = crate::FaceMerger::new(&s);
+        let bar = regions.iter().find(|r| r.sources == [0] && r.contains(Point::new(150.0, 50.0))).unwrap();
+        let merged = merger.merge(&[bar, gaps[0]]);
+        assert_eq!(merged.subpaths.len(), 1, "{merged:?}");
+        assert!((crate::area(&merged, FillRule::NonZero) - 20000.0).abs() < 1e-6);
+        // Shapes apart or overlapping without a hole enclose no gap.
+        let s = [circle(50.0, 50.0, 50.0, 0), circle(250.0, 50.0, 50.0, 1), rect(80.0, 0.0, 220.0, 60.0, 2)];
+        assert!(shape_builder(&s, false).regions.iter().all(|r| !r.sources.is_empty()));
+    }
+
     #[test]
     fn shape_builder_stays_quick_up_to_its_cap() {
         // A wavy ring of nearly the most segments the map takes, crossed by a few lines.
@@ -1194,6 +1242,10 @@ mod tests {
             })
             .collect();
         let mut s = vec![Shape::new(PathData::single(SubPath::polyline(&ring, true)), FillRule::NonZero, 0)];
+        // Closed paths alone are swept for the gaps they enclose.
+        let started = std::time::Instant::now();
+        assert_eq!(shape_builder(&s, false).regions.len(), 1, "the ring encloses no gap");
+        assert!(started.elapsed().as_secs_f64() < 5.0, "{:?}", started.elapsed());
         for k in 0..4 {
             let y = -60.0 + 40.0 * f64::from(k);
             s.push(line((-150.0, y), (150.0, y + 7.0), 1));
