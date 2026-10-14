@@ -16,7 +16,15 @@ use super::*;
 const IN: f64 = 25.4;
 
 /// The patterns: id, name.
-pub const PATTERNS: &[(&str, &str)] = &[("stipple", "Stipple"), ("waves", "Waves"), ("spiral", "Squares spiral"), ("crosshatch", "Crosshatch")];
+pub const PATTERNS: &[(&str, &str)] = &[
+    ("stipple", "Stipple"),
+    ("swirls", "Swirls"),
+    ("loops", "Loops"),
+    ("feathers", "Feathers"),
+    ("waves", "Waves"),
+    ("spiral", "Squares spiral"),
+    ("crosshatch", "Crosshatch"),
+];
 
 /// Block sizes (inches) to start from: common tile and hoop sizes from 2″ to 9 × 14″.
 pub const SIZES: &[(f64, f64)] = &[
@@ -52,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Quilt Block",
             [],
             None,
-            "{width, height: the block (tile) size, unit?: in|mm (in), pattern?: stipple|waves|spiral|crosshatch (stipple), spacing?: mm between lines (6; 2–25; keep it the same for every block of a quilt), stitch?: mm (3; 1.5–5), color?: \"#rrggbb\", hoop?: a hoop's name (else the smallest of My Machine's, or the usual ones, it fits)} a new design: the block's rectangle quilted edge to edge in one running-stitch thread, centred in the hoop, top up → {pattern, widthMm, heightMm, hoop, stitches}",
+            "{width, height: the block (tile) size, unit?: in|mm (in), pattern?: stipple|swirls|loops|feathers|waves|spiral|crosshatch (stipple), spacing?: mm between lines (6; 2–25; keep it the same for every block of a quilt), stitch?: mm (3; 1.5–5), color?: \"#rrggbb\", hoop?: a hoop's name (else the smallest of My Machine's, or the usual ones, it fits)} a new design: the block's rectangle quilted edge to edge in one running-stitch thread, centred in the hoop, top up → {pattern, widthMm, heightMm, hoop, stitches}",
             always,
             quilt_block
         ),
@@ -79,6 +87,124 @@ fn patterns(_s: &mut Session, _p: &Value) -> Result<Value> {
 fn num(v: f64) -> String {
     let r = (v * 100.0).round() / 100.0;
     if (r - r.round()).abs() < 1e-9 { format!("{}", r.round() as i64) } else { format!("{r}") }
+}
+
+/// Rows across the block for a motif `amp` mm either side of its row line, about `pitch` apart:
+/// the rows' middles, spread so the motifs reach `m` from the block's top and bottom.
+fn rows(h: f64, pitch: f64, amp: f64, m: f64) -> Vec<f64> {
+    let room = (h - 2.0 * m - 2.0 * amp).max(0.0);
+    let n = ((room / pitch).round() as usize + 1).clamp(1, 2000);
+    if n == 1 {
+        return vec![h / 2.0];
+    }
+    // spread to reach from the top edge to the bottom one
+    let step = room / (n as f64 - 1.0);
+    (0..n).map(|i| m + amp + i as f64 * step).collect()
+}
+
+/// A row-by-row pattern: `row(x0, x1, y)` gives one row left to right; odd rows run right to
+/// left (mirrored), and the line steps down the side to the next, all one line kept inside the
+/// block `m` from its edges.
+fn by_rows(w: f64, h: f64, m: f64, pitch: f64, amp: f64, row: impl Fn(f64, f64, f64) -> Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    let (x0, x1) = (m, w - m);
+    let mut pts = Vec::new();
+    for (i, y) in rows(h, pitch, amp, m).into_iter().enumerate() {
+        let mut r = row(x0, x1, y);
+        // odd rows come back right to left: the row mirrored, so it starts at the right edge
+        if i % 2 == 1 {
+            r = r.into_iter().map(|(x, y)| (x0 + x1 - x, y)).collect();
+        }
+        pts.extend(r);
+    }
+    pts.into_iter().map(|(x, y)| (x.clamp(m, w - m), y.clamp(m, h - m))).collect()
+}
+
+/// Loops: a row of round cursive loops (a looped cycloid), rows `gap` apart between loops.
+fn loops(w: f64, h: f64, gap: f64) -> Vec<(f64, f64)> {
+    let d = gap * 0.9;
+    let r = d * 0.42;
+    by_rows(w, h, gap / 2.0, 2.0 * d + gap * 0.6, d, |x0, x1, y| {
+        // start and end on the row line (cos = 0), so rows join cleanly at the sides
+        let turns = ((x1 - x0 - 2.0 * d) / r).max(0.0);
+        let n = ((turns / 0.1).ceil() as usize).clamp(2, 200_000);
+        let mut pts = vec![(x0, y)];
+        pts.extend((0..=n).map(|i| {
+            let t = std::f64::consts::FRAC_PI_2 + turns * i as f64 / n as f64;
+            (x0 + d + r * (t - std::f64::consts::FRAC_PI_2) - d * t.sin() + d, y - d * t.cos())
+        }));
+        pts.push((x1, y));
+        pts
+    })
+}
+
+/// Swirls: along each row, a spiral in, its echo back out beside it, and half a turn round the
+/// outside on to the next; each swirl turns the other way from the last.
+fn swirls(w: f64, h: f64, gap: f64) -> Vec<(f64, f64)> {
+    let big = gap * 1.6;
+    let echo = gap * 0.35;
+    let outer = big + echo;
+    by_rows(w, h, gap / 2.0, 2.0 * outer + gap * 0.5, outer, |x0, x1, y| {
+        let cell = 2.0 * outer;
+        let n = (((x1 - x0) / cell).floor() as usize).clamp(1, 5000);
+        let left = x0 + ((x1 - x0) - n as f64 * cell) / 2.0;
+        let mut pts = vec![(x0, y)];
+        let turn = 2.5 * std::f64::consts::PI;
+        for k in 0..n {
+            let cx = left + outer + k as f64 * cell;
+            let s = if k % 2 == 0 { 1.0 } else { -1.0 };
+            let at = |a: f64, rad: f64| (cx - rad * a.cos(), y - s * rad * a.sin());
+            let steps = 60;
+            // in: from the left, spiralling to a small middle
+            for i in 0..=steps {
+                let t = i as f64 / steps as f64;
+                pts.push(at(t * turn, big * (1.0 - 0.8 * t)));
+            }
+            // out: back beside it, `echo` further out
+            for i in (0..=steps).rev() {
+                let t = i as f64 / steps as f64;
+                pts.push(at(t * turn, big * (1.0 - 0.8 * t) + echo));
+            }
+            // round the outside to the right
+            for i in 0..=steps / 2 {
+                let a = -std::f64::consts::PI * i as f64 / (steps / 2) as f64;
+                pts.push(at(a, outer));
+            }
+        }
+        pts.push((x1, y));
+        pts
+    })
+}
+
+/// A cubic Bézier's points from `a` to `d`.
+fn cubic(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64), n: usize) -> impl Iterator<Item = (f64, f64)> {
+    (0..=n).map(move |i| {
+        let t = i as f64 / n as f64;
+        let u = 1.0 - t;
+        let (k0, k1, k2, k3) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+        (k0 * a.0 + k1 * b.0 + k2 * c.0 + k3 * d.0, k0 * a.1 + k1 * b.1 + k2 * c.1 + k3 * d.1)
+    })
+}
+
+/// Feathers: rows of teardrop plumes all growing one way, each swelling back over the one before
+/// and coming down to the stem a plume further on, the next row's plumes filling in below.
+fn feathers(w: f64, h: f64, gap: f64) -> Vec<(f64, f64)> {
+    let ph = gap * 1.8;
+    let pw = gap * 1.1;
+    by_rows(w, h, gap / 2.0, ph + gap * 0.6, ph / 2.0, |x0, x1, y| {
+        let stem = y + ph / 2.0;
+        let n = (((x1 - x0) / pw).floor() as usize).clamp(1, 20_000);
+        let left = x0 + ((x1 - x0) - n as f64 * pw) / 2.0;
+        let mut pts = vec![(x0, stem)];
+        for k in 0..n {
+            let b = left + k as f64 * pw;
+            let tip = (b + pw * 0.3, stem - ph);
+            // up and back over the plume before, round the tip, down to the next base
+            pts.extend(cubic((b, stem), (b - pw * 0.9, stem - ph * 0.4), (b - pw * 0.5, stem - ph * 1.05), tip, 16));
+            pts.extend(cubic(tip, (b + pw * 1.0, stem - ph * 0.95), (b + pw * 1.2, stem - ph * 0.35), (b + pw, stem), 16).skip(1));
+        }
+        pts.push((x1, stem));
+        pts
+    })
 }
 
 /// Waves: rows `gap` apart across the block, each a gentle wave, joined end to end at the sides
@@ -164,7 +290,7 @@ fn quilt_block(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let pattern = str_param(p, "pattern").unwrap_or("stipple");
     if !PATTERNS.iter().any(|(id, _)| *id == pattern) {
-        return Err(bad(CMD, "`pattern` is stipple, waves, spiral or crosshatch"));
+        return Err(bad(CMD, "`pattern` is stipple, swirls, loops, feathers, waves, spiral or crosshatch"));
     }
     let gap = match p.get("spacing") {
         None | Some(Value::Null) => 6.0,
@@ -204,7 +330,13 @@ fn quilt_block(s: &mut Session, p: &Value) -> Result<Value> {
             id
         }
         _ => {
-            let pts = if pattern == "waves" { waves(w, h, gap) } else { crosshatch(w, h, gap) };
+            let pts = match pattern {
+                "swirls" => swirls(w, h, gap),
+                "loops" => loops(w, h, gap),
+                "feathers" => feathers(w, h, gap),
+                "waves" => waves(w, h, gap),
+                _ => crosshatch(w, h, gap),
+            };
             let r = s.execute("path.create", &json!({ "d": path_d(&pts, left, top) }))?;
             let id = r["id"].as_u64().ok_or_else(|| bad(CMD, "the block wasn't made"))?;
             s.execute("select.set", &json!({ "ids": [id] }))?;
@@ -230,8 +362,11 @@ fn quilt_set(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.quiltBlock.set";
     let folder = str_param(p, "folder").ok_or_else(|| bad(CMD, "missing `folder`: where the files go"))?.to_string();
     let pattern = str_param(p, "pattern").unwrap_or("stipple").to_string();
-    let name =
-        PATTERNS.iter().find(|(i, _)| *i == pattern).map(|(_, n)| *n).ok_or_else(|| bad(CMD, "`pattern` is stipple, waves, spiral or crosshatch"))?;
+    let name = PATTERNS
+        .iter()
+        .find(|(i, _)| *i == pattern)
+        .map(|(_, n)| *n)
+        .ok_or_else(|| bad(CMD, "`pattern` is stipple, swirls, loops, feathers, waves, spiral or crosshatch"))?;
     let sizes: Vec<(f64, f64)> = match p.get("sizes").and_then(Value::as_array) {
         Some(a) => a.iter().take(60).filter_map(|v| Some((v["width"].as_f64()?, v["height"].as_f64()?))).collect(),
         None => SIZES.to_vec(),

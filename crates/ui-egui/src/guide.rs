@@ -388,6 +388,9 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
 fn pattern_name(name: &str) -> &str {
     match name {
         "Stipple" => tl!("Stipple"),
+        "Swirls" => tl!("Swirls"),
+        "Loops" => tl!("Loops"),
+        "Feathers" => tl!("Feathers"),
         "Waves" => tl!("Waves"),
         "Squares spiral" => tl!("Squares spiral"),
         "Crosshatch" => tl!("Crosshatch"),
