@@ -4202,6 +4202,8 @@ theme	Appearance	Giao diện
 @msg	the art is too light for any dots	tác phẩm quá sáng để có bất kỳ chấm nào
 @msg	the art on them differs from the page's in {_1}% of it	tác phẩm trên chúng khác với trang {_1}%
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	tác phẩm trên chúng khác với tác phẩm của trang ở {_1}% diện tích: dù vậy chúng vẫn được lấy từ dữ liệu chỉnh sửa
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	không đọc được các lớp của tệp ({_1}): tệp được mở dưới dạng trang của nó, trong một lớp
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	không đọc được các lớp của tệp từ dữ liệu chỉnh sửa ({_1}): chúng được lấy từ phần PDF
 @msg	the artboard to fit must be a positive size up to {_1} pt	bảng vẽ cần khớp phải có kích thước dương tối đa {_1} pt
 @msg	the background worker stopped	tiến trình nền đã dừng
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	tệp nén giải nén ra nhiều hơn VectorCraft đọc ({_1} MB tài liệu, {_2} MB mỗi ảnh)

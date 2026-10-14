@@ -3833,6 +3833,8 @@ theme	Appearance	外観
 @msg	its page has text, and its layers have no text objects to put it in	ページにテキストがありますが、レイヤーにはそれを入れるテキストオブジェクトがありません
 @msg	the art on them differs from the page's in {_1}% of it	レイヤー上のアートの {_1}% がページのアートと異なります
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	レイヤー上のアートの {_1}% がページのアートと異なりますが、レイヤーは編集データから読み込まれました
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	ファイルのレイヤーを読み込めませんでした ({_1})。ページとして 1 つのレイヤーに読み込みます
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	編集データからファイルのレイヤーを読み込めませんでした ({_1})。PDF 部分から読み込みます
 @msg	its Windows metafile preview was opened instead, which may simplify the art	代わりに Windows メタファイルのプレビューを開いたため、アートが簡略化されている場合があります
 @msg	its preview was placed instead, at screen resolution	代わりにプレビューを画面解像度で配置しました
 @msg	shadings of more than 4096 patches or triangles were left out	パッチまたは三角形が 4096 個を超えるシェーディングは除外されました

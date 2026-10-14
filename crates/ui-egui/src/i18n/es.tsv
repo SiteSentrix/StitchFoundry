@@ -3512,6 +3512,8 @@ axis	Both	Ambos
 @msg	its type is to come in as outlines, which only its page has	su texto debe llegar como contornos, y solo su página los tiene
 @msg	the art on them differs from the page's in {_1}% of it	el arte de las capas difiere del de la página en el {_1} % de su superficie
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	el arte de las capas difiere del de la página en el {_1} % de su superficie: aun así proceden de sus datos de edición
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	no se leyeron las capas del archivo ({_1}): se abre como su página, en una sola capa
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	no se leyeron las capas del archivo desde sus datos de edición ({_1}): proceden de su parte PDF
 @msg	`to` must be "corner" or "smooth"	`to` debe ser "corner" o "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	los archivos BMP son RGB o en escala de grises: colorModel rgb o gray
 @msg	Blend colors: select at least three objects with filled colours	Fusionar colores: selecciona al menos tres objetos con relleno de color

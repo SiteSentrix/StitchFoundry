@@ -3414,6 +3414,8 @@ theme	Appearance	Erscheinungsbild
 @msg	its type is to come in as outlines, which only its page has	sein Text soll als Pfade übernommen werden, die nur seine Seite enthält
 @msg	the art on them differs from the page's in {_1}% of it	die Grafik darauf weicht in {_1} % von der der Seite ab
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	die Grafik darauf weicht in {_1} % von der der Seite ab: sie stammen trotzdem aus seinen Bearbeitungsdaten
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	die Ebenen der Datei wurden nicht gelesen ({_1}): sie wird als ihre Seite in einer Ebene geöffnet
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	die Ebenen der Datei wurden nicht aus ihren Bearbeitungsdaten gelesen ({_1}): sie stammen aus ihrem PDF-Teil
 @msg	`to` must be "corner" or "smooth"	`to` muss "corner" oder "smooth" sein
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-Dateien sind RGB oder Graustufen: colorModel rgb oder gray
 @msg	Blend colors: select at least three objects with filled colours	Farben angleichen: Wählen Sie mindestens drei Objekte mit Flächenfarbe aus

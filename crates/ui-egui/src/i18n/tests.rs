@@ -1167,6 +1167,23 @@ fn unknown_parameter_errors_are_translated() {
     }
 }
 
+/// The notes of an EPS or `.ai` whose layers weren't read, which the importer pushes as warnings
+/// (the scan above doesn't read them), are translated whole, reason included, as the status bar
+/// shows them after opening (#2035).
+#[test]
+fn unread_layers_notes_are_translated() {
+    for note in [
+        "the file's layers weren't read (its editing data is for a different page): it comes in as its page, in one layer",
+        "the file's layers weren't read from its editing data (its editing data is damaged): they come from its PDF part",
+    ] {
+        let status = format!("Opened with 1 note(s): {note}");
+        for code in COMPLETE_MESSAGES.iter().chain(&["pt-br"]) {
+            let shown = message(Lang::from_code(code).unwrap(), &status);
+            assert!(!shown.contains("weren't read") && !shown.contains("its editing data") && !shown.contains("Opened with"), "{code}: {shown}");
+        }
+    }
+}
+
 /// The parameter error of `select.key` for an id that isn't a selected top-level object, whose
 /// text [`message_literals`] doesn't read, is translated whole in each language of
 /// [`COMPLETE_MESSAGES`].

@@ -3510,6 +3510,8 @@ axis	Both	Оба
 @msg	its type is to come in as outlines, which only its page has	его текст должен прийти в виде контуров, а они есть только на его странице
 @msg	the art on them differs from the page's in {_1}% of it	изображение на слоях отличается от изображения на странице на {_1} % площади
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	изображение на слоях отличается от изображения на странице на {_1} % площади: тем не менее слои взяты из его данных для редактирования
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	слои файла не прочитаны ({_1}): он открывается как его страница, на одном слое
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	слои файла не прочитаны из его данных для редактирования ({_1}): они взяты из его PDF-части
 @msg	`to` must be "corner" or "smooth"	`to` должно быть "corner" или "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	файлы BMP бывают RGB или в оттенках серого: colorModel rgb или gray
 @msg	Blend colors: select at least three objects with filled colours	Смешивание цветов: выберите не менее трёх объектов с цветными заливками
