@@ -33,11 +33,75 @@ pub fn is_postscript(bytes: &[u8]) -> bool {
     bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
 }
 
+/// The deepest a file's arrays and dictionaries may nest. The PDF reader (hayro) reads them by
+/// recursion, without a cap of its own: a file nested deeply enough overflows the stack, which is
+/// an abort, not an error. Far beyond what a PDF writer makes.
+const MAX_OBJECT_NESTING: usize = 256;
+
+fn too_deep() -> PdfError {
+    PdfError::Parse(format!("its arrays and dictionaries are nested more than {MAX_OBJECT_NESTING} deep"))
+}
+
+/// Do the arrays and dictionaries in the text of `pdf` nest deeper than [`MAX_OBJECT_NESTING`]?
+/// Read as tokens (strings and comments hold none), an object at a time. The data of a stream
+/// with a filter is skipped: it isn't PDF text until decoded, which this doesn't do, so nesting
+/// inside compressed streams is not seen here.
+fn nests_too_deep(pdf: &[u8]) -> bool {
+    let after =
+        |from: usize, what: &[u8]| pdf.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at + what.len());
+    let word = |at: usize, w: &[u8]| pdf.get(at..).is_some_and(|rest| rest.starts_with(w));
+    let (mut depth, mut filtered) = (0usize, false);
+    let mut i = 0;
+    while let Some(&c) = pdf.get(i) {
+        i += 1;
+        match c {
+            b'%' => i += pdf.get(i..).and_then(|rest| rest.iter().position(|c| matches!(c, b'\n' | b'\r'))).unwrap_or(pdf.len()),
+            b'(' => {
+                // A string: parentheses nest in it, a backslash takes the next byte.
+                let mut open = 1usize;
+                while open > 0 {
+                    match pdf.get(i) {
+                        None => return false,
+                        Some(b'\\') => i += 1,
+                        Some(b'(') => open += 1,
+                        Some(b')') => open -= 1,
+                        Some(_) => {}
+                    }
+                    i += 1;
+                }
+            }
+            b'[' => depth += 1,
+            b']' => depth = depth.saturating_sub(1),
+            b'<' if pdf.get(i) == Some(&b'<') => (depth, i) = (depth + 1, i + 1),
+            b'>' if pdf.get(i) == Some(&b'>') => (depth, i) = (depth.saturating_sub(1), i + 1),
+            // A string in hexadecimal.
+            b'<' => i = after(i, b">").unwrap_or(pdf.len()),
+            b'/' if word(i - 1, b"/Filter") => filtered = true,
+            b'e' if word(i - 1, b"endobj") => (depth, filtered) = (0, false),
+            b'e' if word(i - 1, b"endstream") => i += 8,
+            b's' if word(i - 1, b"stream") => {
+                depth = 0;
+                if std::mem::take(&mut filtered) {
+                    i = after(i, b"endstream").unwrap_or(pdf.len());
+                }
+            }
+            _ => {}
+        }
+        if depth > MAX_OBJECT_NESTING {
+            return true;
+        }
+    }
+    false
+}
+
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
 /// password opens a file too.
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
+    }
+    if nests_too_deep(bytes) {
+        return Err(too_deep());
     }
     let password = password.unwrap_or_default();
     let read = |pw: &str| Pdf::new_with_password(bytes.to_vec(), pw);
@@ -55,6 +119,12 @@ pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError
             LoadPdfError::Decryption(DecryptionError::PasswordProtected) => PdfError::WrongPassword,
             e => PdfError::Parse(format!("{e:?}")),
         })
+}
+
+/// The error of a page whose content, decoded, nests arrays and dictionaries too deep (see
+/// [`MAX_OBJECT_NESTING`]): its operands are read the same way as the file's objects.
+pub(crate) fn content_too_deep(page: &Page<'_>) -> Result<(), PdfError> {
+    if page.page_stream().is_some_and(nests_too_deep) { Err(too_deep()) } else { Ok(()) }
 }
 
 /// The pages and their boxes. An encrypted PDF needs its `password`

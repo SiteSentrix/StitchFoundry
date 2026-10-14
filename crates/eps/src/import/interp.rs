@@ -4,7 +4,6 @@
 //! Every operation counts against a budget and procedures nest only so deep, so a looping or
 //! recursing program ends with [`PsError::Limit`] instead of hanging.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use vectorcraft_geom::Affine;
@@ -86,7 +85,7 @@ struct SaveMark {
 }
 
 fn new_dict() -> DictRef {
-    Rc::new(RefCell::new(Dict::new()))
+    DictRef::new(Dict::new())
 }
 
 /// An encoding vector: 256 `/.notdef` names (type is read as Latin-1 whatever the encoding).

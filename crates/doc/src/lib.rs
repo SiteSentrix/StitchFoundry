@@ -11,6 +11,7 @@ pub mod blend;
 pub mod clipnest;
 pub mod cmyk;
 pub mod corners;
+pub mod depth;
 pub mod graph;
 pub mod hit;
 mod id_index;
@@ -79,6 +80,7 @@ pub use appearance::{
 };
 pub use assets::ExportAsset;
 pub use corners::LiveCorners;
+pub use depth::MAX_DEPTH;
 pub use graph::{
     GraphDesign, GraphKind, GraphSpec, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, PiePosition, PieSort, SeriesPaint, TickLength,
     ValueAxisSide,

@@ -993,6 +993,7 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, tr
         }
         None => unmark(&mut doc.layers, true, &mut vec![]),
     }
+    doc.limit_depth_noting(&mut notes);
     Ok((doc, notes))
 }
 

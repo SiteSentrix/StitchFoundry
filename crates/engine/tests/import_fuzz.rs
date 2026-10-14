@@ -2440,3 +2440,345 @@ proptest! {
         checked("mutated script", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "sample.jsx"}))?;
     }
 }
+
+// ---------- deep nesting ----------
+//
+// The tree is walked by recursion, so a file nested deeply enough overflowed the stack: an abort,
+// which nothing catches. Every reader caps what it reads, and no document is deeper than
+// `MAX_DEPTH`. These run on a thread with the stack of a Windows main thread (1 MB), where an
+// overflow ends the test run.
+
+use vectorcraft_doc::MAX_DEPTH;
+
+/// `f` on a thread with a 1 MB stack.
+fn on_a_small_stack(f: impl FnOnce() + Send + 'static) {
+    std::thread::Builder::new().stack_size(1 << 20).spawn(f).unwrap().join().unwrap();
+}
+
+/// Open `bytes` as the file `name`: an error, or a document within the cap that renders and
+/// exports. Returns the document and the import's warnings.
+fn open_deep(name: &str, bytes: &[u8]) -> Option<(Document, Vec<String>)> {
+    let loaded = vectorcraft_engine::cmd::fileio::load(name, bytes).ok()?;
+    assert!(!loaded.doc.too_deep(None), "{name}: deeper than the cap");
+    let doc = loaded.doc.clone();
+    survive(name, move || Some(doc)).unwrap();
+    Some((loaded.doc, loaded.warnings))
+}
+
+fn merged(warnings: &[String]) -> bool {
+    warnings.iter().any(|w| w.contains("nested more than"))
+}
+
+fn paths_in(doc: &Document) -> usize {
+    let mut paths = 0;
+    doc.walk(|n| paths += usize::from(n.path_data().is_some()));
+    paths
+}
+
+const SVG_NS: &str = "xmlns=\"http://www.w3.org/2000/svg\"";
+
+/// `n` groups in one another, each named (so it is kept) and with a rectangle beside the next.
+fn nested_svg(n: usize) -> String {
+    let open: String = (0..n).map(|i| format!("<g id=\"g{i}\"><rect width=\"5\" height=\"5\"/>")).collect();
+    format!("<svg {SVG_NS} width=\"100\" height=\"100\">{open}<rect width=\"10\" height=\"10\"/>{}</svg>", "</g>".repeat(n))
+}
+
+#[test]
+fn deeply_nested_svg_is_refused_or_merged() {
+    on_a_small_stack(|| {
+        // Within what the reader takes: opened, the groups past the cap merged into the last.
+        let (doc, warnings) = open_deep("deep.svg", nested_svg(40).as_bytes()).expect("40 groups open");
+        assert!(merged(&warnings), "{warnings:?}");
+        assert_eq!(paths_in(&doc), 41, "no art is lost");
+        let (_, warnings) = open_deep("shallow.svg", nested_svg(20).as_bytes()).expect("20 groups open");
+        assert!(!merged(&warnings), "{warnings:?}");
+        // As deep as the reader goes (on a stack of its own): opened and merged the same.
+        let most = vectorcraft_svg::MAX_ELEMENT_DEPTH;
+        let (doc, warnings) = open_deep("deepest.svg", nested_svg(most - 2).as_bytes()).expect("opens at the reader's cap");
+        assert!(merged(&warnings), "{warnings:?}");
+        assert_eq!(paths_in(&doc), most - 1, "no art is lost");
+        // Past it: an error that says why, whatever the depth.
+        for n in [most, 2 * most, 200_000] {
+            let e = vectorcraft_engine::cmd::fileio::load("deep.svg", nested_svg(n).as_bytes()).err().expect("refused").to_string();
+            assert!(e.contains(&format!("nested more than {most} deep")), "{n}: {e}");
+        }
+        // Unnamed groups of one object aren't kept, but usvg walks them all the same.
+        let plain = format!(
+            "<svg {SVG_NS} width=\"9\" height=\"9\">{}<rect width=\"1\" height=\"1\"/>{}</svg>",
+            "<g>".repeat(2 * most),
+            "</g>".repeat(2 * most)
+        );
+        assert!(open_deep("plain.svg", plain.as_bytes()).is_none());
+        // A chain of `<use>`: shallow XML, a deep tree.
+        let links: String = (0..3000).map(|i| format!("<g id=\"u{i}\"><use href=\"#u{}\"/></g>", i + 1)).collect();
+        let chain = format!(
+            "<svg {SVG_NS} width=\"9\" height=\"9\"><defs>{links}<rect id=\"u3000\" width=\"1\" height=\"1\"/></defs><use href=\"#u0\"/></svg>"
+        );
+        assert!(open_deep("chain.svg", chain.as_bytes()).is_none());
+        // Placed and pasted, as opened.
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        for n in [40, 2 * most] {
+            let p = json!({"name": "deep.svg", "dataBase64": vectorcraft_format::base64_encode(nested_svg(n).as_bytes())});
+            let _ = no_panic(s.execute("file.place", &p));
+            let _ = no_panic(s.execute("clipboard.importSvg", &json!({"svg": nested_svg(n)})));
+            let _ = no_panic(s.execute("edit.paste", &json!({})));
+            assert!(!s.doc().unwrap().doc.too_deep(None));
+        }
+    });
+}
+
+/// A page whose content is `content`, with `resources`.
+fn deep_pdf(content: &str, resources: &str) -> Vec<u8> {
+    handmade_pdf(content, resources, "[0 0 100 100]")
+}
+
+/// An EPS whose program is `body`.
+fn deep_eps(body: &str) -> Vec<u8> {
+    format!("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n{body}\nshowpage\n%%EOF\n").into_bytes()
+}
+
+/// A test for each file: it opens as an error or as a document within the cap, on a small stack.
+macro_rules! deep_files {
+    ($($test:ident: $name:literal, $bytes:expr;)*) => {$(
+        #[test]
+        fn $test() {
+            on_a_small_stack(|| {
+                open_deep($name, &$bytes);
+            });
+        }
+    )*};
+}
+
+deep_files! {
+    // PDF: clips inside clips (saved states never restored); arrays in arrays as an operand and as
+    // an object; dictionaries in dictionaries as a resource and inline; marked content never ended.
+    pdf_clips_in_clips: "clips.pdf", deep_pdf(&format!("{} 0 0 5 5 re f", "q 0 0 50 50 re W n ".repeat(20_000)), "<< >>");
+    pdf_arrays_in_an_operand: "arrays.pdf", deep_pdf(&format!("BT {}{} TJ ET 0 0 5 5 re f", "[".repeat(100_000), "]".repeat(100_000)), "<< >>");
+    pdf_arrays_in_an_object: "boxes.pdf", handmade_pdf("0 0 5 5 re f", "<< >>", &format!("{}0 0 100 100{}", "[".repeat(100_000), "]".repeat(100_000)));
+    pdf_dictionaries_in_resources: "dicts.pdf", deep_pdf("0 0 5 5 re f", &format!("{}{}", "<< /A ".repeat(50_000), ">> ".repeat(50_000)));
+    pdf_dictionaries_in_content: "inline.pdf", deep_pdf(&format!("/P {}{} DP 0 0 5 5 re f", "<< /A ".repeat(50_000), ">> ".repeat(50_000)), "<< >>");
+    pdf_marked_content_never_ended: "marked.pdf", deep_pdf(&format!("{} 0 0 5 5 re f", "/Span << /MCID 0 >> BDC ".repeat(50_000)), "<< >>");
+    // PostScript: clips inside clips; procedures in procedures; arrays in arrays; a procedure that
+    // calls itself; dictionaries never ended.
+    eps_clips_in_clips: "clips.eps", deep_eps(&format!("{} 0 0 5 5 rectfill", "gsave 0 0 50 50 rectclip ".repeat(20_000)));
+    eps_procedures_in_procedures: "procs.eps", deep_eps(&format!("{}{} 0 0 5 5 rectfill", "{".repeat(100_000), "}".repeat(100_000)));
+    eps_arrays_in_arrays: "arrays.eps", deep_eps(&format!("{}{} pop 0 0 5 5 rectfill", "[".repeat(100_000), "]".repeat(100_000)));
+    eps_a_procedure_calling_itself: "runaway.eps", deep_eps("/f { 0 0 5 5 rectfill f } def f");
+    eps_dictionaries_never_ended: "dicts.eps", deep_eps(&format!("{} 0 0 5 5 rectfill", "1 dict begin ".repeat(100_000)));
+}
+
+#[test]
+fn deeply_nested_dxf_blocks_are_read_within_the_cap() {
+    on_a_small_stack(|| {
+        // Block `B0` inserts `B1`, which inserts `B2`, and so on; the last one holds a line.
+        let pair = |c: i32, v: &str| (c, v.to_string());
+        let mut pairs = vec![pair(0, "SECTION"), pair(2, "BLOCKS")];
+        for i in 0..2_000 {
+            pairs.extend([pair(0, "BLOCK"), pair(2, &format!("B{i}")), pair(10, "0"), pair(20, "0")]);
+            if i + 1 < 2_000 {
+                pairs.extend([pair(0, "INSERT"), pair(2, &format!("B{}", i + 1)), pair(10, "1"), pair(20, "1")]);
+            } else {
+                pairs.extend([pair(0, "LINE"), pair(10, "0"), pair(20, "0"), pair(11, "5"), pair(21, "5")]);
+            }
+            pairs.push(pair(0, "ENDBLK"));
+        }
+        pairs.extend([pair(0, "ENDSEC"), pair(0, "SECTION"), pair(2, "ENTITIES"), pair(0, "INSERT"), pair(2, "B0"), pair(10, "0"), pair(20, "0")]);
+        pairs.extend([pair(0, "LINE"), pair(10, "0"), pair(20, "0"), pair(11, "9"), pair(21, "9"), pair(0, "ENDSEC"), pair(0, "EOF")]);
+        open_deep("blocks.dxf", dxf_text(&pairs).as_bytes()).expect("opens");
+    });
+}
+
+/// A layer holding `levels` groups in one another around a rectangle, each with a second
+/// rectangle beside the next: `levels + 2` deep.
+fn nested_document(levels: usize) -> Document {
+    use vectorcraft_doc::Node;
+    use vectorcraft_testkit::fixtures::DocBuilder;
+    let mut b = DocBuilder::new(100.0, 100.0);
+    let rect =
+        |b: &mut DocBuilder, x: f64| b.rect_node(vectorcraft_geom::Rect::new(x, 0.0, x + 10.0, 10.0), vectorcraft_color::Color::rgb8(200, 0, 0));
+    let mut inner = rect(&mut b, 0.0);
+    for _ in 0..levels {
+        let beside = rect(&mut b, 20.0);
+        inner = Node::group(b.alloc(), vec![std::sync::Arc::new(inner), std::sync::Arc::new(beside)]);
+        inner.opacity = 0.9;
+    }
+    b.add(inner);
+    b.build()
+}
+
+#[test]
+fn a_document_at_the_cap_saves_opens_and_exports() {
+    on_a_small_stack(|| {
+        let doc = nested_document(MAX_DEPTH - 2);
+        assert!(!doc.too_deep(None));
+        let back = vectorcraft_format::load_file(&vectorcraft_format::save_file(&doc)).expect("what can be made opens again");
+        assert!(back.depth_notes.is_empty());
+        assert_eq!(back.doc.layers, doc.layers);
+        survive("at the cap", || Some(doc.clone())).unwrap();
+        // Every format that keeps the nesting reads its own file back within the cap.
+        let mut s = vectorcraft_engine::Session::new();
+        s.add_document(doc, None);
+        for format in ["svg", "pdf", "eps", "ai"] {
+            let r = s.execute("document.export", &json!({"format": format})).unwrap();
+            let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+            open_deep(&format!("cap.{format}"), &bytes).unwrap_or_else(|| panic!("{format} opens"));
+        }
+        for cmd in ["select.all", "document.inspect", "document.info", "edit.copy", "edit.paste", "object.ungroup", "edit.undo"] {
+            no_panic(s.execute(cmd, &json!({}))).unwrap_or_else(|e| panic!("{cmd}: {e}"));
+        }
+    });
+}
+
+#[test]
+fn a_native_file_nested_too_deep_is_merged_or_refused() {
+    on_a_small_stack(|| {
+        // Saved before the cap by a version that could still open it: opened, the deepest merged.
+        let old = vectorcraft_format::save_file(&nested_document(MAX_DEPTH + 2));
+        let (doc, warnings) = open_deep("old.vectorcraft", &old).expect("opens");
+        assert!(merged(&warnings), "{warnings:?}");
+        assert_eq!(paths_in(&doc), MAX_DEPTH + 3, "no art is lost");
+        // Deeper than any version could open, and a hostile file: an error that says why. Written
+        // by hand: a tree this deep can't be built and saved.
+        let text = String::from_utf8(vectorcraft_format::save(&nested_document(0), false)).unwrap();
+        let (open, close) = ("{\"id\":900000,\"kind\":{\"type\":\"group\",\"children\":[", "]}}");
+        let at = text.find("\"children\":[").expect("the layer's children") + "\"children\":[".len();
+        for levels in [100, 50_000] {
+            let deep = format!("{}{}{},{}", &text[..at], open.repeat(levels), close.repeat(levels), &text[at..]);
+            let e = vectorcraft_engine::cmd::fileio::load("deep.vectorcraft", deep.as_bytes()).err().expect("refused").to_string();
+            assert!(e.contains("nested too deep"), "{levels}: {e}");
+        }
+    });
+}
+
+#[test]
+fn commands_cannot_nest_deeper_than_the_cap() {
+    on_a_small_stack(|| {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        s.execute("select.all", &json!({})).unwrap();
+        let mut grouped = 0;
+        for _ in 0..10_000 {
+            match no_panic(s.execute("object.group", &json!({}))) {
+                Ok(_) => grouped += 1,
+                Err(e) => assert!(e.to_string().contains(vectorcraft_engine::TOO_DEEP), "after {grouped} groups: {e}"),
+            }
+        }
+        // The layer, the groups and the rectangle.
+        assert_eq!(grouped, MAX_DEPTH - 2);
+        assert!(!s.doc().unwrap().doc.too_deep(None));
+        // Other ways down: a clipping mask, a copy pasted, a symbol made of it.
+        for (cmd, p) in [
+            ("object.clippingMask.make", json!({})),
+            ("edit.copy", json!({})),
+            ("edit.pasteInFront", json!({})),
+            ("symbol.new", json!({"name": "deep"})),
+        ] {
+            let _ = no_panic(s.execute(cmd, &p));
+            assert!(!s.doc().unwrap().doc.too_deep(None), "{cmd}");
+        }
+        survive("grouped to the cap", || Some((*s.doc().unwrap().doc).clone())).unwrap();
+    });
+}
+
+/// A document whose one object is an instance of the first of `count` symbols: each symbol's art
+/// is `levels` groups around an instance of the next symbol, the last one of `last`.
+fn symbols_document(count: usize, levels: usize, last: &str) -> Document {
+    use vectorcraft_doc::{Node, NodeKind, Symbol};
+    let instance =
+        |doc: &mut Document, of: String| Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: of, xf: vectorcraft_geom::Affine::IDENTITY });
+    let mut doc = nested_document(1);
+    for i in 0..count {
+        let mut art = instance(&mut doc, if i + 1 < count { format!("s{}", i + 1) } else { last.to_string() });
+        for _ in 0..levels {
+            art = Node::group(doc.alloc_id(), vec![std::sync::Arc::new(art)]);
+        }
+        doc.symbols.push(Symbol { name: format!("s{i}"), art: std::sync::Arc::new(art) });
+    }
+    let first = instance(&mut doc, "s0".into());
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc
+}
+
+/// `doc` saved (as an older version, or a hostile file, could have) and opened again: within the
+/// caps (`kept`: as it was), drawn, exported and edited.
+fn symbols_survive(what: &str, doc: Document, kept: bool) {
+    let (back, warnings) = open_deep("symbols.vectorcraft", &vectorcraft_format::save_file(&doc)).expect("opens");
+    assert_eq!(!warnings.iter().any(|w| w.contains("symbol instances")), kept, "{what}: {warnings:?}");
+    let mut s = vectorcraft_engine::Session::new();
+    s.add_document(back, None);
+    for cmd in [
+        "select.all",
+        "document.inspect",
+        "document.info",
+        "object.expand",
+        "symbol.breakLink",
+        "object.flattenTransparency",
+        "edit.copy",
+        "edit.paste",
+    ] {
+        let _ = no_panic(s.execute(cmd, &json!({})));
+        assert!(!s.doc().unwrap().doc.too_deep(None), "{what}: {cmd}");
+    }
+    for format in ["svg", "pdf", "eps", "png"] {
+        let _ = no_panic(s.execute("document.export", &json!({"format": format})));
+    }
+}
+
+#[test]
+fn a_symbol_holding_itself_opens_without_the_instance() {
+    on_a_small_stack(|| {
+        symbols_survive("a symbol holding itself", symbols_document(1, 1, "s0"), false);
+        symbols_survive("symbols holding one another", symbols_document(3, 2, "s0"), false);
+    });
+}
+
+#[test]
+fn symbols_in_symbols_are_drawn_only_so_deep() {
+    on_a_small_stack(|| {
+        // As deep as symbols draw: each one's art as deep as art goes.
+        symbols_survive("symbols at the cap", symbols_document(3, MAX_DEPTH - 2, "none"), true);
+        symbols_survive("symbols in symbols", symbols_document(40, MAX_DEPTH - 1, "none"), false);
+        // A symbol can't be made to hold itself, or one that holds it, by editing either.
+        let mut s = vectorcraft_engine::Session::new();
+        s.add_document(symbols_document(2, 1, "none"), None);
+        s.execute("select.all", &json!({})).unwrap();
+        for (cmd, p) in [
+            ("symbol.new", json!({"name": "s1"})),
+            ("symbol.update", json!({"name": "s1"})),
+            ("symbol.update", json!({"name": "s0"})),
+            ("symbol.replace", json!({"name": "s1"})),
+        ] {
+            let _ = no_panic(s.execute(cmd, &p));
+            assert!(!s.doc().unwrap().doc.too_deep(None), "{cmd} {p}");
+        }
+    });
+}
+
+#[test]
+fn a_pattern_painting_its_own_tile_opens_without_the_paint() {
+    on_a_small_stack(|| {
+        use vectorcraft_color::Paint;
+        use vectorcraft_doc::{Appearance, PatternDef};
+        let painted = |doc: &mut Document, with: &str| {
+            let fill = Paint::Pattern { pattern: with.into(), xf: vectorcraft_geom::Affine::IDENTITY };
+            let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 20.0, 20.0));
+            vectorcraft_doc::Node::path(doc.alloc_id(), square, Appearance::basic(fill, Paint::None, 0.0))
+        };
+        // One pattern painting its own tile, and two painting each other's.
+        for names in [["p", "p"], ["p", "q"]] {
+            let mut doc = nested_document(1);
+            let (first, second) = (painted(&mut doc, names[1]), painted(&mut doc, names[0]));
+            doc.patterns.push(PatternDef::new(names[0], vec![std::sync::Arc::new(first)]));
+            if names[0] != names[1] {
+                doc.patterns.push(PatternDef::new(names[1], vec![std::sync::Arc::new(second)]));
+            }
+            let on_layer = painted(&mut doc, "p");
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), usize::MAX, on_layer).unwrap();
+            symbols_survive("a pattern painting its own tile", doc, false);
+        }
+    });
+}

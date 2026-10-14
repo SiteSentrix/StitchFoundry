@@ -18,10 +18,13 @@ use crate::{ImportOptions, SvgError, fnv1a};
 use css::XNode;
 use text::TextSlots;
 
+pub use depth::MAX_ELEMENT_DEPTH;
+pub(crate) use depth::xml_too_deep;
 pub(crate) use fx::BLEND;
 
 mod css;
 mod css_transform;
+mod depth;
 mod files;
 mod fx;
 mod spread;
@@ -29,11 +32,30 @@ mod symbol_units;
 mod text;
 mod vector_effect;
 
+/// The XML of `svg`.
+fn parse(svg: &str) -> Result<roxmltree::Document<'_>, SvgError> {
+    roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() })
+        .map_err(|e| SvgError::Parse(e.to_string()))
+}
+
 pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
-    let (svg, found) = prepass(svg, opts);
+    // Before anything reads the tree: the XML reader, usvg, and what is made of its tree, all by
+    // recursion.
+    let too_deep = || SvgError::TooDeep(depth::MAX_ELEMENT_DEPTH);
+    if depth::xml_too_deep(svg) {
+        return Err(too_deep());
+    }
+    let xml = parse(svg)?;
+    if depth::too_deep(&xml) {
+        return Err(too_deep());
+    }
+    let (svg, found) = prepass(svg, &xml, opts);
+    // The prepass's edits are in the text: the XML is read again only when it made any.
+    let xml = match &svg {
+        Cow::Borrowed(_) => xml,
+        Cow::Owned(edited) => parse(edited)?,
+    };
     let svg = svg.as_ref();
-    let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() })
-        .map_err(|e| SvgError::Parse(e.to_string()))?;
     let units = RootUnits::of(xml.root_element());
     let root_name = root_layer_name(xml.root_element());
     let mut warnings = found.warnings;
@@ -165,6 +187,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
             promote_sublayers(Arc::make_mut(l), &im.sublayer_groups);
         }
     }
+    im.doc.limit_depth_noting(&mut im.warnings);
     Ok((im.doc, im.warnings))
 }
 
@@ -554,7 +577,7 @@ impl Edits {
 /// * linked files are read ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
-fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
+fn prepass<'s>(svg: &'s str, xml: &roxmltree::Document, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
     let css_transform = has_css_transform(svg);
@@ -565,9 +588,6 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     {
         return (svg.into(), found);
     }
-    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
-        return (svg.into(), found);
-    };
     let mut edits = Edits::default();
     let elements = || xml.descendants().filter(|n| n.is_element());
     for a in elements().filter(|n| n.tag_name().name() == "a") {
@@ -592,24 +612,24 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     }
     let (display, non_scaling) = (svg.contains("display"), svg.contains(vector_effect::NON_SCALING));
     if display || non_scaling || not {
-        let css = css::Styles::new(&xml);
+        let css = css::Styles::new(xml);
         // First: an undisplayed object shown for usvg is shown after these.
         if not && css.has_not_rules() {
-            not_rules(svg, &xml, &css, &mut edits);
+            not_rules(svg, xml, &css, &mut edits);
         }
         if display {
-            hidden_objects(svg, &xml, &css, &mut edits, &mut found.hidden);
+            hidden_objects(svg, xml, &css, &mut edits, &mut found.hidden);
         }
         if non_scaling {
-            vector_effect::find(svg, &xml, &css, &mut edits, &mut found.non_scaling, &mut found.warnings);
+            vector_effect::find(svg, xml, &css, &mut edits, &mut found.non_scaling, &mut found.warnings);
         }
     }
-    found.files = files::Files::read(svg, &xml, opts, &mut edits, &mut found.warnings);
+    found.files = files::Files::read(svg, xml, opts, &mut edits, &mut found.warnings);
     if !symbols.is_empty() && svg.contains('%') {
-        edits.list.extend(symbol_units::rewrites(&xml));
+        edits.list.extend(symbol_units::rewrites(xml));
     }
     if css_transform {
-        edits.list.extend(css_transform::rewrites(svg, &xml));
+        edits.list.extend(css_transform::rewrites(svg, xml));
     }
     (edits.apply(svg), found)
 }

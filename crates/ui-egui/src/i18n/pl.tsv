@@ -3965,6 +3965,8 @@ imageTrace	Outline	Kontur
 @msg	recovery copy `{file}`: {e}	kopia odzyskiwania `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	rozdzielczości muszą mieścić się w zakresie od 1 do 2400 ppi
 @msg	result would exceed the canvas (coordinates out of range)	wynik wykroczyłby poza płótno (współrzędne poza zakresem)
+@msg	objects can't be nested more than 32 deep	obiektów nie można zagnieżdżać głębiej niż na 32 poziomy
+@msg	the SVG's elements are nested more than {0} deep	elementy SVG są zagnieżdżone głębiej niż na {0} poziomów
 @msg	scale must be a number from {_1} to {_2}, not {_3}	skala musi być liczbą od {_1} do {_2}, nie {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	skala musi być liczbą od {_1} do {_2}, nie {s}
 @msg	select (or target) objects whose appearance isn't basic	zaznacz (lub wskaż) obiekty, których wygląd nie jest podstawowy

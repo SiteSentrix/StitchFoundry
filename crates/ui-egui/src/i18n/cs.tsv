@@ -4099,6 +4099,8 @@ imageTrace	Outline	Obrys
 @msg	recovery copy `{file}`: {e}	kopie pro obnovení `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	rozlišení musí být mezi 1 a 2400 ppi
 @msg	result would exceed the canvas (coordinates out of range)	výsledek by přesáhl plátno (souřadnice mimo rozsah)
+@msg	objects can't be nested more than 32 deep	objekty nelze vnořit hlouběji než do 32 úrovní
+@msg	the SVG's elements are nested more than {0} deep	prvky SVG jsou vnořeny hlouběji než do {0} úrovní
 @msg	scale must be a number from {_1} to {_2}, not {_3}	měřítko musí být číslo od {_1} do {_2}, ne {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	měřítko musí být číslo od {_1} do {_2}, ne {s}
 @msg	select (or target) objects whose appearance isn't basic	vyberte (nebo zacilte) objekty, jejichž vzhled není základní

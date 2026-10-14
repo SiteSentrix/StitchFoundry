@@ -389,7 +389,7 @@ impl Interp<'_> {
         d.insert(Key::name("FontMatrix"), matrix_obj(Affine::scale(0.001)));
         d.insert(Key::name("FontBBox"), Obj::array(vec![Obj::Int(0), Obj::Int(-250), Obj::Int(1000), Obj::Int(1000)]));
         d.insert(Key::name("Encoding"), Obj::array(vec![Obj::name(".notdef"); 256]));
-        let font = Rc::new(std::cell::RefCell::new(d));
+        let font = DictRef::new(d);
         self.fonts.borrow_mut().insert(key, Obj::Dict(font.clone()));
         Ok(font)
     }
@@ -489,7 +489,7 @@ fn transformed(font: &DictRef, m: Affine) -> DictRef {
     let mut d = font.borrow().clone();
     let fm = d.get(&Key::name("FontMatrix")).and_then(|o| o.items().and_then(|i| matrix_of(&i.borrow()))).unwrap_or(Affine::scale(0.001));
     d.insert(Key::name("FontMatrix"), matrix_obj(m * fm));
-    Rc::new(std::cell::RefCell::new(d))
+    DictRef::new(d)
 }
 
 /// The character a glyph name stands for (`A`, `space`, `uni20AC`), else a bullet.
