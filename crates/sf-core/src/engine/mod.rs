@@ -159,11 +159,13 @@ fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<P
                 travel_length: u.stitch_length.max(0.5),
                 ..ScanConfig::default()
             };
+            // the underlay ends back near the start, where the top stitching begins
             let h = out.pos().or(hint);
-            fill::scan_fill_all(&inset, &cfg, out, h, None, trim);
+            fill::scan_fill_all(&inset, &cfg, out, h, hint, trim);
         }
     }
-    let here = out.pos().or(hint);
+    // the top stitching starts at the object's start point (the underlay's end only without one)
+    let here = hint.or(out.pos());
     match params.kind {
         FillKind::Tatami | FillKind::Satin => {
             let satin = params.kind == FillKind::Satin;
@@ -790,6 +792,24 @@ mod tests {
         assert!(p.stitches.iter().any(|s| s.cmd == Cmd::Trim));
         assert_eq!(DesignPoint::from_id("center"), Some(DesignPoint::Centre));
         assert!(DesignPoint::ALL.iter().all(|q| DesignPoint::from_id(q.id()) == Some(*q)));
+    }
+
+    #[test]
+    fn a_fill_with_underlay_sews_its_top_from_the_start_point_to_the_stop_point() {
+        // a 30 mm square, rows across, start at the bottom, stop at the top (the complaint: the top
+        // stitching started where the underlay left off, at the top, then travelled back up)
+        let shape = Shape::rect(Point::new(0.0, 0.0), Point::new(30.0, 30.0));
+        let mut params = FillParams { angle: 0.0, ..FillParams::default() };
+        assert!(params.underlay.tatami && params.underlay.edge_run);
+        // underlay rows along the top rows: it sweeps from the start towards the stop
+        params.underlay.angle_offset = 0.0;
+        let job = FillJob { params: &params, splits: &[], flow: &[], extra_angle: 0.0 };
+        let st = fill_shape(&shape, job, &[], Some(Point::new(15.0, 30.0)), Some(Point::new(15.0, 0.0)), (2.0, 12.1));
+        let ys: Vec<f64> = st.iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.y).collect();
+        let at = |f: f64| ys[((ys.len() - 1) as f64 * f) as usize];
+        // the top layer (the last part) climbs steadily and ends at the top
+        assert!(at(0.70) > at(0.85) && at(0.85) > at(0.97), "{} {} {}", at(0.70), at(0.85), at(0.97));
+        assert!(*ys.last().unwrap() < 2.0);
     }
 
     #[test]

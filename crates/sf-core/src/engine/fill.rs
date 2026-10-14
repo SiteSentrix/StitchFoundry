@@ -926,6 +926,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
     };
     let splits = Splits::new(cfg, &rings, &fwd);
     let hint_rs = hint.map(|h| fwd.apply(h));
+    let exit_rs = exit.map(|e| fwd.apply(e));
     let pc = cfg.pull_comp;
     let travel = cfg.travel_length.max(0.5);
 
@@ -935,6 +936,18 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
     let mut pts: Vec<Point> = Vec::new();
     let mut cur: Option<usize> = None;
     let mut xs = Vec::new();
+    let node_pt = |n: usize| plan.graph.pts.get(n).copied().unwrap_or_default();
+    let to_exit = |e: Entry| exit_rs.map_or(0.0, |ex| node_pt(plan.exit_node(e)).distance(ex));
+    // With a stop point, the section that can end nearest it is sewn last, so the fill finishes
+    // there instead of travelling back over sewn rows.
+    let last_sec: Option<usize> = if exit_rs.is_some() && plan.sections.len() > 1 {
+        (0..plan.sections.len())
+            .flat_map(|s| plan.entries(s).collect::<Vec<_>>())
+            .min_by(|a, b| to_exit(*a).total_cmp(&to_exit(*b)))
+            .map(|e| e.section)
+    } else {
+        None
+    };
 
     let push_run = |pts: &mut Vec<Point>, to: Point, step: f64| {
         if let Some(&from) = pts.last() {
@@ -959,11 +972,13 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
                     let b = polyline::bbox(&rings[0]);
                     Point::new(b.min.x, b.min.y)
                 });
-                let first = (0..plan.sections.len()).flat_map(|s| plan.entries(s).collect::<Vec<_>>()).min_by(|a, b| {
-                    let da = plan.graph.pts[plan.entry_node(*a)].distance(target);
-                    let db = plan.graph.pts[plan.entry_node(*b)].distance(target);
-                    da.total_cmp(&db)
-                });
+                // one section: of the entries near the start, the one ending nearest the stop
+                let single = plan.sections.len() == 1;
+                let score = |e: Entry| node_pt(plan.entry_node(e)).distance(target) + if single { 0.5 * to_exit(e) } else { 0.0 };
+                let first = (0..plan.sections.len())
+                    .filter(|&s| Some(s) != last_sec)
+                    .flat_map(|s| plan.entries(s).collect::<Vec<_>>())
+                    .min_by(|a, b| score(*a).total_cmp(&score(*b)));
                 let Some(first) = first else { break };
                 first
             }
@@ -975,7 +990,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
                     if dist[n].is_finite() { dist[n] } else { from.distance(plan.graph.pts[n]) * NO_ROUTE_COST }
                 };
                 let mut cands: Vec<(f64, Entry)> = (0..plan.sections.len())
-                    .filter(|&s| !done[s])
+                    .filter(|&s| !done[s] && (remaining <= 1 || Some(s) != last_sec))
                     .flat_map(|s| plan.entries(s).collect::<Vec<_>>())
                     .map(|e| (cost(e, &dist, here), e))
                     .collect();
@@ -1001,8 +1016,14 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
                         }
                     }
                 }
-                let mut best = cands[0];
-                if remaining > 1 && k_sections > 1 {
+                let Some(&first_cand) = cands.first() else { break };
+                let mut best = first_cand;
+                if remaining == 1 && exit_rs.is_some() {
+                    // the last section: entered where it ends nearest the stop point
+                    if let Some(&b) = cands.iter().min_by(|a, b| (a.0 + to_exit(a.1)).total_cmp(&(b.0 + to_exit(b.1)))) {
+                        best = b;
+                    }
+                } else if remaining > 1 && k_sections > 1 {
                     let mut best_score = f64::INFINITY;
                     for &(c1, e) in cands.iter().filter(|(_, e)| chosen_sections.contains(&e.section)) {
                         for &s in &plan.sections[e.section] {
@@ -1012,7 +1033,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
                         let (d2, _) = dijkstra(&plan.graph, exit_node, &sewn, cfg.trapunto);
                         let from = plan.graph.pts[exit_node];
                         let c2 = (0..plan.sections.len())
-                            .filter(|&s| !done[s] && s != e.section)
+                            .filter(|&s| !done[s] && s != e.section && (remaining <= 2 || Some(s) != last_sec))
                             .flat_map(|s| plan.entries(s).collect::<Vec<_>>())
                             .map(|e2| cost(e2, &d2, from))
                             .fold(f64::INFINITY, f64::min);
@@ -1118,6 +1139,35 @@ mod tests {
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Point> {
         vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)]
+    }
+
+    #[test]
+    fn fills_start_at_the_start_point_and_finish_at_the_stop_point() {
+        let cfg = ScanConfig { row_spacing: 0.4, stitch_length: 3.0, ..ScanConfig::default() };
+        // a square: start at the bottom, stop at the top: the rows climb from bottom to top
+        let sq = Polygon::from_ring(rect(0.0, 0.0, 30.0, 30.0));
+        let pts = scan_fill(&sq, &cfg, Some(Point::new(15.0, 31.0)), Some(Point::new(15.0, -1.0)));
+        let (first, last) = (pts[0], *pts.last().unwrap());
+        assert!(first.y > 29.0 && last.y < 1.0, "{first:?} → {last:?}");
+        // no travel back down over the rows at the end
+        let tail: Vec<f64> = pts.iter().rev().take(40).map(|p| p.y).collect();
+        assert!(tail.iter().all(|y| *y < 2.0), "{tail:?}");
+        // a U: start at the top of its right arm, stop at the top of its left arm: the left arm is
+        // sewn last, ending at its top, with no long travel to get there
+        let u = Polygon::from_ring(vec![
+            Point::new(0.0, 0.0),
+            Point::new(10.0, 0.0),
+            Point::new(10.0, 30.0),
+            Point::new(20.0, 30.0),
+            Point::new(20.0, 0.0),
+            Point::new(30.0, 0.0),
+            Point::new(30.0, 40.0),
+            Point::new(0.0, 40.0),
+        ]);
+        let pts = scan_fill(&u, &cfg, Some(Point::new(25.0, -1.0)), Some(Point::new(5.0, -1.0)));
+        let last = *pts.last().unwrap();
+        assert!(last.distance(Point::new(5.0, 0.0)) < 6.0, "{last:?}");
+        assert!(pts[0].distance(Point::new(25.0, 0.0)) < 6.0, "{:?}", pts[0]);
     }
 
     fn max_stitch(pts: &[Point]) -> f64 {
