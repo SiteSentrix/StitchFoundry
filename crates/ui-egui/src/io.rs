@@ -239,8 +239,7 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
 /// Web: download `bytes` under `path`'s file name; desktop: write them to `path`.
 pub(crate) fn write_to(services: &mut Services, path: &str, bytes: &[u8]) -> Result<(), String> {
     if let Some(dl) = services.download.as_mut() {
-        dl(&fileio::file_name(path), bytes);
-        return Ok(());
+        return dl(&fileio::file_name(path), bytes);
     }
     services.write.as_mut().ok_or("no file writer")?(path, bytes)
 }
@@ -768,7 +767,7 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
     } else if let Some(download) = app.services.download.as_mut() {
         for (name, data) in &returned {
             let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;
-            download(name, &bytes);
+            download(name, &bytes)?;
         }
         let what = match returned.as_slice() {
             [(name, _)] => (*name).to_string(),
@@ -828,6 +827,35 @@ mod tests {
         // An agent's `file.open {path}` gets the error back and no dialog.
         assert!(app.run("file.open", json!({"path": "/docs/gone.ai"})).is_err());
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// #1693: a browser download that can't be started is a failed save: the document stays
+    /// modified and without a file, and Save Changes doesn't close it.
+    #[test]
+    fn a_download_that_cannot_start_leaves_the_document_unsaved_and_open() {
+        let started = Rc::new(RefCell::new(false));
+        let ok = started.clone();
+        let download: crate::DownloadFn = Box::new(move |_: &str, _: &[u8]| if *ok.borrow() { Ok(()) } else { Err("the browser refused the download".into()) });
+        let mut app = VectorcraftApp::new(Session::new(), Services { download: Some(download), ..Default::default() });
+        app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let unsaved = |app: &VectorcraftApp| {
+            let st = app.session.doc().unwrap();
+            (st.is_dirty(), st.path.clone())
+        };
+        let e = save(&mut app, SaveMode::Save, &json!({"path": "Poster.vectorcraft"}), false).unwrap_err();
+        assert!(e.contains("the browser refused the download"), "{e}");
+        assert_eq!(unsaved(&app), (true, None));
+        // Save Changes › Save: not saved, so not closed.
+        let (i, uid) = (app.session.active_index().unwrap(), app.session.doc().unwrap().uid);
+        app.ui.dialog = Some(crate::state::Dialog::new(crate::unsaved::KIND, json!({"index": i, "uid": uid, "name": "Poster", "then": "close"})));
+        app.session.doc_mut().unwrap().path = Some("Poster.vectorcraft".into());
+        assert!(crate::unsaved::confirm(&mut app).is_err());
+        assert_eq!((app.session.documents().len(), app.session.doc().unwrap().is_dirty()), (1, true));
+        // Once the download starts, the save counts.
+        *started.borrow_mut() = true;
+        save(&mut app, SaveMode::Save, &json!({}), false).unwrap();
+        assert!(!app.session.doc().unwrap().is_dirty());
     }
 
     fn bytes_of(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Vec<u8> {

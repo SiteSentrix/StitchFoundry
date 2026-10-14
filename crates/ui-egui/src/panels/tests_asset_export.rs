@@ -21,7 +21,10 @@ fn app(web: bool) -> (VectorcraftApp, Log, [u64; 2]) {
     let l = log.clone();
     let mut services = Services::default();
     if web {
-        services.download = Some(Box::new(move |name: &str, bytes: &[u8]| l.borrow_mut().push((name.to_string(), bytes.to_vec()))));
+        services.download = Some(Box::new(move |name: &str, bytes: &[u8]| {
+            l.borrow_mut().push((name.to_string(), bytes.to_vec()));
+            Ok(())
+        }));
     }
     let mut app = VectorcraftApp::new(Session::new(), services);
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();

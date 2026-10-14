@@ -95,7 +95,10 @@ fn the_web_downloads_a_zip() {
     let mut app = saved(&dir);
     let got: Rc<RefCell<Vec<(String, usize)>>> = Rc::default();
     let g = got.clone();
-    app.services.download = Some(Box::new(move |name: &str, b: &[u8]| g.borrow_mut().push((name.to_string(), b.len()))));
+    app.services.download = Some(Box::new(move |name: &str, b: &[u8]| {
+        g.borrow_mut().push((name.to_string(), b.len()));
+        Ok(())
+    }));
     app.run("ui.packageDialog", json!({})).unwrap();
     assert!(!frame(&mut app).contains("Location:"), "no folder to choose");
     confirm(&mut app).unwrap();
@@ -124,7 +127,7 @@ fn fonts_left_out_of_the_package_are_named() {
     assert!(detail.contains(gone) && !detail.contains("Source Sans 3"), "{detail}");
     // The web's download says so too.
     app.ui.dialog = None;
-    app.services.download = Some(Box::new(|_: &str, _: &[u8]| {}));
+    app.services.download = Some(Box::new(|_: &str, _: &[u8]| Ok(())));
     app.run("ui.packageDialog", json!({})).unwrap();
     confirm(&mut app).unwrap();
     assert!(app.ui.status.contains(gone), "{}", app.ui.status);

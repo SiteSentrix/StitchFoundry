@@ -155,11 +155,12 @@ pub(crate) fn go_to(app: &mut VectorcraftApp, id: u64) {
 
 /// Write embedded image `id` to a picked file (the web downloads it) and link it there.
 pub(crate) fn unembed(app: &mut VectorcraftApp, id: u64, name: &str) {
-    if let Some(dl) = app.services.download.as_mut() {
+    if app.services.download.is_some() {
         if let Ok(v) = app.session.execute("links.unembed", &json!({ "id": id }))
             && let (Some(name), Some(bytes)) = (v["name"].as_str(), v["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode))
+            && let Err(e) = crate::io::write_to(&mut app.services, name, &bytes)
         {
-            dl(name, &bytes);
+            app.status(e);
         }
         return;
     }
