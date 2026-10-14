@@ -2300,37 +2300,6 @@ fn sort_by_color(s: &mut Session, _p: &Value) -> Result<Value> {
     Ok(json!({ "moved": moved }))
 }
 
-/// The outline round the stitched art `ids` (and everything in them), `reach` mm out, pieces close
-/// together sharing one: its outer rings, in mm.
-pub(super) fn art_rings(s: &mut Session, ids: &[NodeId], reach: f64) -> Result<Vec<Vec<(f64, f64)>>> {
-    let mut inside = std::collections::HashSet::new();
-    {
-        let d = &s.doc()?.doc;
-        let mut stack: Vec<NodeId> = ids.to_vec();
-        while let Some(id) = stack.pop() {
-            if inside.insert(id)
-                && let Some(kids) = d.node(id).and_then(|n| n.children())
-            {
-                stack.extend(kids.iter().map(|k| k.id));
-            }
-        }
-    }
-    let plan = s.embroidery_plan().ok_or_else(|| bad("embroidery", "no document"))?;
-    let polys: Vec<sf_core::geom::Polygon> = plan
-        .design
-        .objects
-        .iter()
-        .zip(&plan.nodes)
-        .filter(|(_, n)| inside.contains(*n))
-        .flat_map(|(o, _)| sf_core::engine::object_polygons(o))
-        .filter(|p| p.outer.len() >= 3)
-        .collect();
-    let close = reach.max(1.0);
-    let wide = sf_core::geom::poly::offset(&sf_core::geom::poly::union(&polys), reach + close);
-    let grown = sf_core::geom::poly::offset(&wide, -close);
-    Ok(grown.iter().filter(|g| g.outer.len() >= 3).map(|g| g.outer.iter().map(|q| (q.x, q.y)).collect()).collect())
-}
-
 fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.outlineAround";
     let gap = super::embroidery_lettering::ranged(p, "gap", 0.0..=50.0, CMD, "`gap` is 0 to 50 mm")?.unwrap_or(2.0);
