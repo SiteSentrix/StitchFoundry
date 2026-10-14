@@ -111,8 +111,19 @@ pub enum Format {
 
 impl Format {
     /// Every format StitchFoundry writes (and reads).
-    pub const ALL: [Format; 11] =
-        [Format::Dst, Format::Exp, Format::Jef, Format::Pes, Format::Pec, Format::Vp3, Format::Xxx, Format::U01, Format::Pcs, Format::Tap, Format::Dsb];
+    pub const ALL: [Format; 11] = [
+        Format::Dst,
+        Format::Exp,
+        Format::Jef,
+        Format::Pes,
+        Format::Pec,
+        Format::Vp3,
+        Format::Xxx,
+        Format::U01,
+        Format::Pcs,
+        Format::Tap,
+        Format::Dsb,
+    ];
 
     /// The formats StitchFoundry reads but doesn't write.
     pub const READ_ONLY: [Format; 1] = [Format::Dsz];
@@ -443,7 +454,9 @@ mod tests {
         let mut p = Pattern::new();
         p.name = "badge".into();
         p.threads = vec![sf_core::Thread::default(), sf_core::Thread::default()];
-        for (x, y, cmd) in [(0.0, 0.0, Cmd::Stitch), (8.0, 0.0, Cmd::Stitch), (8.0, 0.0, Cmd::Trim), (8.0, 0.0, Cmd::ColorChange), (8.0, 6.0, Cmd::Stitch)] {
+        for (x, y, cmd) in
+            [(0.0, 0.0, Cmd::Stitch), (8.0, 0.0, Cmd::Stitch), (8.0, 0.0, Cmd::Trim), (8.0, 0.0, Cmd::ColorChange), (8.0, 6.0, Cmd::Stitch)]
+        {
             p.stitches.push(sf_core::Stitch::new(x, y, cmd));
         }
         let dsb = write(Format::Dsb, &p, &WriteOptions::default()).unwrap();

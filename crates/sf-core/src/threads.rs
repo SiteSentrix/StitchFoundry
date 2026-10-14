@@ -251,14 +251,19 @@ impl ThreadChart {
             if threads.len() >= MAX_CHART_THREADS {
                 break;
             }
-            if line.is_empty() || line.starts_with('#') || (line.contains(':') && line.split(':').next().is_some_and(|k| k.chars().all(char::is_alphabetic))) {
+            if line.is_empty()
+                || line.starts_with('#')
+                || (line.contains(':') && line.split(':').next().is_some_and(|k| k.chars().all(char::is_alphabetic)))
+            {
                 continue;
             }
             let mut parts = line.split_whitespace();
             let mut channel = || parts.next().and_then(|v| v.parse::<u8>().ok());
             let (Some(r), Some(g), Some(b)) = (channel(), channel(), channel()) else { continue };
             let label: Vec<&str> = parts.collect();
-            let is_code = |w: &&str| w.len() <= 12 && w.chars().any(|c| c.is_ascii_digit()) && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.');
+            let is_code = |w: &&str| {
+                w.len() <= 12 && w.chars().any(|c| c.is_ascii_digit()) && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+            };
             let (code, words) = match (label.first(), label.last()) {
                 (Some(w), _) if label.len() > 1 && is_code(w) => (w.to_string(), label.get(1..).unwrap_or_default()),
                 (_, Some(w)) if label.len() > 1 && is_code(w) => (w.to_string(), label.get(..label.len() - 1).unwrap_or_default()),

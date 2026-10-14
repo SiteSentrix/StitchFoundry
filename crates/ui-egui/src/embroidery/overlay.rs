@@ -380,7 +380,12 @@ fn density_color(layers: f32, limit: f64) -> Option<Color32> {
         return None;
     }
     let t = (f64::from(layers) / limit).clamp(0.0, 1.0) as f32;
-    let stops = [(0.0, Color32::from_rgb(40, 110, 230)), (0.4, Color32::from_rgb(40, 190, 90)), (0.7, Color32::from_rgb(240, 200, 30)), (1.0, Color32::from_rgb(230, 40, 40))];
+    let stops = [
+        (0.0, Color32::from_rgb(40, 110, 230)),
+        (0.4, Color32::from_rgb(40, 190, 90)),
+        (0.7, Color32::from_rgb(240, 200, 30)),
+        (1.0, Color32::from_rgb(230, 40, 40)),
+    ];
     let c = stops.windows(2).find(|w| t <= w[1].0).map_or(Color32::from_rgb(230, 40, 40), |w| lerp(w[0].1, w[1].1, (t - w[0].0) / (w[1].0 - w[0].0)));
     Some(Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 120))
 }
