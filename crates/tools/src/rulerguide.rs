@@ -2,14 +2,15 @@
 //! made where it is released over the canvas: with the Artboard tool, an artboard guide of the
 //! active artboard. For the selection tools ([`GuideEdit`]), a press on a guide selects it (Shift
 //! adds it to the selected guides or, released without a drag, takes it out); dragging moves the
-//! selected guides (Alt copies them). A dragged guide snaps ([`GuideSnap`]): with Shift to the
+//! selected guides (Alt copies them), and a marquee selects the guides it crosses along with the
+//! art ([`marquee_select`]). A dragged guide snaps ([`GuideSnap`]): with Shift to the
 //! ruler's ticks, else to whole pixels, the grid, with Smart Guides the art's and the artboards'
 //! edges, centres and anchors, or with Snap to Point the anchors. Dropped off the canvas onto its
 //! ruler, a moved guide is deleted. Hidden or locked guides (View › Guides), and guides on a hidden
 //! or locked layer, can't be picked.
 
 use serde_json::json;
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Point, Rect};
 
 use crate::guides::Targets;
 use crate::{Action, Cursor, Overlay, PointerEvent, PointerKind, ToolContext};
@@ -30,6 +31,35 @@ pub fn guide_at(cx: &ToolContext, p: Point) -> Option<usize> {
         .filter(|(_, d)| *d <= tol)
         .min_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
         .map(|(i, _)| i)
+}
+
+/// What a selection tool's marquee `r` does to the ruler guides, after its action selecting the
+/// art: the guides it crosses join the selection (with a Shift marquee, the selected ones leave
+/// it, as with a Shift-click on a guide).
+pub fn marquee_select(cx: &ToolContext, r: Rect) -> Option<Action> {
+    let guides = guides_in_rect(cx, r);
+    (!guides.is_empty()).then(|| Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })))
+}
+
+/// The editable ruler guides intersecting marquee rectangle `r`.
+fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
+    if !cx.guides {
+        return vec![];
+    }
+    cx.doc
+        .guides
+        .iter()
+        .enumerate()
+        .filter(|(_, g)| cx.doc.guide_editable(g))
+        .filter(|(_, g)| {
+            if g.vertical {
+                r.min_x() <= g.pos && g.pos <= r.max_x() && cx.doc.guide_span(g).is_none_or(|(y0, y1)| r.max_y() >= y0 && r.min_y() <= y1)
+            } else {
+                r.min_y() <= g.pos && g.pos <= r.max_y() && cx.doc.guide_span(g).is_none_or(|(x0, x1)| r.max_x() >= x0 && r.min_x() <= x1)
+            }
+        })
+        .map(|(i, _)| i)
+        .collect()
 }
 
 /// The pointer for a guide: it moves sideways if vertical, up and down if horizontal.

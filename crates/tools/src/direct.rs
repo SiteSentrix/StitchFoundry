@@ -730,7 +730,8 @@ impl Tool for DirectSelectionTool {
                 }
                 sel.retain(|(id, _)| cx.doc.is_editable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
-                vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}))]
+                let art = Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}));
+                std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r)).collect()
             }
             _ => vec![],
         }
@@ -1098,6 +1099,26 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
         assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
+    }
+
+    #[test]
+    fn marquee_selects_ruler_guides() {
+        let (mut d, id) = doc_with_rect();
+        d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
+        assert_eq!(
+            a,
+            vec![
+                Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"})),
+                Action::Exec("guide.select".into(), json!({"indexes": [0], "toggle": true})),
+            ]
+        );
     }
 
     /// A path inside an inner group, a sibling path outside it, and the groups' ids.
