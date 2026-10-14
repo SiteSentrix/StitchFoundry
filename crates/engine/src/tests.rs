@@ -1480,6 +1480,26 @@ fn direct_selection_moves_one_anchor() {
     assert_eq!(p.subpaths[0].anchors[1].p, vectorcraft_geom::Point::new(200.0, 100.0));
 }
 
+/// #1816: with Snap to Grid on, a dragged anchor lands on the grid's subdivisions, not on whole
+/// points, even with Snap to Pixel left on too.
+#[test]
+fn direct_selection_snaps_anchors_to_the_grid() {
+    let mut s = session();
+    let a = rect(&mut s, 101.0, 101.0, 100.0, 100.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let step = s.doc().unwrap().doc.grid.spacing / f64::from(s.doc().unwrap().doc.grid.subdivisions.max(1));
+    let on_grid = |v: f64| (v / step - (v / step).round()).abs() < 1e-9;
+    let v = ViewInfo { snap_to_grid: true, snap_to_pixel: true, ..ViewInfo::default() };
+    s.select_tool("directSelection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 101.0, 101.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 131.0, 113.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 131.0, 113.0), v).unwrap();
+    let p = s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().clone();
+    let moved = p.subpaths[0].anchors[0].p;
+    assert!(on_grid(moved.x) && on_grid(moved.y), "anchor at {moved:?}, grid step {step}");
+    assert_eq!(p.subpaths[0].anchors[1].p, vectorcraft_geom::Point::new(201.0, 101.0));
+}
+
 /// Follow-up to #1254: toggling or adding anchors of a path selected as a whole starts from all
 /// its anchors, so toggling one deselects it alone and adding one keeps them all.
 #[test]

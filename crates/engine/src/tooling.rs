@@ -188,7 +188,9 @@ impl Session {
             guides: view.guides && !self.menu.guides_locked,
             snap_to_grid: view.snap_to_grid,
             show_bbox: view.show_bbox,
-            snap_to_pixel: view.snap_to_pixel,
+            // Snap to Grid and Snap to Pixel are exclusive, as in Illustrator; left both on, the grid
+            // wins instead of pixels quietly rounding every drag to whole points (#1816).
+            snap_to_pixel: view.snap_to_pixel && !view.snap_to_grid,
             snap_to_point: view.snap_to_point,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
