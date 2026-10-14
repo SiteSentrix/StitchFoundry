@@ -166,7 +166,7 @@ pub(crate) fn copy_artboard(d: &mut vectorcraft_doc::Document, i: usize, dv: Vec
 /// (`<name> copy 2`…) when that is taken → its index.
 pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vectorcraft_doc::Artboard, rect: Rect) -> usize {
     let mut a = src.clone();
-    a.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0).saturating_add(1);
+    a.id = d.next_artboard_id();
     let taken = |name: &str| d.artboards.iter().any(|a| a.name == name);
     a.name = [src.name.clone(), format!("{} copy", src.name)]
         .into_iter()
