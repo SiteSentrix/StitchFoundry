@@ -440,6 +440,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{double?: bool} show the toolbar's tools in two columns (true), one (false) or toggle (omitted), as the double arrow at the top of the toolbar does; returns the new state",
     ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
+    ("window.toolbarUngrouped", "Toolbar: All Tools, Ungrouped", "", "{} every tool in a button of its own, no flyouts to open (toggle)"),
     (
         "window.floatTools",
         "Float Tool Group",
@@ -1380,6 +1381,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             json!(on)
         }),
         "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
+        "window.toolbarUngrouped" => flag(&mut app.ui.toolbar_ungrouped),
         "window.floatTools" => {
             let floating = match opt_bool(p, "floating") {
                 Ok(on) => on,
@@ -1744,6 +1746,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolbarUngrouped" => app.ui.toolbar_ungrouped,
         "window.toolbarColumns" => app.ui.toolbar_double,
         "window.editToolbar" => app.ui.tools_drawer,
         "window.floatTools" => {
@@ -2824,7 +2827,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Control", "window.control"),
                 c("Contextual Task Bar", "window.taskBar"),
                 c("Tools", "window.toolbar"),
-                sub("Toolbars", vec![c("Advanced", "window.toolbarAdvanced"), c("Double Column", "window.toolbarColumns")]),
+                sub(
+                    "Toolbars",
+                    vec![
+                        c("Advanced", "window.toolbarAdvanced"),
+                        c("All Tools, Ungrouped", "window.toolbarUngrouped"),
+                        c("Double Column", "window.toolbarColumns"),
+                    ],
+                ),
                 Sep,
                 panel("Actions", "actions"),
                 panel("Align", "align"),

@@ -5065,3 +5065,5 @@ machine	Stop	停止
 	Clear Default	デフォルトを解除
 	Every new design starts with these properties	新しいデザインはすべてこのプロパティで始まります
 	New designs take the built-in properties again	新しいデザインは再び組み込みのプロパティになります
+	All Tools, Ungrouped	すべてのツール（グループなし）
+	Toolbar: All Tools, Ungrouped	ツールバー：すべてのツール（グループなし）

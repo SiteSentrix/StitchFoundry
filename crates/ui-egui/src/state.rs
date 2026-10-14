@@ -267,6 +267,10 @@ pub struct UiState {
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
     #[serde(default)]
     pub toolbar_advanced: bool,
+    /// Every tool in a slot of its own, none hidden in a flyout (Window › Toolbars › All Tools,
+    /// Ungrouped).
+    #[serde(default)]
+    pub toolbar_ungrouped: bool,
     #[serde(default = "yes")]
     pub task_bar: bool,
     /// Where the Contextual Task Bar was dragged or pinned. Not saved, as in Illustrator: the bar
@@ -605,6 +609,7 @@ impl Default for UiState {
             toolbar: true,
             toolbar_double: false,
             toolbar_advanced: false,
+            toolbar_ungrouped: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
             slot_tool: Default::default(),
