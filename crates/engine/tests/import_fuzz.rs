@@ -2552,10 +2552,14 @@ fn deep_pdf(content: &str, resources: &str) -> Vec<u8> {
 
 /// A stream object with the entries `dict`, its `data` compressed.
 fn packed(dict: &str, data: &str) -> Vec<u8> {
-    let z = deflated(data.as_bytes());
+    packed_as_is(dict, &deflated(data.as_bytes()))
+}
+
+/// A stream object with the entries `dict`, its data `z` compressed already.
+fn packed_as_is(dict: &str, z: &[u8]) -> Vec<u8> {
     // (A length the test gives stands.)
     let length = if dict.contains("/Length") { String::new() } else { format!(" /Length {}", z.len()) };
-    [format!("<< {dict} /Filter /FlateDecode{length} >>\nstream\n").as_bytes(), &z, b"\nendstream"].concat()
+    [format!("<< {dict} /Filter /FlateDecode{length} >>\nstream\n").as_bytes(), z, b"\nendstream"].concat()
 }
 
 /// A page whose content is `content`, with `resources` and the objects `more` (numbered from 5).
@@ -2799,6 +2803,54 @@ fn pdf_color_spaces_that_hold_themselves() {
             ),
         ],
     );
+}
+
+/// Spaces past what a stream may decode to (256 MB), compressed (about 260 kB).
+fn spaces_past_the_cap() -> Vec<u8> {
+    use std::io::Write as _;
+    let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+    for _ in 0..257 {
+        e.write_all(&[b' '; 1 << 20]).unwrap();
+    }
+    e.finish().unwrap()
+}
+
+// Streams the reader would fail on (#1700, #1701): it applies a predictor before checking its
+// parameters (`Columns 0` divides by zero, a huge `Columns` allocates a row that large), and
+// inflates without a ceiling.
+
+#[test]
+fn pdf_streams_the_reader_would_fail_on_are_refused() {
+    let zero = "/DecodeParms << /Predictor 2 /Columns 0 >>";
+    let huge = "/DecodeParms << /Predictor 12 /Colors 4 /Columns 99999999999 >>";
+    // An inline image whose data is deflated, written in hexadecimal so the content stays text.
+    let inline = |dp: &str| {
+        let data: String = deflated(&[0; 8]).iter().map(|b| format!("{b:02x}")).collect();
+        format!("q 10 0 0 10 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 /F [/AHx /Fl] /DP [null {dp}] ID {data}> EI Q")
+    };
+    let form = |dict: &str, content: &str| pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed(&format!("{FORM} {dict}"), content)]);
+    let files = [
+        ("a form with Columns 0", form(zero, "0 0 5 5 re f")),
+        ("a form with a huge Columns", form(huge, "0 0 5 5 re f")),
+        ("an inline image with Columns 0", deep_pdf(&inline("<< /Predictor 2 /Columns 0 >>"), "<< >>")),
+        ("an inline image with a huge Columns", deep_pdf(&inline("<< /Predictor 15 /Columns 99999999999 >>"), "<< >>")),
+        ("an inline image in a compressed form", form("", &inline("<< /Predictor 2 /Columns 0 >>"))),
+        ("an object stream with Columns 0", pdf_with_object_stream("[0 0 100 100]", zero)),
+        ("a form of spaces past the cap", pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed_as_is(FORM, &spaces_past_the_cap())])),
+    ];
+    on_a_small_stack(move || {
+        for (what, bytes) in &files {
+            for name in ["hostile.pdf", "hostile.ai"] {
+                let e = vectorcraft_engine::cmd::fileio::load(name, bytes).err().map(|e| e.to_string());
+                assert!(e.as_deref().is_some_and(|e| e.contains("would decode to more than 256 MB")), "{what} as {name}: {e:?}");
+            }
+        }
+    });
+    // Within range, the same files open.
+    let fine = "/DecodeParms << /Predictor 1 /Columns 0 >>";
+    for bytes in [form(fine, "0 0 5 5 re f"), deep_pdf(&inline("<< /Predictor 1 >>"), "<< >>")] {
+        vectorcraft_engine::cmd::fileio::load("fine.pdf", &bytes).expect("opens");
+    }
 }
 
 #[test]
