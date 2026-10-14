@@ -446,6 +446,9 @@ pub struct TracedPath {
     pub shape: Option<TracedShape>,
     /// Gradients: the linear gradient the path is filled with (`color` is its middle colour).
     pub gradient: Option<TracedGradient>,
+    /// Create Strokes: the stroke's ends are square (a cap that goes half the width past the
+    /// path's end, cut straight), as the line's ink is; otherwise round.
+    pub square_caps: bool,
 }
 
 /// The traced result, bottom-most path first.
@@ -846,14 +849,14 @@ impl Layers<'_> {
         let area_stroke = (params.strokes && !params.fills).then_some(1.0);
         let min_hole = params.noise.max(1) as i64;
         let mut paths = vec![];
-        let mut add = |path: PathData, pixels: usize, stroke: Option<f64>, shape: Option<TracedShape>| {
+        let mut add = |path: PathData, pixels: usize, stroke: Option<f64>, shape: Option<TracedShape>, square_caps: bool| {
             let n = path.anchor_count();
             if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
                 return false;
             }
             // (A gradient fills; a stroked line of it is its middle colour.)
             let gradient = self.gradients.get(ci).cloned().flatten().filter(|_| stroke.is_none());
-            paths.push(TracedPath { path, color, pixels, stroke, shape, gradient });
+            paths.push(TracedPath { path, color, pixels, stroke, shape, gradient, square_caps });
             true
         };
         let mut comps = trace_mask(&mask, bw, bh);
@@ -887,12 +890,12 @@ impl Layers<'_> {
                 _ => None,
             };
             let path = shape.map_or_else(|| PathData::new(subs), |s| s.path());
-            if !add(path, comp.pixels, area_stroke, shape) {
+            if !add(path, comp.pixels, area_stroke, shape, false) {
                 return None;
             }
         }
         for line in lines {
-            if !add(line.path, line.pixels, Some(line.width), None) {
+            if !add(line.path, line.pixels, Some(line.width), None, line.square) {
                 return None;
             }
         }

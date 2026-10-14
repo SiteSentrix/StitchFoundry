@@ -874,7 +874,8 @@ fn image_trace_create_strokes_makes_stroked_centre_lines() {
     assert!(line.appearance.fill_paint().color().is_none(), "not filled");
     let st = line.appearance.items.iter().find_map(|i| if let AppearanceItem::Stroke(st) = i { Some(st) } else { None }).expect("stroked");
     assert!((st.width - 6.0).abs() < 1.0, "3 px at 2× is about 6 pt: {}", st.width);
-    assert_eq!((st.cap, st.join), (LineCap::Round, LineJoin::Round));
+    // (The line is cut square at its ends, and so is its stroke.)
+    assert_eq!((st.cap, st.join), (LineCap::Square, LineJoin::Round));
     assert_eq!(st.paint, Paint::solid(Color::rgb8(0, 0, 0)));
     let sp = &line.path_data().unwrap().subpaths[0];
     assert!(!sp.closed);

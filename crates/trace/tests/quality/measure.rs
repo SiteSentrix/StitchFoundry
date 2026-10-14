@@ -59,7 +59,10 @@ pub fn fidelity(src: &Raster, out: &Raster) -> (f64, f64) {
 fn painted(tp: &TracedPath) -> BezPath {
     let bez = tp.path.to_bezpath();
     match tp.stroke {
-        Some(width) => kurbo::stroke(bez, &Stroke::new(width), &StrokeOpts::default(), 0.05),
+        Some(width) => {
+            let cap = if tp.square_caps { kurbo::Cap::Square } else { kurbo::Cap::Round };
+            kurbo::stroke(bez, &Stroke::new(width).with_caps(cap), &StrokeOpts::default(), 0.05)
+        }
         None => bez,
     }
 }
