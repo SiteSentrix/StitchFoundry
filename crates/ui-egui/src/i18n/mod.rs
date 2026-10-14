@@ -94,7 +94,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 19] = [
+pub static LANGUAGES: [LangInfo; 20] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Greek: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `el-*` locale (including `el-GR` and `el-CY`) resolves here.
@@ -233,6 +233,10 @@ pub static LANGUAGES: [LangInfo; 19] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    // Finnish: the whole interface and the status and error messages, keeping the same names in
+    // English as Spanish; one/other plurals with the partitive after any number but 1 ("2 tasoa").
+    // Every `fi-*` locale resolves here.
+    LangInfo { code: "fi", name: "Suomi", source: include_str!("fi.tsv"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
 ];
 
 impl LangInfo {

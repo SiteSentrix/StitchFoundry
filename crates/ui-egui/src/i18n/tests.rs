@@ -481,7 +481,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 15] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi"];
+const KEEPS_MENU_NAMES: [&str; 16] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -723,6 +723,43 @@ fn vietnamese_reads_as_vietnamese() {
     }
     let nested = "command `object.group` is not available right now: nothing selected";
     assert_eq!(message(vi(), nested), "lệnh `object.group` hiện không khả dụng: chưa chọn gì");
+}
+
+fn fi() -> Lang {
+    Lang::from_code("fi").expect("fi registered")
+}
+
+/// Finnish has one/other plurals (partitive after numbers other than 1) and covers the complete
+/// interface and messages.
+#[test]
+fn finnish_reads_as_finnish() {
+    assert_eq!(fi().name(), "Suomi");
+    assert!(fi().complete_menus());
+    assert_eq!(Lang::from_pref("fi"), fi());
+    assert_eq!(Lang::from_pref("FI"), fi());
+    for tag in ["fi", "fi-FI", "fi_FI.UTF-8", "FI-fi"] {
+        assert_eq!(lang_from_tag(tag), Some(fi()), "{tag}");
+    }
+    // Filipino (`fil`) and Swedish in Finland (`sv-FI`) don't pick Finnish.
+    assert_ne!(lang_from_tag("fil"), Some(fi()));
+    assert_ne!(lang_from_tag("sv-FI"), Some(fi()));
+    for (en, want) in [
+        ("Artboard Tool", "Piirtoalustatyökalu"),
+        ("Swatches", "Värimallit"),
+        ("Stroke", "Viiva"),
+        ("Fill", "Täyttö"),
+        ("Direct Selection Tool", "Suoravalintatyökalu"),
+        ("Save As…", "Tallenna nimellä…"),
+        ("Undo", "Kumoa"),
+        ("Close", "Sulje"),
+    ] {
+        assert_eq!(tr(fi(), en), want);
+    }
+    for (n, layer) in [(0, "tasoa"), (1, "taso"), (3, "tasoa"), (21, "tasoa")] {
+        assert_eq!(trn(fi(), n, "{n} Layer", "{n} Layers"), format!("{n} {layer}"));
+    }
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(fi(), nested), "komento `object.group` ei ole nyt käytettävissä: mitään ei ole valittu");
 }
 
 /// Ambiguous English terms keep their intended Vietnamese meaning across UI contexts.
@@ -1245,7 +1282,7 @@ fn select_key_param_error_is_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi"];
+const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
