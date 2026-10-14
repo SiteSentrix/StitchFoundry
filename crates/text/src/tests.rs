@@ -466,6 +466,33 @@ fn tab_stops_position_text() {
     assert!((x_of(&p, 4) - 72.0).abs() < 1e-6);
 }
 
+#[test]
+fn tab_leaders_line_up_from_line_to_line_and_stop_short_of_the_stop() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let mut t = point("A\t1\nAAAAA\t2", style(12.0));
+    t.para.tabs = vec![TabStop { position: 120.0, align: TabAlign::Left, leader: ".".into(), align_on: '.' }];
+    let lay = layout(db(), &t);
+    // The left edges of the dots of each line's tab.
+    let dots = |byte: usize| -> Vec<f64> {
+        let tab = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+        let mut xs: Vec<f64> = vec![];
+        for el in tab.outline.elements() {
+            if let kurbo::PathEl::MoveTo(p) = el {
+                xs.push(p.x);
+            }
+        }
+        xs.sort_by(f64::total_cmp);
+        xs.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+        xs
+    };
+    let (short, long) = (dots(1), dots(9));
+    assert!(short.len() > long.len() && long.len() > 10, "{short:?} {long:?}");
+    // The longer line's dots are the shorter line's last ones, at the same x.
+    let tail = &short[short.len() - long.len()..];
+    assert!(tail.iter().zip(&long).all(|(a, b)| (a - b).abs() < 1e-6), "{tail:?} {long:?}");
+    assert!(short.last().is_some_and(|&x| x < 120.0));
+}
+
 /// Are the Japanese craft-fonts faces built in? Tests of Japanese glyphs skip (and say so) when
 /// they aren't: the bundled fonts have none, and [`db`] reads no system fonts.
 fn japanese_fonts() -> bool {
