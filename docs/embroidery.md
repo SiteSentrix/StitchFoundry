@@ -650,12 +650,15 @@ Quilting a whole quilt on an embroidery machine, one hooping at a time, with cle
 (the kind sold as tile quilting systems): lay a tile the size of the block on the quilt, mark its
 middle, crosshairs, up arrow, sides and corners with a water-soluble pen, hoop the quilt sandwich
 with the marks centred, and quilt the design that size. **Make a Design › Quilting for a tile**
-(or `embroidery.quiltBlock {width, height, unit?, pattern?, spacing?, stitch?, color?, hoop?}`)
+(or `embroidery.quiltBlock {width, height, unit?, pattern?: stipple|swirls|loops|feathers|waves|spiral|crosshatch, spacing?, stitch?, color?, hoop?}`)
 makes that design:
 
 - the block's rectangle quilted edge to edge in **one running-stitch thread** (no trims), in the
   smallest of My Machine's hoops it fits, turned the block's way round, top up;
-- patterns: **Stipple** (a wandering meander), **Waves**, **Squares spiral** and **Crosshatch**;
+- patterns: **Stipple** (a wandering meander), **Swirls** (a spiral in and its echo back out,
+  swirl after swirl), **Loops** (rows of round cursive loops), **Feathers** (rows of teardrop
+  plumes, each leaning back over the one before), **Waves**, **Squares spiral** and **Crosshatch**;
+  the row patterns turn at the block's sides, so each is still one line;
 - every block keeps its lines half a line-spacing in from its edge, so with the same pattern and
   **Lines apart** for every block, blocks of any size side by side read as one continuous quilting
   with no lines to match up.
