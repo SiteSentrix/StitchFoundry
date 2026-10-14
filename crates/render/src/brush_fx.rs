@@ -107,7 +107,7 @@ impl Renderer {
         let pieces = match self.brushes.entries.get(&key, stamp) {
             Some(e) if Arc::ptr_eq(&e.brush, &brush) && e.stroke == *st && e.path == *bp => e.pieces.clone(),
             _ => {
-                let pieces = Arc::new(vectorcraft_brush::stroke_pieces(&brush, bp, st));
+                let pieces = Arc::new(vectorcraft_brush::stroke_pieces(f.doc, &brush, bp, st));
                 let bytes = size_of::<Entry>() + lru::path_bytes(bp) + pieces.iter().map(lru::node_bytes).sum::<usize>();
                 self.brushes.entries.insert(key, Entry { path: bp.clone(), stroke: st.clone(), brush, pieces: pieces.clone() }, bytes, stamp);
                 pieces

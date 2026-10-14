@@ -403,7 +403,7 @@ impl<'a> Scene<'a> {
         let doc = self.doc;
         let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
         let b = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name))?;
-        Some(vectorcraft_brush::stroke_pieces(b, bp, st))
+        Some(vectorcraft_brush::stroke_pieces(doc, b, bp, st))
     }
 
     /// A placed image, decoded once per image.

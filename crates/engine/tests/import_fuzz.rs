@@ -2881,6 +2881,188 @@ fn deeply_nested_dxf_blocks_are_read_within_the_cap() {
     });
 }
 
+#[test]
+fn dxf_blocks_inserting_themselves_are_left_out() {
+    on_a_small_stack(|| {
+        let pair = |c: i32, v: &str| (c, v.to_string());
+        // A line, then an insert of `inserts`.
+        let block = |name: &str, inserts: &str| {
+            let line = [pair(0, "LINE"), pair(10, "0"), pair(20, "0"), pair(11, "5"), pair(21, "5")];
+            let insert = [pair(0, "INSERT"), pair(2, inserts), pair(10, "1"), pair(20, "1"), pair(0, "ENDBLK")];
+            [pair(0, "BLOCK"), pair(2, name), pair(10, "0"), pair(20, "0")].into_iter().chain(line).chain(insert).collect::<Vec<_>>()
+        };
+        let mut pairs = vec![pair(0, "SECTION"), pair(2, "BLOCKS")];
+        pairs.extend([block("SELF", "SELF"), block("A", "B"), block("B", "A")].concat());
+        pairs.extend([pair(0, "ENDSEC"), pair(0, "SECTION"), pair(2, "ENTITIES")]);
+        for name in ["SELF", "A"] {
+            pairs.extend([pair(0, "INSERT"), pair(2, name), pair(10, "0"), pair(20, "0")]);
+        }
+        pairs.extend([pair(0, "ENDSEC"), pair(0, "EOF")]);
+        let (_, warnings) = open_deep("self.dxf", dxf_text(&pairs).as_bytes()).expect("opens");
+        assert!(warnings.iter().any(|w| w.contains("inside themselves")), "{warnings:?}");
+    });
+}
+
+#[test]
+fn deeply_nested_affinity_groups_are_read_within_the_cap() {
+    use vectorcraft_affinity::synth::{self, F, Method, tag};
+    // Groups in groups: within what the reader takes, past its cap on layers (128), past its cap
+    // on the stream's own nesting (384), and far past both.
+    let files: Vec<Vec<u8>> = [20u32, 120, 180, 370, 2000]
+        .into_iter()
+        .map(|levels| {
+            let group = |id: u32, fields| F::Def(id, vec![tag(b"Grup")], fields);
+            let inner = (0..levels).fold(group(10, vec![]), |inner, i| group(11 + i, vec![(tag(b"Chld"), F::Shared(vec![inner]))]));
+            let spread = F::Def(2, vec![tag(b"Sprd")], vec![(tag(b"Chld"), F::Shared(vec![inner]))]);
+            let stream = synth::stream(&[(tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))]))]);
+            affinity_native(&stream, Method::Stored)
+        })
+        .collect();
+    on_a_small_stack(move || {
+        for bytes in &files {
+            open_deep("deep.afdesign", bytes);
+        }
+    });
+}
+
+#[test]
+fn metafiles_saving_states_without_end_are_read_within_the_cap() {
+    on_a_small_stack(|| {
+        // A saved state, a clip and a rectangle, over and over (nothing is ever restored).
+        let longs = |v: [i32; 4]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+        let emf: Vec<(u32, Vec<u8>)> = (0..50_000).flat_map(|_| [(33, vec![]), (30, longs([0, 0, 500, 500])), (43, longs([0, 0, 50, 50]))]).collect();
+        open_deep("deep.emf", &emf_of(&emf));
+        let shorts = |v: [i16; 4]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+        let wmf: Vec<(u16, Vec<u8>)> =
+            (0..20_000).flat_map(|_| [(0x001E, vec![]), (0x0416, shorts([500, 500, 0, 0])), (0x041B, shorts([50, 50, 0, 0]))]).collect();
+        open_deep("deep.wmf", &wmf_of(&wmf));
+    });
+}
+
+#[test]
+fn deeply_nested_plugin_manifests_and_output_are_errors() {
+    on_a_small_stack(|| {
+        // (A manifest may be 64 kB.)
+        let deep = |n: usize| format!("{}{}", "[".repeat(n), "]".repeat(n));
+        assert!(vectorcraft_plugins::Manifest::parse(deep(30_000).as_bytes()).is_err());
+        assert!(vectorcraft_plugins::Manifest::parse(format!("{{\"params\": {}}}", deep(30_000)).as_bytes()).is_err());
+        let deep = deep(100_000);
+        for output in [deep.clone(), format!("{{\"objects\": {deep}}}"), format!("{{\"objects\": [{{\"kind\": \"path\", \"path\": {deep}}}]}}")] {
+            assert!(vectorcraft_plugins::objects::decode(output.as_bytes()).is_err());
+        }
+    });
+}
+
+/// A document whose symbol `s0` and pattern `p0` are each a line stroked with the brush `loop`,
+/// with an instance of the symbol and a square painted with the pattern on the layer. The brush
+/// is the `kind`th of those that hold art (art, scatter, pattern), and its art is the `art`th of:
+/// an instance of the symbol; that instance inside as many groups as a file holds; a square
+/// painted with the pattern. So what the brush draws is drawn with the brush.
+fn brushed_document(kind: usize, art: usize) -> Document {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, PatternBrush, Scatter};
+    use vectorcraft_color::Paint;
+    use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeKind, PatternDef, Symbol};
+    let mut doc = nested_document(1);
+    let square = || vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 60.0, 20.0));
+    let brushed = |doc: &mut Document| {
+        let mut look = Appearance::basic(Paint::None, Paint::solid(vectorcraft_color::Color::rgb8(0, 0, 0)), 4.0);
+        for item in &mut look.items {
+            if let AppearanceItem::Stroke(s) = item {
+                s.brush = Some("loop".into());
+            }
+        }
+        Node::path(doc.alloc_id(), square(), look)
+    };
+    let instance =
+        |doc: &mut Document| Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "s0".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let painted = |doc: &mut Document| {
+        let fill = Paint::Pattern { pattern: "p0".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+        Node::path(doc.alloc_id(), square(), Appearance::basic(fill, Paint::None, 0.0))
+    };
+    let (in_symbol, in_pattern) = (brushed(&mut doc), brushed(&mut doc));
+    doc.symbols.push(Symbol { name: "s0".into(), art: std::sync::Arc::new(in_symbol) });
+    doc.patterns.push(PatternDef::new("p0", vec![std::sync::Arc::new(in_pattern)]));
+    let art = match art {
+        0 => instance(&mut doc),
+        1 => (0..MAX_DEPTH + 4).fold(instance(&mut doc), |inner, _| Node::group(doc.alloc_id(), vec![std::sync::Arc::new(inner)])),
+        _ => painted(&mut doc),
+    };
+    let kind = match kind {
+        0 => BrushKind::Art(ArtBrush { art, ..Default::default() }),
+        1 => BrushKind::Scatter(Scatter { art, ..Default::default() }),
+        _ => BrushKind::Pattern(PatternBrush { side: art.clone(), start: Some(art), ..Default::default() }),
+    };
+    vectorcraft_brush::store(&mut doc, &[Brush { name: "loop".into(), kind }]);
+    let layer = doc.layers[0].id;
+    for on_layer in [instance(&mut doc), painted(&mut doc), brushed(&mut doc)] {
+        doc.insert(Some(layer), usize::MAX, on_layer).unwrap();
+    }
+    doc
+}
+
+/// `doc` saved, opened again, drawn, exported and edited: nothing overflows.
+fn art_by_name_survives(what: &str, doc: Document) {
+    let (back, _) = open_deep("named.vectorcraft", &vectorcraft_format::save_file(&doc)).expect("opens");
+    let mut s = vectorcraft_engine::Session::new();
+    s.add_document(back, None);
+    for (cmd, p) in [
+        ("select.all", json!({})),
+        ("document.inspect", json!({})),
+        ("brush.expand", json!({})),
+        ("edit.undo", json!({})),
+        ("object.expand", json!({})),
+        ("edit.undo", json!({})),
+        ("object.outlineStroke", json!({})),
+        ("edit.undo", json!({})),
+        ("graph.design", json!({"paste": "deep"})),
+        ("graph.create", json!({"type": "line", "x": 10, "y": 10, "width": 80, "height": 60})),
+        ("graph.marker", json!({"design": "deep"})),
+        ("graph.design", json!({"new": "again"})),
+        ("edit.copy", json!({})),
+        ("edit.paste", json!({})),
+    ] {
+        let _ = no_panic(s.execute(cmd, &p));
+        assert!(!s.doc().unwrap().doc.too_deep(None), "{what}: {cmd}");
+    }
+    for format in ["svg", "pdf", "eps", "png", "dxf", "emf"] {
+        let _ = no_panic(s.execute("document.export", &json!({"format": format})));
+    }
+}
+
+/// A test for each brush whose art is drawn with the brush itself ([`brushed_document`]).
+macro_rules! brushes_drawn_with_themselves {
+    ($($test:ident: $kind:literal, $art:literal;)*) => {$(
+        #[test]
+        fn $test() {
+            on_a_small_stack(|| art_by_name_survives(stringify!($test), brushed_document($kind, $art)));
+        }
+    )*};
+}
+
+brushes_drawn_with_themselves! {
+    an_art_brush_of_its_own_symbol: 0, 0;
+    an_art_brush_of_its_own_symbol_in_deep_art: 0, 1;
+    an_art_brush_painted_with_its_own_pattern: 0, 2;
+    a_scatter_brush_of_its_own_symbol: 1, 0;
+    a_scatter_brush_of_its_own_symbol_in_deep_art: 1, 1;
+    a_scatter_brush_painted_with_its_own_pattern: 1, 2;
+    a_pattern_brush_of_its_own_symbol: 2, 0;
+    a_pattern_brush_of_its_own_symbol_in_deep_art: 2, 1;
+    a_pattern_brush_painted_with_its_own_pattern: 2, 2;
+}
+
+#[test]
+fn a_graph_design_of_deep_art_and_of_a_symbol_holding_itself_is_drawn() {
+    use vectorcraft_doc::{GraphDesign, Node, NodeKind};
+    on_a_small_stack(|| {
+        let mut doc = symbols_document(1, 1, "s0");
+        let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "s0".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+        let art = (0..MAX_DEPTH + 4).fold(instance, |inner, _| Node::group(doc.alloc_id(), vec![std::sync::Arc::new(inner)]));
+        doc.graph_designs.push(GraphDesign { name: "deep".into(), art: std::sync::Arc::new(art) });
+        art_by_name_survives("a graph design of deep art", doc);
+    });
+}
+
 /// A layer holding `levels` groups in one another around a rectangle, each with a second
 /// rectangle beside the next: `levels + 2` deep.
 fn nested_document(levels: usize) -> Document {

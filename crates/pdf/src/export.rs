@@ -1336,7 +1336,7 @@ impl Exporter<'_> {
         let doc = self.doc;
         let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
         let Some(b) = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) else { return false };
-        let art = vectorcraft_brush::stroke_pieces(b, bp, st);
+        let art = vectorcraft_brush::stroke_pieces(doc, b, bp, st);
         let mut pushes = 0;
         if st.blend != BlendMode::Normal {
             s.push_blend_mode(blend(st.blend));
