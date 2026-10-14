@@ -1774,6 +1774,14 @@ Direct Selection or Group Selection tool inside an artboard makes that artboard 
 tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection. Choosing the Artboard
 tool (`tool.select {tool: "artboard"}`) starts it on the active artboard: its `active` option is that artboard's index.
 
+`artboard.fitToArt {index?}` (Object › Artboards › Fit to Artwork Bounds) and `artboard.fitToSelection {index?}`
+(Object › Artboards › Fit to Selected Art) resize artboard `index` (a 0-based index), or the first artboard when the
+call gives none. The desktop app adds its active artboard as `index` to the calls of these two commands that it runs
+without `index`, MCP's `run_command` calls in remote mode included. A batch passes its `artboard` on to each of their
+steps that names no `index`, as the step's `index`. When the document a step runs in has no artboard at that index,
+the step gets that document's last artboard. An action recorded in the Actions panel leaves `index` out of these
+steps, and they resize the artboard that is active when the action plays.
+
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","to":"artboard","artboard":1}}}
 {"name":"run_command","arguments":{"command":"object.distribute","params":{"horizontal":"left","to":"artboard","artboard":1}}}

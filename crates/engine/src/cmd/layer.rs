@@ -152,11 +152,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fit to Artwork Bounds",
             ["Object", "Artboards"],
             None,
-            "{index?} the artboard fits the art that shows (with its strokes and effects; hidden objects and layers, guides and template layers don't count)",
+            "{index?: n (0-based; the app passes the active artboard; default: the first)} the artboard fits the art that shows (with its strokes and effects; hidden objects and layers, guides and template layers don't count)",
             has_doc,
             artboard_fit_art
         ),
-        cmd!("artboard.fitToSelection", "Fit to Selected Art", ["Object", "Artboards"], None, "{index?}", has_selection, artboard_fit_sel),
+        cmd!(
+            "artboard.fitToSelection",
+            "Fit to Selected Art",
+            ["Object", "Artboards"],
+            None,
+            "{index?: n (0-based; the app passes the active artboard; default: the first)}",
+            has_selection,
+            artboard_fit_sel
+        ),
         cmd!(
             "layer.clippingMask.toggle",
             "Make/Release Clipping Mask",

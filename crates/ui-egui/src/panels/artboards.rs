@@ -312,6 +312,27 @@ mod tests {
         assert_eq!(picked(&mut app, json!({})), json!([a]));
         assert_eq!(picked(&mut app, json!({"artboard": 1})), json!([b]));
     }
+
+    /// Object › Artboards › Fit to Artwork Bounds and Fit to Selected Art resize the artboard made
+    /// active here, as the panel menu's Fit to Artwork Bounds does, and leave artboard 1 as it was;
+    /// an explicit index still wins.
+    #[test]
+    fn fit_to_artwork_bounds_and_selected_art_resize_the_active_artboard() {
+        for id in ["artboard.fitToArt", "artboard.fitToSelection"] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
+            app.session.execute("shape.rectangle", &json!({"x": 130, "y": 10, "width": 20, "height": 30})).unwrap();
+            app.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+            let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+            let (first, art) = (boards(&app)[0], vectorcraft_geom::Rect::new(130.0, 10.0, 150.0, 40.0));
+            select(&mut app, 1);
+            crate::menus::invoke(&mut app, id, json!({}));
+            assert_eq!(boards(&app), [first, art], "{id} resizes Artboard 2, the active one");
+            crate::menus::invoke(&mut app, id, json!({"index": 0}));
+            assert_eq!(boards(&app), [art, art], "{id} with an index resizes that artboard");
+        }
+    }
+
     /// With the Artboard tool, Shift-click on a row adds its artboard to the tool's selection or
     /// takes it out (#1139), and every selected row is highlighted.
     #[test]
