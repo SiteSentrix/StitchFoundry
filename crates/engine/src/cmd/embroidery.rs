@@ -219,7 +219,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Around",
             ["Embroidery"],
             None,
-            "{ids?, gap?: mm between the art and the outline (2; 0–50), width?: mm (satin 3, 0.5–10), kind?: satin|run|triple|knockdown|emboss (satin), shape?: rectangle|circle (emboss; rectangle), extend?: mm the emboss shape reaches beyond (5; 0–200), color?: \"#rrggbb\" (#1a1a1a)} bubble lettering, sticker and patch borders: one outline round the selected stitched art as it sews (lettering, shapes, lines), its holes left out, `gap` from it, sewn after everything else; knockdown: a light tatami fill of that area sewn first, under the art (towels, fleece); emboss: a rectangle or circle round it filled with light tatami but for the art's area, sewn first; a new path, selected → {id, pieces}",
+            "{ids?, gap?: mm between the art and the outline (2; 0–50), width?: mm (satin 3, 0.5–10), kind?: satin|run|triple|knockdown|emboss|echo|stipple (satin), shape?: rectangle|circle (emboss and stipple; rectangle), extend?: mm the emboss or stipple shape reaches beyond (5; 0–200), count?: echo lines (3; 1–30), spacing?: mm between echo lines (3; 0.5–50), color?: \"#rrggbb\" (#1a1a1a)} bubble lettering, sticker and patch borders: one outline round the selected stitched art as it sews (lettering, shapes, lines), its holes left out, `gap` from it, sewn after everything else; knockdown: a light tatami fill of that area sewn first, under the art (towels, fleece); emboss: a rectangle or circle round it filled with light tatami but for the art's area, sewn first; echo quilting: `count` running-stitch outlines, the first `gap` from the art, each `spacing` further out; stipple: background quilting, a rectangle or circle round it filled with a meander but for the art's area, sewn first; a new path, selected → {id, pieces}",
             has_selection,
             outline_around
         ),
@@ -2310,9 +2310,15 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
         "triple" => StitchType::Run(RunParams { kind: RunKind::Triple, ..RunParams::default() }),
         // light tatami: knockdown stitches press a towel's or fleece's pile flat under the design
         "knockdown" | "emboss" => StitchType::Fill(FillParams { spacing: 1.2, angle: 45.0, ..FillParams::default() }),
-        _ => return Err(bad(CMD, "`kind` is satin, run, triple, knockdown or emboss")),
+        // echo quilting: running-stitch outlines stepping out from the art
+        "echo" => StitchType::Run(RunParams::default()),
+        // background quilting: a meander wandering round the art
+        "stipple" => StitchType::Fill(FillParams { kind: FillKind::Meander, ..FillParams::default() }),
+        _ => return Err(bad(CMD, "`kind` is satin, run, triple, knockdown, emboss, echo or stipple")),
     };
-    let filled = matches!(kind, "knockdown" | "emboss");
+    let filled = matches!(kind, "knockdown" | "emboss" | "stipple");
+    let count = super::embroidery_lettering::ranged(p, "count", 1.0..=30.0, CMD, "`count` is 1 to 30")?.map_or(3, |c| c.round() as usize);
+    let spacing = super::embroidery_lettering::ranged(p, "spacing", 0.5..=50.0, CMD, "`spacing` is 0.5 to 50 mm")?.unwrap_or(3.0);
     let circle = match str_param(p, "shape").unwrap_or("rectangle") {
         "rectangle" => false,
         "circle" => true,
@@ -2366,8 +2372,21 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(CMD, "the art is too small to outline"));
     }
     let pieces = subpaths.len();
-    // emboss: a rectangle or circle round it all, `extend` beyond, the art's outline left out
-    if kind == "emboss" {
+    // echo quilting: more outlines, each `spacing` further out (pieces that meet share one)
+    if kind == "echo" {
+        let union = sf_core::geom::poly::union(&polys);
+        for k in 1..count {
+            let out = reach + spacing * k as f64;
+            let ring = sf_core::geom::poly::offset(&sf_core::geom::poly::offset(&union, out + close), -close);
+            subpaths.extend(
+                ring.iter()
+                    .filter(|g| g.outer.len() >= 3)
+                    .map(|g| vectorcraft_geom::path::SubPath::polyline(&g.outer.iter().map(to_pt).collect::<Vec<_>>(), true)),
+            );
+        }
+    }
+    // emboss and stipple: a rectangle or circle round it all, `extend` beyond, the art's outline left out
+    if matches!(kind, "emboss" | "stipple") {
         let Some(b) = grown.iter().map(sf_core::geom::Polygon::bbox).reduce(sf_core::BBox::union) else {
             return Err(bad(CMD, "the art is too small to outline"));
         };
@@ -2394,6 +2413,8 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
         n.name = Some(match kind {
             "knockdown" => "Knockdown".into(),
             "emboss" => "Emboss".into(),
+            "echo" => "Echo quilting".into(),
+            "stipple" => "Background quilting".into(),
             _ => "Outline".into(),
         });
         let mut e = Embroidery::new(stitch);

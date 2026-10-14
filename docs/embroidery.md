@@ -465,6 +465,12 @@ first, under the design, to press a towel's or fleece's pile flat; **emboss** (`
 fills a rectangle or circle (`shape`) reaching `extend` (5 mm) beyond the design with light
 tatami, leaving the design's area out, so the design stands up from a stitched background.
 
+Two quilting kinds (Embroidery › Echo Quilting and Background Quilting): **echo**
+(`kind: echo`) sews `count` (3) running-stitch outlines round the art, the first `gap` (2 mm) from
+it and each `spacing` (3 mm) further out, the way a quilter echoes an appliqué; **stipple**
+(`kind: stipple`) fills a rectangle or circle (`shape`, `extend`) round the art with a meander,
+leaving the art's area out, sewn first so the design sits on a quilted background.
+
 ## Scatter copies
 
 **Embroidery › Scatter Copies** (`embroidery.scatter {count?, gap?, spread?, seed?, turn?}`)

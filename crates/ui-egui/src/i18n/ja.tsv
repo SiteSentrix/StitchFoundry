@@ -5109,3 +5109,5 @@ machine	Stop	停止
 	Everything, with job orders and batch output	すべて（ジョブオーダーとバッチ出力を含む）
 	How do you work?	どのように使いますか？
 @msg	`level` is beginner, digitizer, business or all	`level` は beginner、digitizer、business、all のいずれかです
+	Echo Quilting	エコーキルティング
+	Background Quilting	背景キルティング

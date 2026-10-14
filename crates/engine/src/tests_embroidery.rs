@@ -5384,3 +5384,38 @@ fn a_closed_shape_converts_to_a_satin_column_between_two_rails() {
     let NodeKind::Path { path, .. } = &d.node(id).unwrap().kind else { panic!("a path") };
     assert!(path.subpaths.len() == 1 && path.subpaths[0].closed);
 }
+
+/// NEW-27: echo quilting is `count` runs stepping out `spacing` apart from the art; background
+/// quilting a meander round it, the art left out, sewn first.
+#[test]
+fn echo_and_background_quilting_go_round_the_art() {
+    use sf_core::attr::StitchType;
+    use sf_core::model::FillKind;
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 30.0, 30.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let art = s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap();
+    let r = s.execute("embroidery.outlineAround", &json!({"kind": "echo", "gap": 2, "count": 4, "spacing": 3})).unwrap();
+    let st = s.doc().unwrap();
+    let n = st.doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap();
+    assert!(matches!(n.embroidery.as_deref().map(|e| &e.stitch), Some(StitchType::Run(_))));
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("a path") };
+    assert_eq!(path.subpaths.len(), 4);
+    // the outermost 2 + 3 × 3 = 11 mm out
+    let o = n.geometric_bounds().unwrap();
+    assert!((art.x0 - o.x0 - 11.0 * PT).abs() < 0.8, "{o:?} {art:?}");
+    assert!(s.execute("embroidery.outlineAround", &json!({"kind": "echo", "count": 0})).is_err());
+    // stipple: a rectangle 5 mm beyond, the art left out, meander fill, first in the layer
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = s.execute("embroidery.outlineAround", &json!({"kind": "stipple", "extend": 5})).unwrap();
+    let k = NodeId(r["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.layers[0].children().unwrap()[0].id, k);
+    let n = st.doc.node(k).unwrap();
+    assert!(matches!(n.embroidery.as_deref().map(|e| &e.stitch), Some(StitchType::Fill(f)) if f.kind == FillKind::Meander));
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("a path") };
+    assert_eq!(path.subpaths.len(), 2);
+    assert!(stitches(&s) > 0);
+}
