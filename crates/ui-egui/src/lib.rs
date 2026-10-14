@@ -425,6 +425,8 @@ pub struct VectorcraftApp {
     pub(crate) ime_marked: Option<String>,
     /// The IME must drop its marked text (see [`Self::take_ime_discard`]).
     pub(crate) ime_discard: bool,
+    /// Preferences were confirmed (see [`Self::take_prefs_changed`]).
+    pub(crate) prefs_changed: bool,
     /// A numeric field is being scrubbed: the document's edits meanwhile are one undo step
     /// ([`scrub::begin_frame`]).
     scrub_group: bool,
@@ -518,6 +520,7 @@ impl VectorcraftApp {
             synthetic_modifiers: false,
             ime_marked: None,
             ime_discard: false,
+            prefs_changed: false,
             scrub_group: false,
             automation_roots: None,
             synthetic_frame: false,
@@ -855,6 +858,12 @@ impl VectorcraftApp {
     /// keeps the marked text and types it again into the next composition: the host discards it.
     pub fn take_ime_discard(&mut self) -> bool {
         std::mem::take(&mut self.ime_discard)
+    }
+
+    /// Was Preferences confirmed since the last call? The host then writes the preferences file,
+    /// so what the user just set survives a session that doesn't end with a normal quit (#1747).
+    pub fn take_prefs_changed(&mut self) -> bool {
+        std::mem::take(&mut self.prefs_changed)
     }
 
     /// Linked files another app changed while their document is open: every two seconds, and as

@@ -45,6 +45,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     app.ui.task_bar = d.fields.get("__taskBar").and_then(Value::as_bool).unwrap_or(app.ui.task_bar);
     app.ui.dialog = None;
     app.ui.engine_prefs = app.session.prefs.to_json();
+    app.prefs_changed = true;
     Ok(Value::Null)
 }
 
@@ -557,7 +558,10 @@ mod tests {
         assert!(shown.iter().any(|t| t == "Automatic"), "{shown:?}");
         assert!(shown.iter().any(|t| t == "Applies the next time VectorCraft starts."), "{shown:?}");
         a.ui.dialog.as_mut().unwrap().fields.insert("gpuPreference".into(), json!("highPerformance"));
+        assert!(!a.take_prefs_changed(), "nothing to write before OK");
         confirm(&mut a).unwrap();
+        assert!(a.take_prefs_changed(), "OK asks the host to write the preferences file");
+        assert!(!a.take_prefs_changed());
         assert_eq!(a.session.prefs.gpu_preference, "highPerformance");
         let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
         assert_eq!(saved["engine_prefs"]["gpuPreference"], json!("highPerformance"));
