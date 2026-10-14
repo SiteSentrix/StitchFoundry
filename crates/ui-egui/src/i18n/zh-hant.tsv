@@ -4474,3 +4474,5 @@ machine	Stop	停止
 	Everything, with job orders and batch output	全部功能，包括工單和批次輸出
 	How do you work?	您如何工作？
 @msg	`level` is beginner, digitizer, business or all	`level` 為 beginner、digitizer、business 或 all
+	Embroidery Basics	刺繡基礎
+	Digitizing	製版
