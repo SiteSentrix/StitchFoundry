@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Batch Output",
             [],
             None,
-            "{dir?: the folder to write to (the profile's), profile?: an output profile's name (any case), formats?: [dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap…] (the profile's, else the design's machine, else dst), worksheet?: production|approval|pattern|template|none (the profile's, else production), design?: bool (the profile's, else true: the design itself, .stitchfoundry), name?: what the files are called (the design's), replace?: bool (false: a number is added to all of them when any name is taken)} batch output: the design's machine files, its worksheet as a PDF (`name-worksheet.pdf`) and the design, written to a folder in one step; the documents open stay as they are → {dir, name, files: [{path, kind: machine|worksheet|design, format, bytes}], stitches}",
+            "{dir?: the folder to write to (the profile's), profile?: an output profile's name (any case), formats?: [dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap|dsb…] (the profile's, else the design's machine, else dst), worksheet?: production|approval|pattern|template|none (the profile's, else production), design?: bool (the profile's, else true: the design itself, .stitchfoundry), name?: what the files are called (the design's), replace?: bool (false: a number is added to all of them when any name is taken)} batch output: the design's machine files, its worksheet as a PDF (`name-worksheet.pdf`) and the design, written to a folder in one step; the documents open stay as they are → {dir, name, files: [{path, kind: machine|worksheet|design, format, bytes}], stitches}",
             has_doc,
             output
         ),

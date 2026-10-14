@@ -1,7 +1,7 @@
 //! # StitchFoundry machine embroidery file formats
 //!
 //! Readers and writers for the files embroidery machines sew from. Every format
-//! has a writer ([`write()`]) and a reader ([`read`]); [`detect`] sniffs a file's
+//! has a reader ([`read`]) and all but ZSK DSZ a writer ([`write()`]); [`detect`] sniffs a file's
 //! format from its bytes and [`read_any`] combines detection with reading.
 //!
 //! | Format | Machines | Colours | Native commands |
@@ -16,6 +16,8 @@
 //! | [`Format::U01`] | Barudan | no | stitch, jump, trim, stop, needle change, end |
 //! | [`Format::Pcs`] | Pfaff (experimental) | RGB, 16 at most | stitch, move, colour change (trims are a move where the needle is) |
 //! | [`Format::Tap`] | Happy | no | as DST |
+//! | [`Format::Dsb`] | Barudan (a DST header, U01's records) | no | as U01 |
+//! | [`Format::Dsz`] | ZSK (read only) | no | stitch, jump, trim, stop, needle change |
 //!
 //! ## Coordinates and preparation
 //!
@@ -47,7 +49,9 @@
 //! most common value and the reader ignores it.
 
 mod bytes;
+mod dsb;
 mod dst;
+mod dsz;
 mod exp;
 mod jef;
 mod pcs;
@@ -98,12 +102,25 @@ pub enum Format {
     Pcs,
     /// Happy `.tap`: DST's records without its header.
     Tap,
+    /// Barudan `.dsb`: a DST header, then U01's records.
+    Dsb,
+    /// ZSK `.dsz` (read only): a DST header, then 3-byte records (y, x, control) with trim,
+    /// stop and needle change commands.
+    Dsz,
 }
 
 impl Format {
-    /// Every supported format.
-    pub const ALL: [Format; 10] =
-        [Format::Dst, Format::Exp, Format::Jef, Format::Pes, Format::Pec, Format::Vp3, Format::Xxx, Format::U01, Format::Pcs, Format::Tap];
+    /// Every format StitchFoundry writes (and reads).
+    pub const ALL: [Format; 11] =
+        [Format::Dst, Format::Exp, Format::Jef, Format::Pes, Format::Pec, Format::Vp3, Format::Xxx, Format::U01, Format::Pcs, Format::Tap, Format::Dsb];
+
+    /// The formats StitchFoundry reads but doesn't write.
+    pub const READ_ONLY: [Format; 1] = [Format::Dsz];
+
+    /// Whether [`write()`] can write the format.
+    pub fn writable(self) -> bool {
+        !Format::READ_ONLY.contains(&self)
+    }
 
     /// File extension, lower case without the dot (`"dst"`).
     pub fn extension(self) -> &'static str {
@@ -118,6 +135,8 @@ impl Format {
             Format::U01 => "u01",
             Format::Pcs => "pcs",
             Format::Tap => "tap",
+            Format::Dsb => "dsb",
+            Format::Dsz => "dsz",
         }
     }
 
@@ -134,6 +153,8 @@ impl Format {
             Format::U01 => "Barudan U01",
             Format::Pcs => "Pfaff PCS",
             Format::Tap => "Happy TAP",
+            Format::Dsb => "Barudan DSB",
+            Format::Dsz => "ZSK DSZ",
         }
     }
 
@@ -142,20 +163,20 @@ impl Format {
     pub fn from_extension(ext: &str) -> Option<Format> {
         let ext = ext.trim();
         let ext = ext.rsplit('.').next().unwrap_or(ext);
-        Format::ALL.into_iter().find(|f| f.extension().eq_ignore_ascii_case(ext))
+        Format::ALL.into_iter().chain(Format::READ_ONLY).find(|f| f.extension().eq_ignore_ascii_case(ext))
     }
 
     /// Whether the format stores thread colours. DST, EXP and U01 only store
     /// colour changes; their readers colour the blocks from a generic palette.
     pub fn has_colors(self) -> bool {
-        !matches!(self, Format::Dst | Format::Exp | Format::U01 | Format::Tap)
+        !matches!(self, Format::Dst | Format::Exp | Format::U01 | Format::Tap | Format::Dsb | Format::Dsz)
     }
 
     /// Whether the format has a stop command distinct from a colour change.
     /// Elsewhere a [`sf_core::Cmd::Stop`] is written as a colour change to the
     /// same thread (and reads back as a colour change).
     pub fn supports_stop(self) -> bool {
-        matches!(self, Format::U01)
+        matches!(self, Format::U01 | Format::Dsb | Format::Dsz)
     }
 }
 
@@ -265,6 +286,9 @@ pub enum FormatError {
     /// [`read_any`] could not tell which format the bytes are.
     #[error("unrecognised embroidery file format")]
     Unknown,
+    /// [`write()`] was asked for a format StitchFoundry only reads.
+    #[error("{0} files can be opened but not written")]
+    ReadOnly(Format),
 }
 
 /// Encodes `pattern` as a `format` file.
@@ -283,6 +307,8 @@ pub fn write(format: Format, pattern: &Pattern, opts: &WriteOptions) -> Result<V
         Format::U01 => u01::write(pattern, opts),
         Format::Pcs => pcs::write(pattern, opts),
         Format::Tap => tap::write(pattern, opts),
+        Format::Dsb => dsb::write(pattern, opts),
+        Format::Dsz => Err(FormatError::ReadOnly(format)),
     }
 }
 
@@ -299,6 +325,8 @@ pub fn read(format: Format, bytes: &[u8]) -> Result<Pattern, FormatError> {
         Format::U01 => u01::read(bytes),
         Format::Pcs => pcs::read(bytes),
         Format::Tap => tap::read(bytes),
+        Format::Dsb => dsb::read(bytes),
+        Format::Dsz => dsz::read(bytes),
     }
 }
 
@@ -320,18 +348,20 @@ pub fn prepare(format: Format, pattern: &Pattern, opts: &WriteOptions) -> Result
         Format::U01 => u01::plan(pattern, opts)?,
         Format::Pcs => pcs::plan(pattern, opts)?,
         Format::Tap => tap::plan(pattern, opts)?,
+        Format::Dsb => dsb::plan(pattern, opts)?,
+        Format::Dsz => return Err(FormatError::ReadOnly(format)),
     };
     let mut out = plan.to_pattern(&cfg);
     // The label as the file stores it.
     out.name = match format {
-        Format::Dst | Format::Pes | Format::Pec => bytes::ascii_label(opts.label(pattern), 16).trim_end().to_string(),
-        Format::Exp | Format::Jef | Format::Vp3 | Format::Xxx | Format::U01 | Format::Pcs | Format::Tap => String::new(),
+        Format::Dst | Format::Dsb | Format::Pes | Format::Pec => bytes::ascii_label(opts.label(pattern), 16).trim_end().to_string(),
+        Format::Exp | Format::Jef | Format::Vp3 | Format::Xxx | Format::U01 | Format::Pcs | Format::Tap | Format::Dsz => String::new(),
     };
     Ok(out)
 }
 
 /// Guesses a file's format from its content: magic bytes for PES, PEC, VP3
-/// and DST, header sanity for JEF and XXX, the record structure for U01 and
+/// and DST (a DST header followed by Barudan or ZSK records is DSB or DSZ), header sanity for JEF and XXX, the record structure for U01 and
 /// EXP (the last resort: almost any even-length data is valid EXP).
 pub fn detect(bytes: &[u8]) -> Option<Format> {
     if bytes.starts_with(b"#PES") {
@@ -340,6 +370,10 @@ pub fn detect(bytes: &[u8]) -> Option<Format> {
         Some(Format::Pec)
     } else if bytes.starts_with(b"%vsm%") {
         Some(Format::Vp3)
+    } else if dsb::sniff(bytes) {
+        Some(Format::Dsb)
+    } else if dsz::sniff(bytes) {
+        Some(Format::Dsz)
     } else if dst::sniff(bytes) {
         Some(Format::Dst)
     } else if jef::sniff(bytes) {
@@ -360,16 +394,18 @@ pub fn detect(bytes: &[u8]) -> Option<Format> {
 }
 
 /// Reads a file of unknown format. A format recognised by its magic bytes
-/// (PES, PEC, VP3, DST) wins; otherwise the extension hint (`"dst"`, `".PES"`
-/// or a file name) is tried first and, if it is missing, unknown or fails to
-/// read, the format detected from the content.
+/// (PES, PEC, VP3, DST and the DST-headed DSB and DSZ) wins; otherwise the extension hint
+/// (`"dst"`, `".PES"` or a file name) is tried first and, if it is missing, unknown or fails to
+/// read, the format detected from the content. A `.dsb` or `.dsz` hint goes before a DST
+/// header, since those files carry one over records of their own.
 pub fn read_any(bytes: &[u8], ext_hint: Option<&str>) -> Result<(Format, Pattern), FormatError> {
     let detected = detect(bytes);
-    let magic = detected.filter(|f| matches!(f, Format::Pes | Format::Pec | Format::Vp3 | Format::Dst));
+    let magic = detected.filter(|f| matches!(f, Format::Pes | Format::Pec | Format::Vp3 | Format::Dst | Format::Dsb | Format::Dsz));
     let hinted = ext_hint.and_then(Format::from_extension);
+    let order = if matches!(hinted, Some(Format::Dsb | Format::Dsz)) { [hinted, magic, detected] } else { [magic, hinted, detected] };
     let mut tried: Vec<Format> = Vec::with_capacity(3);
     let mut first_err = None;
-    for f in [magic, hinted, detected].into_iter().flatten() {
+    for f in order.into_iter().flatten() {
         if tried.contains(&f) {
             continue;
         }
@@ -387,16 +423,40 @@ pub fn read_any(bytes: &[u8], ext_hint: Option<&str>) -> Result<(Format, Pattern
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sf_core::Cmd;
 
     #[test]
     fn extensions_round_trip() {
-        for f in Format::ALL {
+        for f in Format::ALL.into_iter().chain(Format::READ_ONLY) {
             assert_eq!(Format::from_extension(f.extension()), Some(f));
             assert_eq!(Format::from_extension(&format!(".{}", f.extension().to_uppercase())), Some(f));
             assert_eq!(Format::from_extension(&format!("design.{}", f.extension())), Some(f));
         }
         assert_eq!(Format::from_extension("svg"), None);
         assert_eq!(Format::from_extension(""), None);
+    }
+
+    /// D1: DSB carries a DST header over U01 records: it reads back as DSB, label included,
+    /// both by content and by extension, and DST's own files stay DST.
+    #[test]
+    fn dsb_is_told_apart_from_dst() {
+        let mut p = Pattern::new();
+        p.name = "badge".into();
+        p.threads = vec![sf_core::Thread::default(), sf_core::Thread::default()];
+        for (x, y, cmd) in [(0.0, 0.0, Cmd::Stitch), (8.0, 0.0, Cmd::Stitch), (8.0, 0.0, Cmd::Trim), (8.0, 0.0, Cmd::ColorChange), (8.0, 6.0, Cmd::Stitch)] {
+            p.stitches.push(sf_core::Stitch::new(x, y, cmd));
+        }
+        let dsb = write(Format::Dsb, &p, &WriteOptions::default()).unwrap();
+        assert!(dsb.starts_with(b"LA:badge"));
+        assert_eq!(detect(&dsb), Some(Format::Dsb));
+        let (f, back) = read_any(&dsb, None).unwrap();
+        assert_eq!((f, back.name.as_str()), (Format::Dsb, "badge"));
+        assert!(back.stitches.iter().any(|s| s.cmd == Cmd::Trim) && back.stitches.iter().any(|s| s.cmd == Cmd::ColorChange));
+        assert_eq!(read_any(&dsb, Some("badge.dsb")).unwrap().0, Format::Dsb);
+        let dst = write(Format::Dst, &p, &WriteOptions::default()).unwrap();
+        assert_eq!(detect(&dst), Some(Format::Dst));
+        assert!(matches!(write(Format::Dsz, &p, &WriteOptions::default()), Err(FormatError::ReadOnly(Format::Dsz))));
+        assert!(!Format::Dsz.writable() && Format::Dsb.writable());
     }
 
     #[test]

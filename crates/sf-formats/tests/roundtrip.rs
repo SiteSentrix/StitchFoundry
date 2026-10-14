@@ -124,6 +124,7 @@ fn long_moves_are_split_within_each_formats_limit() {
         (Format::U01, 12.7, 12.7),
         (Format::Pcs, 12.0, 12.0),
         (Format::Tap, 12.1, 12.1),
+        (Format::Dsb, 12.7, 12.7),
     ];
     for (format, max_stitch, max_jump) in limits {
         let back = read(format, &write(format, &p, &options(false)).unwrap()).unwrap();

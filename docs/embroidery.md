@@ -488,7 +488,7 @@ stitches: *Choose Folder…*, then *Find* by name and *Sort* by name, newest, mo
 largest; hover one for its size, stitches, colours and file, click it to open it, and *Print
 Catalogue* makes a catalogue sheet of the designs found. Underneath,
 `embroidery.library.scan {folder, query?, recursive?, sort?}` lists the machine embroidery files
-in a folder and its subfolders (DST, EXP, JEF, PES, PEC, VP3, XXX, U01, PCS, TAP): each with its
+in a folder and its subfolders (DST, EXP, JEF, PES, PEC, VP3, XXX, U01, PCS, TAP, DSB, DSZ): each with its
 size, stitches, colours, threads, date and an outline of its stitches for a thumbnail; `query`
 finds names and folders, and `sort` orders them by name, date, stitches or size. What a file says
 is kept while it is unchanged, so looking again is quick; a file that can't be read is listed
@@ -502,7 +502,8 @@ listed in `files` in another machine format: each beside the file it came from o
 named as it was (a number added when the name is taken, unless `replace`). Designs already in
 that format are skipped (in the Design Library section: **Convert to**, then **Convert All**
 for the designs found), the files read are left as they are, and a file that can't be read is
-listed with why. A format without colours (DST, EXP, TAP, U01) gives the converted design
+listed with why. ZSK DSZ designs can be converted from but not to. A format without colours
+(DST, EXP, TAP, U01, DSB) gives the converted design
 standard threads.
 
 ## Worksheets
@@ -1136,6 +1137,11 @@ a design; export machine files with **Export Machine File**.
 - PCS is **experimental**: its layout comes from public descriptions of the format, and no
   machine has sewn one yet. It holds 16 colours at most, positions in 1/6 mm, and no trim (a
   trim is written as a move to where the needle is). TAP is DST's records without the header.
+- Barudan **DSB** is a DST header over U01's records: read and written. ZSK **DSZ** (a DST header
+  over records of its own, with trims, stops and needle changes) is **read only**: it opens and
+  converts to the other formats, but isn't written, as no public description covers writing it.
+  Neither stores colours. Both layouts come from the format notes of the MIT-licensed
+  pyembroidery project; no machine has sewn a DSB we wrote yet.
 - Long stitches and jumps are split to the format's limit. Trims are written natively where the
   format has them; DST uses the common three-jump convention.
 - VP3 writes each move as one long record that ends where the next stitch starts. Programs
