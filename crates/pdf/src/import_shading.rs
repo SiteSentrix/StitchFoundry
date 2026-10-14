@@ -23,15 +23,15 @@ use crate::import_mask::{contains, is_rectangle, luminance};
 const MAX_PATCHES: usize = 4096;
 
 /// An axial or radial shading as a gradient paint, with whether it extends past its start and
-/// its end.
-pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>) -> Option<(GradientPaint, [bool; 2])> {
+/// its end. `inks`: the colorant names of its space, from the page's walk ([`Colors::solid`]).
+pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<&[String]>) -> Option<(GradientPaint, [bool; 2])> {
     let ShadingType::RadialAxial { coords, domain, function, axial, extend } = sp.shading.shading_type.as_ref() else {
         return None;
     };
     let m = sp.matrix;
     let cs = &sp.shading.color_space;
     let at = |t: f32| function.eval(&smallvec::smallvec![domain[0] + (domain[1] - domain[0]) * t]);
-    let space = colors.shading_space(cs, at(0.0)?.len());
+    let space = colors.shading_space(cs, at(0.0)?.len(), inks);
     // RGB to decide which samples are stops; the stops keep the shading's model.
     let sample = |t: f32| -> Option<Color> {
         let [r, g, b, _] = cs.to_rgba(&at(t)?, 1.0, false).components();
@@ -140,12 +140,13 @@ pub(crate) fn extend_clip(sp: &ShadingPattern, bounds: Rect) -> Option<BezPath> 
 }
 
 /// The colour of shading components `v` (the input of the shading's function, when it has one).
-fn mesh_color(v: &[f32], function: Option<&ShadingFunction>, sp: &ShadingPattern, colors: &mut Colors<'_>) -> Color {
+/// `inks` as for [`shading_gradient`].
+fn mesh_color(v: &[f32], function: Option<&ShadingFunction>, sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<&[String]>) -> Color {
     let comps = match function {
         Some(f) => f.eval(&v.iter().copied().collect()).map(|c| c.to_vec()).unwrap_or_default(),
         None => v.to_vec(),
     };
-    let space = colors.shading_space(&sp.shading.color_space, comps.len());
+    let space = colors.shading_space(&sp.shading.color_space, comps.len(), inks);
     colors.native(space, &comps).map(|n| n.color).unwrap_or_else(|| {
         let [r, g, b, _] = sp.shading.color_space.to_rgba(&comps, 1.0, false).components();
         Color::rgb(round3(r), round3(g), round3(b))
@@ -153,8 +154,9 @@ fn mesh_color(v: &[f32], function: Option<&ShadingFunction>, sp: &ShadingPattern
 }
 
 /// A patch mesh or triangle mesh shading as gradient meshes in document space (one per patch;
-/// a triangle is a patch with two corners together). `None`: not a mesh, or too big.
-pub(crate) fn mesh_shading(sp: &ShadingPattern, colors: &mut Colors<'_>) -> Option<Vec<GradientMesh>> {
+/// a triangle is a patch with two corners together). `None`: not a mesh, or too big. `inks` as
+/// for [`shading_gradient`].
+pub(crate) fn mesh_shading(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<&[String]>) -> Option<Vec<GradientMesh>> {
     let m = sp.matrix;
     let mut out = vec![];
     match sp.shading.shading_type.as_ref() {
@@ -163,7 +165,7 @@ pub(crate) fn mesh_shading(sp: &ShadingPattern, colors: &mut Colors<'_>) -> Opti
                 return None;
             }
             for p in patches {
-                let colors = [0, 1, 2, 3].map(|i| mesh_color(p.colors.get(i).map_or(&[][..], |c| c.as_slice()), function.as_ref(), sp, colors));
+                let colors = [0, 1, 2, 3].map(|i| mesh_color(p.colors.get(i).map_or(&[][..], |c| c.as_slice()), function.as_ref(), sp, colors, inks));
                 out.extend(GradientMesh::coons(&p.control_points.map(|q| m * q), colors));
             }
         }
@@ -173,7 +175,7 @@ pub(crate) fn mesh_shading(sp: &ShadingPattern, colors: &mut Colors<'_>) -> Opti
                 return None;
             }
             for p in patches {
-                let colors = [0, 1, 2, 3].map(|i| mesh_color(p.colors.get(i).map_or(&[][..], |c| c.as_slice()), function.as_ref(), sp, colors));
+                let colors = [0, 1, 2, 3].map(|i| mesh_color(p.colors.get(i).map_or(&[][..], |c| c.as_slice()), function.as_ref(), sp, colors, inks));
                 out.extend(p.control_points.map(|q| m * q).first_chunk::<12>().and_then(|cp| GradientMesh::coons(cp, colors)));
             }
         }
@@ -182,7 +184,7 @@ pub(crate) fn mesh_shading(sp: &ShadingPattern, colors: &mut Colors<'_>) -> Opti
                 return None;
             }
             for t in triangles {
-                let v = [&t.p0, &t.p1, &t.p2].map(|v| (m * v.point, mesh_color(v.colors.as_slice(), function.as_ref(), sp, colors)));
+                let v = [&t.p0, &t.p1, &t.p2].map(|v| (m * v.point, mesh_color(v.colors.as_slice(), function.as_ref(), sp, colors, inks)));
                 out.extend(GradientMesh::triangle(v));
             }
         }
