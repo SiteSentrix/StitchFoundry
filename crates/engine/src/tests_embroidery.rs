@@ -5353,7 +5353,9 @@ fn fabric_recipes_set_underlay_types_push_compensation_and_clothing() {
 fn a_closed_shape_converts_to_a_satin_column_between_two_rails() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
-    let id = NodeId(s.execute("shape.ellipse", &json!({"x": 20.0 * PT, "y": 40.0 * PT, "width": 60.0 * PT, "height": 8.0 * PT})).unwrap()["id"].as_u64().unwrap());
+    let id = NodeId(
+        s.execute("shape.ellipse", &json!({"x": 20.0 * PT, "y": 40.0 * PT, "width": 60.0 * PT, "height": 8.0 * PT})).unwrap()["id"].as_u64().unwrap(),
+    );
     s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
     let before = s.embroidery_plan().unwrap().pattern().bounds();
     let r = s.execute("embroidery.toColumn", &json!({})).unwrap();

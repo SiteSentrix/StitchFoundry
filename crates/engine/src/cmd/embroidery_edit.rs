@@ -116,7 +116,8 @@ fn density_map(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.densityMap";
     let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
     let pat = plan.pattern();
-    let limit = s.doc()?.doc.embroidery.as_deref().map(|e| e.checks.dense_layers).unwrap_or_else(|| sf_core::attr::CheckLimits::default().dense_layers);
+    let limit =
+        s.doc()?.doc.embroidery.as_deref().map(|e| e.checks.dense_layers).unwrap_or_else(|| sf_core::attr::CheckLimits::default().dense_layers);
     let b = pat.bounds();
     let area = if b.width().is_finite() && b.height().is_finite() { b.width().max(0.0) * b.height().max(0.0) } else { 0.0 };
     let cell = p.get("cell").and_then(Value::as_f64).filter(|c| c.is_finite()).unwrap_or(CELL).clamp(0.5, 10.0).max((area / MAX_MAP_CELLS).sqrt());
@@ -186,7 +187,9 @@ fn swap_sides(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.edit("Swap Satin Sides", |d, _| {
         for id in &satin {
-            if let Some(sf_core::attr::StitchType::Satin(sp)) = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery.as_deref_mut().map(|e| &mut e.stitch) {
+            if let Some(sf_core::attr::StitchType::Satin(sp)) =
+                d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery.as_deref_mut().map(|e| &mut e.stitch)
+            {
                 sp.swap_sides = !sp.swap_sides;
             }
         }
