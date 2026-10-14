@@ -314,6 +314,32 @@ fn a_copy_stays_inside_the_write_root() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// An SVG's linked files are read on the importer's own thread (it needs a deep stack): the roots
+/// in force on the thread that opens the SVG hold there too.
+#[test]
+fn an_svg_reads_its_links_within_the_read_root() {
+    let root = folder("svg-roots");
+    for dir in ["in", "out"] {
+        write(&root.join(dir).join("dot.png"), &png(4, 4, RED));
+    }
+    // What came of an SVG linking to the picture in `dir`: the pictures read, and the warnings.
+    let import = |dir: &str| {
+        let href = root.join(dir).join("dot.png").to_string_lossy().replace('\\', "/");
+        let svg =
+            format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><image width=\"4\" height=\"4\" href=\"{href}\"/></svg>");
+        let (doc, warnings) = crate::cmd::fileio::import_svg(&svg, None).unwrap();
+        (doc.images.len(), warnings)
+    };
+    let (inside, outside) = (import("in"), import("out"));
+    assert_eq!(inside, outside, "both are read with no roots in force");
+    let roots = crate::file_access::AutomationRoots::new(Some(&root.join("in")), None).unwrap();
+    crate::file_access::confine(roots.as_ref(), || {
+        assert_eq!(import("in"), inside, "inside the read root: read as before");
+        assert_ne!(import("out"), outside, "outside the read root: not read");
+    });
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn junk_search_params_never_fail_internally() {
     let root = folder("junk");
