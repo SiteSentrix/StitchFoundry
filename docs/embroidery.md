@@ -546,7 +546,7 @@ workspace and how much the Embroidery panel shows:
 **Everything** (the start) shows every section in the Essentials workspace. Each is a command too:
 `window.experience {level: beginner|digitizer|business|all}`.
 
-### Simple mode
+## Simple mode
 
 For someone who would rather not learn a drawing program. The left column has big buttons, each
 with a one-line hint:
