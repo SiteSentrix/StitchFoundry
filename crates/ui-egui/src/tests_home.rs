@@ -247,3 +247,63 @@ fn my_machine_shapes_home_and_saves_in_its_format() {
     assert_eq!(app.run("ui.saveForMyMachine", json!({})).unwrap()["open"], true);
     assert!(app.ui.my_machine.open);
 }
+
+/// What the Make a Design guide shows at its current step.
+fn guide_strings(app: &mut VectorcraftApp) -> Vec<String> {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 1000.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| crate::guide::show(app, ui.ctx()));
+    out.textures_delta.clear();
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    v
+}
+
+/// E3: Make a Design walks from what to make, through the hoop and the words, to the colours,
+/// watching it sew and saving; a mistake shows on the step instead of moving on.
+#[test]
+fn make_a_design_guide_walks_from_words_to_saving() {
+    use crate::guide::Step;
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("embroidery.myMachine.set", json!({"machine": "Husqvarna Viking Designer Diamond deLuxe"})).unwrap();
+    assert_eq!(app.run("ui.makeDesign", json!({})).unwrap()["open"], true);
+    let has = |v: &[String], want: &str| assert!(v.iter().any(|t| t == want), "{want} in {v:?}");
+    let s = guide_strings(&mut app);
+    for want in ["Step 1 / 6", "What would you like to make?", "A name or some words", "An appliqué", "A sample to try"] {
+        has(&s, want);
+    }
+    (app.guide.what, app.guide.step) = (Some("words"), Step::Hoop);
+    let s = guide_strings(&mut app);
+    has(&s, "Which hoop will you use?");
+    has(&s, "240 × 150 mm (9.4×5.9″)");
+    (app.guide.hoop, app.guide.step) = (Some("Husqvarna 240 × 150".into()), Step::Details);
+    let s = guide_strings(&mut app);
+    has(&s, "What should it say?");
+    has(&s, "Make It");
+    // nothing typed: the step says so and stays
+    crate::guide::make_it(&mut app, json!({"what": "words", "text": "", "hoop": app.guide.hoop}));
+    assert_eq!(app.guide.step, Step::Details);
+    assert!(app.guide.error.is_some());
+    crate::guide::make_it(&mut app, json!({"what": "words", "text": "Mia", "height": 25, "hoop": app.guide.hoop}));
+    assert_eq!(app.guide.step, Step::Colours, "{:?}", app.guide.error);
+    let s = guide_strings(&mut app);
+    has(&s, "Your thread colours");
+    has(&s, "1.");
+    app.guide.step = Step::Watch;
+    let s = guide_strings(&mut app);
+    has(&s, "Watch It Sew");
+    assert!(s.iter().any(|t| t.starts_with("Sewing time ")), "{s:?}");
+    app.guide.step = Step::Save;
+    has(&guide_strings(&mut app), "Save for My Machine");
+    let info = app.run("embroidery.info", json!({})).unwrap();
+    assert_eq!(info["machineFormat"], "vp3");
+    assert!(info["stitches"].as_u64().unwrap() > 100);
+}

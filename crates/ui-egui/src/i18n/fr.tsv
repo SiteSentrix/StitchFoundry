@@ -5185,3 +5185,39 @@ machine	Stop	Arrêt
 @msg	the design has no page	le motif n’a pas de page
 @msg	open or start a design first	ouvrez ou commencez d’abord un motif
 	Set My Machine	Choisir ma machine
+	Make a Design	Créer un motif
+	Make a Design…	Créer un motif…
+	Make a Design, Step by Step	Créer un motif pas à pas
+	Step by step: words, a shape, appliqué, a picture or a sample	Pas à pas : des mots, une forme, une appliqué, une image ou un exemple
+	Step	Étape
+	Back	Retour
+	What would you like to make?	Que voulez-vous faire ?
+	A name or some words	Un prénom ou quelques mots
+	For towels, bags, pillows and gifts	Pour serviettes, sacs, coussins et cadeaux
+	A shape	Une forme
+	A heart, a star, a flower and more	Un cœur, une étoile, une fleur et plus
+	An appliqué	Une appliqué
+	A shape cut from fabric and sewn down	Une forme découpée dans du tissu et cousue
+	A photo or a drawing turned into stitches	Une photo ou un dessin transformé en points
+	A sample to try	Un exemple à essayer
+	A finished design to sew and learn from	Un motif terminé pour broder et apprendre
+	Which hoop will you use?	Quel cercle allez-vous utiliser ?
+	Tell us your machine to see its hoops.	Indiquez votre machine pour voir ses cercles.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Choisissez le cercle où vous tendrez le tissu. Le motif est fait pour y tenir.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Les majuscules ont cette hauteur. 20 à 30 mm conviennent à une serviette, 10 à 15 mm à une chemise.
+	Make It	Créer
+	Which shape of fabric?	Quelle forme de tissu ?
+	Which shape?	Quelle forme ?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	La machine brode l’emplacement du tissu et s’arrête ; vous posez le tissu, elle le fixe et s’arrête à nouveau pour que vous le découpiez ; puis elle brode le bord.
+	Choose a picture	Choisissez une image
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Les images simples avec peu de couleurs unies et des bords nets marchent le mieux : un dessin, un logo, un clipart.
+	Choose a Picture…	Choisir une image…
+	Which sample?	Quel exemple ?
+	Your thread colours	Vos couleurs de fil
+	These are sewn in this order. Click a colour to match a thread you have.	Elles sont brodées dans cet ordre. Cliquez sur une couleur pour l’accorder à un fil que vous avez.
+	Watch it sew	Regardez la broderie
+	See the needle go stitch by stitch, in the order your machine will sew it.	Regardez l’aiguille point par point, dans l’ordre où votre machine brodera.
+	Save it	Enregistrez-le
+	Save for My Machine writes the file your machine sews, to its USB stick.	Enregistrer pour ma machine écrit le fichier que votre machine brode sur sa clé USB.
+	Save Design keeps a copy you can open and change later.	Enregistrer le motif garde une copie que vous pourrez ouvrir et modifier plus tard.
+	Save Design…	Enregistrer le motif…

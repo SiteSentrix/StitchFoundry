@@ -71,6 +71,7 @@ fn machine_file_items() -> Vec<Item> {
 fn embroidery_menu() -> Vec<Item> {
     let ty = |label: &'static str, ty: &'static str| cp(label, "embroidery.set", json!({ "type": ty }));
     vec![
+        c("Make a Design…", "ui.makeDesign"),
         c("My Machine…", "ui.myMachine"),
         c("Save for My Machine", "ui.saveForMyMachine"),
         Sep,
@@ -577,6 +578,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing; viewAfterSaving opens the file) → {path, bytes, warnings}",
     ),
     ("help.about", "About StitchFoundry", "", "{}"),
+    (
+        "ui.makeDesign",
+        "Make a Design…",
+        "",
+        "{} opens Make a Design: a step-by-step guide from words, a shape, appliqué, a picture or a sample through the hoop, thread colours and watching it sew to saving it for My Machine (embroidery.makeDesign) → {open}",
+    ),
     (
         "ui.myMachine",
         "My Machine…",
@@ -1547,6 +1554,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "help.show" => crate::dialogs::help::open(app, p),
         "ui.calibrateLifeSize" => crate::dialogs::life_size::run(app, p),
         "ui.myMachine" => crate::dialogs::my_machine::open(app),
+        "ui.makeDesign" => crate::guide::open(app),
         "ui.saveForMyMachine" => crate::dialogs::my_machine::save(app, p),
         "help.commandPalette" => {
             app.ui.palette_open = !app.ui.palette_open;
@@ -2322,6 +2330,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             "File",
             vec![
                 c("New…", "file.newDialog"),
+                c("Make a Design…", "ui.makeDesign"),
                 c("New from Template…", "file.newFromTemplate"),
                 c("Open…", "file.open"),
                 sub("Open Recent Files", {

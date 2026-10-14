@@ -5131,3 +5131,39 @@ machine	Stop	Stopp
 @msg	the design has no page	das Motiv hat keine Seite
 @msg	open or start a design first	öffnen oder beginnen Sie zuerst ein Motiv
 	Set My Machine	Meine Maschine festlegen
+	Make a Design	Motiv erstellen
+	Make a Design…	Motiv erstellen…
+	Make a Design, Step by Step	Motiv Schritt für Schritt erstellen
+	Step by step: words, a shape, appliqué, a picture or a sample	Schritt für Schritt: Worte, eine Form, Applikation, ein Bild oder ein Beispiel
+	Step	Schritt
+	Back	Zurück
+	What would you like to make?	Was möchten Sie machen?
+	A name or some words	Einen Namen oder ein paar Worte
+	For towels, bags, pillows and gifts	Für Handtücher, Taschen, Kissen und Geschenke
+	A shape	Eine Form
+	A heart, a star, a flower and more	Ein Herz, ein Stern, eine Blume und mehr
+	An appliqué	Eine Applikation
+	A shape cut from fabric and sewn down	Eine aus Stoff geschnittene, aufgenähte Form
+	A photo or a drawing turned into stitches	Ein Foto oder eine Zeichnung als Stiche
+	A sample to try	Ein Beispiel zum Ausprobieren
+	A finished design to sew and learn from	Ein fertiges Motiv zum Sticken und Lernen
+	Which hoop will you use?	Welchen Rahmen verwenden Sie?
+	Tell us your machine to see its hoops.	Nennen Sie Ihre Maschine, um ihre Rahmen zu sehen.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Wählen Sie den Rahmen, in den Sie den Stoff spannen. Das Motiv wird passend gemacht.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	So hoch sind die Großbuchstaben. 20 bis 30 mm passen zu einem Handtuch, 10 bis 15 mm zu einem Hemd.
+	Make It	Erstellen
+	Which shape of fabric?	Welche Stoffform?
+	Which shape?	Welche Form?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Die Maschine stickt, wohin der Stoff kommt, und hält an; Sie legen den Stoff auf, sie heftet ihn fest und hält wieder an, damit Sie ihn zuschneiden; dann stickt sie den Rand.
+	Choose a picture	Wählen Sie ein Bild
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Am besten eignen sich einfache Bilder mit wenigen flächigen Farben und klaren Kanten: ein Cartoon, ein Logo, Clipart.
+	Choose a Picture…	Bild wählen…
+	Which sample?	Welches Beispiel?
+	Your thread colours	Ihre Garnfarben
+	These are sewn in this order. Click a colour to match a thread you have.	Sie werden in dieser Reihenfolge gestickt. Klicken Sie auf eine Farbe, um sie an ein Garn anzupassen, das Sie haben.
+	Watch it sew	Beim Sticken zusehen
+	See the needle go stitch by stitch, in the order your machine will sew it.	Sehen Sie die Nadel Stich für Stich in der Reihenfolge, in der Ihre Maschine stickt.
+	Save it	Speichern
+	Save for My Machine writes the file your machine sews, to its USB stick.	Für meine Maschine speichern schreibt die Datei, die Ihre Maschine stickt, auf ihren USB-Stick.
+	Save Design keeps a copy you can open and change later.	Motiv speichern behält eine Kopie, die Sie später öffnen und ändern können.
+	Save Design…	Motiv speichern…

@@ -363,6 +363,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     help::show(app, ctx);
     life_size::show(app, ctx);
     my_machine::show(app, ctx);
+    crate::guide::show(app, ctx);
     settle(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and
     // its first field is to take the keyboard focus (`focus_id`, until a field takes it).

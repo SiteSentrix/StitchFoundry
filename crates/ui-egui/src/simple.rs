@@ -46,6 +46,11 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::Panel::left("simple-bar").resizable(false).exact_size(BAR).frame(frame).show(ui, |ui| {
         let doc = app.session.active().is_some();
         ui.spacing_mut().item_spacing.y = 8.0;
+        // the guide works with or without a design open
+        if big(ui, tl!("Make a Design…"), false).on_hover_text(tl!("Step by step: words, a shape, appliqué, a picture or a sample")).clicked() {
+            app.run("ui.makeDesign", json!({})).ok();
+        }
+        ui.add_space(6.0);
         ui.add_enabled_ui(doc, |ui| {
             if big(ui, tl!("Select"), false).on_hover_text(tl!("Click a part of the design to choose it, drag it to move it")).clicked() {
                 app.run("tool.select", json!({ "tool": "selection" })).ok();
@@ -311,7 +316,7 @@ pub fn windows(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// A shape's name in the UI language.
-fn shape_name(name: &str) -> &str {
+pub(crate) fn shape_name(name: &str) -> &str {
     match name {
         "Heart" => tl!("Heart"),
         "Star" => tl!("Star"),
@@ -329,6 +334,7 @@ fn shape_name(name: &str) -> &str {
 pub fn keeps(id: &str, _p: &Value) -> bool {
     const KEEP: &[&str] = &[
         "file.newDialog",
+        "ui.makeDesign",
         "file.open",
         "file.save",
         "file.saveAs",

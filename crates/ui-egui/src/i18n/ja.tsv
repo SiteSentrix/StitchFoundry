@@ -5171,3 +5171,39 @@ machine	Stop	停止
 @msg	the design has no page	デザインにページがありません
 @msg	open or start a design first	先にデザインを開くか始めてください
 	Set My Machine	マイミシンを設定
+	Make a Design	デザインを作る
+	Make a Design…	デザインを作る…
+	Make a Design, Step by Step	ステップごとにデザインを作る
+	Step by step: words, a shape, appliqué, a picture or a sample	ステップごとに：文字、かたち、アップリケ、画像、サンプル
+	Step	ステップ
+	Back	戻る
+	What would you like to make?	何を作りますか？
+	A name or some words	名前やことば
+	For towels, bags, pillows and gifts	タオル、バッグ、クッション、贈り物に
+	A shape	かたち
+	A heart, a star, a flower and more	ハート、星、花など
+	An appliqué	アップリケ
+	A shape cut from fabric and sewn down	布を切ったかたちを縫い付けます
+	A photo or a drawing turned into stitches	写真や絵をステッチにします
+	A sample to try	試せるサンプル
+	A finished design to sew and learn from	縫って学べる完成デザイン
+	Which hoop will you use?	どの枠を使いますか？
+	Tell us your machine to see its hoops.	ミシンを選ぶと、その枠が表示されます。
+	Pick the hoop you will put the fabric in. The design is made to fit it.	布を張る枠を選んでください。デザインはその枠に合わせて作られます。
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	大文字の高さです。タオルなら20〜30 mm、シャツなら10〜15 mmが目安です。
+	Make It	作る
+	Which shape of fabric?	どのかたちの布にしますか？
+	Which shape?	どのかたちにしますか？
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	ミシンが布の位置を縫って止まります。布を置くと仮留めしてまた止まるので、余分を切ります。そのあと縁を縫います。
+	Choose a picture	画像を選んでください
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	色数が少なく、ふちがはっきりした簡単な絵がいちばん向いています（イラスト、ロゴ、クリップアートなど）。
+	Choose a Picture…	画像を選ぶ…
+	Which sample?	どのサンプルにしますか？
+	Your thread colours	糸の色
+	These are sewn in this order. Click a colour to match a thread you have.	この順に縫われます。色をクリックして、手持ちの糸に合わせられます。
+	Watch it sew	縫う様子を見る
+	See the needle go stitch by stitch, in the order your machine will sew it.	ミシンが縫う順に、針の動きを一針ずつ見られます。
+	Save it	保存する
+	Save for My Machine writes the file your machine sews, to its USB stick.	「マイミシン用に保存」で、ミシンが縫うファイルをUSBメモリーに書き出します。
+	Save Design keeps a copy you can open and change later.	「デザインを保存」で、あとで開いて直せるコピーを残します。
+	Save Design…	デザインを保存…
