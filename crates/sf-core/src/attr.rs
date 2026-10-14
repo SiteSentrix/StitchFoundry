@@ -919,11 +919,32 @@ pub struct CheckLimits {
     pub small_lettering: f64,
     /// Objects smaller than this (mm) both ways are tiny.
     pub tiny_object: f64,
+    /// Sewn on clothing (worn and washed): long stitches catch from 7 mm, not 12.1 mm.
+    pub garment: bool,
+    /// Stitches shorter than this (mm) make the needle sew in one spot and can break the thread.
+    pub short_stitch: f64,
+    /// Satin narrower than this (mm) doesn't sit up on the fabric.
+    pub narrow_satin: f64,
+    /// Tatami stitches shorter than this (mm) ripple after washing.
+    pub short_fill: f64,
 }
+
+/// The long-stitch limit for clothing and for everything else (mm).
+pub const LONG_STITCH_GARMENT: f64 = 7.0;
+pub const LONG_STITCH_OTHER: f64 = 12.1;
 
 impl Default for CheckLimits {
     fn default() -> Self {
-        CheckLimits { dense_layers: 4.5, long_stitch: 8.0, small_lettering: 5.0, tiny_object: 1.0 }
+        CheckLimits {
+            dense_layers: 4.5,
+            long_stitch: LONG_STITCH_GARMENT,
+            small_lettering: 5.0,
+            tiny_object: 1.0,
+            garment: true,
+            short_stitch: 0.5,
+            narrow_satin: 1.0,
+            short_fill: 4.0,
+        }
     }
 }
 

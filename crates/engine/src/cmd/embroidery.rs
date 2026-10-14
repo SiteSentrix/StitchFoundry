@@ -2011,13 +2011,25 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     if let Some(c) = p.get("checks") {
-        let o = c.as_object().ok_or_else(|| bad(CMD, "checks is {denseLayers?, longStitch?, smallLettering?, tinyObject?}"))?;
+        let o = c.as_object().ok_or_else(|| {
+            bad(CMD, "checks is {denseLayers?, longStitch?, smallLettering?, tinyObject?, garment?, shortStitch?, narrowSatin?, shortFill?}")
+        })?;
         let lim = &mut cfg.checks;
+        // clothing or not sets the long-stitch limit, unless it is given too
+        if let Some(g) = o.get("garment") {
+            let g = g.as_bool().ok_or_else(|| bad(CMD, "checks.garment is true or false"))?;
+            lim.garment = g;
+            lim.long_stitch = if g { sf_core::attr::LONG_STITCH_GARMENT } else { sf_core::attr::LONG_STITCH_OTHER };
+            changed = true;
+        }
         for (k, slot, lo, hi) in [
             ("denseLayers", &mut lim.dense_layers, 1.5, 20.0),
             ("longStitch", &mut lim.long_stitch, 2.0, 20.0),
             ("smallLettering", &mut lim.small_lettering, 1.0, 30.0),
             ("tinyObject", &mut lim.tiny_object, 0.1, 10.0),
+            ("shortStitch", &mut lim.short_stitch, 0.0, 3.0),
+            ("narrowSatin", &mut lim.narrow_satin, 0.0, 5.0),
+            ("shortFill", &mut lim.short_fill, 0.0, 10.0),
         ] {
             if let Some(v) = o.get(k) {
                 *slot = v.as_f64().filter(|x| (lo..=hi).contains(x)).ok_or_else(|| bad(CMD, format!("checks.{k} is a number from {lo} to {hi}")))?;
@@ -2861,6 +2873,8 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "checks": {
             "denseLayers": cfg.checks.dense_layers, "longStitch": cfg.checks.long_stitch,
             "smallLettering": cfg.checks.small_lettering, "tinyObject": cfg.checks.tiny_object,
+            "garment": cfg.checks.garment, "shortStitch": cfg.checks.short_stitch,
+            "narrowSatin": cfg.checks.narrow_satin, "shortFill": cfg.checks.short_fill,
         },
     });
     let fits = cfg.hoop.as_ref().map(|h| {

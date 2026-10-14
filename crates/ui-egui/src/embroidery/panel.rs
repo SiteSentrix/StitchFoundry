@@ -3235,6 +3235,12 @@ fn finding_text(f: &Value) -> String {
     match f["kind"].as_str().unwrap_or_default() {
         "dense" => crate::i18n::fmt(tl!("Very dense: about {n} layers of thread here"), &[("n", &num("value"))]),
         "longStitches" => crate::i18n::fmt(tl!("Stitches up to {n} mm long can snag"), &[("n", &num("value"))]),
+        "shortStitches" => crate::i18n::fmt(
+            tl!("{n} very short stitches can break the thread"),
+            &[("n", &f["value"].as_f64().map(|v| format!("{v:.0}")).unwrap_or_default())],
+        ),
+        "narrowSatin" => crate::i18n::fmt(tl!("Satin only {n} mm wide sinks into the fabric"), &[("n", &num("value"))]),
+        "shortFill" => crate::i18n::fmt(tl!("Fill stitches {n} mm long can ripple after washing"), &[("n", &num("value"))]),
         "tiny" => tl!("Tiny object: may not sew cleanly").to_string(),
         "smallLettering" => crate::i18n::fmt(tl!("Lettering only {n} mm tall is hard to sew clearly"), &[("n", &num("value"))]),
         "noStitches" => tl!("Makes no stitches").to_string(),
@@ -3254,9 +3260,16 @@ fn checks(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     // what counts as a problem: the design's own limits
     egui::CollapsingHeader::new(tl!("Check settings")).id_salt("emb-check-limits").show(ui, |ui| {
         let lim = app.session.active().and_then(|st| st.doc.embroidery.as_deref().map(|e| e.checks.clone())).unwrap_or_default();
+        if let Some(v) = check(ui, tl!("Sewn on clothing"), lim.garment) {
+            app.run("embroidery.settings", json!({ "checks": { "garment": v } })).ok();
+        }
+        ui.label(egui::RichText::new(tl!("Long stitches catch from 7 mm on clothing, 12.1 mm on other items")).small());
         for (label, key, id, value, suffix) in [
             (tl!("Dense from (layers)"), "denseLayers", "chk-dense", lim.dense_layers, ""),
             (tl!("Long stitches from"), "longStitch", "chk-long", lim.long_stitch, " mm"),
+            (tl!("Short stitches under"), "shortStitch", "chk-short", lim.short_stitch, " mm"),
+            (tl!("Narrow satin under"), "narrowSatin", "chk-narrow", lim.narrow_satin, " mm"),
+            (tl!("Short fill stitches under"), "shortFill", "chk-fill", lim.short_fill, " mm"),
             (tl!("Small lettering under"), "smallLettering", "chk-text", lim.small_lettering, " mm"),
             (tl!("Tiny objects under"), "tinyObject", "chk-tiny", lim.tiny_object, " mm"),
         ] {

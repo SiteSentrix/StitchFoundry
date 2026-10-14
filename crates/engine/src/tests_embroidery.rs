@@ -3108,7 +3108,7 @@ fn what_check_design_flags_is_a_design_setting() {
         let r = s.execute("embroidery.check", &json!({})).unwrap();
         r["findings"].as_array().unwrap().iter().map(|f| f["kind"].as_str().unwrap().to_string()).collect()
     };
-    // a 10.6 mm satin without auto split: long stitches by the 8 mm default
+    // a 10.6 mm satin without auto split: long stitches by the 7 mm default (clothing)
     rect(&mut s, 50.0, 50.0, 200.0, 30.0);
     s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
     s.execute("embroidery.setParams", &json!({"params": {"splitLength": 0}})).unwrap();
@@ -5254,4 +5254,44 @@ fn saving_a_stitched_design_as_svg_keeps_its_stitches() {
     });
     let _ = std::fs::remove_file(&path);
     assert_eq!(pulls, vec![0.7], "the stitch settings come back from the SVG");
+}
+
+#[test]
+fn check_design_follows_the_stitch_length_rules_for_clothing_and_other_items() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let kinds = |s: &mut Session| -> Vec<String> {
+        let r = s.execute("embroidery.check", &json!({})).unwrap();
+        r["findings"].as_array().unwrap().iter().map(|f| f["kind"].as_str().unwrap().to_string()).collect()
+    };
+    // a 9 mm satin, not split: too long on clothing, fine on a bag
+    rect(&mut s, 10.0 * PT, 10.0 * PT, 40.0 * PT, 9.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"splitLength": 0}})).unwrap();
+    assert!(kinds(&mut s).contains(&"longStitches".to_string()));
+    s.execute("embroidery.settings", &json!({"checks": {"garment": false}})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!((info["settings"]["checks"]["garment"].as_bool(), info["settings"]["checks"]["longStitch"].as_f64()), (Some(false), Some(12.1)));
+    assert!(!kinds(&mut s).contains(&"longStitches".to_string()));
+    s.execute("embroidery.settings", &json!({"checks": {"garment": true}})).unwrap();
+    // a satin line 0.6 mm wide: too narrow to sit up
+    s.execute("path.create", &json!({"d": format!("M {} {} L {} {}", 10.0 * PT, 40.0 * PT, 60.0 * PT, 40.0 * PT)})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"width": 0.6}})).unwrap();
+    assert!(kinds(&mut s).contains(&"narrowSatin".to_string()));
+    // a fill with 2 mm stitches: may ripple after washing
+    rect(&mut s, 10.0 * PT, 60.0 * PT, 30.0 * PT, 30.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert!(!kinds(&mut s).contains(&"shortFill".to_string()), "the 4 mm default is fine");
+    s.execute("embroidery.setParams", &json!({"params": {"stitchLength": 2.0}})).unwrap();
+    assert!(kinds(&mut s).contains(&"shortFill".to_string()));
+    // hand-placed stitches 0.2 mm apart: the needle sews in one spot
+    let d: String = (0..30).map(|i| format!("{} {} {} ", if i == 0 { "M" } else { "L" }, (100.0 + 0.2 * f64::from(i)) * PT, 100.0 * PT)).collect();
+    s.execute("path.create", &json!({"d": d})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "manual"})).unwrap();
+    assert!(kinds(&mut s).contains(&"shortStitches".to_string()));
+    // each rule can be turned off
+    s.execute("embroidery.settings", &json!({"checks": {"shortStitch": 0, "narrowSatin": 0, "shortFill": 0}})).unwrap();
+    let k = kinds(&mut s);
+    assert!(!k.iter().any(|k| k == "shortStitches" || k == "narrowSatin" || k == "shortFill"), "{k:?}");
 }

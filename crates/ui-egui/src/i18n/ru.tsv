@@ -5070,3 +5070,11 @@ machine	Stop	Остановка
 	All Tools, Ungrouped	Все инструменты, без групп
 	Toolbar: All Tools, Ungrouped	Панель инструментов: все, без групп
 	Push compensation	Компенсация выталкивания
+	{n} very short stitches can break the thread	{n} очень коротких стежков могут порвать нить
+	Satin only {n} mm wide sinks into the fabric	Гладь шириной всего {n} мм утонет в ткани
+	Fill stitches {n} mm long can ripple after washing	Стежки заливки длиной {n} мм могут пойти волнами после стирки
+	Sewn on clothing	Вышивка на одежде
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	Длинные стежки цепляются от 7 мм на одежде, от 12,1 мм на других вещах
+	Short stitches under	Короткие стежки менее
+	Narrow satin under	Узкая гладь менее
+	Short fill stitches under	Короткие стежки заливки менее
