@@ -2046,7 +2046,7 @@ fn machine_files_export_and_open_as_manual_stitches() {
         assert!(after * 10 >= before * 9 && after * 10 <= before * 13, "{ext}: {after} stitches from {before}");
         let colors: Vec<Rgb> = paths.iter().filter_map(|n| n.embroidery.as_ref()?.thread.as_ref().map(|t| t.color)).collect();
         assert_eq!(colors.len(), 2, "{ext}: one stitch path per thread");
-        if !["dst", "exp", "u01", "tap"].contains(&ext) {
+        if !["dst", "exp", "u01", "tap", "dsb"].contains(&ext) {
             assert!(colors[0].delta_e(Rgb::new(0xd6, 0x28, 0x28)) < 25.0, "{ext}: {colors:?}");
             assert!(colors[1].delta_e(Rgb::new(0x1a, 0x3e, 0x8c)) < 25.0, "{ext}: {colors:?}");
         }

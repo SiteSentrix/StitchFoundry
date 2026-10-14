@@ -168,31 +168,51 @@ pub(crate) fn write(pattern: &Pattern, opts: &WriteOptions) -> Result<Vec<u8>, F
     }
     body.bytes.extend_from_slice(&[0x00, 0x00, 0xF3]);
     body.records += 1;
-    if body.records > 9_999_999 || changes > 999 {
+    let mut out = header(opts.label(pattern), &Extents { records: body.records, changes, min: body.min, max: body.max, end: (body.x, body.y) })?;
+    out.extend_from_slice(&body.bytes);
+    Ok(out)
+}
+
+/// What a DST-style header counts (0.1 mm, +y up, from the start point).
+pub(crate) struct Extents {
+    pub records: usize,
+    pub changes: usize,
+    pub min: (i64, i64),
+    pub max: (i64, i64),
+    pub end: (i64, i64),
+}
+
+/// The 512-byte DST header (also the header of Barudan DSB files).
+pub(crate) fn header(label: &str, e: &Extents) -> Result<Vec<u8>, FormatError> {
+    if e.records > 9_999_999 || e.changes > 999 {
         return Err(FormatError::TooLarge);
     }
-
     let sign = |v: i64| if v < 0 { '-' } else { '+' };
-    let label = ascii_label(opts.label(pattern), 16);
+    let label = ascii_label(label, 16);
     let header = format!(
-        "LA:{label:<16}\rST:{:>7}\rCO:{changes:>3}\r+X:{:>5}\r-X:{:>5}\r+Y:{:>5}\r-Y:{:>5}\rAX:{}{:>5}\rAY:{}{:>5}\rMX:+    0\rMY:+    0\rPD:******\r\u{1a}",
-        body.records,
-        body.max.0.max(0),
-        (-body.min.0).max(0),
-        body.max.1.max(0),
-        (-body.min.1).max(0),
-        sign(body.x),
-        body.x.abs(),
-        sign(body.y),
-        body.y.abs(),
+        "LA:{label:<16}\rST:{:>7}\rCO:{:>3}\r+X:{:>5}\r-X:{:>5}\r+Y:{:>5}\r-Y:{:>5}\rAX:{}{:>5}\rAY:{}{:>5}\rMX:+    0\rMY:+    0\rPD:******\r\u{1a}",
+        e.records,
+        e.changes,
+        e.max.0.max(0),
+        (-e.min.0).max(0),
+        e.max.1.max(0),
+        (-e.min.1).max(0),
+        sign(e.end.0),
+        e.end.0.abs(),
+        sign(e.end.1),
+        e.end.1.abs(),
     );
     let mut out = header.into_bytes();
     if out.len() > HEADER {
         return Err(FormatError::TooLarge);
     }
     out.resize(HEADER, b' ');
-    out.extend_from_slice(&body.bytes);
     Ok(out)
+}
+
+/// The label of a DST-style header.
+pub(crate) fn header_label(bytes: &[u8]) -> String {
+    read_label(bytes.get(3..19).unwrap_or_default())
 }
 
 /// Emits a run of jumps, as a trim first when it is three or more long.
@@ -217,8 +237,7 @@ pub(crate) fn read(bytes: &[u8]) -> Result<Pattern, FormatError> {
         return Err(if bytes.len() < 3 { FormatError::Truncated } else { FormatError::BadMagic(Format::Dst) });
     }
     let body = bytes.get(HEADER..).ok_or(FormatError::Truncated)?;
-    let name = read_label(bytes.get(3..19).unwrap_or_default());
-    read_records(body, name)
+    read_records(body, header_label(bytes))
 }
 
 /// Decodes DST stitch records (up to the end record) into a pattern named `name`.

@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document};
 
-use super::embroidery::{MACHINE_EXTS, sheet_text};
+use super::embroidery::{MACHINE_EXTS, MACHINE_READ_EXTS, sheet_text};
 use super::*;
 
 /// Designs listed at most.
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Design Library",
             [],
             None,
-            "{folder, query?: text in the name or folder (any case), recursive?: bool (true: subfolders too, 6 deep), sort?: name|date|stitches|size (name)} the machine embroidery files in a folder (dst, exp, jef, pes, pec, vp3, xxx, u01, pcs, tap; 2000 at most) → {folder, designs: [{path, name, folder, format, bytes, modified: ms since 1970, widthMm, heightMm, stitches, colors, threads: [\"#rrggbb\"], preview: [{color, runs: [[[x, y], …]]}] (mm from the design's top left, simplified)}], failed: [{path, error}], truncated}",
+            "{folder, query?: text in the name or folder (any case), recursive?: bool (true: subfolders too, 6 deep), sort?: name|date|stitches|size (name)} the machine embroidery files in a folder (dst, exp, jef, pes, pec, vp3, xxx, u01, pcs, tap, dsb, dsz; 2000 at most) → {folder, designs: [{path, name, folder, format, bytes, modified: ms since 1970, widthMm, heightMm, stitches, colors, threads: [\"#rrggbb\"], preview: [{color, runs: [[[x, y], …]]}] (mm from the design's top left, simplified)}], failed: [{path, error}], truncated}",
             always,
             scan
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Batch Convert",
             [],
             None,
-            "{format: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap, folder?: the designs in it, as embroidery.library.scan finds them (query?, recursive?), files?: [path…] (these designs instead), dir?: the folder to write to (each design's own), replace?: bool (false: a number is added when the name is taken)} batch convert: each design read and written again in `format`, named as it was; designs already in that format are skipped and the files read are left as they are → {format, converted: [{from, to, stitches, colors}], skipped: [path], failed: [{path, error}], truncated}",
+            "{format: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap|dsb, folder?: the designs in it, as embroidery.library.scan finds them (query?, recursive?), files?: [path…] (these designs instead), dir?: the folder to write to (each design's own), replace?: bool (false: a number is added when the name is taken)} batch convert: each design read and written again in `format`, named as it was; designs already in that format are skipped and the files read are left as they are → {format, converted: [{from, to, stitches, colors}], skipped: [path], failed: [{path, error}], truncated}",
             always,
             convert
         ),
@@ -76,7 +76,7 @@ fn machine_files(folder: &str, recursive: bool) -> Result<(Vec<String>, bool)> {
                 Some("folder") if recursive && depth < MAX_DEPTH && !name.starts_with('.') => stack.push((path, depth + 1)),
                 Some("file") => {
                     let ext = name.rsplit_once('.').map(|(_, x)| x.to_ascii_lowercase()).unwrap_or_default();
-                    if MACHINE_EXTS.contains(&ext.as_str()) {
+                    if MACHINE_READ_EXTS.contains(&ext.as_str()) {
                         if out.len() >= MAX_DESIGNS {
                             truncated = true;
                             continue;
@@ -101,7 +101,7 @@ fn read_pattern(path: &str, bytes: u64) -> std::result::Result<sf_core::Pattern,
     let p = std::path::Path::new(path);
     let ext = p.extension().map(|x| x.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     let format = sf_formats::Format::from_extension(&ext)
-        .filter(|_| MACHINE_EXTS.contains(&ext.as_str()))
+        .filter(|_| MACHINE_READ_EXTS.contains(&ext.as_str()))
         .ok_or_else(|| format!("not a machine file: .{ext}"))?;
     let data = super::fileio::read_file(path).map_err(|e| e.to_string())?;
     sf_formats::read(format, &data).map_err(|e| e.to_string())

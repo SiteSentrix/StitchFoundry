@@ -234,7 +234,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
         }
-        id if crate::cmd::embroidery::MACHINE_EXTS.contains(&id) => {
+        id if crate::cmd::embroidery::MACHINE_READ_EXTS.contains(&id) => {
             let (doc, warnings) = crate::cmd::embroidery::machine_file_doc(&title, bytes, id)?;
             (doc, warnings, false)
         }

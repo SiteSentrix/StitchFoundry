@@ -55,6 +55,7 @@ fn machine_file_items() -> Vec<Item> {
         f("Pfaff VP3 (.vp3)…", "vp3"),
         f("Singer XXX (.xxx)…", "xxx"),
         f("Barudan U01 (.u01)…", "u01"),
+        f("Barudan DSB (.dsb)…", "dsb"),
         f("Pfaff PCS (.pcs)…", "pcs"),
         f("Happy TAP (.tap)…", "tap"),
         f("Brother PEC (.pec)…", "pec"),
@@ -198,7 +199,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.export.embroidery",
         "Export Machine File…",
         "",
-        "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01 (dst), path?, name?, center?} write the stitch plan as a machine embroidery file (embroidery.export) to path, else a picked file (the web downloads it) → {path}",
+        "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01|dsb (dst), path?, name?, center?} write the stitch plan as a machine embroidery file (embroidery.export) to path, else a picked file (the web downloads it) → {path}",
     ),
     (
         "file.export.stitchImage",

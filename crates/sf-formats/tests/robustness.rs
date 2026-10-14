@@ -19,7 +19,7 @@ fn read_all_ways(format: Format, bytes: &[u8]) {
 #[test]
 fn random_bytes() {
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
-    for format in Format::ALL {
+    for format in Format::ALL.into_iter().chain(Format::READ_ONLY) {
         for _ in 0..2000 {
             let len = rng.below(2049);
             let bytes = rng.bytes(len);
@@ -35,13 +35,14 @@ fn random_bytes_behind_a_valid_header() {
     for format in Format::ALL {
         let valid = write(format, &sample(format), &options(true)).unwrap();
         let keep = match format {
-            Format::Dst | Format::U01 | Format::Xxx => 0x200.min(valid.len()),
+            Format::Dst | Format::U01 | Format::Xxx | Format::Dsb => 0x200.min(valid.len()),
             Format::Pes | Format::Pec => 0x220,
             Format::Jef => 0x94,
             Format::Vp3 => 120,
             Format::Exp | Format::Tap => 0,
             // the hoop, the colours and the record count
             Format::Pcs => 22,
+            Format::Dsz => 0,
         };
         for _ in 0..2000 {
             let mut bytes = valid[..keep.min(valid.len())].to_vec();
@@ -49,6 +50,19 @@ fn random_bytes_behind_a_valid_header() {
             bytes.extend(rng.bytes(len));
             read_all_ways(format, &bytes);
         }
+    }
+}
+
+/// D1: ZSK DSZ is read only, so its fuzzing starts from a DSB file's DST header.
+#[test]
+fn random_dsz_records_behind_a_dst_header() {
+    let mut rng = Rng(0x6C07_8965_D1B5_4A32);
+    let header = write(Format::Dsb, &sample(Format::Dsb), &options(true)).unwrap()[..0x200].to_vec();
+    for _ in 0..4000 {
+        let mut bytes = header.clone();
+        let len = rng.below(2049);
+        bytes.extend(rng.bytes(len));
+        read_all_ways(Format::Dsz, &bytes);
     }
 }
 

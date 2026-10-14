@@ -21,6 +21,7 @@
 //! Uncertain: the header contents and the meaning of bit 7; readers ignore
 //! both, and unknown functions are read as jumps so positions stay right.
 
+use crate::dst::Extents;
 use crate::plan::{Decoder, Plan, PlanCfg, build_plan};
 use crate::{FormatError, WriteOptions};
 use sf_core::{Cmd, Pattern};
@@ -59,7 +60,15 @@ fn record(func: u8, dx: i64, dy: i64) -> [u8; 3] {
 pub(crate) fn write(pattern: &Pattern, opts: &WriteOptions) -> Result<Vec<u8>, FormatError> {
     let (plan, _) = plan(pattern, opts)?;
     let mut out = vec![0u8; HEADER];
-    out.reserve(plan.recs.len() * 3);
+    out.extend_from_slice(&records(&plan).0);
+    Ok(out)
+}
+
+/// The records of a plan (ending with its end record) and what a DST-style header counts of
+/// them (Barudan DSB files hold these records after a DST header).
+pub(crate) fn records(plan: &Plan) -> (Vec<u8>, Extents) {
+    let mut out = Vec::with_capacity(plan.recs.len() * 3);
+    let mut e = Extents { records: 0, changes: 0, min: (0, 0), max: (0, 0), end: (0, 0) };
     let mut cur = (0i64, 0i64);
     let mut needle = 1u8;
     for r in &plan.recs {
@@ -71,14 +80,19 @@ pub(crate) fn write(pattern: &Pattern, opts: &WriteOptions) -> Result<Vec<u8>, F
             Cmd::Stop => record(STOP, 0, 0),
             Cmd::ColorChange => {
                 needle = needle % 15 + 1;
+                e.changes += 1;
                 record(NEEDLE_1 + needle - 1, 0, 0)
             }
             Cmd::End => [0xF8, 0, 0],
         };
         out.extend_from_slice(&rec);
         cur = (r.x, r.y);
+        e.records += 1;
+        e.min = (e.min.0.min(cur.0), e.min.1.min(cur.1));
+        e.max = (e.max.0.max(cur.0), e.max.1.max(cur.1));
     }
-    Ok(out)
+    e.end = cur;
+    (out, e)
 }
 
 /// The move of a record.
@@ -88,7 +102,11 @@ fn delta(b: &[u8; 3]) -> (i64, i64) {
 }
 
 pub(crate) fn read(bytes: &[u8]) -> Result<Pattern, FormatError> {
-    let body = bytes.get(HEADER..).ok_or(FormatError::Truncated)?;
+    read_records(bytes.get(HEADER..).ok_or(FormatError::Truncated)?, String::new())
+}
+
+/// Decodes U01 records (up to the end record) into a pattern named `name`.
+pub(crate) fn read_records(body: &[u8], name: String) -> Result<Pattern, FormatError> {
     let mut dec = Decoder::new(10.0, true);
     for chunk in body.chunks_exact(3) {
         let Ok(b) = <[u8; 3]>::try_from(chunk) else { break };
@@ -107,12 +125,16 @@ pub(crate) fn read(bytes: &[u8]) -> Result<Pattern, FormatError> {
             }
         }
     }
-    dec.finish(Vec::new(), String::new())
+    dec.finish(Vec::new(), name)
 }
 
 /// Whole records after the header, known functions only, ending with the end record.
 pub(crate) fn sniff(bytes: &[u8]) -> bool {
-    let Some(body) = bytes.get(HEADER..) else { return false };
+    bytes.get(HEADER..).is_some_and(sniff_records)
+}
+
+/// Whole records, known functions only, ending with the end record.
+pub(crate) fn sniff_records(body: &[u8]) -> bool {
     if body.len() < 6 || !body.len().is_multiple_of(3) {
         return false;
     }

@@ -192,7 +192,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Machine File",
             ["Embroidery"],
             None,
-            "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap (the design's machine, else dst), or an open text export: csv|json (stitch lists: x, y in mm from the centre, y down, command, thread) or gcode (G21 G90; G0 jumps, G1 stitches each followed by a needle cycle; thread changes pause), name?: design label, center?: bool (true), gcode?: {feed?: mm/min (1200), zStep?: Z advance a stitch (1; 0: none), stitchCommand?: after each stitch (none), colorCommand?: at a thread change or stop (M0), trimCommand?: at a trim (none), flipY?: bool (true: y up)}} the stitch plan as a machine embroidery file → {dataBase64, format, bytes, stitches, colors}",
+            "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap|dsb (the design's machine, else dst), or an open text export: csv|json (stitch lists: x, y in mm from the centre, y down, command, thread) or gcode (G21 G90; G0 jumps, G1 stitches each followed by a needle cycle; thread changes pause), name?: design label, center?: bool (true), gcode?: {feed?: mm/min (1200), zStep?: Z advance a stitch (1; 0: none), stitchCommand?: after each stitch (none), colorCommand?: at a thread change or stop (M0), trimCommand?: at a trim (none), flipY?: bool (true: y up)}} the stitch plan as a machine embroidery file → {dataBase64, format, bytes, stitches, colors}",
             has_doc,
             export_machine_file
         ),
@@ -895,8 +895,12 @@ fn convert_art(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(ids_json(&done))
 }
 
-/// The machine formats, by extension (what `embroidery.export` and File › Open take).
-pub const MACHINE_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01", "pcs", "tap"];
+/// The machine formats StitchFoundry writes, by extension (what `embroidery.export` takes).
+pub const MACHINE_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01", "pcs", "tap", "dsb"];
+
+/// The machine formats StitchFoundry reads (File › Open, the design library): the ones it
+/// writes and ZSK DSZ.
+pub const MACHINE_READ_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01", "pcs", "tap", "dsb", "dsz"];
 
 /// Open text exports of the stitches (export only): CSV and JSON stitch lists, G-code.
 pub const TEXT_EXTS: &[&str] = &["csv", "json", "gcode"];

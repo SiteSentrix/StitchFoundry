@@ -593,6 +593,8 @@ pub const FORMATS: &[Format] = &[
     reader("u01", "Barudan U01", &["u01"], "application/x-u01", false),
     reader("pcs", "Pfaff PCS", &["pcs"], "application/x-pcs", false),
     reader("tap", "Happy TAP", &["tap"], "application/x-tap", false),
+    reader("dsb", "Barudan DSB", &["dsb"], "application/x-dsb", false),
+    reader("dsz", "ZSK DSZ", &["dsz"], "application/x-dsz", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -633,6 +635,8 @@ pub const OPEN_EXTS: &[&str] = &[
     "u01",
     "pcs",
     "tap",
+    "dsb",
+    "dsz",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the desktop packaging doesn't associate with VectorCraft: Photoshop
@@ -693,6 +697,8 @@ pub const PLACE_EXTS: &[&str] = &[
     "u01",
     "pcs",
     "tap",
+    "dsb",
+    "dsz",
     "txt",
 ];
 
