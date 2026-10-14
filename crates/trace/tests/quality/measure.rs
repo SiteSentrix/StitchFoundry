@@ -194,6 +194,8 @@ pub struct Metrics {
     pub stroke_anchors: f64,
     /// Share (%) of the art's plain shapes that came out as a shape lying within 0.6 px of it.
     pub shapes: f64,
+    /// Shapes: paths made a shape that lie more than 0.6 px off the art.
+    pub false_shapes: f64,
     /// Auto Grouping: share (%) of the paths that lie inside another.
     pub grouped: f64,
     /// Gradients: paths filled with one; and where the input is a known gradient, whether one was
@@ -271,11 +273,16 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
 
     let nan = f64::NAN;
     let (mut geo_mean, mut geo_max, mut miss_max, mut corners, mut kinks, mut slivers, mut sliver_area) = (nan, nan, nan, nan, nan, nan, nan);
+    let mut false_shapes = if params.shapes { 0.0 } else { nan };
     if !matches!(input.class, Class::Tone | Class::Ramp) {
         let truth_shapes = input.scaled(size);
         let truth = Outline::new(truth_shapes.iter().map(|(p, _)| p), None);
         let traced = Outline::new(shapes.iter().map(|(p, _)| p), Some(f64::from(size)));
         (geo_mean, geo_max) = traced.distance_to(&truth);
+        // Shapes that are not the art's: a path made a shape that strays more than 0.6 px from it.
+        false_shapes =
+            res.paths.iter().filter(|tp| tp.shape.is_some() && Outline::new([&tp.path.to_bezpath()], None).distance_to(&truth).1 > 0.6).count()
+                as f64;
         miss_max = truth.distance_to(&traced).1;
 
         let true_corners = input.scaled_corners(size);
@@ -378,6 +385,7 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
         ramp_angle,
         ramp_off,
         shapes: shapes_found,
+        false_shapes,
         centre_off,
         width_off,
         stroke_anchors,

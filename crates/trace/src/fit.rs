@@ -188,7 +188,7 @@ pub(crate) fn fit_loop(
     across: &dyn Fn(Crack) -> (f64, u32),
     junction_at: &dyn Fn(i32, i32) -> Option<Point>,
     style: &Style,
-) -> Option<SubPath> {
+) -> Option<(SubPath, bool)> {
     let pieces = subpixel::outline(l, w, h, across, junction_at);
     let mut segs: Vec<Cubic> = Vec::new();
     for piece in &pieces {
@@ -206,7 +206,7 @@ pub(crate) fn fit_loop(
             segs.extend(fit_piece(&piece.pts, &style, true));
         }
     }
-    subpath(&segs, true)
+    Some((subpath(&segs, true)?, pieces.iter().any(|p| p.hard)))
 }
 
 /// A chain of cubics as a subpath: closed (its end joins its start) or open. A straight piece has
