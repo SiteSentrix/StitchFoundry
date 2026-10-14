@@ -288,3 +288,35 @@ fn enveloped_type_keeps_each_runs_colour_on_the_canvas() {
     }
     assert!(red > 100 && black > 100, "{red} red, {black} black");
 }
+
+/// #1738: type warped by an envelope inside a symbol looks the same after a native save and
+/// reopen: the type in symbol definitions gets its layout bounds back (they aren't saved), so the
+/// envelope is fitted to the same box as before.
+#[test]
+fn warped_type_in_a_symbol_reopens_unchanged() {
+    let mut s = session();
+    s.execute("text.create", &json!({"x": 30, "y": 160, "text": "STUDIO", "size": 72, "color": "#E3AB49"})).unwrap();
+    s.execute("object.envelope.makeWithWarp", &json!({"style": "wave", "bend": 18})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Master"})).unwrap();
+    let render = |s: &Session| vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 400, 300, Affine::IDENTITY, &Default::default());
+    let before = render(&s);
+    let dir = std::env::temp_dir().join(format!("vectorcraft-1738-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("warped.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"path": path})).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let d = &o.doc().unwrap().doc;
+    let mut texts = 0;
+    d.symbols[0].art.walk(&mut |n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts += 1;
+            assert!(t.cached_bounds.is_some(), "the symbol's type has no layout bounds after reopening");
+        }
+    });
+    assert_eq!(texts, 1);
+    let after = render(&o);
+    let differ = (0..300).flat_map(|y| (0..400).map(move |x| (x, y))).filter(|&(x, y)| before.pixel(x, y) != after.pixel(x, y)).count();
+    assert_eq!(differ, 0, "{differ} pixels changed on reopening");
+}
