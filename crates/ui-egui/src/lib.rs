@@ -31,6 +31,7 @@ pub mod floating;
 pub mod font_menu;
 mod free_transform;
 pub mod graphics;
+pub mod guide;
 pub mod i18n;
 pub mod icon_data;
 pub mod icons;
@@ -348,6 +349,8 @@ pub struct VectorcraftApp {
     pub embroidery: embroidery::EmbroideryUi,
     /// Simple mode's open windows (Add Words, the shape picker).
     pub simple: simple::SimpleState,
+    /// Make a Design: the step-by-step guide.
+    pub guide: guide::GuideState,
     pub perf: Perf,
     /// macOS: the room the app bar keeps at its left for the window buttons over it, in points
     /// (0 where the OS draws no buttons over the app bar).
@@ -480,6 +483,7 @@ impl VectorcraftApp {
             },
             embroidery: embroidery::EmbroideryUi::default(),
             simple: simple::SimpleState::default(),
+            guide: guide::GuideState::default(),
             perf: Perf::default(),
             titlebar_inset: 0.0,
             last_effect: None,

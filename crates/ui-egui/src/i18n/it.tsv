@@ -5177,3 +5177,39 @@ machine	Stop	Arresto
 @msg	the design has no page	il disegno non ha una pagina
 @msg	open or start a design first	apri o inizia prima un disegno
 	Set My Machine	Imposta la mia macchina
+	Make a Design	Crea un disegno
+	Make a Design…	Crea un disegno…
+	Make a Design, Step by Step	Crea un disegno passo passo
+	Step by step: words, a shape, appliqué, a picture or a sample	Passo passo: parole, una forma, applicazione, un’immagine o un esempio
+	Step	Passo
+	Back	Indietro
+	What would you like to make?	Cosa vuoi fare?
+	A name or some words	Un nome o qualche parola
+	For towels, bags, pillows and gifts	Per asciugamani, borse, cuscini e regali
+	A shape	Una forma
+	A heart, a star, a flower and more	Un cuore, una stella, un fiore e altro
+	An appliqué	Un’applicazione
+	A shape cut from fabric and sewn down	Una forma ritagliata dalla stoffa e cucita
+	A photo or a drawing turned into stitches	Una foto o un disegno trasformato in punti
+	A sample to try	Un esempio da provare
+	A finished design to sew and learn from	Un disegno finito da ricamare e da cui imparare
+	Which hoop will you use?	Quale telaio userai?
+	Tell us your machine to see its hoops.	Indica la tua macchina per vederne i telai.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Scegli il telaio in cui metterai la stoffa. Il disegno sarà fatto su misura.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Le maiuscole sono alte così. Da 20 a 30 mm per un asciugamano, da 10 a 15 mm per una camicia.
+	Make It	Crea
+	Which shape of fabric?	Quale forma di stoffa?
+	Which shape?	Quale forma?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	La macchina ricama dove va la stoffa e si ferma; appoggi la stoffa, la fissa e si ferma di nuovo per farla rifilare; poi ricama il bordo.
+	Choose a picture	Scegli un’immagine
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Funzionano meglio le immagini semplici con pochi colori pieni e bordi netti: un fumetto, un logo, una clipart.
+	Choose a Picture…	Scegli un’immagine…
+	Which sample?	Quale esempio?
+	Your thread colours	I colori dei tuoi fili
+	These are sewn in this order. Click a colour to match a thread you have.	Vengono ricamati in quest’ordine. Fai clic su un colore per abbinarlo a un filo che hai.
+	Watch it sew	Guarda il ricamo
+	See the needle go stitch by stitch, in the order your machine will sew it.	Guarda l’ago punto per punto, nell’ordine in cui ricamerà la tua macchina.
+	Save it	Salvalo
+	Save for My Machine writes the file your machine sews, to its USB stick.	Salva per la mia macchina scrive il file che la tua macchina ricama sulla sua chiavetta USB.
+	Save Design keeps a copy you can open and change later.	Salva disegno conserva una copia da aprire e modificare in seguito.
+	Save Design…	Salva disegno…

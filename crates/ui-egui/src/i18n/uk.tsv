@@ -5157,3 +5157,39 @@ machine	Stop	Зупинка
 @msg	the design has no page	візерунок не має сторінки
 @msg	open or start a design first	спочатку відкрийте або почніть візерунок
 	Set My Machine	Вибрати мою машину
+	Make a Design	Створити візерунок
+	Make a Design…	Створити візерунок…
+	Make a Design, Step by Step	Створити візерунок крок за кроком
+	Step by step: words, a shape, appliqué, a picture or a sample	Крок за кроком: слова, фігура, аплікація, картинка або зразок
+	Step	Крок
+	Back	Назад
+	What would you like to make?	Що ви хочете зробити?
+	A name or some words	Ім’я або кілька слів
+	For towels, bags, pillows and gifts	Для рушників, сумок, подушок і подарунків
+	A shape	Фігура
+	A heart, a star, a flower and more	Серце, зірка, квітка та інше
+	An appliqué	Аплікація
+	A shape cut from fabric and sewn down	Фігура з тканини, пришита до основи
+	A photo or a drawing turned into stitches	Фото або малюнок, перетворений на стібки
+	A sample to try	Зразок, щоб спробувати
+	A finished design to sew and learn from	Готовий візерунок, щоб вишити й навчитися
+	Which hoop will you use?	Які п’яльця ви візьмете?
+	Tell us your machine to see its hoops.	Вкажіть свою машину, щоб побачити її п’яльця.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Виберіть п’яльця, у які натягнете тканину. Візерунок буде за їхнім розміром.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Такої висоти великі літери. Для рушника підійде 20–30 мм, для сорочки 10–15 мм.
+	Make It	Створити
+	Which shape of fabric?	Яка фігура з тканини?
+	Which shape?	Яка фігура?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Машина прошиє місце для тканини й зупиниться; ви кладете тканину, вона її прихопить і знову зупиниться, щоб ви обрізали зайве; потім обшиє край.
+	Choose a picture	Виберіть картинку
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Найкраще підходять прості картинки з кількома рівними кольорами й чіткими краями: мультяшний малюнок, логотип, кліпарт.
+	Choose a Picture…	Вибрати картинку…
+	Which sample?	Який зразок?
+	Your thread colours	Ваші кольори ниток
+	These are sewn in this order. Click a colour to match a thread you have.	Вони вишиваються в цьому порядку. Клацніть колір, щоб підібрати його до своєї нитки.
+	Watch it sew	Подивіться вишивання
+	See the needle go stitch by stitch, in the order your machine will sew it.	Дивіться, як іде голка, стібок за стібком, у тому порядку, у якому шитиме ваша машина.
+	Save it	Збережіть
+	Save for My Machine writes the file your machine sews, to its USB stick.	«Зберегти для моєї машини» запише файл для вишивання на її флешку.
+	Save Design keeps a copy you can open and change later.	«Зберегти візерунок» залишить копію, яку можна відкрити й змінити пізніше.
+	Save Design…	Зберегти візерунок…

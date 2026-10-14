@@ -1869,7 +1869,12 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     ui.label(egui::RichText::new(tl!("Machine embroidery digitizing — fast, open, scriptable.")).size(14.0).color(t.text_dim));
     ui.add_space(22.0);
     ui.horizontal(|ui| {
-        if widgets::primary_button(ui, tl!("New file")).clicked() {
+        // the step-by-step guide first: the easiest way in
+        if widgets::primary_button(ui, tl!("Make a Design, Step by Step")).clicked() {
+            app.run("ui.makeDesign", json!({})).ok();
+        }
+        ui.add_space(8.0);
+        if widgets::secondary_button(ui, tl!("New file")).clicked() {
             app.run("file.newDialog", json!({})).ok();
         }
         ui.add_space(8.0);
@@ -1900,21 +1905,7 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         }
     });
     ui.add_space(8.0);
-    let theirs: Vec<(String, String, f64, f64)> = mine["hoops"]
-        .as_array()
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|h| {
-            let (name, w, ht) = (h["name"].as_str()?, h["width"].as_f64()?, h["height"].as_f64()?);
-            Some((hoop_label(w, ht), name.to_string(), w, ht))
-        })
-        .collect();
-    let hoops: Vec<(String, String, f64, f64)> = if theirs.is_empty() {
-        HOME_HOOPS.iter().map(|(label, hoop, w, h)| ((*label).to_string(), (*hoop).to_string(), *w, *h)).collect()
-    } else {
-        theirs
-    };
+    let hoops = home_hoops(&mine);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(14.0, 14.0);
         for (label, hoop, w, h) in &hoops {
@@ -2000,6 +1991,26 @@ fn experience_row(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     });
 }
 
+/// The hoops a new design is offered in: My Machine's (`mine`, as `embroidery.myMachine` gives
+/// it), else the usual ones; each label, hoop name, width × height (mm).
+pub(crate) fn home_hoops(mine: &serde_json::Value) -> Vec<(String, String, f64, f64)> {
+    let theirs: Vec<(String, String, f64, f64)> = mine["hoops"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|h| {
+            let (name, w, ht) = (h["name"].as_str()?, h["width"].as_f64()?, h["height"].as_f64()?);
+            Some((hoop_label(w, ht), name.to_string(), w, ht))
+        })
+        .collect();
+    if theirs.is_empty() {
+        HOME_HOOPS.iter().map(|(label, hoop, w, h)| ((*label).to_string(), (*hoop).to_string(), *w, *h)).collect()
+    } else {
+        theirs
+    }
+}
+
 /// A hoop card's label: its sewing field in millimetres and inches (`240 × 150 mm (9.4 × 5.9″)`).
 fn hoop_label(w: f64, h: f64) -> String {
     let inch = |mm: f64| {
@@ -2019,7 +2030,7 @@ const HOME_HOOPS: [(&str, &str, f64, f64); 5] = [
 ];
 
 /// A sample design's name in the UI language.
-fn sample_name(name: &str) -> &str {
+pub(crate) fn sample_name(name: &str) -> &str {
     match name {
         "Heart patch" => tl!("Heart patch"),
         "Sun and moon" => tl!("Sun and moon"),
@@ -2029,7 +2040,7 @@ fn sample_name(name: &str) -> &str {
 }
 
 /// A Home screen card for a hoop: its field drawn to scale, its size under it.
-fn hoop_card(ui: &mut Ui, t: &Tokens, label: &str, (w, h): (f64, f64)) -> egui::Response {
+pub(crate) fn hoop_card(ui: &mut Ui, t: &Tokens, label: &str, (w, h): (f64, f64)) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(128.0, 128.0), egui::Sense::click());
     let hovered = resp.hovered();
     ui.painter().rect_filled(rect, 6.0, t.panel);

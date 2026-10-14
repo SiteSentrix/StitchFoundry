@@ -5175,3 +5175,39 @@ machine	Stop	Parada
 @msg	the design has no page	el diseño no tiene página
 @msg	open or start a design first	abre o empieza un diseño primero
 	Set My Machine	Elegir mi máquina
+	Make a Design	Crear un diseño
+	Make a Design…	Crear un diseño…
+	Make a Design, Step by Step	Crear un diseño paso a paso
+	Step by step: words, a shape, appliqué, a picture or a sample	Paso a paso: palabras, una forma, aplique, una imagen o una muestra
+	Step	Paso
+	Back	Atrás
+	What would you like to make?	¿Qué quieres hacer?
+	A name or some words	Un nombre o unas palabras
+	For towels, bags, pillows and gifts	Para toallas, bolsas, cojines y regalos
+	A shape	Una forma
+	A heart, a star, a flower and more	Un corazón, una estrella, una flor y más
+	An appliqué	Un aplique
+	A shape cut from fabric and sewn down	Una forma cortada de tela y cosida
+	A photo or a drawing turned into stitches	Una foto o un dibujo convertido en puntadas
+	A sample to try	Una muestra para probar
+	A finished design to sew and learn from	Un diseño terminado para bordar y aprender
+	Which hoop will you use?	¿Qué bastidor vas a usar?
+	Tell us your machine to see its hoops.	Indica tu máquina para ver sus bastidores.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Elige el bastidor donde pondrás la tela. El diseño se hace a su medida.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Las mayúsculas miden esto. De 20 a 30 mm va bien en una toalla; de 10 a 15 mm en una camisa.
+	Make It	Hacerlo
+	Which shape of fabric?	¿Qué forma de tela?
+	Which shape?	¿Qué forma?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	La máquina borda dónde va la tela y se detiene; colocas la tela, la hilvana y se detiene otra vez para que la recortes; luego borda el borde.
+	Choose a picture	Elige una imagen
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Funcionan mejor las imágenes sencillas con pocos colores planos y bordes nítidos: un dibujo animado, un logotipo, un clipart.
+	Choose a Picture…	Elegir una imagen…
+	Which sample?	¿Qué muestra?
+	Your thread colours	Tus colores de hilo
+	These are sewn in this order. Click a colour to match a thread you have.	Se bordan en este orden. Haz clic en un color para igualarlo a un hilo que tengas.
+	Watch it sew	Mira cómo se borda
+	See the needle go stitch by stitch, in the order your machine will sew it.	Mira la aguja puntada a puntada, en el orden en que bordará tu máquina.
+	Save it	Guárdalo
+	Save for My Machine writes the file your machine sews, to its USB stick.	Guardar para mi máquina escribe el archivo que borda tu máquina en su memoria USB.
+	Save Design keeps a copy you can open and change later.	Guardar diseño conserva una copia que puedes abrir y cambiar más tarde.
+	Save Design…	Guardar diseño…

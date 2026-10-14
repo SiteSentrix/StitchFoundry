@@ -4538,3 +4538,39 @@ machine	Stop	停止
 @msg	the design has no page	圖案沒有頁面
 @msg	open or start a design first	請先開啟或開始一個圖案
 	Set My Machine	設定我的機器
+	Make a Design	製作圖案
+	Make a Design…	製作圖案…
+	Make a Design, Step by Step	一步一步製作圖案
+	Step by step: words, a shape, appliqué, a picture or a sample	一步一步：文字、形狀、貼布繡、圖片或範例
+	Step	步驟
+	Back	上一步
+	What would you like to make?	你想做什麼？
+	A name or some words	名字或幾個字
+	For towels, bags, pillows and gifts	用於毛巾、包、枕頭和禮物
+	A shape	一個形狀
+	A heart, a star, a flower and more	心形、星星、花朵等
+	An appliqué	貼布繡
+	A shape cut from fabric and sewn down	從布上剪下並縫上的形狀
+	A photo or a drawing turned into stitches	把照片或圖畫變成針跡
+	A sample to try	可以試試的範例
+	A finished design to sew and learn from	可直接繡、用來學習的成品圖案
+	Which hoop will you use?	你要用哪個繡框？
+	Tell us your machine to see its hoops.	告訴我們你的機器，就能看到它的繡框。
+	Pick the hoop you will put the fabric in. The design is made to fit it.	選擇你要繃布的繡框，圖案會按它的大小來做。
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	這是大寫字母的高度。毛巾適合 20 到 30 公釐，襯衫適合 10 到 15 公釐。
+	Make It	製作
+	Which shape of fabric?	哪種布片形狀？
+	Which shape?	哪種形狀？
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	機器先繡出布片的位置並停下；你放上布，機器把它固定後再停下讓你修剪；最後繡邊。
+	Choose a picture	選擇一張圖片
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	顏色少、色塊平整、邊緣清楚的簡單圖片效果最好：卡通、標誌、美工圖案。
+	Choose a Picture…	選擇圖片…
+	Which sample?	哪個範例？
+	Your thread colours	你的線色
+	These are sewn in this order. Click a colour to match a thread you have.	按這個順序繡。點擊一種顏色，配成你手上的線。
+	Watch it sew	看它怎麼繡
+	See the needle go stitch by stitch, in the order your machine will sew it.	按機器的繡製順序，一針一針看針的走向。
+	Save it	儲存
+	Save for My Machine writes the file your machine sews, to its USB stick.	「為我的機器儲存」會把機器要繡的檔案寫到它的隨身碟。
+	Save Design keeps a copy you can open and change later.	「儲存圖案」會留一份以後可以開啟修改的副本。
+	Save Design…	儲存圖案…

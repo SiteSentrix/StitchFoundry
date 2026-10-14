@@ -10,6 +10,7 @@ Everything is a command (`embroidery.*`), so the same features work from the men
 the control channel, the CLI and the MCP server.
 
 - [Quick start](#quick-start)
+- [Make a Design](#make-a-design)
 - [Simple mode](#simple-mode)
 - [My Machine](#my-machine)
 - [Digitizing basics](#digitizing-basics)
@@ -546,11 +547,37 @@ workspace and how much the Embroidery panel shows:
 **Everything** (the start) shows every section in the Essentials workspace. Each is a command too:
 `window.experience {level: beginner|digitizer|business|all}`.
 
+## Make a Design
+
+**Make a Design, Step by Step** on the Home screen (also **File › Make a Design…**, the
+Embroidery menu and the first button in simple mode) walks through a whole design in six steps,
+with Back to change an answer:
+
+1. **What would you like to make?** A name or some words, a shape, an appliqué, a picture, or a
+   sample to try.
+2. **Which hoop will you use?** My Machine's hoops (or the usual ones); the design is made to fit
+   it. A sample comes with its own hoop.
+3. **The words, the shape or the picture.** Words: what it should say and how tall the capital
+   letters are (20–30 mm suits a towel, 10–15 mm a shirt). A shape or an appliqué: pick one; an
+   appliqué piece stops for the fabric, tacks it down, stops to trim and sews the edge. A
+   picture: choose one, and it is turned into stitches at most four fifths of the hoop (simple
+   pictures with a few flat colours work best). **Make It** builds the design
+   (`embroidery.makeDesign {what, hoop?, text?, height?, shape?, path?, colors?, sample?}`); a
+   mistake (no words typed, a picture that can't be read) shows on the step.
+4. **Your thread colours**, in sewing order: click one to match a thread you have
+   (`embroidery.recolor`).
+5. **Watch it sew**: the sewing time, a warning if it is bigger than the hoop, and **Watch It Sew**.
+6. **Save it**: **Save for My Machine** writes the machine's file to its USB stick; **Save
+   Design…** keeps a copy to change later.
+
+`ui.makeDesign` opens the guide.
+
 ## Simple mode
 
 For someone who would rather not learn a drawing program. The left column has big buttons, each
 with a one-line hint:
 
+- **Make a Design…**: the step-by-step guide (above).
 - **Select**: click a part of the design to choose it, drag it to move it.
 - **Add Words…**: type a name or a few words and how tall they should be (8–80 mm, inches shown
   too); they land in the middle of the hoop as smooth satin letters in the current thread

@@ -5173,3 +5173,39 @@ machine	Stop	Остановка
 @msg	the design has no page	у рисунка нет страницы
 @msg	open or start a design first	сначала откройте или начните рисунок
 	Set My Machine	Выбрать мою машину
+	Make a Design	Создать рисунок
+	Make a Design…	Создать рисунок…
+	Make a Design, Step by Step	Создать рисунок шаг за шагом
+	Step by step: words, a shape, appliqué, a picture or a sample	Шаг за шагом: слова, фигура, аппликация, картинка или образец
+	Step	Шаг
+	Back	Назад
+	What would you like to make?	Что вы хотите сделать?
+	A name or some words	Имя или несколько слов
+	For towels, bags, pillows and gifts	Для полотенец, сумок, подушек и подарков
+	A shape	Фигура
+	A heart, a star, a flower and more	Сердце, звезда, цветок и другое
+	An appliqué	Аппликация
+	A shape cut from fabric and sewn down	Фигура из ткани, пришитая к основе
+	A photo or a drawing turned into stitches	Фото или рисунок, превращённый в стежки
+	A sample to try	Образец, чтобы попробовать
+	A finished design to sew and learn from	Готовый рисунок, чтобы вышить и научиться
+	Which hoop will you use?	Какие пяльцы вы возьмёте?
+	Tell us your machine to see its hoops.	Укажите свою машину, чтобы увидеть её пяльцы.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Выберите пяльцы, в которые натянете ткань. Рисунок будет по их размеру.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Такой высоты заглавные буквы. Для полотенца подойдёт 20–30 мм, для рубашки 10–15 мм.
+	Make It	Создать
+	Which shape of fabric?	Какая фигура из ткани?
+	Which shape?	Какая фигура?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Машина прошьёт место для ткани и остановится; вы кладёте ткань, она её прихватит и снова остановится, чтобы вы обрезали лишнее; затем обошьёт край.
+	Choose a picture	Выберите картинку
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Лучше всего подходят простые картинки с несколькими ровными цветами и чёткими краями: мультяшный рисунок, логотип, клипарт.
+	Choose a Picture…	Выбрать картинку…
+	Which sample?	Какой образец?
+	Your thread colours	Ваши цвета ниток
+	These are sewn in this order. Click a colour to match a thread you have.	Они вышиваются в этом порядке. Щёлкните цвет, чтобы подобрать его к своей нитке.
+	Watch it sew	Посмотрите вышивку
+	See the needle go stitch by stitch, in the order your machine will sew it.	Смотрите, как идёт игла, стежок за стежком, в том порядке, в каком будет шить ваша машина.
+	Save it	Сохраните
+	Save for My Machine writes the file your machine sews, to its USB stick.	«Сохранить для моей машины» запишет файл для вышивки на её флешку.
+	Save Design keeps a copy you can open and change later.	«Сохранить рисунок» оставит копию, которую можно открыть и изменить позже.
+	Save Design…	Сохранить рисунок…
