@@ -50,6 +50,12 @@ pub struct GuideState {
     pub project: Option<String>,
     /// The in-the-hoop project's shape, if any.
     pub ith_shape: Option<&'static str>,
+    /// Its extras: a ribbon (loop or band), clear vinyl on top, a button mark.
+    pub ribbon: bool,
+    pub vinyl: bool,
+    pub button: bool,
+    /// The last in-the-hoop project made, for its cutting templates.
+    pub last_ith: Option<Value>,
     /// A quilt block: its size (inches), pattern and line spacing (mm).
     pub block: (f64, f64),
     pub pattern: &'static str,
@@ -80,6 +86,10 @@ impl Default for GuideState {
             picture: None,
             project: None,
             ith_shape: None,
+            ribbon: false,
+            vinyl: false,
+            button: false,
+            last_ith: None,
             block: (5.0, 7.0),
             pattern: "stipple",
             spacing: 6.0,
@@ -417,11 +427,24 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                     }
                 }
             });
+            // the extras (vinyl only on the pieces finished in the hoop)
+            let panel = app.guide.project.as_deref().is_some_and(|p| p.starts_with("pillow"));
+            ui.checkbox(&mut app.guide.ribbon, if panel { tl!("Add a ribbon band across it") } else { tl!("Add a ribbon loop to hang it") });
+            if !panel {
+                ui.checkbox(&mut app.guide.vinyl, tl!("Clear vinyl on top (wipe-clean)"));
+            }
+            ui.checkbox(&mut app.guide.button, tl!("Mark where a button goes"));
             if let Some(project) = app.guide.project.clone()
                 && crate::widgets::primary_button(ui, tl!("Make It")).clicked()
             {
                 let text = app.guide.text.trim().to_string();
-                make = Some(json!({ "what": "ith", "project": project, "text": (!text.is_empty()).then_some(text), "shape": app.guide.ith_shape }));
+                let g = &app.guide;
+                let q = json!({
+                    "what": "ith", "project": project, "text": (!text.is_empty()).then_some(text), "shape": g.ith_shape,
+                    "ribbon": g.ribbon, "vinyl": g.vinyl && !panel, "button": g.button,
+                });
+                app.guide.last_ith = Some(q.clone());
+                make = Some(q);
             }
         }
         _ => {
@@ -526,6 +549,18 @@ fn watch(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
 /// Step 6: save it for the machine, and as a design to change later.
 fn save(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     ui.label(RichText::new(tl!("Save it")).font(theme::semibold(18.0)).color(t.text));
+    // an in-the-hoop project's pieces, life size to cut round
+    if app.guide.what == Some("ith")
+        && let Some(q) = app.guide.last_ith.clone()
+        && ui.button(RichText::new(tl!("Print the Cutting Templates…")).size(15.0)).clicked()
+    {
+        match app.run("embroidery.ith.templates", q) {
+            Ok(_) => {
+                app.run("file.print", json!({})).ok();
+            }
+            Err(e) => app.guide.error = Some(e),
+        }
+    }
     ui.label(RichText::new(tl!("Save for My Machine writes the file your machine sews, to its USB stick.")).size(13.0).color(t.text_dim));
     if crate::widgets::primary_button(ui, tl!("Save for My Machine")).clicked() {
         app.run("ui.saveForMyMachine", json!({})).ok();
