@@ -133,7 +133,7 @@ pub(crate) fn paste_command(held: Modifiers) -> &'static str {
 /// Keyboard pastes of something other than text. egui swallows a paste chord's key press and
 /// sends a Paste event only when the clipboard holds text, so a paste key released without its
 /// press (or a Paste event) reported was a paste of a bitmap or a PDF.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct PasteChord {
     /// Paste keys whose press was reported (typed, not pasting).
     pressed: Vec<Key>,

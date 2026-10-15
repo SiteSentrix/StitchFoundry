@@ -2312,8 +2312,12 @@ as `document.open` reads one), `clipboard.importImage {dataBase64, mime?}` (an e
 physical size) or `clipboard.importText {text}` (point text in the default type style), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
-copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). Pasting what VectorCraft copied
-keeps the lossless internal clipboard. Windows carries every format both ways and pastes a bitmap from PNG, else
+copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). A background thread makes the
+formats and they are published when they are ready. While that thread has a save, an export, a print or a recovery
+copy to finish, Copy and Cut make and publish them at once. When another Copy or Cut, or a copy of text in
+VectorCraft, comes first, they are dropped. Pasting what VectorCraft copied keeps the lossless internal clipboard,
+also before its formats are published. While a text field or the Type tool has the keyboard, the app waits for
+them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
 throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). On the web Copy publishes SVG text, and
