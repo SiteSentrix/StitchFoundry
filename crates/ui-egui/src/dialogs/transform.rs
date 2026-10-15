@@ -53,6 +53,9 @@ fn link_distance_and_angle(d: &mut Dialog) {
     let polar_edited = last.as_deref().is_some_and(|l| l.get(2..) != Some(&[distance, angle][..]));
     let [dx, dy, distance, angle] = if polar_edited {
         let a = angle.to_radians();
+        // An angle past 180° reads as its negative one (270° is -90°), as the documented dialog has it.
+        let turn = angle.rem_euclid(360.0);
+        let angle = if turn > 180.0 { turn - 360.0 } else { turn };
         [distance * a.cos(), -distance * a.sin(), distance, angle].map(clean)
     } else {
         [dx, dy, dx.hypot(dy), (-dy).atan2(dx).to_degrees()].map(clean)
@@ -321,6 +324,9 @@ mod tests {
         set(&mut app, [("dx", 3.0), ("dy", 4.0)]);
         frame(&mut app);
         assert_eq!(fields(&app), [3.0, 4.0, 5.0, -53.130102]);
+        set(&mut app, [("distance", 10.0), ("angle", 270.0)]);
+        frame(&mut app);
+        assert_eq!(fields(&app), [0.0, 10.0, 10.0, -90.0], "270° is -90°");
         set(&mut app, [("distance", 10.0), ("angle", 90.0)]);
         frame(&mut app);
         crate::dialogs::confirm(&mut app).unwrap();
