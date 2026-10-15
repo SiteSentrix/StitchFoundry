@@ -2897,6 +2897,20 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
         format!("q 10 0 0 10 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 /F [/AHx /Fl] /DP [null {dp}] ID {data}> EI Q")
     };
     let form = |dict: &str, content: &str| pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed(&format!("{FORM} {dict}"), content)]);
+    // A calculator function with the deflated program `z`, to write inside another object. Its
+    // data is in hexadecimal digits with spaces between them, so the object around it still reads.
+    let calculator = |z: &[u8], dp: &str| {
+        let data: String = z.iter().map(|b| format!("{:X} {:X} ", b >> 4, b & 15)).collect();
+        let dict = format!("/FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1] /Filter [/ASCIIHexDecode /FlateDecode] {dp}");
+        format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len())
+    };
+    let held = |object: String| pdf_with("0 0 5 5 re f", "<< >>", &[object.into_bytes()]);
+    let shaded = |function: &str| {
+        let shading = format!("<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function {function} >>");
+        pdf_with("/S sh", "<< /Shading << /S 5 0 R >> >>", &[shading.into_bytes()])
+    };
+    let spaces = calculator(&spaces_past_the_cap(), "");
+    let program = deflated(b"{ dup 1 exch sub 0 }");
     let files = [
         ("a form with Columns 0", form(zero, "0 0 5 5 re f")),
         ("a form with a huge Columns", form(huge, "0 0 5 5 re f")),
@@ -2905,6 +2919,10 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
         ("an inline image in a compressed form", form("", &inline("<< /Predictor 2 /Columns 0 >>"))),
         ("an object stream with Columns 0", pdf_with_object_stream("[0 0 100 100]", zero)),
         ("a form of spaces past the cap", pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed_as_is(FORM, &spaces_past_the_cap())])),
+        ("a function of spaces past the cap in an array", held(format!("[{spaces}]"))),
+        ("a function of spaces past the cap in a dictionary", held(format!("<< /K {spaces} >>"))),
+        ("a function of spaces past the cap in a shading", shaded(&spaces)),
+        ("a function with Columns 0 in an array", held(format!("[{}]", calculator(&program, "/DecodeParms [null << /Predictor 2 /Columns 0 >>]")))),
     ];
     on_a_small_stack(move || {
         for (what, bytes) in &files {
@@ -2916,7 +2934,8 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
     });
     // Within range, the same files open.
     let fine = "/DecodeParms << /Predictor 1 /Columns 0 >>";
-    for bytes in [form(fine, "0 0 5 5 re f"), deep_pdf(&inline("<< /Predictor 1 >>"), "<< >>")] {
+    let function = calculator(&program, "");
+    for bytes in [form(fine, "0 0 5 5 re f"), deep_pdf(&inline("<< /Predictor 1 >>"), "<< >>"), held(format!("[{function}]")), shaded(&function)] {
         vectorcraft_engine::cmd::fileio::load("fine.pdf", &bytes).expect("opens");
     }
 }

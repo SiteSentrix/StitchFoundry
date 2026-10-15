@@ -117,37 +117,34 @@ fn procedures_too_deep(o: &Object<'_>) -> bool {
 /// The error of a file with a stream the reader would fail on ([`crate::streams`]).
 const STREAM_NOTE: &str = "a stream in it would decode to more than 256 MB, or its decode parameters can't be applied";
 
-/// The error of a file [`nests_without_end`].
+/// The error of a file with functions or color spaces built on one another past [`MAX_LINKS`]
+/// (or on themselves), or a calculator function nested past [`MAX_PROCEDURES`].
 const NESTED_NOTE: &str = "its functions or colour spaces are built on one another without end";
 
-/// Why `pdf` is refused, if it is: a stream the reader would fail on (its own checks come first:
-/// the calculator functions are decoded below), or [`nests_without_end`].
+/// Why `pdf` is refused, if it is: a stream the reader would fail on ([`STREAM_NOTE`]), or
+/// functions, color spaces or calculator procedures nested too deep ([`NESTED_NOTE`]). Every
+/// object is looked at, and every array, dictionary and stream written inside one, wherever it
+/// is used from: the interpreter builds functions and color spaces from resources, shadings,
+/// images, patterns, masks and graphics states alike.
 fn hostile(pdf: &Pdf) -> Option<&'static str> {
-    if pdf.objects().into_iter().any(|o| matches!(&o, Object::Stream(s) if crate::streams::unsafe_stream(s))) {
-        return Some(STREAM_NOTE);
-    }
-    nests_without_end(pdf).then_some(NESTED_NOTE)
-}
-
-/// Does `pdf` hold functions or colour spaces built on one another past [`MAX_LINKS`] (or on
-/// themselves), or a calculator function nested past [`MAX_PROCEDURES`]? Every object is looked
-/// at, wherever it is used from: the interpreter builds them from resources, shadings, images,
-/// patterns, masks and graphics states alike.
-fn nests_without_end(pdf: &Pdf) -> bool {
     let xref = pdf.xref();
     let mut known = HashMap::new();
     // The objects of the file, then what each holds directly (64 deep at most: the reader's cap).
     let mut pending: Vec<Object<'_>> = pdf.objects().into_iter().collect();
     while let Some(o) = pending.pop() {
+        // A stream's own checks come first: a calculator function is decoded below.
+        if matches!(&o, Object::Stream(s) if crate::streams::unsafe_stream(s)) {
+            return Some(STREAM_NOTE);
+        }
         if procedures_too_deep(&o) || built_on(MaybeRef::NotRef(o.clone()), xref, &mut known, MAX_LINKS).is_none() {
-            return true;
+            return Some(NESTED_NOTE);
         }
         match &o {
             Object::Array(a) => pending.extend(a.raw_iter().filter_map(direct)),
             _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| values(d)).filter_map(direct)),
         }
     }
-    false
+    None
 }
 
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
