@@ -77,3 +77,12 @@ fn a_negative_operand_after_an_operator_is_a_sign() {
     assert_eq!(Unit::Points.parse("10-2"), Some(8.0));
     assert_eq!(super::parse_number("90*-1"), Some(-90.0));
 }
+
+#[test]
+fn mixed_mul_div() {
+    // `*` and `/` share one precedence level and run left to right.
+    assert_eq!(Unit::Points.parse("10/2*5"), Some(25.0));
+    assert_eq!(crate::parse_number("100*3/4"), Some(75.0));
+    assert_eq!(Unit::Points.parse("10*2/5"), Some(4.0));
+    assert_eq!(Unit::Points.parse("10*2/5 px"), Some(Unit::Pixels.to_pt(4.0)));
+}
