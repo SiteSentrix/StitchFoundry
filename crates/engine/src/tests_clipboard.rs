@@ -571,6 +571,20 @@ fn in_place_pastes_go_onto_the_artboard_named() {
     }
 }
 
+/// Art copied from beside the artboards goes back where it was, whichever artboard is active (#1924).
+#[test]
+fn in_place_pastes_of_art_off_the_artboards_stay_where_it_was() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let r = rect(&mut s, boards[0].x0 - 100.0, boards[0].y0 + 15.0, 20.0, 20.0);
+    copy(&mut s, &[r]);
+    for cmd in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let ids = ids_of(&s.execute(cmd, &json!({"artboard": 1})).unwrap());
+        assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[0].x0 - 100.0, boards[0].y0 + 15.0), "{cmd}");
+    }
+}
+
 #[test]
 fn paste_remembers_layers_restores_the_source_layers() {
     let mut s = session();
