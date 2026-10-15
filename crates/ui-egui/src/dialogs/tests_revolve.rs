@@ -320,24 +320,24 @@ fn cap_checkbox_previews_resets_and_respects_cancel_and_one_step_undo() {
             let state = h.app.session.doc().unwrap();
             vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
         };
-        assert!(h.app.ui.dialog.as_ref().unwrap().bool("capEnds"), "Cap starts on");
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"), "Cap starts on");
         let capped = art(&h);
         h.click(h.rect("Cap").center());
-        assert!(!h.app.ui.dialog.as_ref().unwrap().bool("capEnds"));
+        assert!(!h.app.ui.dialog.as_ref().unwrap().bool("cap"));
         assert_ne!(art(&h), capped);
-        h.click(h.response(("revolve-reset", "capEnds")).center());
-        assert!(h.app.ui.dialog.as_ref().unwrap().bool("capEnds"));
+        h.click(h.response(("revolve-reset", "cap")).center());
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"));
         assert_eq!(art(&h), capped);
         h.click(h.rect("Cap").center());
         h.click(h.response("revolve-reset-all").center());
-        assert!(h.app.ui.dialog.as_ref().unwrap().bool("capEnds"));
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"));
         h.click(h.rect("Cap").center());
         if confirm {
             dialogs::confirm(&mut h.app).unwrap();
             let state = h.app.session.doc().unwrap();
-            assert_eq!(state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["capEnds"], json!(false));
+            assert_eq!(state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["cap"], json!(false));
             let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
-            assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["capEnds"], json!(false));
+            assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["cap"], json!(false));
             h.app.run("edit.undo", json!({})).unwrap();
         } else {
             dialogs::cancel(&mut h.app);

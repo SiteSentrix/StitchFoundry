@@ -293,7 +293,7 @@ fn smooth_revolve_exports_axial_vector_shading_without_images_and_keeps_the_sour
     n.appearance.effects.push(vectorcraft_doc::Effect {
         id: "threeD.revolve".into(),
         visible: true,
-        params: serde_json::json!({"offset":20,"rotationX":-25,"capEnds":true,"segments":16}),
+        params: serde_json::json!({"offset":20,"rotationX":-25,"cap":true,"segments":16}),
     });
     add(&mut d, n);
     let before = d.clone();

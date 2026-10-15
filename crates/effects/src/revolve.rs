@@ -39,7 +39,7 @@ pub fn revolve_options(p: &Value) -> Revolve {
         ambient: num(p, "ambient", 25.0) / 100.0,
         shade: flag(p, "shade", true),
         smooth_shading: true,
-        cap_ends: flag(p, "capEnds", true),
+        cap_ends: flag(p, "cap", true),
     }
 }
 
@@ -54,8 +54,8 @@ pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
     if p.get("edge").is_some_and(|v| v.as_str() != Some("left") && v.as_str() != Some("right")) {
         return Err("Revolve edge must be left or right".into());
     }
-    if p.get("capEnds").is_some_and(|v| v.as_bool().is_none()) {
-        return Err("Revolve capEnds must be a boolean".into());
+    if p.get("cap").is_some_and(|v| v.as_bool().is_none()) {
+        return Err("Revolve cap must be a boolean".into());
     }
     vectorcraft_three_d::revolve(&path, b, revolve_options(p)).map(|_| ())
 }
@@ -257,7 +257,7 @@ mod tests {
                     crate::new_effect(
                         REVOLVE,
                         &json!({
-                            "offset":20,"rotationX":-18,"segments":24,"capEnds":true,
+                            "offset":20,"rotationX":-18,"segments":24,"cap":true,
                             "shade":shade,"angle":angle
                         }),
                     )
@@ -315,15 +315,15 @@ mod tests {
         let mut effect = fx();
         effect.params["offset"] = json!(20);
         effect.params["rotationX"] = json!(-35);
-        effect.params.as_object_mut().unwrap().remove("capEnds");
+        effect.params.as_object_mut().unwrap().remove("cap");
         n.appearance.effects.push(effect);
         let capped = revolve_art(&n).unwrap();
-        n.appearance.effects[0].params["capEnds"] = json!(false);
+        n.appearance.effects[0].params["cap"] = json!(false);
         let uncapped = revolve_art(&n).unwrap();
         assert_ne!(uncapped, capped);
-        n.appearance.effects[0].params["capEnds"] = json!(true);
+        n.appearance.effects[0].params["cap"] = json!(true);
         assert_eq!(revolve_art(&n), Some(capped));
-        n.appearance.effects[0].params["capEnds"] = json!(false);
+        n.appearance.effects[0].params["cap"] = json!(false);
         assert_eq!(revolve_art(&n), Some(uncapped));
     }
     #[test]

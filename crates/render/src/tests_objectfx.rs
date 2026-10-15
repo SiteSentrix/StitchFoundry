@@ -49,10 +49,10 @@ fn revolve_caps_cover_the_opening_and_match_export_and_visible_only_expansion() 
         n.appearance.effects = vec![fx(
             "threeD.revolve",
             json!({"offset":20,"rotationX":-35,"lightAzimuth":0,
-            "angle":angle,"segments":32,"capEnds":false,"expandVisibleOnly":true}),
+            "angle":angle,"segments":32,"cap":false,"expandVisibleOnly":true}),
         )];
         let open = render(&doc_with(Document::new(100.0, 100.0), n.clone()));
-        n.appearance.effects[0].params["capEnds"] = json!(true);
+        n.appearance.effects[0].params["cap"] = json!(true);
         let d = doc_with(Document::new(100.0, 100.0), n.clone());
         let live = render(&d);
         assert_ne!(live.pixels, open.pixels, "caps change the opening: {angle}, {opacity}");
@@ -158,7 +158,7 @@ fn revolve_rim_has_no_spikes_at_high_zoom_and_keeps_seams_covered() {
     use vectorcraft_doc::AppearanceItem;
     let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 30 L70 70").unwrap());
     let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
-    n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":-18,"segments":24,"capEnds":true})));
+    n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":-18,"segments":24,"cap":true})));
     let d = doc_with(Document::new(100.0, 100.0), n);
     let baked = vectorcraft_effects::bake_document(&d).unwrap();
     let mut fills = baked.clone();
@@ -197,7 +197,7 @@ fn continuous_revolve_caps_keep_one_colour_along_the_curved_rim_at_high_zoom() {
     for rotation in [-18.0f64, 18.0] {
         for shade in [false, true] {
             let mut n = Node::path(NodeId(0), path.clone(), Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
-            n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":rotation,"segments":8,"capEnds":true,"shade":shade})));
+            n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":rotation,"segments":8,"cap":true,"shade":shade})));
             let d = doc_with(Document::new(100.0, 100.0), n);
             let center_y = 50.0 + if rotation < 0.0 { -20.0 } else { 20.0 } * rotation.to_radians().cos();
             let zoom = 24.0;

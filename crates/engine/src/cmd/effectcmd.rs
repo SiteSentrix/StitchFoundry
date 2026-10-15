@@ -661,7 +661,7 @@ mod tests {
         let initial = node(&s, id);
         let source = initial.path_data().unwrap().clone();
         assert!(!initial.appearance.effects[0].params.as_object().unwrap().contains_key("smoothShading"));
-        assert!(initial.appearance.effects[0].params["capEnds"].as_bool().unwrap());
+        assert!(initial.appearance.effects[0].params["cap"].as_bool().unwrap());
         let mut gradients = 0;
         effects_for_test(&s, id).walk(&mut |face| {
             gradients += face.appearance.items.iter().filter(|item| {
@@ -693,22 +693,22 @@ mod tests {
         s.execute(
             "effect.apply",
             &json!({"effect":"threeD.revolve","ids":[id.0],"item":null,
-            "params":{"offset":30,"rotationX":-35,"segments":16,"expandVisibleOnly":false,"capEnds":false}}),
+            "params":{"offset":30,"rotationX":-35,"segments":16,"expandVisibleOnly":false,"cap":false}}),
         )
         .unwrap();
         let uncapped = node(&s, id);
-        assert_eq!(uncapped.appearance.effects[0].params["capEnds"], json!(false));
+        assert_eq!(uncapped.appearance.effects[0].params["cap"], json!(false));
         let count = |n: &vectorcraft_doc::Node| n.children().unwrap()[0].children().unwrap().len();
         let open_count = count(&effects_for_test(&s, id));
-        s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"capEnds":true}})).unwrap();
+        s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"cap":true}})).unwrap();
         let capped = node(&s, id);
         let art = effects_for_test(&s, id);
         assert_eq!(count(&art), open_count + 2, "each endpoint adds one continuous vector cap");
         assert_eq!(capped.path_data(), Some(&source));
-        assert!(s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"capEnds":"yes"}})).is_err());
+        assert!(s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"cap":"yes"}})).is_err());
         assert_eq!(node(&s, id), capped, "a bad boolean does not mutate the document");
         let restored = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
-        assert_eq!(restored.node(id).unwrap().appearance.effects[0].params["capEnds"], json!(true));
+        assert_eq!(restored.node(id).unwrap().appearance.effects[0].params["cap"], json!(true));
         assert_eq!(effects::revolve_art(restored.node(id).unwrap()), Some(art.clone()));
         let pdf = s.execute("document.serialize", &json!({"format":"pdf"})).unwrap();
         assert!(vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap().starts_with(b"%PDF"));

@@ -58,7 +58,7 @@ SVG/PDF export evaluates filled vector faces; native saves retain the profile an
 **Object > Expand Appearance** replaces the live effect with ordinary editable vector faces.
 
 **Cap** in the shape controls closes the circular rings at the endpoints of an open profile.
-It is on by default. Its saved parameter is `capEnds` (boolean, default true); missing parameters
+It is on by default. Its saved parameter is `cap` (boolean, default true); missing parameters
 also use caps. Set it to false to keep the ends open. The reset dot and Reset all restore Cap to on. Each cap is one closed curved vector path from the endpoint ring to the rotation axis,
 with uniform flat shading. A full turn produces a projected circular disk (an ellipse in an
 orthographic view); a partial turn produces a sector. Body faces share the same curved rim,

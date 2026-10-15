@@ -25,11 +25,11 @@ fn fx(id: &str) -> Effect {
 fn revolve_caps_export_as_additional_vector_faces_and_leave_source_editable() {
     let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M100 30 L100 160").unwrap());
     let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.8, 0.2, 0.1)), Paint::None, 0.0));
-    n.appearance.effects.push(Effect { params: json!({"offset":30,"rotationX":-35,"segments":16,"capEnds":false}), ..fx("threeD.revolve") });
+    n.appearance.effects.push(Effect { params: json!({"offset":30,"rotationX":-35,"segments":16,"cap":false}), ..fx("threeD.revolve") });
     let mut d = doc_with(n);
     let open = export(&d, &ExportOptions::default());
     let id = d.layers[0].children().unwrap()[0].id;
-    d.node_mut(id).unwrap().appearance.effects[0].params["capEnds"] = json!(true);
+    d.node_mut(id).unwrap().appearance.effects[0].params["cap"] = json!(true);
     let before = d.clone();
     let capped = export(&d, &ExportOptions::default());
     assert_eq!(capped.matches("<path").count(), open.matches("<path").count() + 2, "two continuous caps, each with a fill and rim stroke");
@@ -62,7 +62,7 @@ fn smooth_revolve_exports_vector_gradients_without_rasterizing_or_editing_the_so
         vectorcraft_geom::PathData::from_bezpath(&bp),
         Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0),
     );
-    n.appearance.effects.push(Effect { params: json!({"offset":20,"rotationX":-25,"capEnds":true,"segments":16}), ..fx("threeD.revolve") });
+    n.appearance.effects.push(Effect { params: json!({"offset":20,"rotationX":-25,"cap":true,"segments":16}), ..fx("threeD.revolve") });
     let d = doc_with(n);
     let before = d.clone();
     let svg = export(&d, &ExportOptions::default());

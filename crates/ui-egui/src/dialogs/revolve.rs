@@ -91,15 +91,15 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     number(ui, d, "offset", tl!("Offset"), (0.0, 100000.0), "", 1, Some(unit));
     ui.horizontal(|ui| {
-        let mut cap = d.bool("capEnds");
+        let mut cap = d.bool("cap");
         let tip = tl!("Close the circular ends of open profiles. Partial sweeps keep their cut sides open.");
         if widgets::check_tip(ui, c3("Cap"), cap, true, tip) {
             cap = !cap;
-            d.fields.insert("capEnds".into(), json!(cap));
+            d.fields.insert("cap".into(), json!(cap));
         }
         ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, "capEnds", !cap, "true") {
-            d.fields.insert("capEnds".into(), json!(true));
+        if reset_dot(ui, "cap", !cap, "true") {
+            d.fields.insert("cap".into(), json!(true));
         }
     });
     ui.add_space(10.0);
