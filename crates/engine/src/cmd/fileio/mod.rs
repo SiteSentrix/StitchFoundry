@@ -1,6 +1,6 @@
 //! Document file I/O for every frontend (desktop, web, CLI, control channel, headless MCP): open,
 //! save, export and serialize by path or bytes (base64), the format table, `command.batch` and
-//! `action.batch` (File › Automate › Batch / the Actions panel).
+//! `action.batch` (the Actions panel menu's Batch…).
 //!
 //! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, DXF, raster images).
 //! - `action_batch`: play an action on every file in a folder or every data set.
@@ -152,7 +152,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(
             "action.batch",
             "Batch…",
-            ["File", "Automate"],
+            [],
             None,
             "{commands: [{command, params}] (the action's steps), source?: folder (default) | datasets, folder? (required for folder: the source folder), includeSubdirs?: false, destination?: none (default: leave each file open) | saveAndClose (save over the source and close) | folder (save or export into destinationFolder and close), destinationFolder? (required when destination is folder; also the folder Override Save/Export write into), overrideOpen?: true (skip document.open / file.open steps: the batch opens each source file), overrideSave?: true (point document.save / file.save / file.saveAs at destinationFolder/{stem}.{ext}), overrideExport?: true (point document.export / document.exportForScreens / document.exportSelection the same way), stopOnError?: true, label?} play the commands on every readable file in folder (and its subfolders when includeSubdirs), or on every data set of the open document (source: datasets; File + Data Set Name for Override Save/Export). Caps: 500 files or data sets, 8 folder levels, 256 steps. Batches cannot nest. → {processed: [{path|dataset, result|error}…], count, failed, stopped}",
             always,

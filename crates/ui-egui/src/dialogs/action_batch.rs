@@ -1,4 +1,4 @@
-//! Actions panel › Batch… / File › Automate › Batch: play the selected action on every file in a
+//! Actions panel menu › Batch…: play the selected action on every file in a
 //! folder, or on every data set of the open document (`action.batch`).
 
 use serde_json::{Value, json};

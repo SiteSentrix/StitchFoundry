@@ -1,5 +1,5 @@
 //! `action.batch`: play an action's commands on every file in a folder, or on every data set
-//! of the open document (File › Automate › Batch / the Actions panel).
+//! of the open document (the Actions panel menu's Batch…).
 //!
 //! Public options follow the Batch dialog: source Folder or Data Sets; destination None,
 //! Save and Close, or Folder; Override Open / Save / Export. Cited:
@@ -324,7 +324,8 @@ fn is_openable(path: &str) -> bool {
     OPEN_EXTS.iter().any(|e| *e == ext) || FORMATS.iter().any(|f| f.read && f.extensions.iter().any(|e| *e == ext))
 }
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use super::*;
     use serde_json::json;

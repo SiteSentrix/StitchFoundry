@@ -991,7 +991,7 @@ already walks Image Trace. Short agent entry points:
   `dataset.select`.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
-  action on every file in a folder or every data set (File › Automate › Batch…).
+  action on every file in a folder or every data set (the Actions panel menu's Batch…).
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|graph}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeGraphDynamic`, `variable.unbind`,
   `dataset.new` / `dataset.set` / `dataset.select` (graph values are CSV as `graph.setData`).
@@ -1801,7 +1801,7 @@ for `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack`, and to each
 none, when the step runs. When the document a step runs in has no artboard at that index (for example, after an
 earlier step deleted the active artboard when it was the last one), the step gets that document's last artboard. In
 remote mode, MCP's `run_command` calls and each step of the `command_batch` tool get the active artboard too. The
-Actions panel plays an action as a `command.batch`. File › Automate › Batch… and the Actions panel's Batch… run
+Actions panel plays an action as a `command.batch`. The Actions panel menu's Batch… runs
 `action.batch`: the same steps on every readable file in a folder (or every data set of the open document), with
 destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. Caps: 500 files or data sets, 8
 folder levels, 256 steps. An action recorded in the Actions panel leaves the artboard out,
