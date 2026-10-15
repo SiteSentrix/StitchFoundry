@@ -346,6 +346,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let c = b.center();
                     let origin = app.ruler_origin();
                     let link = app.session.prefs.constrain_proportions;
+                    let copy = crate::panels::transform::alt_enter_copies(app, ui);
                     for (k, lbl, v, offset) in [
                         ("x", "X:", c.x, origin.x),
                         ("y", "Y:", c.y, origin.y),
@@ -358,7 +359,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         }
                         widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
                         if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v - offset), units, 80.0) {
-                            app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link})).ok();
+                            app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
                         }
                     }
                 }

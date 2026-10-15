@@ -415,6 +415,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let b = bx.rect;
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
     let rp = bx.reference_point(refi);
+    let copy = super::transform::alt_enter_copies(app, ui);
     section_header(ui, tl!("Transform"));
     let fw = super::field_width(ui);
     ui.horizontal(|ui| {
@@ -426,20 +427,20 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
             if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x - origin.x), units, fw) {
-                app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi})).ok();
+                app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "W:");
             if let Some(v) = widgets::num_field(ui, "tw", Some(b.width()), units, fw) {
-                app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link})).ok();
+                app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
             dim_label(ui, "Y:");
             if let Some(v) = widgets::num_field(ui, "ty", Some(rp.y - origin.y), units, fw) {
-                app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi})).ok();
+                app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "H:");
             if let Some(v) = widgets::num_field(ui, "th", Some(b.height()), units, fw) {
-                app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link})).ok();
+                app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
         });
@@ -451,7 +452,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::scrub::note_label(ui, icon.rect);
         // The bounding box's angle: a new value turns the selection to it.
         if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, fw) {
-            app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
+            app.run("object.rotate", json!({"angle": a, "absolute": true, "copy": copy})).ok();
         }
         ui.add_space(10.0);
         // Same mapping as the Transform panel (#1910): Lucide flip-vertical-2 is the vertical
