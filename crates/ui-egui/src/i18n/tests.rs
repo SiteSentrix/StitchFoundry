@@ -481,7 +481,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 14] = ["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi"];
+const KEEPS_MENU_NAMES: [&str; 15] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -1245,7 +1245,7 @@ fn select_key_param_error_is_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi"];
+const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];

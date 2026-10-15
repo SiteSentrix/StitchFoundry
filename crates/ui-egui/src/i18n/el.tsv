@@ -4591,7 +4591,7 @@ effect	Horizontal	Οριζόντιο
 	Coloring Controls	Στοιχεία ελέγχου χρωματισμού
 effect	Regular	Κανονικό
 effect	Vertical	Κατακόρυφο
-	English	Αγγλικά
+	English	English
 	Name 40%	Όνομα 40%
 @msg	object has no weighted stroke	Το αντικείμενο δεν διαθέτει περίγραμμα μεταβλητού πάχους
 	PPI	PPI
@@ -4774,3 +4774,107 @@ effect	Points	Σημεία
 	Web 1440×900	Web 1440×900
 	Web 1600×900	Web 1600×900
 	Web 1920×1080	Web 1920×1080
+# Strings added upstream after this catalog was written (machine-drafted; review welcome).
+	 cancels  |  Double-click the tool for options	 για ακύρωση  |  Διπλό κλικ στο εργαλείο για επιλογές
+	 out from a highlighted edge to place its dimension  |  	 προς τα έξω από μια επισημασμένη ακμή για τοποθέτηση της διάστασής της  |  
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Ένα αρχείο .ai παλαιού τύπου περιέχει έναν πίνακα σχεδίασης: κάθε πίνακας σχεδίασης που επιλέγετε αποθηκεύεται ως ξεχωριστό αρχείο.
+	Arrange Intertwine Area	Διάταξη περιοχής διαπλοκής
+	Batch…	Μαζική επεξεργασία…
+	By Layer	Ανά επίπεδο
+	By Object	Ανά αντικείμενο
+	Check an artboard to save.	Επιλέξτε έναν πίνακα σχεδίασης για αποθήκευση.
+	Clear All	Εκκαθάριση όλων
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κρατούν ανοιχτές τις πλευρές τομής τους.
+	Color Panel Options	Επιλογές πίνακα χρώματος
+	Color blindness – Tritanopia-type	Αχρωματοψία – τύπου τριτανοπίας
+	Create Dimension	Δημιουργία διάστασης
+	Darkness	Σκουρότητα
+	Destination Folder:	Φάκελος προορισμού:
+	Dimension	Διάσταση
+	Dimension Tool	Εργαλείο διαστάσεων
+	Dimension Tool Options	Επιλογές εργαλείου διαστάσεων
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Σχέδιο : πραγματικό μέγεθος — με 1:10 η 1 μονάδα στη σελίδα εμφανίζεται ως 10.
+	Editable	Επεξεργάσιμο
+	Export Data Sets…	Εξαγωγή συνόλων δεδομένων…
+	Filter	Φίλτρο
+	Filter Layers Panel Rows	Φιλτράρισμα γραμμών πίνακα επιπέδων
+	Flatten	Ισοπέδωση
+	Font Family:	Οικογένεια γραμματοσειράς:
+	Font Style:	Στυλ γραμματοσειράς:
+	Groups	Ομάδες
+	Hidden	Κρυφό
+	Hidden Layer	Κρυφό επίπεδο
+	Hidden Objects:	Κρυφά αντικείμενα:
+	Hide Template	Απόκρυψη προτύπου
+	Images	Εικόνες
+	Import Data Sets…	Εισαγωγή συνόλων δεδομένων…
+	Intertwine	Διαπλοκή
+	Isolate Selected Object	Απομόνωση επιλεγμένου αντικειμένου
+	Keep selected	Διατήρηση επιλογής
+	Legacy (version 7)	Παλαιού τύπου (έκδοση 7)
+	Legacy .ai Options	Επιλογές .ai παλαιού τύπου
+	Linked Files	Συνδεδεμένα αρχεία
+	Locked	Κλειδωμένο
+	Make Graph Dynamic	Δυναμικό γράφημα
+	Make Image Dynamic	Δυναμική εικόνα
+	Make Visible	Εμφάνιση
+	Omit	Παράλειψη
+	Overrides	Παρακάμψεις
+	PDF-compatible	Συμβατό με PDF
+	Panels Except Tools and Control	Πλαίσια εκτός από Εργαλεία και Έλεγχο
+	Precision:	Ακρίβεια:
+	Preview (1 inch on the page)	Προεπισκόπηση (1 ίντσα στη σελίδα)
+	Registration:	Σημείο αναφοράς:
+	Reset Tracking and Kerning	Επαναφορά απόστασης χαρακτήρων και διαγραμμάτωσης
+	Sample Color from Screen	Δειγματοληψία χρώματος από την οθόνη
+	Set as Default	Ορισμός ως προεπιλογή
+	Show Template	Εμφάνιση προτύπου
+	Source Folder:	Φάκελος προέλευσης:
+	Text:	Κείμενο:
+	The active document changed while the screen color sampler was open	Το ενεργό έγγραφο άλλαξε ενώ ήταν ανοιχτή η δειγματοληψία χρώματος από την οθόνη
+	This system has no screen color sampler	Αυτό το σύστημα δεν έχει δειγματοληψία χρώματος από την οθόνη
+	Transparent Images:	Διαφανείς εικόνες:
+	Update Dimensions	Ενημέρωση διαστάσεων
+	Uses every data set of the open document.	Χρησιμοποιεί κάθε σύνολο δεδομένων του ανοιχτού εγγράφου.
+	{count} of {total} artboards	{count} από {total} πίνακες σχεδίασης
+@msg	Angles require two straight segments	Οι γωνίες απαιτούν δύο ευθύγραμμα τμήματα
+@msg	Batch: {count} processed	Μαζική επεξεργασία: {count} επεξεργάστηκαν
+@msg	Batch: {count} processed, {failed} failed	Μαζική επεξεργασία: {count} επεξεργάστηκαν, {failed} απέτυχαν
+@msg	Choose a circle or a perfect arc	Επιλέξτε έναν κύκλο ή ένα τέλειο τόξο
+@msg	Choose a precision from 0 to 6	Επιλέξτε ακρίβεια από 0 έως 6
+@msg	Choose two different points	Επιλέξτε δύο διαφορετικά σημεία
+@msg	Choose two non-parallel straight segments	Επιλέξτε δύο μη παράλληλα ευθύγραμμα τμήματα
+@msg	Choose two nonzero angle arms	Επιλέξτε δύο σκέλη γωνίας με μη μηδενικό μήκος
+@msg	Dimension point is outside the canvas	Το σημείο διάστασης βρίσκεται έξω από τον καμβά
+@msg	Dimension size is outside its supported range	Το μέγεθος της διάστασης είναι εκτός του υποστηριζόμενου εύρους
+@msg	First measured segment no longer exists	Το πρώτο μετρημένο τμήμα δεν υπάρχει πλέον
+@msg	Invalid dimension distance	Μη έγκυρη απόσταση διάστασης
+@msg	Invalid dimension font name	Μη έγκυρο όνομα γραμματοσειράς διάστασης
+@msg	Invalid drawing scale	Μη έγκυρη κλίμακα σχεδίου
+@msg	Invalid real scale	Μη έγκυρη πραγματική κλίμακα
+@msg	Measured anchor no longer exists	Το μετρημένο σημείο αγκύρωσης δεν υπάρχει πλέον
+@msg	Measured segment no longer exists	Το μετρημένο τμήμα δεν υπάρχει πλέον
+@msg	Non-finite dimension	Η διάσταση δεν είναι πεπερασμένος αριθμός
+@msg	Scale must be drawing:real, for example 1:10	Η κλίμακα πρέπει να είναι σχέδιο:πραγματικό, για παράδειγμα 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Ο λόγος κλίμακας πρέπει να είναι μεταξύ 1:1000000 και 1000000:1
+@msg	Second measured segment no longer exists	Το δεύτερο μετρημένο τμήμα δεν υπάρχει πλέον
+@msg	Unknown dimension mode	Άγνωστη λειτουργία διάστασης
+@msg	Unknown dimension option {k}	Άγνωστη επιλογή διάστασης {k}
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	το `mode` πρέπει να είναι grayscale, rgb, hsb, cmyk ή websafe
+@msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
+@msg	choose a destination folder	επιλέξτε φάκελο προορισμού
+@msg	choose a source folder	επιλέξτε φάκελο προέλευσης
+@msg	open a document with data sets	ανοίξτε ένα έγγραφο με σύνολα δεδομένων
+@msg	select an Intertwine group	επιλέξτε μια ομάδα διαπλοκής
+@msg	span must be "object" or "selection", got {v}	το span πρέπει να είναι "object" ή "selection", δόθηκε {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: το "selection" τοποθετεί ένα `gradient`, όχι δείγμα χρώματος
+@msg	span: "selection" places a gradient: give `gradient`	span: το "selection" τοποθετεί ντεγκραντέ: δώστε `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: το "selection" τοποθετεί γραμμικό ή ακτινικό ντεγκραντέ, όχι ελεύθερης μορφής
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: το "selection" τοποθετεί το ίδιο το ντεγκραντέ: παραλείψτε τα `start` και `end` (το τοποθετούν ήδη σε συντεταγμένες εγγράφου)
+@msg	the Color Picker is not open	ο επιλογέας χρώματος δεν είναι ανοιχτός
+@msg	the action has no steps	η ενέργεια δεν έχει βήματα
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	τα επίπεδα του αρχείου δεν διαβάστηκαν ({_1}): εισάγεται ως η σελίδα του, σε ένα επίπεδο
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	τα επίπεδα του αρχείου δεν διαβάστηκαν από τα δεδομένα επεξεργασίας του ({_1}): προέρχονται από το τμήμα PDF του
+@msg	the screen color sampler is already open	η δειγματοληψία χρώματος από την οθόνη είναι ήδη ανοιχτή
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	αυτό είναι αρχείο PostScript (ένα .ai αποθηκευμένο σε παλαιότερη μορφή ή χωρίς συμβατότητα PDF, ή αρχείο EPS), όχι PDF: οι εντολές Αρχείο › Άνοιγμα και Αρχείο › Τοποθέτηση το διαβάζουν ως EPS
+@msg	this system has no screen color sampler	αυτό το σύστημα δεν έχει δειγματοληψία χρώματος από την οθόνη
