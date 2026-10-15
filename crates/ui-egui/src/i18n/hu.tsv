@@ -4645,7 +4645,7 @@ imageTrace	Outline	Körvonal
 @msg	this file's PostScript couldn't be read ({why}): {what}	a fájl PostScript-tartalma nem olvasható ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	ez a formátum egy rajztáblát tárol: többet PDF-ként vagy a document.exportForScreens paranccsal exportálj
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	ez DWG-rajz, amely nem olvasható: mentsd ASCII DXF-ként a CAD-alkalmazásból, és azt nyisd meg
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	ez PostScript-fájl (régebbi formátumban vagy PDF-kompatibilitás nélkül mentett .ai, illetve EPS), amely még nem nyitható meg: mentsd PDF-ként, PDF-kompatibilis .ai-ként vagy SVG-ként
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ez PostScript-fájl (régebbi formátumban vagy PDF-kompatibilitás nélkül mentett .ai, illetve EPS), nem PDF: a Fájl › Megnyitás és a Fájl › Elhelyezés EPS-ként olvassa be
 @msg	this is not a PostScript file	ez nem PostScript-fájl
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ez nem egyszínű logó (az egyszínű területeinek csak ennyi része illik néhány alapszínhez: {_1}%), így az Egyszínű logó mód foltokká alakítaná a színátmeneteit: használd inkább a Színes módot
 @msg	this kind of brush has no options dialog yet	ennek az ecsetfajtának még nincs beállítási párbeszédablaka

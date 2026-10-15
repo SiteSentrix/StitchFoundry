@@ -3880,7 +3880,7 @@ theme	Appearance	外観
 @msg	the PDF is password-protected: give its password	この PDF はパスワードで保護されています: パスワードを入力してください
 @msg	the PDF password is wrong	PDF のパスワードが正しくありません
 @msg	the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG	ファイルには仮のページだけが含まれ、アートは含まれていません (PDF 互換なしで保存されています): PDF 互換をオンにして保存し直すか、PDF または SVG として保存してください
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	これは PostScript ファイル (古い形式または PDF 互換なしで保存された .ai、または EPS ファイル) のため、まだ開けません: PDF、PDF 互換の .ai、または SVG として保存してください
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	これは PDF ではなく PostScript ファイル (古い形式または PDF 互換なしで保存された .ai、または EPS ファイル) です: 「ファイル › 開く」と「ファイル › 配置」で EPS として読み込めます
 @msg	unsupported: {0}	対応していません: {0}
 @msg	a page is missing	見つからないページがあります
 @msg	a page tree kid isn't a reference	ページツリーの子要素が参照になっていません
