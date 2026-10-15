@@ -589,7 +589,7 @@ impl Targets {
         let (mut d, mut ov, aligned) = self.align_rects(rects, tol);
         // the page's (hoop's) centre lines, faint, under whatever moves over it
         if let [r] = rects {
-            ov.extend(self.page_lines(*r + d));
+            ov.splice(0..0, self.page_lines(*r + d));
         }
         if let [r] = rects
             && !self.boxes.is_empty()
@@ -766,7 +766,7 @@ impl Targets {
     }
 
     /// The faint centre lines of the page under `r` (its centre on it), across the page.
-    fn page_lines(&self, r: Rect) -> Vec<Overlay> {
+    pub(crate) fn page_lines(&self, r: Rect) -> Vec<Overlay> {
         if !self.style.lines {
             return vec![];
         }
@@ -779,6 +779,13 @@ impl Targets {
             Overlay::GridLine { a: Point::new(m.x, p.y0), b: Point::new(m.x, p.y1), color },
             Overlay::GridLine { a: Point::new(p.x0, m.y), b: Point::new(p.x1, m.y), color },
         ]
+    }
+
+    /// Is a target's centre (an object's, the page's) within `tol` of `c`? A moved selection
+    /// whose middle comes near one lines up middle to middle ([`Self::snap_rect`]), whatever point
+    /// it was grabbed by.
+    pub(crate) fn has_centre_near(&self, c: Point, tol: f64) -> bool {
+        within(&self.points, |q| q.0.x, c.x, tol).iter().any(|(q, k)| *k == Kind::Center && q.distance(c) <= tol)
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
@@ -1217,6 +1224,38 @@ mod tests {
         let (dv, ov) = t.snap_rect(Rect::new(2.0, 50.0, 52.0, 90.0), 4.0);
         assert_eq!(dv.x, -2.0);
         assert!(!ov.is_empty());
+    }
+
+    /// AL1: a selection moved near the page's centre lands on it, with a crosshair across the
+    /// whole page, its centre ringed and "page center"; centred on another object, "centered";
+    /// the page's own centre lines show faintly under it.
+    #[test]
+    fn centre_to_centre_shows_a_crosshair() {
+        let (d, id) = doc_with_rect();
+        let t = Targets::collect(&d, &[id], None);
+        let page = d.artboards[0].rect;
+        let c = page.center();
+        let near = Rect::from_center_size(c + Vec2::new(2.0, -3.0), (40.0, 20.0));
+        let (dv, ov) = t.snap_rect(near, 4.0);
+        assert_eq!((near + dv).center(), c);
+        let label = |ov: &[Overlay]| ov.iter().find_map(|o| if let Overlay::Label { text, .. } = o { Some(text.clone()) } else { None });
+        assert_eq!(label(&ov).as_deref(), Some("page center"), "{ov:?}");
+        let spans_page = |ov: &[Overlay]| {
+            ov.iter().any(|o| matches!(o, Overlay::Line { a, b, .. } if a.x == c.x && a.y <= page.y0 && b.y >= page.y1))
+                && ov.iter().any(|o| matches!(o, Overlay::Line { a, b, .. } if a.y == c.y && a.x <= page.x0 && b.x >= page.x1))
+        };
+        assert!(spans_page(&ov), "{ov:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Handle { p, .. } if *p == c)));
+        assert!(ov.iter().any(|o| matches!(o, Overlay::GridLine { .. })), "the page's centre lines");
+        // a middle near the page's or an object's centre goes middle to middle
+        assert!(t.has_centre_near(c + Vec2::new(2.0, 2.0), 4.0));
+        assert!(!t.has_centre_near(c + Vec2::new(6.0, 0.0), 4.0));
+        let t = Targets::collect(&d, &[], None);
+        assert!(t.has_centre_near(Point::new(151.0, 149.0), 4.0));
+        let (dv, ov) = t.snap_rect(Rect::from_center_size(Point::new(151.0, 149.0), (30.0, 30.0)), 4.0);
+        assert_eq!(dv, Vec2::new(-1.0, 1.0));
+        assert_eq!(label(&ov).as_deref(), Some("centered"), "{ov:?}");
+        assert_eq!(ov.iter().filter(|o| matches!(o, Overlay::Line { .. })).count(), 2);
     }
 
     #[test]

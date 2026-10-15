@@ -581,6 +581,23 @@ workspace and how much the Embroidery panel shows:
 **Everything** (the start) shows every section in the Essentials workspace. Each is a command too:
 `window.experience {level: beginner|digitizer|business|all}`.
 
+## Lining things up
+
+While something is dragged with **View › Smart Guides** on (the default), the hoop's centre lines
+show faintly across the sewing field, so it is always clear where the middle is.
+
+- **Centre to centre wins:** a selection whose middle comes near the hoop's centre, or another
+  object's centre, lands on it, even when one of its edges is a little nearer a line of its own.
+- **Crosshair:** when the middles meet, a line runs both ways through them (across the whole hoop
+  for its centre), both centres are ringed, and a label says **page center** (the hoop's centre),
+  **centered** (on another object), or **page center line** / **center line** when only one way
+  lines up. This works whatever point the object was grabbed by.
+- **Edges** still line up with other objects' edges and the hoop's edges, with a line and
+  **align**.
+
+Hold the guides back with **View › Smart Guides** (Ctrl+U); **Edit › Preferences › Smart
+Guides** turns the lines, the labels and spacing guides on or off and picks their colour.
+
 ## Make a Design
 
 **Make a Design, Step by Step** on the Home screen (also **File › Make a Design…**, the

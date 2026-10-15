@@ -121,11 +121,15 @@ impl MoveSnap {
         }
         if let (Some(t), Some(b)) = (targets, self.bounds) {
             // The point the selection was grabbed by, near another object's anchor or centre,
-            // lands on it, rather than the bounds lining up a little beside it (#955).
-            if t.has_point_near(start + d, cx.snap_tol()) {
-                let (q, ov) = t.snap_point(start + d, cx.snap_tol());
+            // lands on it, rather than the bounds lining up a little beside it (#955); but a
+            // selection whose middle comes near a centre goes middle to middle, with its
+            // crosshair (AL1).
+            let tol = cx.snap_tol();
+            if t.has_point_near(start + d, tol) && !t.has_centre_near((b + d).center(), tol) {
+                let (q, ov) = t.snap_point(start + d, tol);
                 d = q - start;
-                guides = ov;
+                guides = t.page_lines(b + d);
+                guides.extend(ov);
             } else {
                 let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
                 d += adj;

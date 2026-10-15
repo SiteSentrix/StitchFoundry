@@ -1807,7 +1807,7 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, l
                 }
             }
             Overlay::Line { a, b, color, dashed } => {
-                let s = Stroke::new(1.0, c32(*color));
+                let s = Stroke::new(1.5, c32(*color));
                 let (a, b) = (xf.to_screen(*a), xf.to_screen(*b));
                 if *dashed {
                     p.extend(Shape::dashed_line(&[a, b], s, 4.0, 3.0));
