@@ -173,14 +173,19 @@ pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
     }
 }
 
+/// Cmd/Ctrl chords are shortcuts (Create Outlines, Bold, …): their letter is never typed into the
+/// text if a host still emits `Text` for them (#2094). Alt is left to type: Option+key on macOS
+/// and AltGr (Ctrl+Alt) on Windows keyboards type characters such as é, ø and @.
+fn is_shortcut_chord(m: egui::Modifiers) -> bool {
+    (m.command || m.ctrl) && !m.alt
+}
+
 /// Typed text and IME events, in the order they came, to the Type tool.
 fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let view = app.view_info();
     // Switching apps mid-composition needs nothing: the macOS IME keeps its marked text and goes
     // on with it when the window comes back (measured with Kotoeri), as the tool does.
-    // Cmd/Ctrl/Alt chords are shortcuts (Create Outlines, Bold, …): never type their letter into
-    // the text if a host still emits `Text` for them (#2094).
-    let shortcut_mods = ctx.input(|i| i.modifiers.command || i.modifiers.ctrl || i.modifiers.alt);
+    let shortcut_mods = ctx.input(|i| is_shortcut_chord(i.modifiers));
     let events: Vec<egui::Event> =
         ctx.input(|i| i.events.iter().filter(|e| matches!(e, egui::Event::Text(_) | egui::Event::Ime(_))).cloned().collect());
     for e in events {
@@ -533,6 +538,17 @@ mod tests {
         });
         out.textures_delta.clear();
         out
+    }
+
+    #[test]
+    fn option_and_altgr_still_type_but_cmd_and_ctrl_chords_do_not() {
+        use egui::Modifiers as M;
+        assert!(is_shortcut_chord(M::COMMAND | M::SHIFT));
+        assert!(is_shortcut_chord(M::CTRL));
+        assert!(!is_shortcut_chord(M::NONE));
+        assert!(!is_shortcut_chord(M::SHIFT));
+        assert!(!is_shortcut_chord(M::ALT), "Option+key types é, ø on macOS");
+        assert!(!is_shortcut_chord(M::CTRL | M::ALT), "AltGr types @ on a German keyboard");
     }
 
     /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
