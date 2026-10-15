@@ -5,7 +5,7 @@
 //! dataset, and `dataset.select` swaps the whole document to that row in one undo
 //! step. Agents reach every command through `run_command`, like all engine commands.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{DataSet, DataValue, NodeId, NodeKind, Variable, VariableKind, Variables};
@@ -327,10 +327,14 @@ fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"name": name, "values": values.len()}))
 }
 
-/// Update Data Set: write what the bound objects hold now into the row that is active. Without
-/// an active row there is nothing to update, so say so rather than picking one.
-fn dataset_update(s: &mut Session, _p: &Value) -> Result<Value> {
+/// Update Data Set: write what the bound objects hold now into the row that is active, for each
+/// variable the row holds. A variable whose objects report no value (locked, inside a hidden or
+/// locked layer or group, or gone) keeps the row's value. With `all`, every other variable the
+/// objects report a value for is added to the row. Without an active row there is nothing to
+/// update, so say so rather than picking one.
+fn dataset_update(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.update";
+    let all = bool_or(p, "all", false);
     let values = s.doc()?.doc.captured_values();
     let Some(name) = s.doc()?.doc.variables.active_dataset.clone() else {
         return Err(bad(C, "no active data set"));
@@ -338,12 +342,19 @@ fn dataset_update(s: &mut Session, _p: &Value) -> Result<Value> {
     if values.is_empty() {
         return Err(bad(C, "bind something to a variable first"));
     }
-    s.edit("Update Data Set", |d, _| {
+    let (written, left) = s.edit("Update Data Set", |d, _| {
         let ds = d.variables.datasets.iter_mut().find(|d| d.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
-        ds.values = values.clone();
-        Ok(())
+        let mut written = BTreeSet::new();
+        for (var, value) in &values {
+            if all || ds.values.contains_key(var) {
+                ds.values.insert(var.clone(), value.clone());
+                written.insert(var.as_str());
+            }
+        }
+        let left: Vec<String> = d.variables.variables.iter().filter(|v| !written.contains(v.name.as_str())).map(|v| v.name.clone()).collect();
+        Ok((written.len(), left))
     })?;
-    Ok(json!({"name": name, "values": values.len()}))
+    Ok(json!({"name": name, "values": written, "left": left}))
 }
 
 fn dataset_delete(s: &mut Session, p: &Value) -> Result<Value> {
@@ -544,7 +555,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Data Set",
             ["Window", "Variables"],
             None,
-            "{} write what the bound objects hold now into the active dataset",
+            "{all?: bool} write what the bound objects hold now into the active dataset, for each variable the dataset holds; a variable whose objects report no value (locked, inside a hidden or locked layer or group, or gone) keeps the dataset's value. `all: true` also adds every other variable the objects report a value for; `left` names the variables it didn't write → {values, left}",
             has_doc,
             dataset_update
         ),

@@ -972,6 +972,12 @@ already walks Image Trace. Short agent entry points:
 {"name":"run_command","arguments":{"command":"imageTrace.presets","params":{}}}
 ```
 
+`dataset.update {all?}` writes what the bound objects hold now into the active data set, for each variable that the
+data set holds. A variable whose objects report no value, because they are locked, inside a hidden or locked layer
+or group, or deleted, keeps the data set's value. With `all: true` it also adds every other variable that the
+objects report a value for. The reply gives `values`, the number of values it wrote, and `left`, the variables it
+did not write.
+
 ## Graphic styles
 
 A graphic style holds an appearance (fills, strokes, effects) plus opacity, blend mode, isolate and knockout.

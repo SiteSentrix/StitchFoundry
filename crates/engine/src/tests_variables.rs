@@ -344,6 +344,82 @@ fn updating_writes_the_art_into_the_active_row() {
     assert_eq!(plain(&s, t), "Caz");
 }
 
+/// Update Data Set writes only the variables the active row holds, so a row that sets some of
+/// them still leaves the others alone when it is selected again. `all: true` adds the rest.
+#[test]
+fn updating_writes_only_the_variables_the_row_holds() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Client", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Client", "ids": [t.0]})).unwrap();
+    s.execute("variable.define", &json!({"name": "Badge", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Badge", "ids": [r.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Badge off", "values": {"Badge": false}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Badge off"})).unwrap();
+
+    s.execute("text.editRange", &json!({"id": t.0, "insert": "Typed by hand"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [r.0], "visible": true})).unwrap();
+    let v = s.execute("dataset.update", &json!({})).unwrap();
+    assert_eq!((v["values"].clone(), v["left"].clone()), (json!(1), json!(["Client"])), "{v}");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Badge": {"visible": true}}), "{sets}");
+
+    // `all: true` adds every variable the art reports a value for.
+    let v = s.execute("dataset.update", &json!({"all": true})).unwrap();
+    assert_eq!((v["values"].clone(), v["left"].clone()), (json!(2), json!([])), "{v}");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"]["Client"], json!({"text": "Typed by hand"}), "{sets}");
+}
+
+/// A variable whose object is locked reports no value, so Update keeps the row's value for it
+/// rather than dropping it from the row.
+#[test]
+fn updating_keeps_a_value_the_art_does_not_report() {
+    let mut s = session();
+    let t = text(&mut s, "First");
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Label", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Label", "ids": [t.0]})).unwrap();
+    s.execute("variable.define", &json!({"name": "Mark", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Mark", "ids": [r.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Row", "values": {"Label": "Second", "Mark": true}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Row"})).unwrap();
+
+    s.execute("object.setProps", &json!({"ids": [t.0], "locked": true})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [r.0], "visible": false})).unwrap();
+    for params in [json!({}), json!({"all": true})] {
+        let v = s.execute("dataset.update", &params).unwrap();
+        assert_eq!((v["values"].clone(), v["left"].clone()), (json!(1), json!(["Label"])), "{params}: {v}");
+        let sets = s.execute("dataset.list", &json!({})).unwrap();
+        assert_eq!(sets["datasets"][0]["values"], json!({"Label": {"text": "Second"}, "Mark": {"visible": false}}), "{params}: {sets}");
+    }
+}
+
+/// A variable defined after a row was captured stays out of that row on Update, and joins it
+/// with `all: true`.
+#[test]
+fn a_variable_defined_after_a_row_joins_it_only_with_all() {
+    let mut s = session();
+    let name = text(&mut s, "First job");
+    let note = text(&mut s, "First note");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [name.0]})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "Job 1"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Note", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Note", "ids": [note.0]})).unwrap();
+
+    s.execute("text.editRange", &json!({"id": name.0, "insert": "Second job"})).unwrap();
+    let v = s.execute("dataset.update", &json!({})).unwrap();
+    assert_eq!((v["values"].clone(), v["left"].clone()), (json!(1), json!(["Note"])), "{v}");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "Second job"}}), "{sets}");
+
+    s.execute("dataset.update", &json!({"all": true})).unwrap();
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "Second job"}, "Note": {"text": "First note"}}), "{sets}");
+}
+
 /// Renaming carries the variable's bindings and its values in every row with it — a name is
 /// how a variable is referred to, so leaving the old one behind would orphan both.
 #[test]

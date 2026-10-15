@@ -396,6 +396,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 
 - **Architecture:** 19+ crates with enforced layering (`cargo xtask layers`). Every action is a command (~400 engine + ~50 UI). Undo is unlimited via structural sharing. `command.batch` runs several commands as one transaction.
 - **Automation:**
+  - Variables: Update Data Set writes what the art holds into the active data set for the variables that data set holds, and keeps the data set's value for a variable whose objects are locked or inside a hidden or locked layer or group; `dataset.update {all: true}` also adds the other variables that the art reports a value for.
   - Actions panel (record/playback, persisted), generic parameter dialogs for every "…" command.
   - Variables (data merge): text and visibility variables bound to objects (an object may carry several), dataset rows applied in one undo step (`variable.*`, `dataset.*`) from a Variables panel and Window › Variables, with dialogs to define, bind and edit, Make Text/Visibility Dynamic, Capture/Update Data Set, and a row in italics when an edit leaves the art not matching it; bindings let go of deleted art and locked art is left alone; every command, like the rest, is drivable over MCP and the CLI.
   - JSON-lines control channel with real egui pointer and keyboard injection.
