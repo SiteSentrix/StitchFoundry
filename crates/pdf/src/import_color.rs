@@ -12,7 +12,8 @@ use std::fmt::{self, Debug, Write as _};
 use craft_pdf::interpret::Function;
 use craft_pdf::interpret::color::ColorSpace;
 use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, MaybeRef, Name, Object, Stream};
+use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, Stream};
+use craft_pdf::syntax::reader::{Reader, ReaderExt};
 use smallvec::SmallVec;
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, Paint, Swatch};
@@ -304,7 +305,7 @@ impl<'p> Colors<'p> {
         match o {
             Object::Array(a) => {
                 self.ink_space(&a);
-                for item in a.raw_iter().filter_map(direct) {
+                for item in items(&a).filter_map(direct) {
                     self.visit(item, depth + 1);
                 }
             }
@@ -379,6 +380,28 @@ impl<'p> Colors<'p> {
 }
 
 /// An object written in place (references are visited as objects of their own).
+/// Can every item of `a` be read? Not in a damaged file, and hayro's own iterator over the items
+/// unwraps each read and panics there.
+///
+/// The items are read without the array's context. That reading fails wherever the array's own
+/// would (a string it can't decrypt is kept as it is either way; a stream whose `/Length` it can't
+/// follow falls back to finding `endstream`, as the array's reading does when its length is wrong).
+pub(crate) fn readable(a: &Array<'_>) -> bool {
+    let mut r = Reader::new(a.data());
+    std::iter::from_fn(|| {
+        r.skip_white_spaces_and_comments();
+        (!r.at_end()).then(|| r.read_without_context::<MaybeRef<Object<'_>>>().is_some())
+    })
+    .all(|read| read)
+}
+
+/// The items of `a`, or none when one of them can't be read ([`readable`]). A file with such an
+/// array is refused before it is imported ([`crate::pages`]), so that none never hides what the
+/// interpreter would still read of it (its leading items).
+pub(crate) fn items<'a>(a: &Array<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> + use<'a> {
+    readable(a).then(|| a.raw_iter()).into_iter().flatten()
+}
+
 pub(crate) fn direct(m: MaybeRef<Object<'_>>) -> Option<Object<'_>> {
     match m {
         MaybeRef::NotRef(o) => Some(o),
@@ -387,7 +410,7 @@ pub(crate) fn direct(m: MaybeRef<Object<'_>>) -> Option<Object<'_>> {
 }
 
 /// The values of `d` that the reader can parse, sorted by key as `Dict::entries` sorts them.
-pub(crate) fn values<'a>(d: &craft_pdf::syntax::object::Dict<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> {
+pub(crate) fn values<'a>(d: &Dict<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> {
     let mut keys: Vec<Name<'a>> = d.keys().collect();
     keys.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
     keys.into_iter().filter_map(|k| d.get_raw::<Object<'a>>(k.as_ref()))
