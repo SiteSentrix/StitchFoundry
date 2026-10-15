@@ -738,24 +738,25 @@ impl Targets {
             }
             ov.extend(self.line(Point::new(x0, y), Point::new(x1, y)));
         }
-        if !centred.is_empty() && self.style.lines {
-            if let [r] = rects {
-                let c = (*r + d).center();
-                ov.push(Overlay::Handle { p: c, color: self.style.color });
-                for (from, _) in &centred {
-                    if from.distance(c) > 1e-6 {
-                        ov.push(Overlay::Handle { p: *from, color: self.style.color });
-                    }
+        if !centred.is_empty()
+            && self.style.lines
+            && let [r] = rects
+        {
+            let c = (*r + d).center();
+            ov.push(Overlay::Handle { p: c, color: self.style.color });
+            for (from, _) in &centred {
+                if from.distance(c) > 1e-6 {
+                    ov.push(Overlay::Handle { p: *from, color: self.style.color });
                 }
-                let on_page = centred.iter().all(|(_, page)| *page);
-                let text = match (centred.len(), on_page) {
-                    (2, true) => "page center",
-                    (2, false) => "centered",
-                    (_, true) => "page center line",
-                    _ => "center line",
-                };
-                ov.extend(self.label(c, text));
             }
+            let on_page = centred.iter().all(|(_, page)| *page);
+            let text = match (centred.len(), on_page) {
+                (2, true) => "page center",
+                (2, false) => "centered",
+                (_, true) => "page center line",
+                _ => "center line",
+            };
+            ov.extend(self.label(c, text));
         }
         (d, ov, [best_x.is_some(), best_y.is_some()])
     }
