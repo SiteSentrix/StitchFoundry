@@ -387,6 +387,18 @@ fn text_roundtrip_and_escaping() {
 }
 
 #[test]
+fn text_with_control_characters_exports_well_formed_svg() {
+    // A pasted manual line break (U+000B) or other C0 control character is not allowed in XML 1.0.
+    let t = TextObject::point(Point::new(20.0, 50.0), "A\u{0}\u{8}B\u{b}C\u{fffe}D", CharStyle::default());
+    let id = Document::new(200.0, 200.0).alloc_id();
+    let d = doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]);
+    let s = export(&d, &ExportOptions::default());
+    let r = import(&s).unwrap_or_else(|e| panic!("exported SVG doesn't import: {e:?}"));
+    let NodeKind::Text(t) = &art(&r)[0].kind else { panic!() };
+    assert_eq!(t.plain_text(), "AB CD");
+}
+
+#[test]
 fn scaled_text_roundtrips_at_the_size_it_draws() {
     // Type scaled with its object (its transform scales it) comes back at the size it draws at,
     // drawn the same, and stays so on the next round trip; a stretch stays the transform.
