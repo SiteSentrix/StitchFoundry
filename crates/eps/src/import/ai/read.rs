@@ -1500,8 +1500,8 @@ impl<'a> Reader<'a> {
             // After a layer's art and before its `LB`: the layer's own state (#2003). Kept until
             // an operator that isn't part of the state block (or the `LB` that takes it) says the
             // art moves on, so a path's state before its paint isn't read as its layer's.
-            self.layer_state = matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
-                .then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
+            self.layer_state =
+                matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. })).then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
         }
     }
 

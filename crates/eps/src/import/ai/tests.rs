@@ -315,10 +315,7 @@ fn a_layer_keeps_its_own_transparency() {
     // The art inside keeps its own state.
     assert_eq!(art(&doc)[0].opacity, 1.0);
     // A layer whose last object is a group keeps that group's state apart from the layer's.
-    let art_ = format!(
-        "0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n0 0 Xd\n6 () XW\n",
-        rect_path(0.0, 0.0, 10.0, 10.0)
-    );
+    let art_ = format!("0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n0 0 Xd\n6 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
     let doc = read_ok(&layer(&art_)).doc;
     assert_eq!(doc.layers[0].opacity, 1.0, "no layer state written: the layer stays opaque");
     assert_eq!(art(&doc)[0].opacity, 0.5, "the group's own state");
