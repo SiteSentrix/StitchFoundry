@@ -66,3 +66,14 @@ fn readouts_show_two_decimals() {
     assert_eq!((Unit::Inches.number(595.2756), Unit::Points.number(595.2756)), ("8.2677".into(), "595.276".into()));
     assert_eq!(Unit::Points.number(-0.00001), "0");
 }
+
+#[test]
+fn a_negative_operand_after_an_operator_is_a_sign() {
+    assert_eq!(Unit::Points.parse("10*-2"), Some(-20.0));
+    assert_eq!(Unit::Points.parse("-10/-2"), Some(5.0));
+    assert_eq!(Unit::Points.parse("5--3"), Some(8.0));
+    assert_eq!(Unit::Points.parse("5 - -3"), Some(8.0));
+    assert_eq!(Unit::Points.parse("5+-3"), Some(2.0));
+    assert_eq!(Unit::Points.parse("10-2"), Some(8.0));
+    assert_eq!(super::parse_number("90*-1"), Some(-90.0));
+}
