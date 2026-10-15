@@ -17,6 +17,9 @@
 //! segment of a selected path adds an anchor there and a click on one of its anchors deletes it
 //! (Shift held or General → Disable Auto Add/Delete starts a new path instead). On a selected
 //! blend's spine a click adds a point (on a point no key object sits on: deletes it).
+//! The pointer shows the new-path asterisk where a click starts a new path. While a path is being
+//! drawn it shows no badge, except where a click closes the path, joins another open path or
+//! converts an anchor.
 //! Each anchor placed snaps to Smart Guides ([`DrawSnap`]): onto the anchors, centres and paths of
 //! the other art and of the path being drawn, into line with them, onto the construction guides
 //! through the last anchor; with Shift held it slides along its 45° step into line. Hovering shows
@@ -388,7 +391,8 @@ impl Tool for PenTool {
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         let tol = cx.tol(5.0).max(cx.point_tol());
-        if let Some((id, first, last, _)) = self.active(cx) {
+        let active = self.active(cx);
+        if let Some((id, first, last, _)) = active {
             let closing_end = last_anchor(cx, id).filter(|(_, ai)| *ai > 0).map(|_| first);
             match pick_endpoint(closing_end, last, p, tol, Endpoint::First) {
                 Some(Endpoint::First) => return Cursor::PenClose,
@@ -402,7 +406,9 @@ impl Tool for PenTool {
         if alt_converts(cx, p, m) {
             return Cursor::PenConvert;
         }
-        if !self.drawing {
+        // These show whenever no path is being drawn, also after another path was selected while
+        // the Pen was drawing.
+        if active.is_none() {
             match spine_click(cx, p, tol).as_deref() {
                 Some([Action::Exec(c, _)]) if c == "object.blend.spine.removeAnchor" => return Cursor::PenDelete,
                 Some([_]) => return Cursor::PenAdd,
@@ -419,7 +425,8 @@ impl Tool for PenTool {
                 None => {}
             }
         }
-        Cursor::Pen
+        // The new-path asterisk shows only while a click starts a new path.
+        if active.is_some() { Cursor::PenDrawing } else { Cursor::Pen }
     }
 }
 
@@ -977,7 +984,7 @@ mod tests {
                 click(&mut narrow_pen, &narrow, near.x, near.y, Mods::default()),
                 vec![Action::Begin("Convert Anchor Point".into()), set_out(id, 1, 60.0, 300.0)]
             );
-            assert_eq!(narrow_pen.cursor(&narrow, Point::new(60.0, 300.0 + 6.0 / zoom), Mods::default()), Cursor::Pen);
+            assert_eq!(narrow_pen.cursor(&narrow, Point::new(60.0, 300.0 + 6.0 / zoom), Mods::default()), Cursor::PenDrawing);
         }
     }
 
@@ -1243,7 +1250,7 @@ mod tests {
         let alt = Mods { alt: true, ..Mods::default() };
         let mut t = PenTool { drawing: true, ..PenTool::default() };
         assert_eq!(t.cursor(&cx, Point::new(150.0, 302.0), alt), Cursor::PenConvert);
-        assert_eq!(t.cursor(&cx, Point::new(150.0, 302.0), Mods::default()), Cursor::Pen);
+        assert_eq!(t.cursor(&cx, Point::new(150.0, 302.0), Mods::default()), Cursor::PenDrawing);
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 302.0).with_mods(alt)), vec![]);
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 262.0).with_mods(alt));
         assert_eq!(a[0], Action::Begin("Reshape".into()));
@@ -1278,7 +1285,30 @@ mod tests {
         sb.set([b]);
         let cx_b = cx(&d, &sb, &p);
         assert_eq!(t.cursor(&cx_b, Point::new(150.0, 350.0), Mods::default()), Cursor::Pen);
+        // An end of B shows what a click there does: it goes on drawing B.
+        assert_eq!(t.cursor(&cx_b, Point::new(60.0, 400.0), Mods::default()), Cursor::PenContinue);
         let acts = click(&mut t, &cx_b, 150.0, 350.0, Mods::default());
         assert!(matches!(&acts[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"), "{acts:?}");
+    }
+
+    /// The new-path asterisk shows until a path is started; while one is being drawn the pen has no
+    /// badge, and the asterisk comes back once the path is finished.
+    #[test]
+    fn the_new_path_asterisk_shows_only_before_a_path_is_started() {
+        let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0)], false));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let empty = Point::new(250.0, 450.0);
+        let mut t = PenTool::default();
+        assert_eq!(t.cursor(&cx, empty, Mods::default()), Cursor::Pen, "no path started");
+        t.drawing = true;
+        assert_eq!(t.cursor(&cx, empty, Mods::default()), Cursor::PenDrawing, "after the first anchor");
+        let a = click(&mut t, &cx, empty.x, empty.y, Mods::default());
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.appendAnchor"), "{a:?}");
+        assert_eq!(t.cursor(&cx, empty, Mods::default()), Cursor::PenDrawing);
+        assert_eq!(t.cursor(&cx, empty, Mods { shift: true, ..Mods::default() }), Cursor::PenDrawing, "Shift constrains the next anchor");
+        t.key(&cx, ToolKey::Enter, Mods::default());
+        assert_eq!(t.cursor(&cx, empty, Mods::default()), Cursor::Pen, "the path is finished");
+        assert_eq!(Cursor::PenDrawing.precise(), Cursor::Crosshair);
     }
 }

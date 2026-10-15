@@ -453,6 +453,7 @@ fn precise_cursors_replace_every_pen_state() {
     use vectorcraft_tools::Cursor;
     for c in [
         Cursor::Pen,
+        Cursor::PenDrawing,
         Cursor::PenAdd,
         Cursor::PenDelete,
         Cursor::PenClose,

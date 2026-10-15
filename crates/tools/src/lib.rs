@@ -435,7 +435,10 @@ pub enum Cursor {
     RotateToward(u8),
     /// Over a Live Corners widget (drag to round the corners).
     CornerRadius,
+    /// The Pen with the new-path asterisk: a click starts a new path.
     Pen,
+    /// The Pen without a badge, while a path is being drawn: a click adds its next anchor.
+    PenDrawing,
     PenAdd,
     PenDelete,
     PenClose,
@@ -501,6 +504,7 @@ impl Cursor {
     pub fn precise(self) -> Self {
         match self {
             Cursor::Pen
+            | Cursor::PenDrawing
             | Cursor::PenAdd
             | Cursor::PenDelete
             | Cursor::PenClose

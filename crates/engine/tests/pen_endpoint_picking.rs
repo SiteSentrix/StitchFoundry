@@ -299,7 +299,7 @@ fn overlapping_other_endpoints_join_nearest_raw_end_before_grid_snapping() {
 #[test]
 fn another_path_join_keeps_snapped_target_when_raw_pointer_misses() {
     // Upstream also joins through snapping when raw hits no endpoint. Keep that fallback.
-    grid_join((100.0, 300.0), (150.0, 300.0), (63.0, 303.0), true, Cursor::Pen);
+    grid_join((100.0, 300.0), (150.0, 300.0), (63.0, 303.0), true, Cursor::PenDrawing);
 }
 
 fn snapped_only_continue(preselected: bool) {

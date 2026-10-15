@@ -553,9 +553,14 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::ResizeNwSe => C::ResizeNwSe,
         Cursor::ResizeNeSw => C::ResizeNeSw,
         Cursor::Rotate | Cursor::RotateToward(_) => C::Alias,
-        Cursor::Pen | Cursor::PenAdd | Cursor::PenDelete | Cursor::PenClose | Cursor::PenContinue | Cursor::PenJoin | Cursor::PenConvert => {
-            C::Crosshair
-        }
+        Cursor::Pen
+        | Cursor::PenDrawing
+        | Cursor::PenAdd
+        | Cursor::PenDelete
+        | Cursor::PenClose
+        | Cursor::PenContinue
+        | Cursor::PenJoin
+        | Cursor::PenConvert => C::Crosshair,
         Cursor::Text => C::Text,
         Cursor::Hand => C::Grab,
         Cursor::HandGrab => C::Grabbing,
@@ -2348,6 +2353,7 @@ mod tests {
     fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
         for c in [
             Cursor::Pen,
+            Cursor::PenDrawing,
             Cursor::PenAdd,
             Cursor::PenDelete,
             Cursor::PenClose,
