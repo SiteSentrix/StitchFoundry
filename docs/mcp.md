@@ -986,6 +986,9 @@ already walks Image Trace. Short agent entry points:
   `symbol.replace`, `symbol.edit`, `symbol.duplicate`, `symbol.selectInstances {name}`.
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?}`, `brush.freehand`, `object.expandBrush {ids?}`.
+- Variables: `variable.list`, `variable.define {name, kind: text|visibility|graph}`, `variable.bind {variable, ids?}`,
+  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeGraphDynamic`, `variable.unbind`,
+  `dataset.new` / `dataset.set` / `dataset.select` (graph values are CSV as `graph.setData`).
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|image}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.unbind`,
   `dataset.new` / `dataset.set` / `dataset.select` (image values are file path strings; apply keeps object bounds),

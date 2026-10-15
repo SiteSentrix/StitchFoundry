@@ -3,7 +3,7 @@
 //!
 //! One dialog covers all of them: what it shows is what the command takes. A variable is a
 //! name and a kind; a dataset is a name and one field per variable — a text field for a
-//! `text` or `image` variable (path for image), a checkbox for a `visibility` one.
+//! `text`, `image` (a path) or `graph` (CSV) variable, a checkbox for a `visibility` one.
 //! `dataset.set` opens with the row's current values, so editing a row is editing what it
 //! already says.
 
@@ -20,11 +20,11 @@ use crate::widgets;
 pub const KIND: &str = "variables";
 
 /// The kinds a variable can have, as `variable.define` names them.
-const KINDS: [&str; 3] = ["text", "visibility", "image"];
+const KINDS: [&str; 4] = ["text", "visibility", "image", "graph"];
 
 /// What the dialog shows for each of [`KINDS`].
-fn kind_labels() -> [&'static str; 3] {
-    [tl!("Text"), tl!("Visibility"), tl!("Image")]
+fn kind_labels() -> [&'static str; 4] {
+    [tl!("Text"), tl!("Visibility"), tl!("Image"), tl!("Graph")]
 }
 
 pub(super) const SPEC: DialogSpec =
@@ -125,9 +125,11 @@ fn value_fields(vars: &Variables, current: Option<&std::collections::BTreeMap<St
             (Some(DataValue::Text(t)), _) => json!(t),
             (Some(DataValue::Visible(b)), _) => json!(b),
             (Some(DataValue::Image(p)), _) => json!(p),
-            // Without a value in the row a text/image field starts empty (no value in this row)
-            // and a visibility one starts shown: its false is a value, so it is never "unset".
-            (None, VariableKind::Text | VariableKind::Image) => json!(""),
+            (Some(DataValue::Graph(c)), _) => json!(c),
+            // Without a value in the row a text, image or graph field starts empty (no value in
+            // this row) and a visibility one starts shown: its false is a value, so it is never
+            // "unset".
+            (None, VariableKind::Text | VariableKind::Image | VariableKind::Graph) => json!(""),
             (None, VariableKind::Visibility) => json!(true),
         };
         out.insert(value_key(&v.name), value);
@@ -207,6 +209,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                         VariableKind::Text | VariableKind::Image => {
                             text(ui, d, &key, 220.0);
                         }
+                        VariableKind::Graph => {
+                            text_area(ui, d, &key, 220.0);
+                        }
                         VariableKind::Visibility => checkbox(ui, d, &key),
                     }
                     ui.end_row();
@@ -250,14 +255,15 @@ fn dropdown(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[&str], widt
     }
 }
 
-/// The `values` object the dialog's fields mean: a text or image variable whose field is empty
-/// carries no value in this row, and a visibility checkbox is always a value — its false, too.
+/// The `values` object the dialog's fields mean: a text, image or graph variable whose field is
+/// empty carries no value in this row, and a visibility checkbox is always a value — its false,
+/// too.
 fn values_of(d: &Dialog, vars: &Variables) -> Value {
     let mut out = serde_json::Map::new();
     for v in &vars.variables {
         let key = value_key(&v.name);
         match v.kind {
-            VariableKind::Text | VariableKind::Image => {
+            VariableKind::Text | VariableKind::Image | VariableKind::Graph => {
                 let text = d.str(&key);
                 if !text.is_empty() {
                     out.insert(v.name.clone(), json!(text));
@@ -269,6 +275,15 @@ fn values_of(d: &Dialog, vars: &Variables) -> Value {
         }
     }
     Value::Object(out)
+}
+
+/// A multiline field for graph CSV.
+fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) {
+    let mut s = d.str(key);
+    let r = ui.add(egui::TextEdit::multiline(&mut s).desired_width(width).desired_rows(4));
+    if r.changed() {
+        d.fields.insert(key.into(), json!(s));
+    }
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {

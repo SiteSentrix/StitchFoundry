@@ -74,6 +74,8 @@ struct Picked {
     single_type: bool,
     /// Make Image Dynamic needs exactly one image object.
     single_image: bool,
+    /// Make Graph Dynamic needs a selection of graph roots only.
+    selection_graph: bool,
 }
 
 fn picked(st: &vectorcraft_engine::DocState) -> Picked {
@@ -81,7 +83,8 @@ fn picked(st: &vectorcraft_engine::DocState) -> Picked {
     let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
     let single_type = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))));
     let single_image = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Image(_))));
-    Picked { has_selection: !selected.is_empty(), selected, selection_bound, single_type, single_image }
+    let selection_graph = !selected.is_empty() && selected.iter().all(|id| st.doc.node(NodeId(*id)).is_some_and(|n| n.extras().graph.is_some()));
+    Picked { has_selection: !selected.is_empty(), selected, selection_bound, single_type, single_image, selection_graph }
 }
 
 /// Delete Variable: the highlighted variable only (the command's default); the rest stay.
@@ -131,7 +134,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         })
         .collect();
     let active = sets.iter().find(|s| s.active);
-    let Picked { selected, has_selection, selection_bound, single_type, single_image } = picked(st);
+    let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
     let highlighted = highlighted_row(st);
 
     // The current data set across the top: its name, and the arrows that step through them.
@@ -167,6 +170,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 VariableKind::Text => "type",
                 VariableKind::Visibility => "eye",
                 VariableKind::Image => "image",
+                VariableKind::Graph => "chart-column",
             };
             ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
             // The object a variable drives is named beside it, as the reference panel does.
@@ -212,6 +216,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button_enabled(ui, "image", tl!("Make Image Dynamic"), false, single_image, 24.0).clicked() {
             app.run("variable.makeImageDynamic", json!({})).ok();
         }
+        if widgets::icon_button_enabled(ui, "chart-column", tl!("Make Graph Dynamic"), false, selection_graph, 24.0).clicked() {
+            app.run("variable.makeGraphDynamic", json!({})).ok();
+        }
         if widgets::icon_button(ui, "plus", tl!("New Variable…"), false, 24.0).clicked() {
             crate::menus::invoke(app, "variable.define", json!({}));
         }
@@ -246,7 +253,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let bound: Vec<u64> = st.doc.variables.bindings.keys().map(|i| i.0).collect();
     let highlighted = highlighted_row(st);
     let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
-    let Picked { selected, has_selection, selection_bound, single_type, single_image } = picked(st);
+    let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
 
     if widgets::menu_item(ui, tl!("New Variable…"), true, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
@@ -264,6 +271,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::menu_item(ui, tl!("Make Image Dynamic"), single_image, false) {
         app.run("variable.makeImageDynamic", json!({})).ok();
+    }
+    if widgets::menu_item(ui, tl!("Make Graph Dynamic"), selection_graph, false) {
+        app.run("variable.makeGraphDynamic", json!({})).ok();
     }
     if widgets::menu_item(ui, tl!("Unbind Variable"), selection_bound, false) {
         app.run("variable.unbind", json!({"ids": selected})).ok();
