@@ -82,6 +82,27 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+/// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
+#[test]
+fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
+    // 3 × 1: red, green, blue (100 010 001), as hex samples in both parts.
+    let raster = "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n[ 60 0 0 60 10 90 ] 3 1 0 Xh\n\
+         [ 60 0 0 60 10 90 ] 0 0 3 1 3 1 1 3 0 0 0 0 4 4 0 0\n%%BeginData: 6\rXI\n8880\n%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\r\n";
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", raster));
+    let page = "q 180 0 0 60 10 30 cm BI /W 3 /H 1 /CS /RGB /BPC 1 /F /AHx ID 8880> EI Q";
+    let file = ai::ai(&compressed(data.as_bytes()), page);
+    let mut s = Session::new();
+    let r = open(&mut s, "bits.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Art"], "{r}");
+    let mut found = vec![];
+    doc.visit_images(|_, im| {
+        let img = image::load_from_memory(&doc.images[&im.key].bytes).unwrap().to_rgb8();
+        found.push(img.pixels().map(|p| p.0).collect::<Vec<_>>());
+    });
+    assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
+}
+
 /// A PDF saved with the editing data opens from it, as a `.ai` does (#868).
 #[test]
 fn a_pdf_saved_with_the_editing_data_opens_from_it() {
