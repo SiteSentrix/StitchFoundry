@@ -5301,3 +5301,4 @@ machine	Stop	Zastavení
 	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	Uložit pro můj stroj návrh stáhne: zkopírujte ho na USB disk, který nosíte ke stroji.
 	Downloaded:	Staženo:
 	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	Uložit pro můj stroj stáhne soubor, který stroj vyšije: zkopírujte ho na jeho USB disk.
+@msg	{_1} {name}	{_1} {name}

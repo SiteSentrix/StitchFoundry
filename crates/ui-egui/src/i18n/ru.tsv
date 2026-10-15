@@ -5272,3 +5272,4 @@ machine	Stop	Остановка
 	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	«Сохранить для моей машины» скачивает дизайн: скопируйте его на флешку, которую вставляете в машину.
 	Downloaded:	Скачано:
 	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	«Сохранить для моей машины» скачивает файл, который вышивает машина: скопируйте его на её флешку.
+@msg	{_1} {name}	{_1} {name}
