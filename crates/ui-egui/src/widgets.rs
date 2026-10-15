@@ -338,7 +338,9 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
     // click, and a release inside one character leaves no text selection, so select-all on
     // release would replace the drag the user just made (#1326).
     let dragged = clicked_focus
-        && ui.data_mut(|d| d.remove_temp::<egui::Pos2>(press_pos)).is_some_and(|p0| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p1| (p1 - p0).length() > 3.0));
+        && ui
+            .data_mut(|d| d.remove_temp::<egui::Pos2>(press_pos))
+            .is_some_and(|p0| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p1| (p1 - p0).length() > 3.0));
     if resp.lost_focus() {
         ui.data_mut(|d| {
             d.remove_temp::<bool>(pending);
