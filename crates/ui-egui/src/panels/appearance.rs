@@ -724,8 +724,8 @@ fn has_options(id: &str) -> bool {
     vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
 }
 
-/// Inline editor for an applied effect's parameters (numbers, booleans, strings, colours);
-/// edits go through `effect.setParams`.
+/// Inline editor for an applied effect's parameters (numbers, booleans, strings, colors, and
+/// Drop Shadow's Color or Darkness as radio buttons); edits go through `effect.setParams`.
 fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect) {
     let t = Tokens::get(ui.ctx());
     let defaults = vectorcraft_effects::default_params(&e.id).unwrap_or(Value::Null);
@@ -752,6 +752,15 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                 if let Some(cur) = widgets::blend_param(key, v) {
                     if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
                         change = Some((key.clone(), m));
+                    }
+                    return;
+                }
+                if e.id == "stylize.dropShadow" && key == "shade" {
+                    let cur = v.as_str().unwrap_or_default();
+                    for (label, value) in crate::dialogs::SHADES {
+                        if widgets::radio(ui, label, cur.eq_ignore_ascii_case(value), true) && !cur.eq_ignore_ascii_case(value) {
+                            change = Some((key.clone(), json!(value)));
+                        }
                     }
                     return;
                 }
@@ -978,6 +987,46 @@ mod tests {
         // Only our own effects are interface labels; a plug-in's name is its own.
         assert!(built_in_effect("stylize.dropShadow") && !built_in_effect("plugin.example.glow"));
         assert_eq!(shown_effect_label("plugin.example.glow"), effect_label("plugin.example.glow"));
+    }
+
+    /// A Drop Shadow's inline editor has Color and Darkness as radio buttons in its Shade row; a
+    /// click on Darkness sets the effect's `shade`.
+    #[test]
+    fn the_drop_shadow_editor_chooses_color_or_darkness() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("effect.apply", json!({"effect": "stylize.dropShadow"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        set_pstate(&ctx, "ap-fx-open-None-0", true);
+        let mut time = 0.0;
+        let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            time += 0.1;
+            let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out
+        };
+        run(&mut app, vec![]);
+        let out = run(&mut app, vec![]);
+        // The Shade row's Darkness, below the Darkness value's own row.
+        fn find(s: &egui::Shape, out: &mut Vec<egui::Pos2>) {
+            match s {
+                egui::Shape::Text(t) if t.galley.text() == "Darkness" => out.push(t.visual_bounding_rect().center()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| find(s, out)),
+                _ => {}
+            }
+        }
+        let mut found = vec![];
+        out.shapes.iter().for_each(|c| find(&c.shape, &mut found));
+        assert_eq!(found.len(), 2, "{found:?}");
+        let at = found.into_iter().max_by(|a, b| a.y.total_cmp(&b.y)).unwrap();
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for events in [vec![egui::Event::PointerMoved(at)], vec![button(true)], vec![button(false)]] {
+            run(&mut app, events);
+        }
+        let n = app.session.doc().unwrap().doc.node(NodeId(id)).unwrap().clone();
+        assert_eq!(n.appearance.effects[0].params["shade"], json!("darkness"));
     }
 
     #[test]

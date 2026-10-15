@@ -2,14 +2,15 @@
 //! source, its silhouette blurred, moved or inverted, a colour flood, a coloured silhouette…),
 //! and the result recognised as one of the effects the canvas draws: Gaussian Blur, Drop Shadow,
 //! Outer Glow, Inner Glow or Feather. That covers `feGaussianBlur`, `feDropShadow`, the usual
-//! shadow chains (offset, blur, flood or colour matrix, composite, merge) and what our export
-//! writes, so export → import keeps the effects.
+//! shadow chains (offset, blur, flood or color matrix, composite, merge), the object moved and
+//! blurred with its colors scaled by `feComponentTransfer` (a drop shadow with Darkness) and what
+//! our export writes, so export → import keeps the effects.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::json;
-use usvg::filter::{ColorMatrixKind, CompositeOperator, Filter, Input, Kind, TransferFunction};
+use usvg::filter::{ColorInterpolation, ColorMatrixKind, CompositeOperator, Filter, Input, Kind, TransferFunction};
 use usvg::roxmltree;
 use vectorcraft_color::Color;
 use vectorcraft_doc::Effect;
@@ -52,8 +53,8 @@ impl Shape {
 enum V {
     /// `SourceGraphic`.
     Graphic,
-    /// The source blurred (σ).
-    Blurred(f64),
+    /// The source blurred (σ), on linear RGB values when `true`.
+    Blurred(f64, bool),
     /// A black silhouette.
     Alpha(Shape),
     Flood(Color, f32),
@@ -66,6 +67,16 @@ enum V {
     },
     /// The source inside its own blurred silhouette (σ).
     Feathered(f64),
+    /// The source blurred (σ `sd`, on linear RGB values when `linear`), moved, its colors times
+    /// `keep` and its alpha times `opacity`: a drop shadow with Darkness 1 − `keep`.
+    Shade {
+        sd: f64,
+        linear: bool,
+        dx: f64,
+        dy: f64,
+        keep: f32,
+        opacity: f32,
+    },
     /// Layers, bottom first.
     Stack(Vec<V>),
 }
@@ -78,17 +89,18 @@ impl V {
         }
     }
 
-    /// Blurred by σ `sd` (blurs add up as variances).
-    fn blur(self, sd: f64) -> Option<V> {
+    /// Blurred by σ `sd` (blurs add up as variances), on linear RGB values when `linear`.
+    fn blur(self, sd: f64, linear: bool) -> Option<V> {
         let add = |a: f64| (a * a + sd * sd).sqrt();
         Some(match self {
             v if sd <= 0.0 => v,
-            V::Graphic => V::Blurred(sd),
-            V::Blurred(a) => V::Blurred(add(a)),
+            V::Graphic => V::Blurred(sd, linear),
+            V::Blurred(a, l) => V::Blurred(add(a), l || linear),
             V::Alpha(s) => V::Alpha(Shape { sd: add(s.sd), ..s }),
             V::Paint { shape, color, opacity, clipped: false } => {
                 V::Paint { shape: Shape { sd: add(shape.sd), ..shape }, color, opacity, clipped: false }
             }
+            V::Shade { sd: s, linear: l, dx, dy, keep, opacity } => V::Shade { sd: add(s), linear: l || linear, dx, dy, keep, opacity },
             _ => return None,
         })
     }
@@ -98,9 +110,24 @@ impl V {
         Some(match self {
             V::Alpha(s) => V::Alpha(moved(s)),
             V::Paint { shape, color, opacity, clipped: false } => V::Paint { shape: moved(shape), color, opacity, clipped: false },
-            v @ (V::Graphic | V::Blurred(_)) if dx == 0.0 && dy == 0.0 => v,
+            v @ (V::Graphic | V::Blurred(..)) if dx == 0.0 && dy == 0.0 => v,
+            V::Graphic => V::Shade { sd: 0.0, linear: false, dx, dy, keep: 1.0, opacity: 1.0 },
+            V::Blurred(sd, linear) => V::Shade { sd, linear, dx, dy, keep: 1.0, opacity: 1.0 },
+            V::Shade { sd, linear, dx: x, dy: y, keep, opacity } => V::Shade { sd, linear, dx: x + dx, dy: y + dy, keep, opacity },
             _ => return None,
         })
+    }
+
+    /// The source, blurred or moved, with each color channel times `keep` and its alpha times
+    /// `opacity` (`feComponentTransfer` with linear functions through 0).
+    fn scaled(self, keep: f32, opacity: f32) -> Option<V> {
+        let (sd, linear, dx, dy, k, o) = match self {
+            V::Graphic => (0.0, false, 0.0, 0.0, 1.0, 1.0),
+            V::Blurred(sd, linear) => (sd, linear, 0.0, 0.0, 1.0, 1.0),
+            V::Shade { sd, linear, dx, dy, keep, opacity } => (sd, linear, dx, dy, keep, opacity),
+            _ => return None,
+        };
+        Some(V::Shade { sd, linear, dx, dy, keep: k * keep, opacity: o * opacity })
     }
 
     /// `self` in the alpha of `mask` (`feComposite operator="in"`).
@@ -124,7 +151,7 @@ impl V {
     fn color_matrix(self, m: &[f32]) -> Option<V> {
         let shape = match self {
             V::Alpha(s) => s,
-            V::Blurred(sd) => Shape { sd, ..Shape::default() },
+            V::Blurred(sd, _) => Shape { sd, ..Shape::default() },
             _ => return None,
         };
         let row = |r: usize| m.get(r * 5..r * 5 + 5);
@@ -163,7 +190,10 @@ fn eval(f: &Filter) -> Option<V> {
             }
         };
         let v = match p.kind() {
-            Kind::GaussianBlur(b) => input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get()))?,
+            Kind::GaussianBlur(b) => {
+                let linear = p.color_interpolation() == ColorInterpolation::LinearRGB;
+                input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get()), linear)?
+            }
             Kind::Offset(o) => input(o.input())?.offset(o.dx() as f64, o.dy() as f64)?,
             Kind::Flood(fl) => V::Flood(color(fl.color()), fl.opacity().get()),
             Kind::Composite(c) => {
@@ -186,8 +216,22 @@ fn eval(f: &Filter) -> Option<V> {
                     TransferFunction::Linear { slope, intercept } => *slope == -1.0 && *intercept == 1.0,
                     _ => false,
                 };
-                match input(c.input())? {
-                    V::Alpha(s) if identity && invert && s.sd == 0.0 => V::Alpha(Shape { inverted: !s.inverted, ..s }),
+                // A scale (a linear function through 0, or none) of each channel.
+                let scale = |f: &TransferFunction| match f {
+                    TransferFunction::Identity => Some(1.0),
+                    TransferFunction::Linear { slope, intercept } if *intercept == 0.0 && (0.0..=1.0).contains(slope) => Some(*slope),
+                    _ => None,
+                };
+                // The same scale of R, G and B, on sRGB values (a scale of 0 or 1 is the same on
+                // linear ones).
+                let srgb = p.color_interpolation() == ColorInterpolation::SRGB;
+                let keep = match [c.func_r(), c.func_g(), c.func_b()].map(scale) {
+                    [Some(r), Some(g), Some(b)] if r == g && g == b && (srgb || r == 0.0 || r == 1.0) => Some(r),
+                    _ => None,
+                };
+                match (input(c.input())?, keep, scale(c.func_a())) {
+                    (V::Alpha(s), _, _) if identity && invert && s.sd == 0.0 => V::Alpha(Shape { inverted: !s.inverted, ..s }),
+                    (v @ (V::Graphic | V::Blurred(..) | V::Shade { .. }), Some(keep), Some(opacity)) => v.scaled(keep, opacity)?,
                     _ => return None,
                 }
             }
@@ -219,7 +263,7 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
         let paint = |c: Color, o: f32| (c.to_hex(), num(o as f64 * 100.0));
         let (id, params) = match eval(f)? {
             V::Graphic => continue,
-            V::Blurred(sd) => ("blur.gaussian", json!({ "radius": blur(sd) })),
+            V::Blurred(sd, _) => ("blur.gaussian", json!({ "radius": blur(sd) })),
             V::Feathered(sd) => ("stylize.feather", json!({ "radius": blur(sd) })),
             V::Stack(layers) => match layers.as_slice() {
                 [V::Paint { shape, color, opacity, clipped: false }, V::Graphic] if !shape.inverted => {
@@ -231,6 +275,13 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
                     } else {
                         ("stylize.outerGlow", json!({ "blur": blur(shape.sd), "color": color, "opacity": opacity, "mode": mode }))
                     }
+                }
+                // A drop shadow with Darkness below 100% blurs the object's sRGB values.
+                [V::Shade { sd, linear, dx, dy, keep, opacity }, V::Graphic] if !*linear || *keep == 0.0 => {
+                    let v = along(*dx, *dy);
+                    let (darkness, opacity) = (num((1.0 - *keep as f64) * 100.0), num(*opacity as f64 * 100.0));
+                    let p = json!({ "x": num(v.x), "y": num(v.y), "blur": blur(*sd), "shade": "darkness", "darkness": darkness, "opacity": opacity, "mode": mode });
+                    ("stylize.dropShadow", p)
                 }
                 [V::Graphic, V::Paint { shape, color, opacity, clipped: true }] if !shape.moved => {
                     let (color, opacity) = paint(*color, *opacity);

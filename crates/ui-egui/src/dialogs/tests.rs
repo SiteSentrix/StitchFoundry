@@ -748,6 +748,51 @@ fn the_transform_effect_dialog_has_its_controls_previews_them_and_shows_them_aga
     assert!(text.lines().any(|l| l == "Reference Point"), "{text}");
 }
 
+/// Drop Shadow's dialog has Color and Darkness as radio buttons, each with its field; a click on
+/// Darkness previews the shadow with it and OK applies it.
+#[test]
+fn drop_shadow_chooses_color_or_darkness() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.dialog", json!({"effect": "stylize.dropShadow"})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let mut time = 0.0;
+    let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.1;
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    };
+    run(&mut app, vec![]);
+    let out = run(&mut app, vec![]);
+    let text = crate::tests_labels::shapes_text(&out);
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Mode:", "Opacity:", "Blur:", "Color", "Darkness"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    assert!(!lines.contains(&"Shade:"), "{lines:?}");
+    fn find(shape: &egui::Shape) -> Option<egui::Pos2> {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Darkness" => Some(t.visual_bounding_rect().center()),
+            egui::Shape::Vec(v) => v.iter().find_map(find),
+            _ => None,
+        }
+    }
+    let at = out.shapes.iter().find_map(|s| find(&s.shape)).unwrap();
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(at)], vec![button(true)], vec![button(false)], vec![], vec![]] {
+        run(&mut app, events);
+    }
+    let effect = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].clone();
+    assert!(app.session.in_interaction(), "the preview runs");
+    assert_eq!(effect(&app).params["shade"], json!("darkness"));
+    confirm(&mut app).unwrap();
+    let params = effect(&app).params;
+    assert_eq!((params["shade"].clone(), params["darkness"].clone()), (json!("darkness"), json!(100.0)));
+}
+
 #[test]
 fn artboard_options_position_moves_art_only_with_the_tool_option_on() {
     for move_art in [false, true] {

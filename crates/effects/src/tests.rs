@@ -565,17 +565,32 @@ fn raster_effects_parse_and_outset() {
     let r = raster_effects(&list);
     assert_eq!(r.len(), 5);
     match &r[0] {
-        RasterFx::DropShadow { mode, opacity, dx, dy, blur, color } => {
+        RasterFx::DropShadow { mode, opacity, dx, dy, blur, color, darkness } => {
             assert_eq!(*mode, vectorcraft_doc::color::BlendMode::Multiply);
             assert!(close(*opacity as f64, 0.5, 1e-6));
             assert_eq!((*dx, *dy, *blur), (10.0, -4.0, 6.0));
             assert_eq!(color.to_rgb(), [1.0, 0.0, 0.0]);
+            assert_eq!(*darkness, None);
         }
         other => panic!("{other:?}"),
     }
     assert!(matches!(r[2], RasterFx::InnerGlow { center: true, .. }));
     assert!(close(outset(&list, vectorcraft_geom::Rect::ZERO), 10.0 + 9.0, 1e-9));
     assert_eq!(outset(&[], vectorcraft_geom::Rect::ZERO), 0.0);
+}
+
+#[test]
+fn drop_shadow_darkness_replaces_its_color_when_chosen() {
+    let darkness = |params: Value| match raster_effects(&[fx("stylize.dropShadow", params)]).as_slice() {
+        [RasterFx::DropShadow { darkness, .. }] => *darkness,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(darkness(json!({"shade": "darkness", "darkness": 60})), Some(0.6));
+    assert_eq!(darkness(json!({"shade": "darkness"})), Some(1.0));
+    assert_eq!(darkness(json!({"shade": "darkness", "darkness": 250})), Some(1.0));
+    // Color is the default: a Darkness value alone leaves the shadow its color.
+    assert_eq!(darkness(json!({"darkness": 60})), None);
+    assert_eq!(darkness(json!({})), None);
 }
 
 #[test]

@@ -308,6 +308,27 @@ fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -> Filter {
     })
 }
 
+/// The layer filter of a drop shadow with Darkness: the object's own pixels blurred.
+fn shade_filter(blur: f64) -> Filter {
+    Filter::from_primitive(FilterPrimitive::GaussianBlur { std_deviation: (blur / 2.0).max(0.0) as f32, edge_mode: EdgeMode::None })
+}
+
+/// How much darker (0..1) a drop shadow with Darkness `darkness` makes the values `ink` paints:
+/// black added leaves the cyan, magenta and yellow plane of a CMYK document as it is and scales
+/// the complemented black plane, as it scales screen colors, by 1 − `darkness`.
+fn shade(ink: Ink, darkness: f32) -> f32 {
+    match ink {
+        Ink::Cmy => 0.0,
+        Ink::K | Ink::Display | Ink::RichBlack => darkness,
+    }
+}
+
+/// What a shadow or glow raster is made from ([`Made::pixels`]): the silhouette's alpha, or its
+/// premultiplied RGBA when the shadow takes the object's own colors (Darkness).
+fn silhouette(pm: &vello_cpu::Pixmap, colored: bool) -> Vec<u8> {
+    if colored { pm.data().iter().flat_map(|p| [p.r, p.g, p.b, p.a]).collect() } else { pm.data().iter().map(|p| p.a).collect() }
+}
+
 fn pcolor(ink: Ink, c: &vectorcraft_doc::color::Color) -> peniko::Color {
     let [r, g, b] = ink.rgb(c);
     peniko::Color::new([r, g, b, 1.0])
@@ -434,7 +455,7 @@ impl ShadowEntry {
 /// was made draws from that raster ([`Renderer::move_shadow`], [`Renderer::move_pixel_content`]).
 pub(crate) struct Made {
     /// The content's pixels as drawn into the raster before the effects ran: premultiplied RGBA,
-    /// or their alpha alone under a shadow or glow.
+    /// or their alpha alone under a shadow or glow that is one color ([`silhouette`]).
     pixels: Vec<u8>,
     /// The effects run on them.
     fx: Vec<RasterFx>,
@@ -684,9 +705,9 @@ impl Renderer {
         owner: Option<&Arc<Node>>,
         paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
     ) -> bool {
-        let (mode, opacity, dx, dy, blur, color) = match fx {
-            RasterFx::DropShadow { mode, opacity, dx, dy, blur, color } => (*mode, *opacity, *dx, *dy, *blur, *color),
-            RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color),
+        let (mode, opacity, dx, dy, blur, color, darkness) = match fx {
+            RasterFx::DropShadow { mode, opacity, dx, dy, blur, color, darkness } => (*mode, *opacity, *dx, *dy, *blur, *color, *darkness),
+            RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color, None),
             _ => return false,
         };
         let linear = linear_key(f.view);
@@ -718,7 +739,8 @@ impl Renderer {
                     return false;
                 }
                 let (w, h) = (w as u16, h as u16);
-                // Silhouette (the object's painted alpha), offset by the shadow distance.
+                // Silhouette (the object's painted alpha, and its colors under Darkness), offset by
+                // the shadow distance.
                 let mut off = f.offscreen_context(w, h);
                 let crop = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
                 let before = self.stats.moved;
@@ -730,15 +752,36 @@ impl Renderer {
                 off.render(&mut pm, &mut self.resources);
                 // What the raster is made from, for its object once it moves (`move_shadow`).
                 let made =
-                    Made { pixels: pm.data().iter().map(|p| p.a).collect(), fx: vec![fx.clone()], size: reach.size(), channels: None, outline: None };
+                    Made { pixels: silhouette(&pm, darkness.is_some()), fx: vec![fx.clone()], size: reach.size(), channels: None, outline: None };
                 let (wu, hu) = (w as usize, h as usize);
-                let mut a: Vec<f32> = pm.data().iter().map(|p| p.a as f32).collect();
-                effects::pixel::blur_plane(&mut a, wu, hu, blur / 2.0 / f.px);
-                let [cr, cg, cb] = f.ink.rgb(&color);
-                let tint = |v: f32, ch: f32| (v * ch).round().clamp(0.0, 255.0) as u8;
-                for (px, av) in pm.data_mut().iter_mut().zip(&a) {
-                    let al = (av * opacity).clamp(0.0, 255.0);
-                    *px = vello_cpu::color::PremulRgba8 { r: tint(al, cr), g: tint(al, cg), b: tint(al, cb), a: al.round() as u8 };
+                let sigma = blur / 2.0 / f.px;
+                if let Some(darkness) = darkness {
+                    // The object's own colors, blurred, with the black Darkness adds (premultiplied).
+                    let keep = 1.0 - shade(f.ink, darkness);
+                    let mut planes: [Vec<f32>; 4] = [
+                        pm.data().iter().map(|p| p.r as f32).collect(),
+                        pm.data().iter().map(|p| p.g as f32).collect(),
+                        pm.data().iter().map(|p| p.b as f32).collect(),
+                        pm.data().iter().map(|p| p.a as f32).collect(),
+                    ];
+                    for plane in &mut planes {
+                        effects::pixel::blur_plane(plane, wu, hu, sigma);
+                    }
+                    let [r, g, b, a] = &planes;
+                    for (k, px) in pm.data_mut().iter_mut().enumerate() {
+                        let al = (a[k] * opacity).clamp(0.0, 255.0).round();
+                        let value = |plane: &Vec<f32>| (plane[k] * opacity * keep).round().clamp(0.0, al) as u8;
+                        *px = vello_cpu::color::PremulRgba8 { r: value(r), g: value(g), b: value(b), a: al as u8 };
+                    }
+                } else {
+                    let mut a: Vec<f32> = pm.data().iter().map(|p| p.a as f32).collect();
+                    effects::pixel::blur_plane(&mut a, wu, hu, sigma);
+                    let [cr, cg, cb] = f.ink.rgb(&color);
+                    let tint = |v: f32, ch: f32| (v * ch).round().clamp(0.0, 255.0) as u8;
+                    for (px, av) in pm.data_mut().iter_mut().zip(&a) {
+                        let al = (av * opacity).clamp(0.0, 255.0);
+                        *px = vello_cpu::color::PremulRgba8 { r: tint(al, cr), g: tint(al, cg), b: tint(al, cb), a: al.round() as u8 };
+                    }
                 }
                 let image = std::sync::Arc::new(pm);
                 let anchor = reach.origin();
@@ -768,8 +811,9 @@ impl Renderer {
     /// frame made for its object (the same id, effect slot and ink, at this zoom and rotation, with
     /// the same `inputs`) when only the silhouette's place changed after that frame: made by the
     /// same effect `fx` from a silhouette whose bounds have the size of `reach` (the content's
-    /// bounds moved by the shadow's offset), and whose alpha is the alpha of `n`'s silhouette drawn
-    /// into a raster placed as that one was against its anchor. The raster is kept as `n`'s, marked
+    /// bounds moved by the shadow's offset), and whose alpha (and colors, under Darkness) are those
+    /// of `n`'s silhouette drawn into a raster placed as that one was against its anchor
+    /// ([`silhouette`]). The raster is kept as `n`'s, marked
     /// moved, and is drawn at the nearest whole pixel.
     #[allow(clippy::too_many_arguments)]
     fn move_shadow(
@@ -783,9 +827,9 @@ impl Renderer {
         inputs: &Inputs,
         paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
     ) {
-        let (dx, dy) = match fx {
-            RasterFx::DropShadow { dx, dy, .. } => (*dx, *dy),
-            _ => (0.0, 0.0),
+        let (dx, dy, colored) = match fx {
+            RasterFx::DropShadow { dx, dy, darkness, .. } => (*dx, *dy, darkness.is_some()),
+            _ => (0.0, 0.0, false),
         };
         let (linear, stamp, size) = (linear_key(f.view), self.stamp, reach.size());
         let fits = |k: &(usize, usize, Ink), e: &ShadowEntry| {
@@ -809,7 +853,7 @@ impl Renderer {
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
         off.render(&mut pm, &mut self.resources);
-        if !self.shadows.get(&old).is_some_and(|e| pm.data().iter().map(|p| p.a).eq(e.made.pixels.iter().copied())) {
+        if !self.shadows.get(&old).is_some_and(|e| silhouette(&pm, colored) == e.made.pixels) {
             return;
         }
         if let Some(mut e) = self.shadows.remove(&old) {
@@ -1028,12 +1072,15 @@ impl Renderer {
             {
                 continue;
             }
-            let (mode, opacity, dx, dy, blur, color) = match fx {
-                RasterFx::DropShadow { mode, opacity, dx, dy, blur, color } => (*mode, *opacity, *dx, *dy, *blur, *color),
-                RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color),
+            let (mode, opacity, dx, dy, blur, color, darkness) = match fx {
+                RasterFx::DropShadow { mode, opacity, dx, dy, blur, color, darkness } => (*mode, *opacity, *dx, *dy, *blur, *color, *darkness),
+                RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color, None),
                 _ => continue,
             };
-            let filter = shadow_filter(0.0, 0.0, blur, pcolor(f.ink, &color));
+            let filter = match darkness {
+                Some(_) => shade_filter(blur),
+                None => shadow_filter(0.0, 0.0, blur, pcolor(f.ink, &color)),
+            };
             // The offset moves the content rather than the filter: vello_cpu drops layer content
             // that lies entirely outside the viewport before filtering.
             let reach = reach + Vec2::new(dx, dy);
@@ -1041,6 +1088,14 @@ impl Renderer {
                 c.set_transform(fr.view);
                 c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
                 paint(r, c, &shifted(fr, dx, dy));
+                // Darkness: black over the object's own colors, keeping their alpha.
+                if let Some(black) = darkness.map(|d| shade(f.ink, d)).filter(|d| *d > 0.0) {
+                    c.set_transform(fr.view);
+                    c.set_blend_mode(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::SrcAtop));
+                    c.set_paint(peniko::Color::new([0.0, 0.0, 0.0, black]));
+                    c.fill_rect(&reach);
+                    c.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));
+                }
                 c.pop_layer();
             });
         }
@@ -1702,6 +1757,80 @@ mod tests {
         assert_eq!(lum(img.pixel(15, 15)), WHITE);
     }
 
+    /// A red square's drop shadow at Darkness `darkness` (%), opaque and sharp, 10 pt down and
+    /// right; `shade` "color" or "darkness".
+    fn shaded_doc(mode: vectorcraft_doc::ColorMode, fill: Color, shade: &str, darkness: f64) -> Document {
+        let mut d = doc_with(
+            Rect::new(20.0, 20.0, 60.0, 60.0),
+            fill,
+            vec![(
+                "stylize.dropShadow",
+                json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal", "shade": shade, "darkness": darkness}),
+            )],
+        );
+        d.color_mode = mode;
+        d
+    }
+
+    /// Darkness: the shadow is the object's own color, each channel times 1 − darkness in an RGB
+    /// document (the reference app's guide gives the object's color at 0%,
+    /// <https://help.adobe.com/archive/en/illustrator/cc/2014/illustrator_reference.pdf> page 428), in the cached
+    /// raster and, at 6000 %, in the filter layer that a raster too large to cache is drawn with.
+    #[test]
+    fn drop_shadow_darkness_darkens_the_objects_own_color() {
+        let rgb = vectorcraft_doc::ColorMode::Rgb;
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        // At 6000 %, the view's center is (65, 65), where only the shadow lies.
+        let zoomed = Affine::translate((50.0, 50.0)) * Affine::scale(60.0) * Affine::translate((-65.0, -65.0));
+        for (darkness, want) in [(0.0, 255), (50.0, 128), (100.0, 0)] {
+            let d = shaded_doc(rgb, red, "darkness", darkness);
+            let px = render(&d).pixel(66, 66);
+            assert!(px[0].abs_diff(want) <= 1 && px[1] == 0 && px[2] == 0, "{darkness}%: {px:?}");
+            let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+            let px = Renderer::new().render(&d, 100, 100, zoomed, &opts).pixel(50, 50);
+            assert!(px[0].abs_diff(want) <= 1 && px[1] == 0 && px[2] == 0, "{darkness}% at 6000 %: {px:?}");
+        }
+    }
+
+    /// In a CMYK document Darkness adds black ink and keeps the object's cyan, magenta and yellow
+    /// (same page of the guide: at 100% an object with colors other than black gets a shadow of those colors under
+    /// full black, and a black object's shadow is 100% black).
+    #[test]
+    fn drop_shadow_darkness_adds_black_in_a_cmyk_document() {
+        let cmyk = vectorcraft_doc::ColorMode::Cmyk;
+        let inks = |d: &Document| {
+            let i = Renderer::new().render_region_inks(d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, &RenderOptions::default());
+            let at = (66 * 100 + 66) * 4;
+            [i[at], i[at + 1], i[at + 2], i[at + 3]]
+        };
+        let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+        for (darkness, k) in [(0.0, 0), (50.0, 128), (100.0, 255)] {
+            let got = inks(&shaded_doc(cmyk, red, "darkness", darkness));
+            assert!(got[0] == 0 && got[1] == 255 && got[2] == 255 && got[3].abs_diff(k) <= 1, "{darkness}%: {got:?}");
+        }
+        // Half black ink, darkened by half: K 50 + 50 × 50% = K 75.
+        let got = inks(&shaded_doc(cmyk, Color::cmyk(0.0, 0.0, 0.0, 0.5), "darkness", 50.0));
+        assert!(got[..3] == [0, 0, 0] && got[3].abs_diff(191) <= 1, "{got:?}");
+        let got = inks(&shaded_doc(cmyk, Color::cmyk(0.0, 0.0, 0.0, 1.0), "darkness", 100.0));
+        assert_eq!(got, [0, 0, 0, 255]);
+    }
+
+    /// Color stays the default: a shadow without the new keys, and one with Color chosen and a
+    /// Darkness value, draw the same pixels, which a shadow with Darkness does not.
+    #[test]
+    fn a_drop_shadow_with_color_draws_as_before() {
+        let rgb = vectorcraft_doc::ColorMode::Rgb;
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let old = doc_with(
+            Rect::new(20.0, 20.0, 60.0, 60.0),
+            red,
+            vec![("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}))],
+        );
+        let before = render(&old).pixels;
+        assert_eq!(render(&shaded_doc(rgb, red, "color", 40.0)).pixels, before);
+        assert_ne!(render(&shaded_doc(rgb, red, "darkness", 40.0)).pixels, before);
+    }
+
     #[test]
     fn shadow_of_offscreen_object_is_not_culled() {
         let d = doc_with(
@@ -2009,6 +2138,14 @@ mod tests {
             doc_with(Rect::new(20.0, 20.0, 50.0, 46.0), Color::rgb(0.9, 0.4, 0.1), vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 2}))]);
         assert_eq!(drag(&shadowed, &moved(&shadowed, false, &recolor)), (1, true), "a shadow under a new color");
         assert_eq!(drag(&shadowed, &moved(&shadowed, false, &notch)), (0, true), "a shadow under a notch");
+        // A shadow with Darkness is made from the object's colors: recolored, it is made again.
+        let shaded = doc_with(
+            Rect::new(20.0, 20.0, 50.0, 46.0),
+            Color::rgb(0.9, 0.4, 0.1),
+            vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 2, "shade": "darkness", "darkness": 50}))],
+        );
+        assert_eq!(drag(&shaded, &moved(&shaded, false, &|_| {})), (1, true), "a shadow with Darkness, moved");
+        assert_eq!(drag(&shaded, &moved(&shaded, false, &recolor)), (0, true), "a shadow with Darkness under a new color");
     }
 
     /// A raster made over moved rasters counts as moved itself (#1257): a group with a drop shadow

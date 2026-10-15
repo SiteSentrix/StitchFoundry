@@ -570,7 +570,8 @@ impl Rules<'_> {
         }
     }
 
-    /// Shadows and glows as `box-shadow` (type: `text-shadow`), a Gaussian blur as `filter`.
+    /// Shadows and glows as `box-shadow` (type: `text-shadow`), a Gaussian blur as `filter`. A drop
+    /// shadow with Darkness is left out and the art marked unsupported.
     fn effects(&mut self, n: &Node, text: bool, art: &mut Art) {
         let fx = &n.appearance.effects;
         if fx.iter().any(|e| e.visible && !vectorcraft_effects::is_raster(&e.id)) {
@@ -580,6 +581,7 @@ impl Rules<'_> {
         let mut filter = None;
         for f in vectorcraft_effects::raster_effects(fx) {
             match f {
+                RasterFx::DropShadow { darkness: Some(_), .. } => art.unsupported("drop shadows with Darkness"),
                 RasterFx::DropShadow { opacity, dx, dy, blur, color, .. } => {
                     shadows.push(format!("{} {} {} {}", self.len(dx), self.len(dy), self.len(blur), color_css(&color, opacity)))
                 }
