@@ -65,8 +65,8 @@ pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
 pub use save::{
-    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, export_folder, save_filters, save_format, save_job, save_plan, save_with,
-    stamp_save_dates, templates_dialog_folder, templates_folder,
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, export_folder, save_filters, save_format, save_job, save_plan,
+    save_with, stamp_save_dates, template_filters, templates_dialog_folder, templates_folder,
 };
 pub use screens::{PRESETS as SCREEN_PRESETS, ScreenSize, preset_rows as screen_preset_rows};
 pub(crate) use screens::{
@@ -497,7 +497,17 @@ pub const FORMATS: &[Format] = &[
         raster: false,
         options: native::AI_OPTIONS,
     },
-    reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),
+    Format {
+        id: "ait",
+        label: "PDF-compatible .ait template",
+        extensions: &["ait"],
+        mime: "application/pdf",
+        read: true,
+        // Save as Template writes it, with the .ai file's options; exports don't.
+        write: false,
+        raster: false,
+        options: native::AI_OPTIONS,
+    },
     Format {
         id: "png",
         label: "PNG",
