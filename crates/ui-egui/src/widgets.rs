@@ -315,6 +315,17 @@ pub(crate) fn focus_field(ui: &Ui, id: egui::Id, text: &str) {
     ui.memory_mut(|m| m.request_focus(id));
 }
 
+/// The modifiers held with an Enter press among this frame's events, `None` without one, as when a
+/// field's editing ends with a click elsewhere.
+pub(crate) fn enter_modifiers(ui: &Ui) -> Option<egui::Modifiers> {
+    ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Key { key: egui::Key::Enter, pressed: true, modifiers, .. } => Some(*modifiers),
+            _ => None,
+        })
+    })
+}
+
 /// Select all of `text` in text field `id`.
 fn select_all(ui: &Ui, id: egui::Id, text: &str) {
     let mut st = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
