@@ -49,7 +49,7 @@ pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub use export::export_source;
-pub(crate) use export::isolated;
+pub(crate) use export::{export_crop, isolated};
 pub(crate) use load::check_not_lossy_overwrite;
 use load::err;
 pub(crate) use load::import_svg;

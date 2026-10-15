@@ -141,6 +141,22 @@ fn shaper_erases_only_protruding_stroke_pieces_keeps_fill_and_original_line() {
     assert_eq!(node(&s, line), &original_line);
 }
 
+/// Export Selection crops a Shaper group to the art it shows, not to its transparent source art.
+#[test]
+fn shaper_export_selection_crops_to_the_shown_art() {
+    let mut s = session();
+    s.execute("paint.setFill", &json!({"color":"#ffff00"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x":100,"y":100,"width":100,"height":100})).unwrap();
+    s.execute("shape.line", &json!({"x1":50,"y1":150,"x2":250,"y2":150})).unwrap();
+    scribble(&mut s, &[[60.0, 140.0], [70.0, 160.0], [80.0, 140.0], [90.0, 160.0]]);
+    let g = scribble(&mut s, &[[210.0, 140.0], [220.0, 160.0], [230.0, 140.0], [240.0, 160.0]]);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let v = s.execute("document.exportSelection", &json!({"format": "png"})).unwrap();
+    let b = node(&s, g).visual_bounds().unwrap();
+    assert!(b.x0 > 90.0 && b.x1 < 210.0, "the trimmed line: {b:?}");
+    assert_eq!(v["bounds"], json!([b.x0, b.y0, b.width(), b.height()]), "{v}");
+}
+
 #[test]
 fn shaper_source_move_resize_native_roundtrip_and_release_preserve_live_art() {
     let mut s = session();
