@@ -1704,8 +1704,9 @@ impl FontDb {
     }
 
     /// Scan the font folders again (fonts installed or removed since), cataloging the faces
-    /// found (native only). Font data is loaded when a cataloged family is first resolved.
-    /// Returns the number of faces cataloged.
+    /// found (native only). Font data is loaded when a cataloged family is first resolved. Faces
+    /// loaded from files the scan no longer finds are dropped. Returns the number of faces
+    /// cataloged.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load_system_fonts(&self) -> usize {
         // The first scan, or a rescan once it is done (never both at once).
@@ -1793,10 +1794,27 @@ impl FontDb {
             }
         }
         log::debug!("cataloged {n} system font faces");
+        let installed: std::collections::HashSet<PathBuf> = catalog.values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
         *self.stamp.lock().unwrap_or_else(|e| e.into_inner()) = Some(ScanStamp { paths, modified: modified_at });
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
         *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
         *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
+        // Faces loaded from a file this scan did not catalog (the font was removed, or its folder
+        // is no longer read) are dropped with their outlines. A family with no face left and no
+        // cataloged file leaves the lists, and type set in it resolves to the fallback font. A face
+        // without a file (bundled, or added as bytes) stays.
+        let mut dropped = std::collections::HashSet::new();
+        self.faces.write().unwrap_or_else(|e| e.into_inner()).retain(|f| {
+            let keep = f.path.as_ref().is_none_or(|p| installed.contains(p));
+            if !keep {
+                dropped.insert(f.id);
+            }
+            keep
+        });
+        if !dropped.is_empty() {
+            log::debug!("dropped {} font faces whose files are no longer installed", dropped.len());
+            self.outlines.lock().unwrap_or_else(|e| e.into_inner()).retain(|(id, _), _| !dropped.contains(id));
+        }
         // A font installed since may cover the characters no font did: they are looked for again.
         {
             let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());

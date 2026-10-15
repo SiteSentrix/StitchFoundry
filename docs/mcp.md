@@ -3237,7 +3237,8 @@ lists every family available, the installed ones included, each by its English (
 Names in English (`fontNamesInEnglish`) only changes the UI menu labels, not this list. With `family` it gives that
 family's styles (upright by weight, then italics) and fails when the family isn't available. `text.rescanFonts`
 (Character panel menu › Refresh Font List) scans the font folders again, for fonts installed or removed since the app
-started: type set in a font that became available redraws in it, without editing the document. The app does so by
+started: type set in a font that became available redraws in it, and type set in a family that was removed redraws in
+the fallback font and is listed as missing, without editing the document. The app does so by
 itself when its window comes to the front and a font folder changed meanwhile.
 
 ```json
