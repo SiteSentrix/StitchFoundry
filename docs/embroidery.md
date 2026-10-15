@@ -231,6 +231,33 @@ shows their colours and **Remove Blend** sews it plain again (`setParams {blend:
 `embroidery.makeBlend` takes up to six colours, and `separate: true` makes the layers objects of
 their own instead. Turn the fill's angle to turn the blend.
 
+**Blend from Gradient:** a tatami fill painted with a linear gradient (Gradient panel, or an SVG
+gradient) shows **Blend from Gradient** in the panel. It sews the gradient's colours as a Multi
+Blend that runs the way the gradient does: the rows turn across the gradient, and each colour is
+densest where its stop is and fades to nothing at the next stop's, so uneven stops blend unevenly
+too. Up to six colours (a gradient with more is sampled evenly); the art keeps its gradient
+(`embroidery.gradientBlend {ids?, spacing?}`). Like Ink/Stitch's linear gradient fill, written for
+StitchFoundry.
+
+**Tartan Fill:** **Embroidery › Tartan Fill** fills the selected closed shapes with a woven check.
+The sett, a run of coloured stripes (our own navy, green, black and gold to start with), is laid
+down the shape and across it and repeated to fill it; by default it runs there and back, as most
+tartans do. Each colour becomes one fill each way: the warp first, its rows running down, then
+the weft on top, its rows running across, both open (0.8 mm apart) so where stripes cross both
+threads show and the colours mix the way a weave's do. The fills take the shape's place in one
+group; one Undo puts it back (`embroidery.tartan {sett?: [{color, width}], mirror?, scale?}`).
+
+**Cutwork:** machines with cutting needles cut the fabric with blades that each face one way, so
+each needle cuts only lines running within its range of directions. **Embroidery › Cutwork** splits
+the selected lines for them: each stretch becomes a running-stitch line in its needle's colour,
+named after it (needle 1 cuts from 0° to 45°, needle 2 from 45° to 90° and so on, either way along
+the line; tiny jogs stay with the stretch before), grouped by needle so each needle cuts all its
+stretches in one go (`embroidery.cutwork {needles?: 1-4, stitch?}`).
+
+**Routing satins:** to sew several satin columns as one path without trims, the way Ink/Stitch's
+auto-route does, select them and use **Embroidery › Branch** (see Stitch Sequence below): it picks the
+order and carries the thread from one to the next under the ones still to come.
+
 **Outlines and borders:** **Embroidery › Add Outline** sews an outline round the selected
 stitched shapes, lines and type, after them and in the top one's thread: a **Satin Outline** or
 **Bean Outline** following them 1 mm out, or a **Rectangle**, **Oval**, **Rounded** or **Motif
