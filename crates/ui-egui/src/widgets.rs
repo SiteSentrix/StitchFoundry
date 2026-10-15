@@ -311,25 +311,43 @@ fn select_all(ui: &Ui, id: egui::Id, text: &str) {
 }
 
 /// Numeric fields select the whole text on keyboard focus, a completed focus click or a
-/// double-click. A pointer press keeps its caret so dragging selects from the pressed position.
+/// double-click. A pointer press keeps its caret so dragging selects from the pressed position,
+/// and a short drag the toolkit still counts as a click keeps it too (#1326): only a tap
+/// releases into select-all.
 fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
     let pending = resp.id.with("select-all-on-focus-click");
-    let (pressed, released) =
-        ui.input(|i| (i.pointer.button_pressed(egui::PointerButton::Primary), i.pointer.button_released(egui::PointerButton::Primary)));
+    let press_pos = resp.id.with("select-all-on-focus-press");
+    let (pressed, released, at_press) = ui.input(|i| {
+        (i.pointer.button_pressed(egui::PointerButton::Primary), i.pointer.button_released(egui::PointerButton::Primary), i.pointer.interact_pos())
+    });
     if resp.gained_focus() {
         ui.data_mut(|d| {
             if pressed {
                 d.insert_temp(pending, true);
+                if let Some(p) = at_press {
+                    d.insert_temp(press_pos, p);
+                }
             } else {
                 d.remove_temp::<bool>(pending);
+                d.remove_temp::<egui::Pos2>(press_pos);
             }
         });
     }
     let clicked_focus = released && ui.data_mut(|d| d.remove_temp::<bool>(pending)).unwrap_or(false) && resp.clicked_by(egui::PointerButton::Primary);
+    // A press released a few points away is a short drag, not a tap. egui still reports a
+    // click, and a release inside one character leaves no text selection, so select-all on
+    // release would replace the drag the user just made (#1326).
+    let dragged = clicked_focus
+        && ui
+            .data_mut(|d| d.remove_temp::<egui::Pos2>(press_pos))
+            .is_some_and(|p0| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p1| (p1 - p0).length() > 3.0));
     if resp.lost_focus() {
-        ui.data_mut(|d| d.remove_temp::<bool>(pending));
+        ui.data_mut(|d| {
+            d.remove_temp::<bool>(pending);
+            d.remove_temp::<egui::Pos2>(press_pos);
+        });
     }
-    if !(resp.gained_focus() && !pressed || resp.double_clicked() || clicked_focus) {
+    if !(resp.gained_focus() && !pressed || resp.double_clicked() || clicked_focus && !dragged) {
         return;
     }
     if let Some(st) = egui::TextEdit::load_state(ui.ctx(), resp.id) {
