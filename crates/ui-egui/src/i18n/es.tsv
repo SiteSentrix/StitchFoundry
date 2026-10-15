@@ -1005,6 +1005,9 @@
 	Export…	Exportar…
 	Extrude & Bevel…	Extrusión y biselado…
 	Eyedropper	Cuentagotas
+	Sample Color from Screen	Tomar color de la pantalla
+	This system has no screen color sampler	Este sistema no tiene muestreador de color de la pantalla
+	The active document changed while the screen color sampler was open	El documento activo cambió mientras el muestreador de color de la pantalla estaba abierto
 	Eyedropper Applies:	El cuentagotas aplica:
 	Eyedropper Options	Opciones de cuentagotas
 	Eyedropper Picks Up:	El cuentagotas toma:
@@ -3647,6 +3650,9 @@ axis	Both	Ambos
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis debe ser "vertical", "horizontal" o un ángulo en grados, no `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fondo {other}: transparent, white, black o un color como "#ff8800"
 @msg	bad color {v}	color no válido {v}
+@msg	the Color Picker is not open	el Selector de color no está abierto
+@msg	the screen color sampler is already open	el muestreador de color de la pantalla ya está abierto
+@msg	this system has no screen color sampler	este sistema no tiene muestreador de color de la pantalla
 @msg	bad colour `{hex}` (#rrggbb)	color no válido `{hex}` (#rrggbb)
 @msg	bad page tree	árbol de páginas no válido
 @msg	bad shortcut	atajo no válido

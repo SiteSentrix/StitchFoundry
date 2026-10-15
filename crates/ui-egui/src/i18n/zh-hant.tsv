@@ -980,6 +980,9 @@
 	Export…	匯出…
 	Extrude & Bevel…	突出與斜角…
 	Eyedropper	滴管
+	Sample Color from Screen	從螢幕取樣顏色
+	This system has no screen color sampler	此系統沒有螢幕取色工具
+	The active document changed while the screen color sampler was open	螢幕取色工具開啟期間，作用中的文件已變更
 	Eyedropper Applies:	滴管套用：
 	Eyedropper Options	滴管選項
 	Eyedropper Picks Up:	滴管擷取：

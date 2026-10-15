@@ -1,6 +1,7 @@
 //! The Color Picker (double-click a Fill/Stroke proxy, or `ui.colorPicker`): a colour field with a
 //! channel slider for H, S, B, R, G or B; HSB, RGB, Lab and CMYK fields and hex; Only Web Colors;
-//! the out-of-gamut and out-of-web warnings (click to correct); New/Original chips; and a Color
+//! the out-of-gamut and out-of-web warnings (click to correct); New/Original chips; an eyedropper
+//! button that samples a color anywhere on the screen ([`crate::screen_color`]); and a Color
 //! Swatches list. With art selected the colour shows on it live as it is picked; OK keeps it as one
 //! undo step through `paint.setFill` / `paint.setStroke`, Cancel puts the art back.
 //!
@@ -183,6 +184,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         json!({"stroke": stroke, "original": color_json(&color), "channel": Channel::default().id(), "webOnly": false, "swatches": false}),
     );
     store(&mut d, &Picked::of(color));
+    d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
     app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
@@ -197,6 +199,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let mut pick: Option<Picked> = None;
     let mut new_channel = None;
     let mut toggle_swatches = false;
+    let mut sample = false;
     ui.horizontal_top(|ui| {
         if swatches {
             pick = swatch_list(app, ui, &p.color).map(Picked::of);
@@ -218,7 +221,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 if new_original_chips(ui, &p.color, &original) {
                     pick = Some(Picked::of(original));
                 }
-                ui.add_space(8.0);
+                ui.add_space(4.0);
+                sample = crate::screen_color::button(app, ui);
+                ui.add_space(4.0);
                 ui.vertical(|ui| {
                     if let Some(fix) = gamut
                         && warning_chip(ui, GAMUT_WARNING, &fix)
@@ -249,6 +254,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     }
     if toggle_swatches {
         d.fields.insert("swatches".into(), json!(!swatches));
+    }
+    if sample && let Err(e) = app.run("ui.sampleScreenColor", json!({"picker": true})) {
+        app.status(e);
     }
     store(d, &pick.unwrap_or(p).snapped(d.bool("webOnly")));
     preview(app, d);

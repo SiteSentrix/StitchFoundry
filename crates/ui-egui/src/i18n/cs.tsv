@@ -2732,6 +2732,9 @@ effect	Vertical	Svislý
 	Clear Appearance	Vymazat vzhled
 	Duplicate Item	Duplikovat položku
 	Eyedropper	Kapátko
+	Sample Color from Screen	Nabrat barvu z obrazovky
+	This system has no screen color sampler	Tento systém nemá nástroj pro nabírání barvy z obrazovky
+	The active document changed while the screen color sampler was open	Aktivní dokument se změnil, zatímco byl otevřený nástroj pro nabírání barvy z obrazovky
 	Move Appearance	Přesunout vzhled
 	Reduce to Basic Appearance	Zredukovat na základní vzhled
 	Remove Item	Odebrat položku
@@ -3943,6 +3946,9 @@ imageTrace	Outline	Obrys
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	osa musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
+@msg	the Color Picker is not open	Výběr barvy není otevřený
+@msg	the screen color sampler is already open	nástroj pro nabírání barvy z obrazovky už je otevřený
+@msg	this system has no screen color sampler	tento systém nemá nástroj pro nabírání barvy z obrazovky
 @msg	bad colour `{hex}` (#rrggbb)	chybná barva `{hex}` (#rrggbb)
 @msg	bad page tree	chybný strom stránek
 @msg	bad shortcut	chybná klávesová zkratka

@@ -1376,6 +1376,9 @@
 	Export:	내보내기:
 	Export…	내보내기…
 	Eyedropper	스포이드
+	Sample Color from Screen	화면에서 색상 추출
+	This system has no screen color sampler	이 시스템에는 화면 색상 추출기가 없습니다
+	The active document changed while the screen color sampler was open	화면 색상 추출기가 열려 있는 동안 활성 문서가 바뀌었습니다
 	Eyedropper Applies:	스포이드 적용 대상:
 	Eyedropper Options	스포이드 옵션
 	Eyedropper Picks Up:	스포이드 추출 대상:
@@ -3884,6 +3887,9 @@ theme	Appearance	외관
 @msg	{label}…	{label}…
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
+@msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
+@msg	the screen color sampler is already open	화면 색상 추출기가 이미 열려 있습니다
+@msg	this system has no screen color sampler	이 시스템에는 화면 색상 추출기가 없습니다
 @msg	Corners edits the corners of a path	모퉁이는 패스의 모퉁이를 편집합니다
 @msg	give corners of the path: anchors where its sides meet at an angle	패스의 모퉁이, 즉 변이 각을 이루며 만나는 앵커를 지정하세요
 @msg	select one path, or give its `id`	패스를 하나 선택하거나 `id`를 지정하세요

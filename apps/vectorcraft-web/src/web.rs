@@ -406,6 +406,7 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
     let open_inbox = inbox.clone();
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
+    let screen_color = eye_dropper(ctx.clone());
     Services {
         // File → Place…: the picked files go to the Place dialog.
         place_async: Some(Box::new(move || {
@@ -443,6 +444,8 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
                 ctx.request_repaint();
             });
         })),
+        // Sample Color from Screen: the browser's EyeDropper, where it has one.
+        screen_color,
         // A download that couldn't be started fails the save or export it is for (#1693).
         download: Some(Box::new(|name: &str, bytes: &[u8]| download(name, bytes).inspect_err(|e| log::error!("download of {name} failed: {e}")))),
         inbox: Some(inbox),
@@ -451,6 +454,41 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
         print: Some(Box::new(BrowserPrint)),
         ..Default::default()
     }
+}
+
+/// Sample Color from Screen in the browser: the EyeDropper API
+/// (<https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper>), which only some browsers have,
+/// on secure (HTTPS) pages; `None` without it, and the command is then gray. `open()` needs a
+/// transient user activation (otherwise it fails with a `NotAllowedError`) and resolves with the
+/// picked color's `sRGBHex`; Escape rejects it with an `AbortError`.
+fn eye_dropper(ctx: egui::Context) -> Option<vectorcraft_ui_egui::screen_color::StartSampler> {
+    use js_sys::{Function, Promise, Reflect};
+    use wasm_bindgen::JsValue;
+    let window = web_sys::window()?;
+    let constructor = Reflect::get(&window, &JsValue::from_str("EyeDropper")).ok()?.dyn_into::<Function>().ok()?;
+    Some(Box::new(move || {
+        let eye = Reflect::construct(&constructor, &js_sys::Array::new()).map_err(js_err)?;
+        let open = Reflect::get(&eye, &JsValue::from_str("open")).map_err(js_err)?.dyn_into::<Function>().map_err(js_err)?;
+        let promise = open.call0(&eye).map_err(js_err)?.dyn_into::<Promise>().map_err(js_err)?;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let answer = match wasm_bindgen_futures::JsFuture::from(promise).await {
+                Ok(result) => Reflect::get(&result, &JsValue::from_str("sRGBHex"))
+                    .ok()
+                    .and_then(|hex| hex.as_string())
+                    .and_then(|hex| vectorcraft_ui_egui::screen_color::srgb_from_hex(&hex))
+                    .map(Some)
+                    .ok_or_else(|| "the browser's EyeDropper answered no color".to_string()),
+                Err(e) if Reflect::get(&e, &JsValue::from_str("name")).ok().and_then(|n| n.as_string()).as_deref() == Some("AbortError") => Ok(None),
+                Err(e) => Err(js_err(e)),
+            };
+            // The UI may be gone (the page closing): nothing waits for the color then.
+            let _ = tx.send(answer);
+            ctx.request_repaint();
+        });
+        Ok(rx)
+    }))
 }
 
 /// Data Recovery's store on the web: the browser's local storage (kept across visits and shared by

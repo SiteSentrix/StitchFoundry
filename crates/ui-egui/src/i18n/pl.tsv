@@ -2602,6 +2602,9 @@ effect	Vertical	Pionowo
 	Clear Appearance	Wyczyść wygląd
 	Duplicate Item	Powiel element
 	Eyedropper	Kroplomierz
+	Sample Color from Screen	Pobierz kolor z ekranu
+	This system has no screen color sampler	Ten system nie ma narzędzia do pobierania koloru z ekranu
+	The active document changed while the screen color sampler was open	Aktywny dokument zmienił się, gdy narzędzie do pobierania koloru z ekranu było otwarte
 	Move Appearance	Przesuń wygląd
 	Reduce to Basic Appearance	Ogranicz do wyglądu podstawowego
 	Remove Item	Usuń element
@@ -3757,6 +3760,9 @@ imageTrace	Outline	Kontur
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	oś musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
+@msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
+@msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
+@msg	this system has no screen color sampler	ten system nie ma narzędzia do pobierania koloru z ekranu
 @msg	bad colour `{hex}` (#rrggbb)	nieprawidłowy kolor `{hex}` (#rrggbb)
 @msg	bad page tree	nieprawidłowe drzewo stron
 @msg	bad shortcut	nieprawidłowy skrót
