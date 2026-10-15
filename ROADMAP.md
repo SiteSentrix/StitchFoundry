@@ -112,7 +112,7 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Korean | `ko` | full | 100% |
 | Vietnamese | `vi` | full | 100% |
 
-Also shipped: Traditional Chinese (partial, 80%), Hungarian, Italian, Russian and Ukrainian (full), Czech (catalog complete; render-site gaps reduced; native review pending).
+Also shipped: Traditional Chinese (partial, 80%), Hungarian, Italian, Russian, Swedish and Ukrainian (full), Czech (catalog complete; render-site gaps reduced; native review pending).
 No catalog has had a native speaker's review. Details: [localization-parity.md](docs/localization-parity.md).
 
 ## Upcoming
