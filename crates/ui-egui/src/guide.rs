@@ -142,6 +142,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let t = Tokens::get(ui.ctx());
             ui.set_width(520.0);
             ui.spacing_mut().item_spacing.y = 8.0;
+            // sliders a beginner sees are sliders: wide, filled up to the handle
+            ui.spacing_mut().slider_width = 220.0;
+            ui.visuals_mut().slider_trailing_fill = true;
             ui.label(RichText::new(format!("{} {} / 6", tl!("Step"), step.index() + 1)).size(12.0).color(t.text_dim));
             match step {
                 Step::What => what(app, ui, &t),
@@ -573,7 +576,12 @@ fn save(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
             Err(e) => app.guide.error = Some(e),
         }
     }
-    ui.label(RichText::new(tl!("Save for My Machine writes the file your machine sews, to its USB stick.")).size(13.0).color(t.text_dim));
+    let how = if crate::io::is_web(app) {
+        tl!("Save for My Machine downloads the file your machine sews: copy it to its USB stick.")
+    } else {
+        tl!("Save for My Machine writes the file your machine sews, to its USB stick.")
+    };
+    ui.label(RichText::new(how).size(13.0).color(t.text_dim));
     if crate::widgets::primary_button(ui, tl!("Save for My Machine")).clicked() {
         app.run("ui.saveForMyMachine", json!({})).ok();
     }
