@@ -1581,7 +1581,8 @@ impl Writer<'_> {
     }
 
     /// Raster effects (drop shadow, glows, Gaussian blur, feather) as SVG filters: one `<g filter>`
-    /// per effect, the first effect innermost (the reference app's stacking order). Photoshop-style
+    /// per effect, the first effect innermost (the reference app's stacking order). A drop shadow
+    /// with Darkness darkens the screen colors, in a CMYK document too. Photoshop-style
     /// filters have no SVG equivalent: they are left out with a warning (exports from the app turn
     /// such objects into images first).
     fn filtered(&mut self, n: &Node) {
@@ -1628,6 +1629,15 @@ impl Writer<'_> {
                 format!("<feFlood flood-color=\"{}\" flood-opacity=\"{}\"/>", c.to_hex(), fmt_num(o as f64, 3))
             };
             let body = match f {
+                // Darkness: the object blurred and moved, each color channel times 1 − darkness.
+                RasterFx::DropShadow { opacity, dx, dy, blur, darkness: Some(darkness), .. } => format!(
+                    "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\"/><feComponentTransfer result=\"paint\"><feFuncR type=\"linear\" slope=\"{keep}\"/><feFuncG type=\"linear\" slope=\"{keep}\"/><feFuncB type=\"linear\" slope=\"{keep}\"/><feFuncA type=\"linear\" slope=\"{}\"/></feComponentTransfer><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
+                    sd(*blur),
+                    self.num(*dx),
+                    self.num(*dy),
+                    fmt_num(*opacity as f64, 3),
+                    keep = fmt_num(1.0 - *darkness as f64, 3)
+                ),
                 RasterFx::DropShadow { opacity, dx, dy, blur, color, .. } => format!(
                     "<feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\" result=\"shadow\"/>{}<feComposite in2=\"shadow\" operator=\"in\" result=\"paint\"/><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
                     sd(*blur),

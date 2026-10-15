@@ -220,6 +220,16 @@ fn shadows_and_unsupported_art() {
     let id = add(&mut d, n);
     let r = one(&d, id, &CssOptions::default());
     assert_eq!(prop(&r, "box-shadow"), Some("2px 3px 4px rgba(0, 0, 0, 0.5)"));
+    // A shadow with Darkness takes the object's own colors, which a CSS shadow can't.
+    let mut n = rect(&mut d, (0.0, 0.0, 50.0, 50.0), 0.0);
+    n.appearance.effects.push(Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 2, "y": 3, "blur": 4, "opacity": 50, "shade": "darkness"}),
+        visible: true,
+    });
+    let shaded = add(&mut d, n);
+    let r = one(&d, shaded, &CssOptions::default());
+    assert!(prop(&r, "box-shadow").is_none() && r.unsupported.is_some(), "{r:?}");
     // A star is no box: described as its box, or with rasterize as its picture.
     let star = Node::path(
         d.alloc_id(),

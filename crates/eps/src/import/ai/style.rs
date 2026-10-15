@@ -344,7 +344,7 @@ fn style(filters: &[Filter]) -> ArtStyle {
                 }),
                 visible: true,
             }),
-            // A shadow darkening the object's own colours isn't one effects describe.
+            // A shadow darkening the object's own colors is not read as Drop Shadow's Darkness.
             SHADOW => plain = false,
             _ => {}
         }
