@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Step Type",
             [],
             None,
-            "{attribute: \"size\"|\"leading\"|\"tracking\"|\"kerning\"|\"baselineShift\", by?: steps (1; negative steps down), id?, start?: byte, end?: byte, ids?: [id…] (instead of id)} step type by the Preferences › Type increments (size and leading: typeSizeIncrement, pt; tracking and kerning: trackingIncrement, 1/1000 em; baseline shift: baselineShiftIncrement, pt), what the Type tool's Alt+arrows do (Cmd/Ctrl too: five steps; ←/→ kerning at the caret or tracking of the selection, ↑/↓ leading, Shift+↑/↓ baseline shift). The range of `id`, else the text the Type tool has selected (at a caret: kerning steps the character before it, leading its paragraph), else every selected type object → {ids}",
+            "{attribute: \"size\"|\"leading\"|\"tracking\"|\"kerning\"|\"baselineShift\", by?: steps (1; negative steps down), id?, start?: byte, end?: byte, ids?: [id…] (instead of id)} step type by the Preferences › Type increments (size and leading: typeSizeIncrement, pt; tracking and kerning: trackingIncrement, 1/1000 em; baseline shift: baselineShiftIncrement, pt), what the Type tool's Alt+arrows do (Cmd/Ctrl too: five steps; ←/→ kerning at the caret or tracking of the selection, ↑/↓ leading, Shift+↑/↓ baseline shift). The range of `id`, else the type objects in `ids`, else the text the Type tool has selected (at a caret: kerning steps the character before it, leading its paragraph), else every selected type object → {ids}",
             has_doc,
             type_step
         ),
@@ -84,6 +84,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{by?: steps (1)} type.step {attribute: size, by: -by}",
             has_selection,
             |s, p| type_step(s, &json!({"attribute": "size", "by": -f64_or(p, "by", 1.0)}))
+        ),
+        cmd!(
+            "type.resetTracking",
+            "Reset Tracking and Kerning",
+            [],
+            Some("Cmd+Alt+Q"),
+            "{ids?: [id…]} set tracking to 0 and kerning to Auto (the font's own kerning, which the Character panel shows as 0) in all the text of the type objects in `ids`, else in the text the Type tool has selected (at a caret: only the kerning of the character before it), else in every selected type object, as one undo step → {ids}",
+            has_selection,
+            reset_tracking
         ),
         cmd!(
             "text.discardEmpty",
@@ -598,6 +607,46 @@ pub(crate) fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, us
     Ok(Some((id, at("start"), at("end"))))
 }
 
+/// The text ranges a type shortcut changes: the range of `id`, else all the text of the type
+/// objects in `ids`, else the text the Type tool has selected, else all the text of every selected
+/// type object. At a caret, `at_caret` gives the range from the plain text and the caret's byte
+/// (None: nothing changes there). Each range comes with whether it came from a caret.
+fn type_ranges(
+    s: &mut Session,
+    p: &Value,
+    c: &str,
+    at_caret: impl Fn(&str, usize) -> Option<(usize, usize)>,
+) -> Result<Vec<(NodeId, usize, usize, bool)>> {
+    // (text, its range; None: all of it).
+    let targets: Vec<(NodeId, Option<(usize, usize)>)> = match id_param(p, "id") {
+        Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs))))],
+        None => {
+            let editing = editing_range(s)?.filter(|_| p.get("ids").filter(|v| !v.is_null()).is_none());
+            match editing {
+                Some((id, a, b)) => vec![(id, Some((a.min(b), a.max(b))))],
+                None => super::typecmd::text_targets(s, p, c)?.into_iter().map(|id| (id, None)).collect(),
+            }
+        }
+    };
+    let mut ranges = vec![];
+    for (id, range) in targets {
+        let text = text_ref(s, id)?.plain_text();
+        let (a, b) = range.map_or((0, text.len()), |(a, b)| (a.min(text.len()), b.min(text.len())));
+        let (a, b, caret) = if a < b {
+            (a, b, false)
+        } else {
+            match at_caret(&text, a) {
+                Some((a, b)) => (a, b, true),
+                None => continue,
+            }
+        };
+        if a < b {
+            ranges.push((id, a, b, caret));
+        }
+    }
+    Ok(ranges)
+}
+
 fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.step";
     let step = match str_param(p, "attribute") {
@@ -619,36 +668,19 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
             Step::Tracking | Step::Kerning => prefs.tracking_increment,
             Step::BaselineShift => prefs.baseline_shift_increment,
         };
-    // (text, its range; None: all of it).
-    let targets: Vec<(NodeId, Option<(usize, usize)>)> = match id_param(p, "id") {
-        Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs))))],
-        None => match editing_range(s)? {
-            Some((id, a, b)) => vec![(id, Some((a.min(b), a.max(b))))],
-            None => super::typecmd::text_targets(s, p, C)?.into_iter().map(|id| (id, None)).collect(),
-        },
-    };
     // The ranges stepped. At a caret: kerning is the space after the character before it, leading
     // the paragraph's; the rest wait for a selection.
-    let mut ranges = vec![];
-    for (id, range) in targets {
-        let text = text_ref(s, id)?.plain_text();
-        let (a, b) = range.map_or((0, text.len()), |(a, b)| (a.min(text.len()), b.min(text.len())));
-        let (a, b) = match step {
-            _ if a < b => (a, b),
-            Step::Kerning => (edit::prev_char(&text, a), a),
-            Step::Leading => {
-                let para = edit::paragraph_at(&text, a);
-                (para.start, para.end)
-            }
-            _ => continue,
-        };
-        if a < b {
-            ranges.push((id, a, b));
+    let ranges = type_ranges(s, p, C, |text, a| match step {
+        Step::Kerning => Some((edit::prev_char(text, a), a)),
+        Step::Leading => {
+            let para = edit::paragraph_at(text, a);
+            Some((para.start, para.end))
         }
-    }
+        _ => None,
+    })?;
     if !ranges.is_empty() {
         s.edit("Character", |d, _| {
-            for &(id, a, b) in &ranges {
+            for &(id, a, b, _) in &ranges {
                 let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
                 let points = if matches!(step, Step::Size | Step::Leading | Step::BaselineShift) {
                     t.style_scale().ok_or_else(|| bad(C, "text transform is collapsed or unrepresentable"))?.points
@@ -671,6 +703,29 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 edit::replace_range_styled(&mut t.runs, a, b, &runs);
+                refresh_bounds(t);
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "ids": ranges.iter().map(|(id, ..)| id.0).collect::<Vec<_>>() }))
+}
+
+/// Cmd/Ctrl+Alt+Q: tracking 0 and kerning Auto (0 in the Character panel) in the type objects in
+/// `ids`, else in the Type tool's selected text, else in every selected type object. At a caret,
+/// only the kerning of the character before it changes, as Alt+←/→ kerns there.
+fn reset_tracking(s: &mut Session, p: &Value) -> Result<Value> {
+    let ranges = type_ranges(s, p, "type.resetTracking", |text, a| Some((edit::prev_char(text, a), a)))?;
+    if !ranges.is_empty() {
+        s.edit("Reset Tracking and Kerning", |d, _| {
+            for &(id, a, b, caret) in &ranges {
+                let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+                edit::style_range(&mut t.runs, a, b, |st| {
+                    st.kerning = None;
+                    if !caret {
+                        st.tracking = 0.0;
+                    }
+                });
                 refresh_bounds(t);
             }
             Ok(())

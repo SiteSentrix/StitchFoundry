@@ -1038,6 +1038,26 @@ fn type_preferences_apply_to_agents() {
     assert_eq!(style(&mut s, 6), (size + 4.0, tracking + 50.0));
 }
 
+/// Cmd+Alt+Q reaches agents: the placeholder text the Type tool selects goes back to tracking 0
+/// and Auto kerning.
+#[test]
+fn cmd_alt_q_resets_tracking_and_kerning_for_agents() {
+    let mut s = server();
+    let events = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "up", "x": 100, "y": 100}]);
+    let r = call(&mut s, 1, "pointer_gesture", json!({"tool": "type", "events": events}));
+    assert_eq!(r["isError"], false, "{r}");
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"][0].as_u64().unwrap();
+    let r = call(&mut s, 2, "run_command", json!({"command": "text.setRangeStyle", "params": {"id": id, "tracking": 200, "kerning": -40}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = call(&mut s, 3, "press_key", json!({"key": "Q", "mods": {"cmd": true, "alt": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["command"], "type.resetTracking", "{r}");
+    let r = call(&mut s, 4, "run_command", json!({"command": "text.getRange", "params": {"id": id}}));
+    let runs = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["runs"].clone();
+    assert_eq!(runs.as_array().unwrap().len(), 1, "{runs}");
+    assert_eq!((&runs[0]["style"]["tracking"], &runs[0]["style"]["kerning"]), (&json!(0.0), &Value::Null), "{runs}");
+}
+
 /// The drawing tools snap to Smart Guides over MCP as with the mouse (#506): a Rectangle drawn
 /// from near another object's corner starts on it, and a Pen anchor placed beside that object's
 /// centre lines up with it.

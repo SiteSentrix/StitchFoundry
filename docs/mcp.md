@@ -1917,10 +1917,13 @@ Pen's second anchor at (150, 431), in line with the square's centre.
 - `placeholderText` (on by default): type the Type tools place (`pointer_gesture` with `type`, `areaType`…) starts with
   placeholder text, selected, so `type_text` replaces it; `text.create` and `text.createInPath` take `placeholder: true`.
 - `typeSizeIncrement`, `trackingIncrement`, `baselineShiftIncrement`: what `type.step {attribute: "size" | "leading" |
-  "tracking" | "kerning" | "baselineShift", by?}` steps by, on the text range given, the Type tool's selected text or the
-  selected type objects. `type.size.increase` / `type.size.decrease` (Cmd+Shift+. and Cmd+Shift+,) step the size; the
-  Type tool's Alt+arrows (`press_key {key: "Right", mods: {alt: true}}`) step kerning at a caret or tracking of the
-  selection (←/→), leading (↑/↓) and baseline shift (Shift+↑/↓), five steps with Cmd/Ctrl too.
+  "tracking" | "kerning" | "baselineShift", by?}` steps by, on the text range given, the type objects in `ids`, the
+  Type tool's selected text or the selected type objects. `type.size.increase` / `type.size.decrease` (Cmd+Shift+. and
+  Cmd+Shift+,) step the size; the Type tool's Alt+arrows (`press_key {key: "Right", mods: {alt: true}}`) step kerning at
+  a caret or tracking of the selection (←/→), leading (↑/↓) and baseline shift (Shift+↑/↓), five steps with Cmd/Ctrl
+  too. `type.resetTracking` (Cmd+Alt+Q, `press_key {key: "Q", mods: {cmd: true, alt: true}}`) sets tracking to 0 and
+  kerning to Auto in the type objects in `ids`, the Type tool's selected text or the selected type objects; at a caret
+  it resets only the kerning of the character before it.
 - `missingGlyphProtection` (on by default): `text.setStyle` and `text.setRangeStyle` changing the font leave the
   characters the new font has no glyph for in the font that had one.
 - `typeSelectionByPathOnly` (off by default): on, the Selection tools (`pointer_gesture` with `selection`, and the

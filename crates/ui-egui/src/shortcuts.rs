@@ -662,6 +662,40 @@ mod tests {
         assert!(!crate::menus::enabled(&app, "type.alignCenter"));
     }
 
+    /// Cmd+Alt+Q resets the tracking and kerning of the selected type (tracking 0, kerning Auto),
+    /// and of the Type tool's selected text while it edits.
+    #[test]
+    fn cmd_alt_q_resets_tracking_and_kerning() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "One Two"})).unwrap()["id"].as_u64().unwrap();
+        let spaced =
+            |app: &mut VectorcraftApp| app.session.execute("text.setRangeStyle", &json!({"id": id, "tracking": 200, "kerning": -40})).unwrap();
+        let spacing = |app: &mut VectorcraftApp| {
+            let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+            r["runs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|run| (run["text"].clone(), run["style"]["tracking"].clone(), run["style"]["kerning"].clone()))
+                .collect::<Vec<_>>()
+        };
+        let chord =
+            egui::Event::Key { key: Key::Q, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND | Modifiers::ALT };
+        spaced(&mut app);
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        frame(&mut app, vec![chord.clone()]);
+        assert_eq!(spacing(&mut app), [(json!("One Two"), json!(0.0), json!(null))]);
+        // While the Type tool edits: only its selection.
+        spaced(&mut app);
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 4, "end": 7}));
+        assert!(app.session.tool_wants_text());
+        frame(&mut app, vec![chord]);
+        assert_eq!(spacing(&mut app), [(json!("One "), json!(200.0), json!(-40.0)), (json!("Two"), json!(0.0), json!(null))]);
+    }
+
     /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
     /// keyboard focus on to a field: the keys after it (a tool letter, the next letter typed) still
     /// work.
