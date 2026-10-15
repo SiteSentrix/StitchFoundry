@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-14 · **Change:** minor (wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-14 · **Change:** minor (Revolve: automatic smooth shading and default-on Cap with continuous rims; wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -84,21 +84,22 @@ not an accuracy guarantee for arbitrary artwork. Tests: `pixel::tests::film_grai
 
 | Item | Ours |
 |---|---|
-| Revolve | initial: live, editable profile, rotation and light gizmos, flat shading, SVG/PDF output, Expand Appearance ([revolve.md](revolve.md), #846) |
+| Revolve | initial: live, editable profile, rotation and light gizmos, default-on Cap with continuous curved rims, smooth vector shading and round seam joins, SVG/PDF output, Expand Appearance ([revolve.md](revolve.md), #846) |
 | Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, five original bevel shapes, Inflate volume, both sides, twist, taper and cap, Rotate of every fill and stroke, Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
-| Materials panel, lighting, ray-traced render | one directional light with the documented Intensity, Rotation, Height, Softness and Ambient Light, flat shading; no materials, several lights, light colour or presets, shadows or ray tracing |
+| Materials panel, lighting, ray-traced render | one directional light with the documented Intensity, Rotation, Height, Softness and Ambient Light, Revolve uses smooth vector shading, the other types use flat facets; no materials, several lights, light colour or presets, shadows or ray tracing |
 | 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
 | Turntable (30.0 beta) | none |
 | Export 3D objects (OBJ, USDA, glTF) | none |
 
-The `three-d` crate (depends only on `geom`) builds, rotates, projects, shades and depth-sorts the surfaces;
+The `three-d` crate (depends on `geom` and `pathops`, with no UI or GPU dependencies) builds, rotates, projects, shades and depth-sorts the surfaces;
 the effects crate turns them into art. What's left (materials, several lights and shadows, ray-traced rendering,
-Revolve caps, 3D Classic, Turntable, 3D export) is 25–45 h.
+angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45 h.
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | minor | Revolve: automatic smooth vector shading, default-on Cap with continuous curved rims, and bounded seam joins; angular cut sides remain open. Scores and hour estimates unchanged at this rounding |
 | 2026-10-14 | minor | Wide drop shadows and glows at high zoom render within the raster budget (#1706); stacked Transform effects are bounded (#1705); 3D effects keep the area a nonzero compound path fills (#1724); pattern tiles redraw when a symbol, pattern or image their art shows changes (#1723) (all #1864). Scores unchanged (estimated) |
 | 2026-10-14 | minor | Roughen with Smooth keeps turn-backs smooth instead of making cusps that draw as spikes (#1646, #1643); Scribble draws one zig-zag per region, with no lines across holes and notches; convex shapes are unchanged (#1651, #1648); scores unchanged (estimated) |
 | 2026-10-13 | minor | Zig Zag spaces its ridges evenly along each segment, so lines and curves get a regular wave in Corner and Smooth (#1558); Warp › Arc (the effect and Envelope › Make with Warp) bends in the object's real proportions: a circular arc with concentric edges and no fold-over at 100%, so Arc on art that isn't square draws differently from before (#1581, fixes #1578); `effect.apply` and `effect.setParams` give an error for a misspelt or wrongly typed effect parameter instead of running the effect with its default (#1623, #1592); scores unchanged (estimated) |

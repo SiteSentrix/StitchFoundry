@@ -652,6 +652,76 @@ mod tests {
     }
 
     #[test]
+    fn smooth_revolve_commands_validate_save_expand_and_undo() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":300,"height":300})).unwrap();
+        let r = s.execute("path.create", &json!({"d":"M150 40 C190 60 190 140 150 160"})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect":"threeD.revolve","ids":[id.0],"item":null,"params":{"offset":20,"segments":16}})).unwrap();
+        let initial = node(&s, id);
+        let source = initial.path_data().unwrap().clone();
+        assert!(!initial.appearance.effects[0].params.as_object().unwrap().contains_key("smoothShading"));
+        assert!(initial.appearance.effects[0].params["cap"].as_bool().unwrap());
+        let mut gradients = 0;
+        effects_for_test(&s, id).walk(&mut |face| {
+            gradients += face.appearance.items.iter().filter(|item| {
+                matches!(item, vectorcraft_doc::AppearanceItem::Fill(fill) if matches!(fill.paint, vectorcraft_doc::color::Paint::Gradient(_)))
+            }).count();
+        });
+        assert!(gradients > 0, "commands use smooth vector shading by default");
+        s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"lightAzimuth":30}})).unwrap();
+        let smooth = node(&s, id);
+        assert_eq!(smooth.path_data(), Some(&source));
+        assert_ne!(effects_for_test(&s, id), effects::revolve_art(&initial).unwrap());
+        let restored = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        assert_eq!(effects::revolve_art(restored.node(id).unwrap()), Some(effects_for_test(&s, id)));
+        s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+        assert!(!effects::has_revolve(&node(&s, id)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), smooth);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), initial);
+    }
+
+    #[test]
+    fn revolve_caps_save_export_expand_and_undo_without_changing_the_source() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":300,"height":300})).unwrap();
+        let r = s.execute("path.create", &json!({"d":"M150 40 L150 160"})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let source = node(&s, id).path_data().unwrap().clone();
+        s.execute(
+            "effect.apply",
+            &json!({"effect":"threeD.revolve","ids":[id.0],"item":null,
+            "params":{"offset":30,"rotationX":-35,"segments":16,"expandVisibleOnly":false,"cap":false}}),
+        )
+        .unwrap();
+        let uncapped = node(&s, id);
+        assert_eq!(uncapped.appearance.effects[0].params["cap"], json!(false));
+        let count = |n: &vectorcraft_doc::Node| n.children().unwrap()[0].children().unwrap().len();
+        let open_count = count(&effects_for_test(&s, id));
+        s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"cap":true}})).unwrap();
+        let capped = node(&s, id);
+        let art = effects_for_test(&s, id);
+        assert_eq!(count(&art), open_count + 2, "each endpoint adds one continuous vector cap");
+        assert_eq!(capped.path_data(), Some(&source));
+        assert!(s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"cap":"yes"}})).is_err());
+        assert_eq!(node(&s, id), capped, "a bad boolean does not mutate the document");
+        let restored = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        assert_eq!(restored.node(id).unwrap().appearance.effects[0].params["cap"], json!(true));
+        assert_eq!(effects::revolve_art(restored.node(id).unwrap()), Some(art.clone()));
+        let pdf = s.execute("document.serialize", &json!({"format":"pdf"})).unwrap();
+        assert!(vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap().starts_with(b"%PDF"));
+        s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+        assert_eq!(count(&node(&s, id)), count(&art));
+        assert!(!effects::has_revolve(&node(&s, id)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), capped);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), uncapped);
+    }
+
+    #[test]
     fn revolve_visibility_parameter_saves_expands_and_undoes_without_other_appearance_changes() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width":300,"height":300})).unwrap();
