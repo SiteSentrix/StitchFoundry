@@ -89,6 +89,8 @@ enum Drag {
     Art,
     /// Fingers making a touch gesture ([`crate::touch`]): the first one's press does nothing.
     Gesture,
+    /// A press in Presentation Mode: released as a click, it goes to the next artboard.
+    Present,
 }
 
 fn drag_id() -> egui::Id {
@@ -633,6 +635,27 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         }
     }
 
+    // In Presentation Mode a click anywhere goes to the next artboard. The tool receives no press,
+    // drag or hover, and a drag does not pan the view. A drag that began before the mode was turned
+    // on ends as usual.
+    if app.ui.screen_mode == 3 && matches!(drag, None | Some(Drag::Present | Drag::Gesture)) {
+        let pressed = drag.is_none() && pointer.primary_pressed() && resp.hovered() && at.is_some();
+        // `press` is this frame's new press, or else the press held so far. A quick tap can be
+        // pressed and released in one frame.
+        let press = if pressed { Some(Drag::Present) } else { drag };
+        if press.is_some() && !pointer.primary_down() {
+            ui.data_mut(|dd| dd.remove::<Drag>(drag_id()));
+            // A tap of several fingers leaves `Drag::Gesture` (`touch_gestures`), and its release
+            // does not move the view to the next artboard.
+            if press == Some(Drag::Present) && resp.clicked() {
+                crate::shortcuts::presentation_step(app, true);
+            }
+        } else if pressed {
+            ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Present));
+        }
+        return;
+    }
+
     let tool = app.session.tool_id();
     // Held, Space is the Hand tool for the moment, and Cmd+Space the Zoom tool (with Alt, zooming
     // out), whatever the tool.
@@ -718,7 +741,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                     }
                     ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::ZoomScrub { start, held, moved }));
                 }
-                Drag::Art | Drag::Gesture => {}
+                Drag::Art | Drag::Gesture | Drag::Present => {}
                 Drag::Tool if drag_art_out(app, ui, resp, p, view) => {
                     ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Art));
                 }
@@ -772,7 +795,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                     let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                     dispatch(app, &ev, view);
                 }
-                Drag::Art | Drag::Gesture => {}
+                Drag::Art | Drag::Gesture | Drag::Present => {}
                 Drag::Pan { .. } | Drag::RotateView { .. } => {}
             }
         }
