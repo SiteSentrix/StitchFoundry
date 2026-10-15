@@ -49,6 +49,21 @@ pub fn painted_bounds(doc: &Document, n: &Node) -> Option<Rect> {
     brush_fx::cull_bounds(&doc.symbol_boxes(), n)
 }
 
+/// [`painted_bounds`] of `n` without the room it leaves for brush art past the brushed strokes of
+/// `n` and of a symbol instance's art (the brush art of the objects in a blend, envelope or repeat
+/// still counts). A group or layer without effects of its own is measured by its members, leaving
+/// out the transparent source art of a Shaper group as [`Node::visual_bounds_with`] does. Symbol
+/// instances are measured by their art in `symbols`.
+pub fn effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    match &n.kind {
+        NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(n) => children
+            .iter()
+            .skip(usize::from(n.extras().shaper.is_some()))
+            .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, effect_bounds(symbols, c))),
+        _ => fx::cull_bounds(symbols, n),
+    }
+}
+
 /// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
 /// addresses at most `u16::MAX` pixels per side (and panics at that edge).
 pub const MAX_RASTER_SIDE: u32 = 32_768;

@@ -172,13 +172,19 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
     isolated(&st.doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))
 }
 
-/// Objects `ids` of `doc` alone on one layer (in that order, back to front), with one artboard
-/// named `name`: their visual bounds, symbol instances measured by their art (`None` when they
-/// have none).
-pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Document, vectorcraft_geom::Rect)> {
-    let nodes: Vec<Arc<Node>> = ids.iter().filter_map(|id| doc.node(*id).cloned().map(Arc::new)).collect();
+/// The crop of an export of objects `ids` of `doc` alone: the bounds the renderer measures for what
+/// it draws for them, their effects included ([`vectorcraft_render::effect_bounds`]; symbol
+/// instances are measured by their art), `None` when they have none.
+pub(crate) fn export_crop(doc: &Document, ids: &[NodeId]) -> Option<vectorcraft_geom::Rect> {
     let symbols = doc.symbol_boxes();
-    let bounds = nodes.iter().filter_map(|n| n.visual_bounds_with(&symbols)).reduce(|a, b| a.union(b))?;
+    ids.iter().filter_map(|id| vectorcraft_render::effect_bounds(&symbols, doc.node(*id)?)).reduce(|a, b| a.union(b))
+}
+
+/// Objects `ids` of `doc` alone on one layer (in that order, back to front), with one artboard
+/// named `name`: their [`export_crop`] (`None` when they have none).
+pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Document, vectorcraft_geom::Rect)> {
+    let bounds = export_crop(doc, ids)?;
+    let nodes: Vec<Arc<Node>> = ids.iter().filter_map(|id| doc.node(*id).cloned().map(Arc::new)).collect();
     let mut d = single_artboard(doc, bounds, name);
     let mut layer = Node::layer(d.alloc_id(), name, vectorcraft_doc::LayerColor::Preset(0));
     if let Some(ch) = layer.children_mut() {
@@ -188,8 +194,9 @@ pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Do
     Some((d, bounds))
 }
 
-/// File → Export Selection: the selected objects alone, cropped to their visual bounds. Objects on
-/// template layers are guides, not artwork, and are left out.
+/// File → Export Selection: the selected objects alone, cropped to the bounds the renderer
+/// measures for what they draw, their effects included ([`isolated`]). Objects on template layers
+/// are guides, not artwork, and are left out.
 pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportSelection";
     if let Some(path) = str_param(p, "path") {

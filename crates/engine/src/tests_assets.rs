@@ -127,6 +127,24 @@ fn an_asset_exports_its_art_alone() {
     assert!(!text.to_lowercase().contains("#0000ff"), "no blue: {text}");
 }
 
+/// The crop of an asset takes in its effects: the drop shadow is inside the exported image, and
+/// assets.list gives that crop.
+#[test]
+fn an_assets_crop_takes_in_its_drop_shadow() {
+    let mut s = session();
+    let a = rect(&mut s, 50.0, 50.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    assert_eq!(assets(&mut s)[0]["bounds"], json!([50.0, 50.0, 20.0, 20.0]), "the plain square");
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "ids": [a], "params": {"x": 10, "y": 0, "blur": 0}}));
+    // The shadow's reach (10 pt) on every side.
+    assert_eq!(assets(&mut s)[0]["bounds"], json!([40.0, 40.0, 40.0, 40.0]));
+    let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": "1x"}]})));
+    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    assert_eq!(img.dimensions(), (40, 40));
+    // The shadow's right half, x 70 to 80.
+    assert!(img.get_pixel(35, 20)[3] > 0, "the shadow is in the image");
+}
+
 #[test]
 fn names_follow_the_object_or_count_up_and_can_be_changed() {
     let mut s = session();

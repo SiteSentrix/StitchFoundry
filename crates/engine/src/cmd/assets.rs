@@ -7,7 +7,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{ExportAsset, NodeId};
 
 use super::edit::{roots_of, selected_roots};
-use super::fileio::{SCREEN_SETTINGS_KEYS, check_screen_settings, export_screens, store_screen_settings};
+use super::fileio::{SCREEN_SETTINGS_KEYS, check_screen_settings, export_crop, export_screens, store_screen_settings};
 use super::*;
 
 /// The longest asset name kept (characters).
@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assets",
             [],
             None,
-            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the visual bounds of its art)}]} the Asset Export panel's assets, in order",
+            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the bounds the renderer measures for what its art draws, effects included)}]} the Asset Export panel's assets, in order",
             has_doc,
             list
         ),
@@ -161,7 +161,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
         .assets
         .iter()
         .map(|a| {
-            let bounds = a.nodes.iter().filter_map(|id| d.node(*id)?.visual_bounds()).reduce(|x, y| x.union(y));
+            let bounds = export_crop(d, &a.nodes);
             json!({
                 "id": a.id,
                 "name": a.name,

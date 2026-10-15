@@ -2666,7 +2666,8 @@ crop (`bounds`); `assets.rename {asset, name}` and `assets.remove {assets}` are 
 format row of the document's export settings, the ones Export for Screens remembers (`document.exportSettings`); any
 `formats`, `preset`, `settings`, `prefix` or `subfolders` given win for that export. `assets.settings.set` changes
 those shared settings (not an undo step). `document.exportForScreens {assets: [id…]}` does the same with its own params
-(the dialog's Assets tab).
+(the dialog's Assets tab). An asset's crop, and the crop of `export` with `selection: true`, is the bounds the
+renderer measures for what the art draws, its effects included.
 
 ```json
 {"name":"run_command","arguments":{"command":"assets.add","params":{"multiple":true}}}
