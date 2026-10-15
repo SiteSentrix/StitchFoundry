@@ -697,6 +697,68 @@ mod tests {
         assert_eq!(doc["layers"][0]["children"][0]["name"], "a\tb");
     }
 
+    /// Shift+Tab shows and hides the panels and leaves the toolbar and the Control bar as they are,
+    /// while Tab hides all three. Hiding the panels closes a panel popped out of the icon column.
+    /// In a focused field neither key shows or hides anything.
+    #[test]
+    fn shift_tab_hides_the_panels_but_not_the_toolbar_or_the_control_bar() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0));
+        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        };
+        let press = |modifiers| egui::Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers };
+        let shown = |app: &VectorcraftApp| (app.ui.dock, app.ui.toolbar, app.ui.control_bar);
+        app.ui.control_bar = true;
+        for _ in 0..3 {
+            run(&mut app, vec![]);
+        }
+        assert_eq!(shown(&app), (true, true, true));
+        app.run("window.panel", json!({"panel": "color"})).unwrap();
+        run(&mut app, vec![press(Modifiers::SHIFT)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (false, true, true), "Shift+Tab hid the panels only");
+        assert_eq!(app.ui.open_panel, None, "and the panel popped out of the icon column");
+        run(&mut app, vec![press(Modifiers::SHIFT)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (true, true, true), "a second Shift+Tab shows them again");
+        app.run("window.panel", json!({"panel": "color"})).unwrap();
+        run(&mut app, vec![press(Modifiers::NONE)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (false, false, false), "Tab hides the toolbar and the Control bar too");
+        assert_eq!(app.ui.open_panel, None);
+        run(&mut app, vec![press(Modifiers::NONE)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (true, true, true));
+        // A field of the Color panel has the keyboard focus: Shift+Tab and Tab do not show or hide anything.
+        app.run("window.panel", json!({"panel": "color"})).unwrap();
+        for _ in 0..3 {
+            run(&mut app, vec![]);
+        }
+        let fields: Vec<(egui::Id, egui::Rect)> = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.sense.senses_click()).map(|w| (w.id, w.rect)).collect()
+        });
+        let (id, rect) =
+            fields.into_iter().find(|&(id, _)| egui::TextEdit::load_state(&ctx, id).is_some()).unwrap_or_else(|| panic!("no field on screen"));
+        let click =
+            |pressed| egui::Event::PointerButton { pos: rect.center(), button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        run(&mut app, vec![egui::Event::PointerMoved(rect.center()), click(true)]);
+        run(&mut app, vec![click(false)]);
+        assert!(ctx.memory(|m| m.has_focus(id)), "the field has the keyboard");
+        for modifiers in [Modifiers::SHIFT, Modifiers::NONE] {
+            run(&mut app, vec![press(modifiers)]);
+            run(&mut app, vec![]);
+            assert_eq!(shown(&app), (true, true, true), "{modifiers:?}");
+            assert_eq!(app.ui.open_panel.as_deref(), Some("color"), "{modifiers:?}");
+        }
+    }
+
     #[test]
     fn copy_and_paste_events_use_the_system_clipboard() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
