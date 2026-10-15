@@ -732,6 +732,7 @@ impl<'a> Reader<'a> {
         // The gradients defined so far, lent (and those it defines kept).
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.nodes = self.nodes;
+        sub.template = self.template;
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
@@ -1754,7 +1755,16 @@ impl<'a> Reader<'a> {
     }
 
     fn set_instance(&mut self, i: &Instance) {
-        let to_doc = self.space();
+        let mut to_doc = self.space();
+        // In a pattern's definition a gradient's `Xm` and `Bm` are written y down about the canvas point of art space's
+        // origin, as the file's PDF part draws them.
+        if self.pattern.is_some()
+            && i.has_matrix()
+            && let Some(t) = self.template
+        {
+            let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
+            to_doc *= Affine::new([1.0, 0.0, 0.0, -1.0, CANVAS_CENTRE - cx, CANVAS_CENTRE + cy]);
+        }
         match i.paint(&self.gradients, to_doc) {
             Some(p) if i.stroke => self.pending_stroke = Some(p),
             Some(p) => self.pending_fill = Some(p),
