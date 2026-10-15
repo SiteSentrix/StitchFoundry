@@ -413,6 +413,28 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
         for v in &d.variables.variables {
             pairs.extend(d.variables.objects_of(&v.name).into_iter().map(|id| (id, v.name.clone())));
         }
+        // The row's values go in three passes: the visibility values that show an object,
+        // outermost object first; the other values, in definition order; the visibility values
+        // that hide an object, innermost object first. An object inside a group is then rewritten
+        // after the row shows the group and before the row hides it. An object with several
+        // visibility variables goes in the pass of the last one's value, and each pass keeps
+        // definition order otherwise.
+        let mut shows = std::collections::HashMap::new();
+        for (id, var) in &pairs {
+            let kind = d.variables.variable(var).map(|v| v.kind);
+            if let (Some(VariableKind::Visibility), Some(DataValue::Visible(show))) = (kind, ds.values.get(var)) {
+                shows.insert(*id, *show);
+            }
+        }
+        let depths = d.index_paths(shows.keys().copied());
+        pairs.sort_by_cached_key(|(id, var)| {
+            let depth = depths.get(id).map_or(0, Vec::len);
+            match (d.variables.variable(var).map(|v| v.kind), shows.get(id)) {
+                (Some(VariableKind::Visibility), Some(true)) => (0, depth),
+                (Some(VariableKind::Visibility), Some(false)) => (2, usize::MAX - depth),
+                _ => (1, 0),
+            }
+        });
         let mut applied = 0usize;
         let mut skipped = 0usize;
         for (id, var) in pairs {

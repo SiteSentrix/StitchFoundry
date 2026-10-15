@@ -22,6 +22,13 @@ fn rect(s: &mut Session) -> NodeId {
     NodeId(r["id"].as_u64().unwrap())
 }
 
+/// A group of the objects `ids` → the group's id.
+fn group(s: &mut Session, ids: &[NodeId]) -> NodeId {
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let r = s.execute("object.group", &json!({})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
 fn plain(s: &Session, id: NodeId) -> String {
     match &s.doc().unwrap().doc.node(id).unwrap().kind {
         vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
@@ -669,6 +676,92 @@ fn a_row_that_hides_selected_objects_deselects_them() {
     assert!(s.doc().unwrap().doc.node(r).unwrap().visible);
     let sel = s.doc().unwrap().selection.clone();
     assert_eq!((sel.objects, sel.key), (vec![r, q], Some(r)), "undo selects r again as the key object");
+}
+
+/// A row that shows or hides a group also sets the objects inside it in the same selection,
+/// whichever variable was defined first.
+#[test]
+fn a_row_sets_the_objects_inside_a_group_it_shows_or_hides() {
+    let mut s = session();
+    let (inner, other) = (rect(&mut s), rect(&mut s));
+    let g = group(&mut s, &[inner, other]);
+    s.execute("variable.define", &json!({"name": "Inner", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Inner", "ids": [inner.0]})).unwrap();
+    s.execute("variable.define", &json!({"name": "Set", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Set", "ids": [g.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Hidden", "values": {"Inner": false, "Set": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Shown", "values": {"Inner": true, "Set": true}})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    let v = s.execute("dataset.select", &json!({"name": "Shown"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.node(g).unwrap().visible && doc.node(inner).unwrap().visible, "the group and the object inside it show");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    let matching: Vec<&Value> = sets["datasets"].as_array().unwrap().iter().filter(|d| d["matches"] == json!(true)).map(|d| &d["name"]).collect();
+    assert_eq!(matching, [&json!("Shown")], "{sets}");
+
+    // With the inner object's variable defined last, a row that hides both still hides it.
+    s.execute("variable.delete", &json!({"names": ["Inner"]})).unwrap();
+    s.execute("variable.define", &json!({"name": "Inner", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Inner", "ids": [inner.0]})).unwrap();
+    s.execute("dataset.set", &json!({"name": "Hidden", "values": {"Inner": false, "Set": false}})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    let doc = &s.doc().unwrap().doc;
+    assert!(!doc.node(g).unwrap().visible && !doc.node(inner).unwrap().visible, "both are hidden");
+}
+
+/// A row writes the text of type inside a group that it shows or hides, whichever variable was
+/// defined first.
+#[test]
+fn a_row_writes_type_inside_a_group_it_shows_or_hides() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let other = rect(&mut s);
+    let g = group(&mut s, &[t, other]);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.define", &json!({"name": "Set", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Set", "ids": [g.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Hidden", "values": {"Name": "Bob", "Set": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Shown", "values": {"Name": "Carol", "Set": true}})).unwrap();
+
+    s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob");
+    let v = s.execute("dataset.select", &json!({"name": "Shown"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    assert_eq!(plain(&s, t), "Carol", "the text is written although the group started hidden");
+
+    // With the text variable defined last, a row that hides the group still writes the text.
+    s.execute("variable.delete", &json!({"names": ["Name"]})).unwrap();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("dataset.set", &json!({"name": "Hidden", "values": {"Name": "Bob", "Set": false}})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    assert_eq!(plain(&s, t), "Bob", "the text is written before the group is hidden");
+    assert!(!s.doc().unwrap().doc.node(g).unwrap().visible);
+}
+
+/// Of two visibility variables on one object, the one defined later decides whether it shows,
+/// as with two text variables.
+#[test]
+fn the_later_visibility_variable_on_an_object_wins() {
+    let mut s = session();
+    let r = rect(&mut s);
+    for name in ["First", "Second"] {
+        s.execute("variable.define", &json!({"name": name, "kind": "visibility"})).unwrap();
+        s.execute("variable.bind", &json!({"variable": name, "ids": [r.0]})).unwrap();
+    }
+    s.execute("dataset.new", &json!({"name": "Hide", "values": {"First": true, "Second": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Show", "values": {"First": false, "Second": true}})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "Hide"})).unwrap();
+    assert_eq!(v["applied"], json!(2), "{v}");
+    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
+    s.execute("dataset.select", &json!({"name": "Show"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(r).unwrap().visible);
 }
 
 /// Variables and datasets are separate namespaces: renaming a variable leaves a dataset of
