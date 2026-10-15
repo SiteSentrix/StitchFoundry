@@ -357,6 +357,36 @@ fn transform_each_random_is_deterministic_with_seed() {
     assert!(x.x0.abs() <= 50.0 && x.width() == 100.0);
 }
 
+/// #1910: Transform Each's Reflect X flips left-right; Reflect Y flips top-bottom (same as
+/// Effect › Distort › Transform and Illustrator's Transform Each checkboxes).
+#[test]
+fn transform_each_reflect_x_flips_left_right_reflect_y_flips_top_bottom() {
+    let mut s = session();
+    // A right-pointing triangle: tip at x=100, base on the left.
+    let id =
+        id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 50}, {"x": 0, "y": 100}], "closed": true})).unwrap());
+    sel(&mut s, &[id]);
+    s.execute("object.transformEach", &json!({"reflectX": true})).unwrap();
+    let tip_x = match &node(&s, id).kind {
+        // The tip is the only vertex at y=50; Reflect X about the centre maps (100, 50) → (0, 50).
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.iter().find(|a| (a.p.y - 50.0).abs() < 1e-6).map(|a| a.p.x).unwrap_or(f64::NAN),
+        _ => panic!("expected a path"),
+    };
+    assert!((tip_x - 0.0).abs() < 1e-6, "reflectX must move the tip from x=100 to x=0, got {tip_x}");
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A down-pointing tip at (50, 100); Reflect Y about the centre (50, 50) maps it to (50, 0).
+    let id2 =
+        id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 50, "y": 100}], "closed": true})).unwrap());
+    sel(&mut s, &[id2]);
+    s.execute("object.transformEach", &json!({"reflectY": true})).unwrap();
+    let tip_y = match &node(&s, id2).kind {
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.iter().find(|a| (a.p.x - 50.0).abs() < 1e-6).map(|a| a.p.y).unwrap_or(f64::NAN),
+        _ => panic!("expected a path"),
+    };
+    assert!((tip_y - 0.0).abs() < 1e-6, "reflectY must move the tip from y=100 to y=0, got {tip_y}");
+}
+
 /// Transform Each with its default values, or with any values that move nothing (both scales 100%,
 /// no move, rotation or reflection, Random or not), records no undo step and replies with the
 /// objects. With only a layer selected there is no object to transform: with Copy or without, it
