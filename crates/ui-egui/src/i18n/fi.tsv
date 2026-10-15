@@ -3399,7 +3399,7 @@ axis	Both	Molemmat
 	Grays	Harmaat
 	Color Group	Väriryhmä
 	Library	Kirjasto
-	English	Englanti
+	English	English
 	List Folder	Luettele kansio
 	Area Type Options	Aluetekstin asetukset
 	Reshape Type Area	Muotoile tekstialue uudelleen
@@ -4786,3 +4786,107 @@ mark-style	Japanese	Japanilainen
 	Video 3840×2160	Video 3840×2160
 	Web 1280×720	Verkko 1280×720
 @msg	give corners of the path: anchors between two straight sides	anna polun kulmat: kahden suoran sivun väliset ankkurit
+# Strings added upstream after this catalog was written (machine-drafted; review welcome).
+	 cancels  |  Double-click the tool for options	 peruuttaa  |  Kaksoisnapsauta työkalua avataksesi asetukset
+	 out from a highlighted edge to place its dimension  |  	 ulospäin korostetusta reunasta sijoittaaksesi sen mitan  |  
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Vanhassa .ai-tiedostossa on yksi piirtoalusta: jokainen valitsemasi piirtoalusta tallennetaan omaksi tiedostokseen.
+	Arrange Intertwine Area	Järjestä lomitusalue
+	Batch…	Erä…
+	By Layer	Tason mukaan
+	By Object	Objektin mukaan
+	Check an artboard to save.	Valitse tallennettava piirtoalusta.
+	Clear All	Tyhjennä kaikki
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset jättävät leikkauspintansa auki.
+	Color Panel Options	Väri-paneelin asetukset
+	Color blindness – Tritanopia-type	Värisokeus – tritanopia
+	Create Dimension	Luo mitta
+	Darkness	Tummuus
+	Destination Folder:	Kohdekansio:
+	Dimension	Mitta
+	Dimension Tool	Mitoitustyökalu
+	Dimension Tool Options	Mitoitustyökalun asetukset
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Piirustus : todellinen koko — 1:10 merkitsee sivun 1 yksikön arvoksi 10.
+	Editable	Muokattava
+	Export Data Sets…	Vie tietojoukot…
+	Filter	Suodata
+	Filter Layers Panel Rows	Suodata Tasot-paneelin rivit
+	Flatten	Litistä
+	Font Family:	Fonttiperhe:
+	Font Style:	Fonttityyli:
+	Groups	Ryhmät
+	Hidden	Piilotettu
+	Hidden Layer	Piilotettu taso
+	Hidden Objects:	Piilotetut objektit:
+	Hide Template	Piilota mallipohja
+	Images	Kuvat
+	Import Data Sets…	Tuo tietojoukot…
+	Intertwine	Lomita
+	Isolate Selected Object	Eristä valittu objekti
+	Keep selected	Pidä valittuna
+	Legacy (version 7)	Vanha (versio 7)
+	Legacy .ai Options	Vanhan .ai-muodon asetukset
+	Linked Files	Linkitetyt tiedostot
+	Locked	Lukittu
+	Make Graph Dynamic	Tee kaaviosta dynaaminen
+	Make Image Dynamic	Tee kuvasta dynaaminen
+	Make Visible	Tee näkyväksi
+	Omit	Jätä pois
+	Overrides	Ohitukset
+	PDF-compatible	PDF-yhteensopiva
+	Panels Except Tools and Control	Paneelit paitsi Työkalut ja Ohjaus
+	Precision:	Tarkkuus:
+	Preview (1 inch on the page)	Esikatselu (1 tuuma sivulla)
+	Registration:	Kohdistuspiste:
+	Reset Tracking and Kerning	Palauta merkkiväli ja parivälistys
+	Sample Color from Screen	Poimi väri näytöltä
+	Set as Default	Aseta oletukseksi
+	Show Template	Näytä mallipohja
+	Source Folder:	Lähdekansio:
+	Text:	Teksti:
+	The active document changed while the screen color sampler was open	Aktiivinen asiakirja vaihtui, kun värin poiminta näytöltä oli auki
+	This system has no screen color sampler	Tässä järjestelmässä ei ole värin poimintaa näytöltä
+	Transparent Images:	Läpinäkyvät kuvat:
+	Update Dimensions	Päivitä mitat
+	Uses every data set of the open document.	Käyttää avoimen asiakirjan kaikkia tietojoukkoja.
+	{count} of {total} artboards	{count}/{total} piirtoalustaa
+@msg	Angles require two straight segments	Kulmat vaativat kaksi suoraa segmenttiä
+@msg	Batch: {count} processed	Erä: {count} käsitelty
+@msg	Batch: {count} processed, {failed} failed	Erä: {count} käsitelty, {failed} epäonnistui
+@msg	Choose a circle or a perfect arc	Valitse ympyrä tai täydellinen kaari
+@msg	Choose a precision from 0 to 6	Valitse tarkkuus väliltä 0–6
+@msg	Choose two different points	Valitse kaksi eri pistettä
+@msg	Choose two non-parallel straight segments	Valitse kaksi suoraa segmenttiä, jotka eivät ole yhdensuuntaiset
+@msg	Choose two nonzero angle arms	Valitse kaksi kulman kylkeä, joiden pituus ei ole nolla
+@msg	Dimension point is outside the canvas	Mittapiste on kankaan ulkopuolella
+@msg	Dimension size is outside its supported range	Mitan koko on tuetun alueen ulkopuolella
+@msg	First measured segment no longer exists	Ensimmäistä mitattua segmenttiä ei ole enää
+@msg	Invalid dimension distance	Virheellinen mitan etäisyys
+@msg	Invalid dimension font name	Virheellinen mitan fontin nimi
+@msg	Invalid drawing scale	Virheellinen piirustuksen mittakaava
+@msg	Invalid real scale	Virheellinen todellinen mittakaava
+@msg	Measured anchor no longer exists	Mitattua ankkuripistettä ei ole enää
+@msg	Measured segment no longer exists	Mitattua segmenttiä ei ole enää
+@msg	Non-finite dimension	Mitta ei ole äärellinen luku
+@msg	Scale must be drawing:real, for example 1:10	Mittakaavan on oltava muotoa piirustus:todellinen, esimerkiksi 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Mittakaavan suhteen on oltava välillä 1:1000000–1000000:1
+@msg	Second measured segment no longer exists	Toista mitattua segmenttiä ei ole enää
+@msg	Unknown dimension mode	Tuntematon mitoitustila
+@msg	Unknown dimension option {k}	Tuntematon mitoitusasetus {k}
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
+@msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
+@msg	choose a destination folder	valitse kohdekansio
+@msg	choose a source folder	valitse lähdekansio
+@msg	open a document with data sets	avaa asiakirja, jossa on tietojoukkoja
+@msg	select an Intertwine group	valitse lomitusryhmä
+@msg	span must be "object" or "selection", got {v}	span-arvon on oltava "object" tai "selection", saatiin {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" sijoittaa `gradient`-liukuvärin, ei värimallia
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" sijoittaa liukuvärin: anna `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" sijoittaa lineaarisen tai säteittäisen liukuvärin, ei vapaamuotoista
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" sijoittaa itse liukuvärin: jätä pois `start` ja `end` (ne sijoittavat sen jo asiakirjan koordinaatteihin)
+@msg	the Color Picker is not open	värinvalitsin ei ole auki
+@msg	the action has no steps	toiminnossa ei ole vaiheita
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	tiedoston tasoja ei luettu ({_1}): se tuodaan sivunaan yhdelle tasolle
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	tiedoston tasoja ei luettu sen muokkaustiedoista ({_1}): ne tulevat sen PDF-osasta
+@msg	the screen color sampler is already open	värin poiminta näytöltä on jo auki
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	tämä on PostScript-tiedosto (vanhemmassa muodossa tai ilman PDF-yhteensopivuutta tallennettu .ai tai EPS-tiedosto), ei PDF: Tiedosto › Avaa ja Tiedosto › Sijoita lukevat sen EPS-muodossa
+@msg	this system has no screen color sampler	tässä järjestelmässä ei ole värin poimintaa näytöltä
