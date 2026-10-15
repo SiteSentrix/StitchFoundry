@@ -184,6 +184,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Clipart")).id_salt("emb-clipart").show(ui, |ui| clipart_body(app, ui));
     if level.advanced() {
         buttonhole_rows(app, ui);
+        quilting_rows(app, ui);
     }
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
     if level.business() {
@@ -1667,6 +1668,52 @@ fn buttonhole_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
             let centre = app.session.active().and_then(|st| st.doc.artboards.first().map(|a| a.rect.center()));
             app.run("embroidery.addButtonholes", b.params(centre.unwrap_or_default())).ok();
         }
+    });
+}
+
+/// Longarm Quilting: edge-to-edge rows and borders at the sizes typed (in inches or mm, as the
+/// general units say), from the selected line; the rest is on Embroidery › Longarm Quilting.
+fn quilting_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    egui::CollapsingHeader::new(tl!("Longarm Quilting")).id_salt("emb-quilting").show(ui, |ui| {
+        let inches = app.session.prefs.units_general == "inches";
+        let (k, unit) = if inches { (25.4, "″") } else { (1.0, " mm") };
+        let mut q = app.embroidery.quilt;
+        let size = |ui: &mut Ui, label: &str, id: &str, v: &mut f64, lo: f64, hi: f64| {
+            if let Some(n) = num(ui, label, id, *v / k, unit, if inches { 1 } else { 0 }) {
+                *v = (n * k).clamp(lo, hi);
+            }
+        };
+        ui.label(tl!("Edge-to-edge rows of the selected line"));
+        size(ui, tl!("Quilt width"), "q-w", &mut q.width, 10.0, 20_000.0);
+        size(ui, tl!("Quilt height"), "q-h", &mut q.height, 10.0, 20_000.0);
+        size(ui, tl!("Row spacing (0: the line's height)"), "q-row", &mut q.row, 0.0, 5_000.0);
+        if let Some(v) = check(ui, tl!("Nest the rows"), q.nest) {
+            q.nest = v;
+        }
+        if button(ui, tl!("Make Rows")).clicked() {
+            let mut p = json!({ "width": q.width, "height": q.height, "nest": q.nest });
+            if q.row >= 1.0 {
+                p["row"] = json!(q.row);
+            }
+            if let Err(e) = app.run("quilt.pantograph", p) {
+                app.status(e);
+            }
+        }
+        ui.separator();
+        ui.label(tl!("A border of the selected line"));
+        size(ui, tl!("Border length"), "q-len", &mut q.length, 10.0, 20_000.0);
+        size(ui, tl!("Border depth"), "q-depth", &mut q.depth, 2.0, 1_000.0);
+        size(ui, tl!("Corner leg (0: no corner)"), "q-down", &mut q.down, 0.0, 20_000.0);
+        if button(ui, tl!("Make Border")).clicked() {
+            let mut p = json!({ "length": q.length, "depth": q.depth });
+            if q.down >= 10.0 {
+                p["down"] = json!(q.down);
+            }
+            if let Err(e) = app.run("quilt.border", p) {
+                app.status(e);
+            }
+        }
+        app.embroidery.quilt = q;
     });
 }
 

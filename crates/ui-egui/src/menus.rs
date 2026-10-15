@@ -67,6 +67,42 @@ fn machine_file_items() -> Vec<Item> {
     ]
 }
 
+/// Quilt sizes for edge-to-edge rows: label, width × height (mm), from the usual US sizes.
+const QUILT_SIZES: [(&str, f64, f64); 5] = [
+    ("Crib (36 × 52″)", 914.4, 1320.8),
+    ("Throw (50 × 65″)", 1270.0, 1651.0),
+    ("Twin (70 × 90″)", 1778.0, 2286.0),
+    ("Queen (90 × 108″)", 2286.0, 2743.2),
+    ("King (108 × 108″)", 2743.2, 2743.2),
+];
+
+/// Embroidery › Longarm Quilting: continuous lines for longarm machines (Q1–Q7).
+fn quilting_items() -> Vec<Item> {
+    vec![
+        c("Check Continuous Line", "ui.quiltCheck"),
+        c("Join into One Line", "quilt.join"),
+        c("Start and End on the Edges", "quilt.edges"),
+        sub("Edge-to-Edge Rows", QUILT_SIZES.iter().map(|(label, w, h)| cp(label, "quilt.pantograph", json!({ "width": w, "height": h }))).collect()),
+        sub(
+            "Continuous Fill",
+            vec![
+                cp("Stipple", "quilt.fill", json!({ "kind": "stipple" })),
+                cp("Meander", "quilt.fill", json!({ "kind": "meander" })),
+                cp("Echo", "quilt.fill", json!({ "kind": "echo" })),
+                cp("Stitch in the Ditch", "quilt.fill", json!({ "kind": "ditch" })),
+            ],
+        ),
+        sub(
+            "Export Quilting Lines",
+            vec![
+                cp("HP-GL Plot (.plt)…", "file.export.quilt", json!({ "format": "plt" })),
+                cp("DXF Lines (.dxf)…", "file.export.quilt", json!({ "format": "dxf" })),
+                cp("SVG Lines (.svg)…", "file.export.quilt", json!({ "format": "svg" })),
+            ],
+        ),
+    ]
+}
+
 /// Embroidery: digitizing, stitch types, stitch direction and the stitch order.
 fn embroidery_menu() -> Vec<Item> {
     let ty = |label: &'static str, ty: &'static str| cp(label, "embroidery.set", json!({ "type": ty }));
@@ -179,6 +215,21 @@ fn embroidery_menu() -> Vec<Item> {
         c("Automatic Knife", "embroidery.knife"),
         cp("Echo Quilting", "embroidery.outlineAround", json!({ "kind": "echo" })),
         cp("Background Quilting", "embroidery.outlineAround", json!({ "kind": "stipple" })),
+        sub(
+            "Cross Stitch",
+            vec![c("New Cross-Stitch Pattern…", "embroidery.crossStitch.new"), c("Cross Stitch from Image…", "embroidery.crossStitch.fromImage")],
+        ),
+        sub(
+            "Chenille",
+            vec![
+                cp("Chain", "embroidery.chenille.set", json!({ "stitch": "chain" })),
+                cp("Moss", "embroidery.chenille.set", json!({ "stitch": "moss" })),
+                cp("Lockstitch", "embroidery.chenille.set", json!({ "stitch": "none" })),
+                Sep,
+                c("Compound Chenille…", "embroidery.chenille.compound"),
+            ],
+        ),
+        sub("Longarm Quilting", quilting_items()),
         c("Check Design", "ui.embroideryCheck"),
         c("Density Map", "ui.embroideryDensity"),
         Sep,
@@ -584,6 +635,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Make a Design…",
         "",
         "{} opens Make a Design: a step-by-step guide from words, a shape, appliqué, a picture or a sample through the hoop, thread colours and watching it sew to saving it for My Machine (embroidery.makeDesign) → {open}",
+    ),
+    (
+        "ui.quiltCheck",
+        "Check Continuous Line",
+        "",
+        "{tolerance?} whether the selected lines make one continuous line for a longarm (quilt.check), said in the status bar → as quilt.check",
+    ),
+    (
+        "file.export.quilt",
+        "Export Quilting Lines…",
+        "",
+        "{format?: plt|dxf|svg (plt), path?} the quilting lines (quilt.export: the selected, else all) as a single-stroke file to path, else a picked file (the web downloads it) → {path}",
     ),
     (
         "ui.fontLibrary",
@@ -1142,6 +1205,28 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if id == "file.export.embroidery" {
         let ext = p.get("format").and_then(Value::as_str).unwrap_or("dst").to_ascii_lowercase();
         return Some(io::save_command_output(app, "embroidery.export", &ext, p.clone()).map(|path| json!({ "path": path })));
+    }
+    if id == "file.export.quilt" {
+        let ext = p.get("format").and_then(Value::as_str).unwrap_or("plt").to_ascii_lowercase();
+        return Some(io::save_command_output(app, "quilt.export", &ext, p.clone()).map(|path| json!({ "path": path })));
+    }
+    if id == "ui.quiltCheck" {
+        let r = app.run("quilt.check", if p.is_object() { p.clone() } else { json!({}) });
+        if let Ok(v) = &r {
+            let msg = if v["continuous"].as_bool() == Some(true) {
+                tl!("One continuous line, ready for a longarm").to_string()
+            } else {
+                format!(
+                    "{} {} ({} {:.1} mm)",
+                    v["joins"].as_u64().unwrap_or(0),
+                    tl!("joins needed: Join into One Line makes them"),
+                    tl!("longest"),
+                    v["longestJoin"].as_f64().unwrap_or(0.0)
+                )
+            };
+            app.status(msg);
+        }
+        return Some(r);
     }
     if id == "file.export.stitchImage" {
         return Some(

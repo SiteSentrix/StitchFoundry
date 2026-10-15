@@ -5289,3 +5289,40 @@ machine	Stop	Stopp
 @msg	the font library answered {status} for {path}	die Schriftbibliothek antwortete {status} für {path}
 @msg	the font library answered {status}: try again later	die Schriftbibliothek antwortete {status}: später erneut versuchen
 @msg	{_1} isn't published yet	{_1} ist noch nicht veröffentlicht
+	Border or Corner…	Rand oder Ecke…
+	Check Continuous Line	Durchgehende Linie prüfen
+	Continuous Fill	Durchgehende Füllung
+	Continuous Fill…	Durchgehende Füllung…
+	Crib (36 × 52″)	Babydecke (36 × 52″)
+	DXF Lines (.dxf)…	DXF-Linien (.dxf)…
+	Echo	Echo
+	Edge-to-Edge Rows	Reihen von Rand zu Rand
+	Edge-to-Edge Rows…	Reihen von Rand zu Rand…
+	Export Quilting Lines	Quiltlinien exportieren
+	Export Quilting Lines…	Quiltlinien exportieren…
+	HP-GL Plot (.plt)…	HP-GL-Plot (.plt)…
+	Join into One Line	Zu einer Linie verbinden
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Longarm-Quilten
+	Meander	Mäander
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	SVG-Linien (.svg)…
+	Start and End on the Edges	An den Rändern beginnen und enden
+	Stitch in the Ditch	Im Nahtschatten steppen
+	Throw (50 × 65″)	Kuscheldecke (50 × 65″)
+	Twin (70 × 90″)	Einzelbett (70 × 90″)
+	A border of the selected line	Ein Rand aus der ausgewählten Linie
+	Border depth	Randtiefe
+	Border length	Randlänge
+	Corner leg (0: no corner)	Eckschenkel (0: keine Ecke)
+	Edge-to-edge rows of the selected line	Reihen von Rand zu Rand aus der ausgewählten Linie
+	Make Border	Rand erstellen
+	Make Rows	Reihen erstellen
+	Nest the rows	Reihen verschachteln
+	One continuous line, ready for a longarm	Eine durchgehende Linie, bereit für die Longarm
+	Quilt height	Quilthöhe
+	Quilt width	Quiltbreite
+	Row spacing (0: the line's height)	Reihenabstand (0: Höhe der Linie)
+	joins needed: Join into One Line makes them	Verbindungen nötig: Zu einer Linie verbinden erstellt sie
+	longest	längste
+@msg	nothing to add	nichts hinzuzufügen

@@ -779,8 +779,8 @@ design's notes say how to mark and hoop. Patterns and wording are our own.
 ## Chenille
 
 For chenille machines, which sew thick yarn without a bobbin thread, any stitched object can be
-chain or moss (Embroidery panel › **Chenille**, `embroidery.chenille.set {stitch: chain|moss|none,
-height?, pattern?}`):
+chain or moss (Embroidery › Chenille › Chain, Moss or Lockstitch, or the Embroidery panel's **Chenille** row;
+`embroidery.chenille.set {stitch: chain|moss|none, height?, pattern?}`):
 
 - **Chain** sews link-like loops on top: outlines, borders, monograms and light fills. The
   object keeps its stitch type (a run is usual).
@@ -796,14 +796,45 @@ height?, pattern?}`):
 - Machine files stop wherever the colour, the stitch (chain or moss) or the needle height
   changes, one stop each, as chenille machines that work with single stop codes take them; the
   machine starts in chain. The machine can't tell those stops apart, so **Chenille stops** in the
-  panel (Embroidery › Chenille › Chenille Stops, `embroidery.chenille.stops`) lists what to set at
-  each one. Tajima's own multi-stop chenille code tables aren't publicly described, so they aren't
+  Embroidery panel (`embroidery.chenille.stops`) lists what to set at each one. Tajima's own multi-stop chenille code tables aren't publicly described, so they aren't
   written.
 - The canvas shows chenille objects with their ordinary stitches: chain and moss loops are formed
   by the machine.
 
 Public descriptions: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Chenille/chenille_basics/chenille_basics-3.htm,
 https://docs.wilcom.com/embroiderystudio/e4/en/MainHelp/Chenille/chenille_output/Output_to_Tajima_chenille_machines.htm.
+
+## Longarm quilting
+
+Computerized longarm quilting machines sew one unbroken line across the quilt: they can't trim
+and jump the way an embroidery machine does. **Embroidery › Longarm Quilting** makes and checks
+such lines, drawn as ordinary lines (a stroke, no fill), and writes them for the quilting
+software that runs the machine:
+
+- **Check Continuous Line** (`quilt.check {tolerance?}`) says in the status bar whether the
+  selected lines are one continuous line, or how many joins they need and the longest.
+- **Join into One Line** (`quilt.join`) chains the selected lines and shapes' outlines into one,
+  from the leftmost end, each time on to the nearest end (a closed shape is sewn all the way round
+  from its nearest point); the joins are straight runs.
+- **Start and End on the Edges** (`quilt.edges {height?}`) leads the line in from the left edge
+  of its box and out to the right edge at the height it starts at, so copies set side by side run
+  on from one to the next: the motif for rows and borders.
+- **Edge-to-Edge Rows** (`quilt.pantograph {width, height, row?, nest?}`): the selected line
+  repeated across a quilt in rows, each row one continuous line; every other row starts half a
+  repeat along so the rows nest. The menu has the usual quilt sizes (Crib 36 × 52″ to King 108 ×
+  108″); the Embroidery panel's **Longarm Quilting** section takes any size and row spacing.
+- **Borders and corners** (the panel's section; `quilt.border {length, depth, down?}`): the
+  line fitted a whole number of times along a border, and with a corner leg the border turns a
+  quarter at its end and runs down the side.
+- **Continuous Fill** (`quilt.fill {kind, spacing?}`): **Stipple** and **Meander** (a line that
+  never crosses itself, paths about `spacing` apart, 6 mm unless set), **Echo** (rings following
+  the shape inward, joined into one line) inside each selected closed shape, and **Stitch in the
+  Ditch** along all the selected shapes' outlines as one line.
+- **Export Quilting Lines** (`quilt.export {format}`, File via `file.export.quilt`): the selected
+  lines, else every line, as **HP-GL PLT** (40 units a millimetre), **DXF** (R12 polylines in mm,
+  single stroke) or **SVG** (polylines in mm). The machines' own formats (QLI, HQF, IQP, BQM, CQP,
+  PAT, SSD) have no public description, so they aren't written; quilting software reads DXF, SVG
+  and PLT and writes them.
 
 ## Large designs
 

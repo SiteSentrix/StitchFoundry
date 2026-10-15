@@ -5329,3 +5329,40 @@ machine	Stop	停止
 @msg	the font library answered {status} for {path}	フォントライブラリが {path} に {status} を返しました
 @msg	the font library answered {status}: try again later	フォントライブラリが {status} を返しました。後でもう一度お試しください
 @msg	{_1} isn't published yet	{_1} はまだ公開されていません
+	Border or Corner…	ボーダーまたはコーナー…
+	Check Continuous Line	連続線を確認
+	Continuous Fill	連続フィル
+	Continuous Fill…	連続フィル…
+	Crib (36 × 52″)	ベビー (36 × 52″)
+	DXF Lines (.dxf)…	DXF 線 (.dxf)…
+	Echo	エコー
+	Edge-to-Edge Rows	端から端までの列
+	Edge-to-Edge Rows…	端から端までの列…
+	Export Quilting Lines	キルティング線を書き出し
+	Export Quilting Lines…	キルティング線を書き出し…
+	HP-GL Plot (.plt)…	HP-GL プロット (.plt)…
+	Join into One Line	1 本の線につなぐ
+	King (108 × 108″)	キング (108 × 108″)
+	Longarm Quilting	ロングアームキルティング
+	Meander	メアンダー
+	Queen (90 × 108″)	クイーン (90 × 108″)
+	SVG Lines (.svg)…	SVG 線 (.svg)…
+	Start and End on the Edges	端で始めて端で終える
+	Stitch in the Ditch	落としミシン
+	Throw (50 × 65″)	スロー (50 × 65″)
+	Twin (70 × 90″)	ツイン (70 × 90″)
+	A border of the selected line	選択した線のボーダー
+	Border depth	ボーダーの幅
+	Border length	ボーダーの長さ
+	Corner leg (0: no corner)	コーナーの辺 (0: コーナーなし)
+	Edge-to-edge rows of the selected line	選択した線の端から端までの列
+	Make Border	ボーダーを作成
+	Make Rows	列を作成
+	Nest the rows	列をかみ合わせる
+	One continuous line, ready for a longarm	ロングアーム用の 1 本の連続線です
+	Quilt height	キルトの高さ
+	Quilt width	キルトの幅
+	Row spacing (0: the line's height)	列の間隔 (0: 線の高さ)
+	joins needed: Join into One Line makes them	か所のつなぎが必要です。「1 本の線につなぐ」で作れます
+	longest	最長
+@msg	nothing to add	追加するものがありません

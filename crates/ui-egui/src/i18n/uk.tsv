@@ -5315,3 +5315,40 @@ machine	Stop	Зупинка
 @msg	the font library answered {status} for {path}	бібліотека шрифтів відповіла {status} для {path}
 @msg	the font library answered {status}: try again later	бібліотека шрифтів відповіла {status}: спробуйте пізніше
 @msg	{_1} isn't published yet	{_1} ще не опублікована
+	Border or Corner…	Бордюр або кут…
+	Check Continuous Line	Перевірити безперервну лінію
+	Continuous Fill	Безперервна заливка
+	Continuous Fill…	Безперервна заливка…
+	Crib (36 × 52″)	Дитяче (36 × 52″)
+	DXF Lines (.dxf)…	Лінії DXF (.dxf)…
+	Echo	Відлуння
+	Edge-to-Edge Rows	Ряди від краю до краю
+	Edge-to-Edge Rows…	Ряди від краю до краю…
+	Export Quilting Lines	Експорт ліній стьобання
+	Export Quilting Lines…	Експорт ліній стьобання…
+	HP-GL Plot (.plt)…	Плот HP-GL (.plt)…
+	Join into One Line	Об'єднати в одну лінію
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Стьобання на довгій руці
+	Meander	Меандр
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Лінії SVG (.svg)…
+	Start and End on the Edges	Починати й закінчувати на краях
+	Stitch in the Ditch	Стьобання в шов
+	Throw (50 × 65″)	Плед (50 × 65″)
+	Twin (70 × 90″)	Односпальне (70 × 90″)
+	A border of the selected line	Бордюр із вибраної лінії
+	Border depth	Глибина бордюру
+	Border length	Довжина бордюру
+	Corner leg (0: no corner)	Сторона кута (0: без кута)
+	Edge-to-edge rows of the selected line	Ряди від краю до краю з вибраної лінії
+	Make Border	Створити бордюр
+	Make Rows	Створити ряди
+	Nest the rows	Вкладати ряди одне в одне
+	One continuous line, ready for a longarm	Одна безперервна лінія, готова для довгої руки
+	Quilt height	Висота виробу
+	Quilt width	Ширина виробу
+	Row spacing (0: the line's height)	Крок рядів (0: висота лінії)
+	joins needed: Join into One Line makes them	потрібно з'єднань: «Об'єднати в одну лінію» їх зробить
+	longest	найдовше
+@msg	nothing to add	нічого додати
