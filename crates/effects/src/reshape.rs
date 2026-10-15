@@ -135,7 +135,7 @@ pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
 /// its plain outlines ([`outline_text`]) with its visibility, which is what
 /// [`crate::clip_outline`] clips by.
-fn outline_nested_text(n: &mut Node, clipping: bool) {
+pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {

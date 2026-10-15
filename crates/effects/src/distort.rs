@@ -103,6 +103,39 @@ pub fn roughen(path: &PathData, b: Rect, p: &Value) -> PathData {
     PathData::new(subs)
 }
 
+/// The move and the number of copies of a Transform effect with params `p` that only moves what
+/// it applies to, as [`transform_map`] reads them; `None` when it also scales, rotates or reflects,
+/// or moves by a random share.
+pub(crate) fn transform_move(p: &Value) -> Option<(Vec2, usize)> {
+    let (m, copies) = transform_map(Rect::ZERO, p, 0);
+    let [a, b, c, d, x, y] = m.as_coeffs();
+    (!flag(p, "random", false) && [a, b, c, d] == [1.0, 0.0, 0.0, 1.0]).then_some((Vec2::new(x, y), copies))
+}
+
+/// The offsets at which Transform effects with params `ps`, applied in order, place `path`, the
+/// original's place first, when each of them only moves it ([`transform_move`]): each effect moves
+/// every place it is given, or with copies keeps them and adds each copy's. `None` when one of
+/// them does more than move, or when [`transform`] stops its copies of `path` early.
+pub(crate) fn transform_offsets(ps: &[Value], path: &PathData) -> Option<Vec<Vec2>> {
+    let mut offsets = vec![Vec2::ZERO];
+    let mut all = path.clone();
+    for p in ps {
+        let (v, copies) = transform_move(p)?;
+        let next = transform(&all, Rect::ZERO, p, 0);
+        if next.anchor_count() != all.anchor_count().saturating_mul(copies + 1) {
+            return None;
+        }
+        all = next;
+        if copies == 0 {
+            offsets.iter_mut().for_each(|o| *o += v);
+            continue;
+        }
+        let from = offsets.clone();
+        offsets.extend((1..=copies).flat_map(|k| from.iter().map(move |o| *o + v * k as f64)));
+    }
+    Some(offsets)
+}
+
 /// Largest scale (%) and move (pt) the Transform effect takes.
 const MAX_SCALE: f64 = 100_000.0;
 const MAX_MOVE: f64 = 1.0e7;
