@@ -208,6 +208,36 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     }
 }
 
+/// The id of the Control bar's isolation button.
+const ISOLATION_BUTTON: &str = "cb-isolation";
+
+/// The Control bar's isolation button. In isolation mode it is Exit Isolation Mode, except while a
+/// pattern is edited (the isolation bar's Done and Cancel end that). Otherwise, with one object
+/// selected that [`vectorcraft_tools::select::isolates`], it is Isolate Selected Object, which
+/// also isolates a path inside a group that Direct Selection selected. An envelope's contents
+/// get no button: the envelope's Edit Envelope and Edit Contents buttons show instead.
+fn isolation_button(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some(st) = app.session.active() else { return };
+    let (icon, tip, id) = if st.isolation.is_some() {
+        if st.doc.pattern_edit.is_some() {
+            return;
+        }
+        ("chevron-left", tl!("Exit Isolation Mode"), "object.exitIsolation")
+    } else if let [one] = st.selection.objects[..]
+        && st.doc.node(one).is_some_and(|n| vectorcraft_tools::select::isolates(&n.kind))
+        && vectorcraft_doc::live::envelope_of(&st.doc, one).is_none()
+    {
+        ("square-dashed", tl!("Isolate Selected Object"), "object.isolate")
+    } else {
+        return;
+    };
+    let (rect, _) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::hover());
+    let resp = ui.interact(rect, egui::Id::new(ISOLATION_BUTTON), Sense::click());
+    if widgets::paint_icon_button(ui, resp, icon, tip, false).clicked() {
+        crate::menus::invoke(app, id, json!({}));
+    }
+}
+
 /// The room the Control bar's inline X/Y/W/H fields need; with less, only the Transform link shows.
 const INLINE_TRANSFORM_WIDTH: f32 = 440.0;
 
@@ -252,6 +282,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if anchors != AnchorControls::None {
                     anchor_buttons(app, ui, anchors);
                 }
+                isolation_button(app, ui);
                 ui.add_space(6.0);
                 // An image or an Image Trace object shows its own controls in place of Fill and Stroke.
                 let image = crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui);
@@ -1156,6 +1187,76 @@ mod tests {
         assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));
         s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
         assert!(title(&s).ends_with("(RGB/Preview)"));
+    }
+
+    /// One headless frame of the Control bar; returns the isolation button's rectangle, if it shows.
+    fn isolation_button(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Option<egui::Rect> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        ctx.viewport(|vp| vp.prev_pass.widgets.get(egui::Id::new(super::ISOLATION_BUTTON)).map(|w| w.rect))
+    }
+
+    /// The Control bar's Isolate Selected Object isolates a path inside a group that Direct
+    /// Selection selected, and Exit Isolation Mode leaves with the path selected. Type, symbol
+    /// instances, blends, two objects and an envelope's contents get no isolate button, and pattern
+    /// editing gets no exit button.
+    #[test]
+    fn the_control_bar_isolates_the_selected_object_and_exits_isolation_mode() {
+        use vectorcraft_doc::NodeId;
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+        };
+        let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 50.0));
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("object.group", json!({})).unwrap();
+        app.select_tool("directSelection");
+        app.run("select.anchors", json!({"id": a, "anchors": [[0, 0]]})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let click = |app: &mut crate::VectorcraftApp| {
+            let r = isolation_button(app, &ctx, vec![]).expect("the bar shows the isolation button");
+            let press = |pressed| egui::Event::PointerButton {
+                pos: r.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            for e in [egui::Event::PointerMoved(r.center()), press(true), press(false)] {
+                isolation_button(app, &ctx, vec![e]);
+            }
+        };
+        click(&mut app);
+        assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)), "Isolate Selected Object isolates the path");
+        click(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.isolation, st.selection.objects.clone()), (None, vec![NodeId(a)]), "Exit Isolation Mode selects the path");
+        app.select_tool("selection");
+        // Type, a symbol instance, a blend and two objects.
+        let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        let c = rect(&mut app, 100.0);
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        let symbol = app.run("symbol.new", json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap();
+        let (d, e) = (rect(&mut app, 150.0), rect(&mut app, 250.0));
+        let blend = app.run("object.blend.make", json!({"ids": [d, e], "steps": 1})).unwrap()["id"].as_u64().unwrap();
+        for ids in [json!([text]), json!([symbol]), json!([blend]), json!([text, symbol])] {
+            app.run("select.set", json!({ "ids": ids })).unwrap();
+            assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "{ids}");
+        }
+        // An envelope's contents, while Edit Contents is on.
+        let g = rect(&mut app, 350.0);
+        app.run("select.set", json!({"ids": [g]})).unwrap();
+        app.run("object.envelope.makeWithWarp", json!({})).unwrap();
+        app.run("object.envelope.editContents", json!({"editing": true})).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![NodeId(g)]);
+        assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the envelope's controls show instead");
+        let f = rect(&mut app, 300.0);
+        app.run("select.set", json!({"ids": [f]})).unwrap();
+        app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+        assert!(app.session.active().unwrap().isolation.is_some());
+        assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the isolation bar ends pattern editing");
     }
 
     /// The Zoom tool's hint follows Performance › Animated Zoom (#394): a drag zooms as it goes,

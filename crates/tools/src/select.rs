@@ -279,14 +279,8 @@ impl Tool for SelectionTool {
                     if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
                         return vec![Action::SwitchTool("type".into())];
                     }
-                    // A group, a compound path or a single path, image, mesh or placed file, not
-                    // the one already isolated. Blends, envelopes, repeats and symbol instances
-                    // aren't: they have editing modes of their own.
-                    use vectorcraft_doc::NodeKind as K;
-                    let isolates = cx.doc.node(top).is_some_and(|n| {
-                        matches!(n.kind, K::Group { .. } | K::Compound { .. } | K::Path { .. } | K::Image(_) | K::Mesh(_) | K::PlacedDocument(_))
-                    });
-                    if cx.double_click_isolate && isolates && cx.isolation != Some(top) {
+                    // An object that [`isolates`], not the one already isolated.
+                    if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| isolates(&n.kind)) && cx.isolation != Some(top) {
                         return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
                     }
                 } else if cx.isolation.is_some() {
@@ -566,6 +560,14 @@ fn can_be_key(cx: &ToolContext, id: NodeId) -> bool {
 pub(crate) fn is_area_type(n: &vectorcraft_doc::Node) -> bool {
     n.extras().perspective.is_none()
         && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }))
+}
+
+/// Does a double-click or the Control bar's Isolate Selected Object button isolate an object of
+/// this kind? A group, a compound path or a single path, image, mesh or placed file does. Blends,
+/// envelopes, repeats and symbol instances do not; they have editing modes of their own.
+pub fn isolates(kind: &vectorcraft_doc::NodeKind) -> bool {
+    use vectorcraft_doc::NodeKind as K;
+    matches!(kind, K::Group { .. } | K::Compound { .. } | K::Path { .. } | K::Image(_) | K::Mesh(_) | K::PlacedDocument(_))
 }
 
 /// The resize cursor for handle `h` of a box turned by `angle` (counter-clockwise degrees): the
