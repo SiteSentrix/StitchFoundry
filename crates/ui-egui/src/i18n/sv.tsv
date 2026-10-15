@@ -3998,6 +3998,8 @@ axis	Both	Båda
 @msg	{_1} files	{_1}-filer
 @msg	The graphics were lost and have been restarted	Grafiken förlorades och har startats om
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Grafikprocessorn som prövades först kunde inte visa fönstret, så VectorCraft startade om med {summary}
+@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Den senaste starten av VectorCraft avbröts på {name} innan fönstret visades, så det startade med {summary}. Om du vill prova den grafikprocessorn igen ändrar du Inställningar › Prestanda › Grafikprocessor eller startar med WGPU_BACKEND angiven
+@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Den senaste starten av VectorCraft avbröts medan grafikprocessorerna listades, så det startade med {summary} med enbart OpenGL. Om du vill prova de andra grafikgränssnitten igen ändrar du Inställningar › Prestanda › Grafikprocessor eller startar med WGPU_BACKEND angiven
 @msg	Loading VectorCraft…	Läser in VectorCraft…
 @msg	VectorCraft failed to start: {e}	VectorCraft kunde inte starta: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	En webbläsare med WebGPU eller WebGL2 krävs.

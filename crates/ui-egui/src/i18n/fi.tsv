@@ -4290,6 +4290,8 @@ imageTrace	Outline	Ääriviiva
 @msg	{_1} files	{_1}-tiedostot
 @msg	The graphics were lost and have been restarted	Grafiikka menetettiin ja se käynnistettiin uudelleen
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Ensin kokeiltu grafiikkasuoritin ei pystynyt näyttämään ikkunaa, joten VectorCraft käynnistyi uudelleen: {summary}
+@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraftin edellinen käynnistys päättyi grafiikkasuorittimella {name} ennen kuin sen ikkuna tuli näkyviin, joten se käynnistyi: {summary}. Jos haluat kokeilla tätä grafiikkasuoritinta uudelleen, muuta kohtaa Asetukset › Suorituskyky › Grafiikkasuoritin tai käynnistä WGPU_BACKEND-muuttuja asetettuna
+@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraftin edellinen käynnistys päättyi grafiikkasuorittimien luetteloinnin aikana, joten se käynnistyi pelkällä OpenGL:llä: {summary}. Jos haluat kokeilla muita grafiikkataustoja uudelleen, muuta kohtaa Asetukset › Suorituskyky › Grafiikkasuoritin tai käynnistä WGPU_BACKEND-muuttuja asetettuna
 @msg	Loading VectorCraft…	Ladataan VectorCraftia…
 @msg	VectorCraft failed to start: {e}	VectorCraftin käynnistys epäonnistui: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Vaaditaan selain, joka tukee WebGPU:ta tai WebGL2:ta.
