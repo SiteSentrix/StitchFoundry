@@ -659,6 +659,17 @@ pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("guide.move", "no guide selected (or give an index)"));
     }
     let (dx, dy, copy) = (f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0), bool_or(p, "copy", false));
+    if !s.doc()?.selection.is_empty() {
+        let ids = super::edit::selected_roots(s)?;
+        return super::object::apply_transform(
+            s,
+            if copy { "Copy Guide" } else { "Move Guide" },
+            ids,
+            vectorcraft_geom::Affine::translate((dx, dy)),
+            p,
+            true,
+        );
+    }
     s.edit(if copy { "Copy Guide" } else { "Move Guide" }, |d, sel| {
         let mut copies = vec![];
         for &i in &moving {

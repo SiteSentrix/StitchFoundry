@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Transform"],
             Some("Cmd+Shift+M"),
             "{dx, dy, copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
-            has_selection,
+            has_selection_or_guides,
             move_cmd
         ),
         cmd!(
@@ -297,11 +297,16 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     let objects = transforms_objects(p);
     let mut sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
     sc.patterns = transform_patterns(s, p, &ids)?;
+    let c = xf.as_coeffs();
+    let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
+    let delta = Vec2::new(c[4], c[5]);
+    let with_guides = objects && ids_param(p, "ids").is_none() && is_translation;
+    let has_guides = with_guides && !s.doc()?.selection.guides.is_empty();
     // A transform of ids that name no object, or an identity transform without a copy, moves
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
     // With a copy, the reply lists the copies, and there are none.
     let d = &s.doc()?.doc;
-    let none = d.index_paths(ids.iter().copied()).is_empty();
+    let none = d.index_paths(ids.iter().copied()).is_empty() && !has_guides;
     let ids = if anchors && objects && !copy && !s.doc()?.selection.anchors.is_empty() {
         if xf != Affine::IDENTITY {
             super::path::transform_anchors(s, label, xf, sc)?;
@@ -310,7 +315,7 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     } else if none || (!copy && xf == Affine::IDENTITY) {
         if copy { vec![] } else { ids }
     } else {
-        let kept = if copy { preview_copies(s, &ids)? } else { None };
+        let kept = if copy { preview_copies(s, &ids, with_guides)? } else { None };
         s.edit(label, |d, sel| {
             let targets = match &kept {
                 // The document becomes the snapshot with the kept copies, untransformed, and the
@@ -320,7 +325,21 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
                     sel.clone_from(&k.selection);
                     k.ids.clone()
                 }
-                None if copy => duplicate_in(d, sel, &ids, Affine::IDENTITY)?,
+                None if copy => {
+                    let guide_copies = if with_guides {
+                        let copies: Vec<_> = sel.guides.iter().filter_map(|&i| d.guides.get(i).cloned()).collect();
+                        (!copies.is_empty()).then_some(copies)
+                    } else {
+                        None
+                    };
+                    let new_ids = duplicate_in(d, sel, &ids, Affine::IDENTITY)?;
+                    if let Some(copies) = guide_copies {
+                        let first = d.guides.len();
+                        d.guides.extend(copies);
+                        sel.guides = (first..d.guides.len()).collect();
+                    }
+                    new_ids
+                }
                 None => ids.clone(),
             };
             // Transforms don't move nodes in the tree, so the paths found up front stay right.
@@ -330,6 +349,13 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
                     && !(objects && areas && resize_type_area(n, xf))
                 {
                     transform_node(n, xf, sc, objects);
+                }
+            }
+            if with_guides && (delta.x != 0.0 || delta.y != 0.0) {
+                for i in sel.guides.clone() {
+                    if let Some(g) = d.guides.get_mut(i) {
+                        *g = g.moved(delta);
+                    }
                 }
             }
             Ok(targets)
@@ -355,21 +381,30 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
 /// untransformed, and the interaction keeps that clone. It returns `None` outside an interaction,
 /// and when the document is no longer the snapshot, as for a command run in a typing session or a
 /// script batch after an earlier edit there: the command then copies the current document.
-pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId]) -> Result<Option<Arc<crate::PreviewCopies>>> {
+pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId], with_guides: bool) -> Result<Option<Arc<crate::PreviewCopies>>> {
     let st = s.doc_mut()?;
     let Some(it) = &mut st.interaction else { return Ok(None) };
     if !Arc::ptr_eq(&st.doc, &it.doc) {
         return Ok(None);
     }
+    let has_guide_copies = with_guides && !st.selection.guides.is_empty();
     if let Some(k) = &it.copies
         && Arc::ptr_eq(&k.from, &it.doc)
         && k.roots == roots
+        && (!k.selection.guides.is_empty() == has_guide_copies)
     {
         return Ok(Some(k.clone()));
     }
     let mut doc = it.doc.clone();
     let mut selection = st.selection.clone();
     let ids = duplicate_in(Arc::make_mut(&mut doc), &mut selection, roots, Affine::IDENTITY)?;
+    if has_guide_copies {
+        let d = Arc::make_mut(&mut doc);
+        let first = d.guides.len();
+        let copies: Vec<_> = st.selection.guides.iter().filter_map(|&i| d.guides.get(i).cloned()).collect();
+        d.guides.extend(copies);
+        selection.guides = (first..d.guides.len()).collect();
+    }
     let k = Arc::new(crate::PreviewCopies { from: it.doc.clone(), roots: roots.to_vec(), doc, selection, ids });
     it.copies = Some(k.clone());
     Ok(Some(k))

@@ -960,7 +960,7 @@ fn persp_edit(
         return Err(EngineError::Other("select the objects to transform in perspective".into()));
     }
     let mut g = grid_of(&s.doc()?.doc);
-    let kept = if copy && !stores_attachments(&s.doc()?.doc) { super::object::preview_copies(s, ids)? } else { None };
+    let kept = if copy && !stores_attachments(&s.doc()?.doc) { super::object::preview_copies(s, ids, false)? } else { None };
     s.edit(label, |d, sel| {
         g.adopt_stored_attachments(d);
         let targets = match &kept {
@@ -1164,7 +1164,7 @@ fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
     // lists attachments of its own (`stores_attachments`).
     let kept = if objects == "copy" && s.in_interaction() && !stores_attachments(&s.doc()?.doc) {
         let on = on_plane(&s.doc()?.doc);
-        super::object::preview_copies(s, &on)?
+        super::object::preview_copies(s, &on, false)?
     } else {
         None
     };

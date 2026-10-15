@@ -181,6 +181,9 @@ pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 /// objects selected whole (those with no entry in the selection's `anchors`).
 pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling) -> Result<()> {
     let sel = s.doc()?.selection.clone();
+    let c = xf.as_coeffs();
+    let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
+    let delta = vectorcraft_geom::Vec2::new(c[4], c[5]);
     s.edit(label, |doc, _| {
         for id in &sel.objects {
             match sel.anchors.get(id) {
@@ -196,6 +199,13 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
                     if let Some(n) = doc.node_mut(*id) {
                         n.transform(xf, sc);
                     }
+                }
+            }
+        }
+        if is_translation && (delta.x != 0.0 || delta.y != 0.0) {
+            for &i in &sel.guides {
+                if let Some(g) = doc.guides.get_mut(i) {
+                    *g = g.moved(delta);
                 }
             }
         }
