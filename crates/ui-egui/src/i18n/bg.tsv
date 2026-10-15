@@ -4869,3 +4869,16 @@ theme	Appearance	Външен вид
 
 # Type › Reset Tracking and Kerning
 	Reset Tracking and Kerning	Нулиране на разредката и кернинга
+
+# Layers panel filters (Filter Layers Panel Rows) and Color Panel Options
+	By Layer	По слой
+	By Object	По обект
+	Clear All	Изчистване на всички
+	Filter	Филтър
+	Groups	Групи
+	Hidden	Скрити
+	Images	Изображения
+	Linked Files	Свързани файлове
+	Locked	Заключени
+	Color Panel Options	Опции на панела „Цвят“
+	Filter Layers Panel Rows	Филтриране на редовете в панела „Слоеве“
