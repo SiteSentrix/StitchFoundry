@@ -2097,7 +2097,9 @@ report warn about it).
 ## Units
 
 Commands take and return lengths in points (the distances of `object.path.offsetPath`, `object.path.simplify`,
-`object.path.splitIntoGrid` and `text.setStyle` `size`/`leading` also take a string with a unit, `"5 mm"`). The units
+`object.path.splitIntoGrid` and `text.setStyle` `size`/`leading` also take a string with a unit, `"5 mm"`). A length
+string takes the same arithmetic as the desktop app's fields, where `%` is a share of the value before it:
+`"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. The units
 only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
 three: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
 (weights, dashes) and Type (font size, leading, baseline shift). General is the active document's units

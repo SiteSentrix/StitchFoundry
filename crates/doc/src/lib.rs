@@ -236,7 +236,10 @@ impl Unit {
     /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), simple `+ - * /` arithmetic.
     ///
     /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
-    /// math typed before a field's unit suffix works.
+    /// math typed before a field's unit suffix works. After `*` or `/`, a percentage scales the term
+    /// before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes away
+    /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
+    /// percentage on its own (`50%`) reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
         parse_measure(s, self).filter(|v| v.is_finite())
     }
@@ -273,8 +276,9 @@ impl Unit {
 fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     let s = s.trim();
     // Simple arithmetic on the right (Illustrator fields accept "10+5", "100/2", "3in*2").
-    // `*` and `/` share one precedence level, so they split at the last of either (left to right).
-    for ops in [&['+'][..], &['-'][..], &['*', '/'][..]] {
+    // `+` and `-` share one precedence level, as do `*` and `/`, so each level splits at the last
+    // of its operators (left to right).
+    for ops in [&['+', '-'][..], &['*', '/'][..]] {
         // Past the first character, so a leading sign isn't an operator.
         let skip = s.chars().next().map_or(0, char::len_utf8);
         // A `+` or `-` right after another operator is the sign of its operand (`10*-2`, `5--3`).
@@ -290,11 +294,23 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
             }
             let Some(op) = s[i..].chars().next() else { continue };
             return match op {
-                '+' => Some(parse_measure(l, default)? + parse_measure(r, default)?),
-                '-' => Some(parse_measure(l, default)? - parse_measure(r, default)?),
+                '+' | '-' => {
+                    let a = parse_measure(l, default)?;
+                    // A percentage added or taken away is a share of everything before it:
+                    // `50pt+25%` is 62.5 pt, `100pt+20%-10pt` is 110 pt.
+                    let b = match percent(r) {
+                        Some(k) => a * k,
+                        None => parse_measure(r, default)?,
+                    };
+                    Some(if op == '+' { a + b } else { a - b })
+                }
                 _ => {
-                    // A factor or divisor is a plain number; a unit after it is the expression's.
-                    let (k, unit) = number_unit(r)?;
+                    // A factor or divisor is a plain number or a percentage (`3cm*50%` is 1.5 cm);
+                    // a unit after it is the expression's.
+                    let (k, unit) = match percent(r) {
+                        Some(k) => (k, None),
+                        None => number_unit(r)?,
+                    };
                     let a = parse_measure(l, unit.unwrap_or(default))?;
                     if op == '*' {
                         Some(a * k)
@@ -342,6 +358,14 @@ fn number_unit(s: &str) -> Option<(f64, Option<Unit>)> {
         _ => return None,
     };
     Some((v, unit))
+}
+
+/// A number followed by `%` (`50%`, `12.5 %`) → its fraction (`0.5`, `0.125`).
+fn percent(s: &str) -> Option<f64> {
+    match number_unit(s.trim().strip_suffix('%')?)? {
+        (p, None) => Some(p / 100.0),
+        _ => None,
+    }
 }
 
 /// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
