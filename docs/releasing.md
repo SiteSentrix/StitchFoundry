@@ -44,6 +44,20 @@ and no draft release is created.
 `windows-build` branch (`.github/workflows/windows-build.yml`), builds the x64 MSI and portable
 zip, unsigned, as the run's artifact `stitchfoundry-windows-x64`. It drafts no release.
 
+**Builds for every platform to try:** *Actions › Builds › Run workflow* (any branch), or a push to
+the `builds` branch (`.github/workflows/builds.yml`), builds Windows x64 (MSI and portable zip),
+Linux x86_64 (AppImage, deb, rpm, tar.gz), macOS universal (DMG and CLI zip, ad-hoc signed, not
+notarized) and the web app zip, each its own artifact on the run's page
+(`stitchfoundry-windows-x64`, `-linux-x86_64`, `-macos-universal`, `-web`). Standard GitHub-hosted
+runners only, so it is free for the public repository. Nothing is signed: Windows shows a
+SmartScreen warning (*More info › Run anyway*), and on macOS the first start is right-click ›
+*Open* (or *System Settings › Privacy & Security › Open Anyway*). It drafts no release.
+
+**The web app online:** every push to `main` runs `.github/workflows/pages.yml`, which builds the
+web app and publishes it on GitHub Pages at <https://stitchwright.github.io/StitchFoundry/>
+(free for a public repository; also *Actions › Web app › Run workflow*). One-time setting by the
+repository owner: *Settings › Pages › Build and deployment › Source: GitHub Actions*.
+
 ## What gets built
 
 | Platform | Artifacts | Built on |

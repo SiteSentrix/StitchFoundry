@@ -1,0 +1,168 @@
+# StitchFoundry builds for every desktop platform and the web, on demand: Actions › Builds › Run
+# workflow (any branch), or a push to the `builds` branch. Each platform's files are the run's
+# artifacts, to download from the run's page. Nothing is signed, so Windows shows a SmartScreen
+# warning (More info › Run anyway) and macOS needs right-click › Open the first time. Signed
+# releases come from release.yml once the signing accounts exist (docs/releasing.md).
+#
+# Standard GitHub-hosted runners only: free for a public repository.
+name: Builds
+
+on:
+  push:
+    branches: [builds]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: builds-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  VECTORCRAFT_BUILD_SHA: ${{ github.sha }}
+  CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+  CRAFT_FONTS_REQUIRED: "1"
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+      # Japanese, Chinese, Arabic and Thai fonts for the menus, embedded by crates/text/build.rs
+      # (the same commit as release.yml; see craftrules standards/fonts.md).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: builds-windows-x64
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2
+      - name: Build and package (MSI installer and portable zip, unsigned)
+        shell: pwsh
+        run: ./packaging/windows/package.ps1 -Arch x64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: stitchfoundry-windows-x64
+          path: dist/release/*
+          if-no-files-found: error
+
+  linux:
+    name: Linux x86_64
+    # The oldest hosted image, so the programs run on glibc 2.35 and newer (Ubuntu 22.04+,
+    # Debian 12+, Fedora 36+).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    env:
+      NFPM_VERSION: 2.47.0
+    steps:
+      - uses: actions/checkout@v7
+      # Japanese, Chinese, Arabic and Thai fonts for the menus, embedded by crates/text/build.rs
+      # (the same commit as release.yml; see craftrules standards/fonts.md).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
+          path: craft-fonts
+      - name: Install build and packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev \
+            desktop-file-utils appstream zsync
+          curl -fsSL -o "$RUNNER_TEMP/nfpm.deb" \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
+          sudo dpkg -i "$RUNNER_TEMP/nfpm.deb"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: builds-linux-x86_64
+      - name: Build and package (AppImage, deb, rpm, tar.gz)
+        run: packaging/linux/package.sh
+      - name: Check the packages
+        run: |
+          dpkg-deb --contents dist/release/*.deb | grep -E 'usr/bin/stitchfoundry$'
+          for appimage in dist/release/*.AppImage; do
+            chmod +x "$appimage"
+            APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --version
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: stitchfoundry-linux-x86_64
+          path: dist/release/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS universal (Apple silicon and Intel)
+    # The standard runner (free for public repositories), not release.yml's larger one.
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      # Japanese, Chinese, Arabic and Thai fonts for the menus, embedded by crates/text/build.rs
+      # (the same commit as release.yml; see craftrules standards/fonts.md).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: builds-macos-universal
+      - name: Build and package (DMG, ad-hoc signed, not notarized)
+        run: packaging/macos/package.sh --arch universal
+      - uses: actions/upload-artifact@v7
+        with:
+          name: stitchfoundry-macos-universal
+          path: dist/release/*
+          if-no-files-found: error
+
+  web:
+    name: Web (wasm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TRUNK_VERSION: 0.21.14
+    steps:
+      - uses: actions/checkout@v7
+      # Japanese, Chinese, Arabic and Thai fonts for the menus, embedded by crates/text/build.rs
+      # (the same commit as release.yml; see craftrules standards/fonts.md).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: builds-web
+      - name: Install trunk
+        run: |
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.cargo/bin" trunk
+          trunk --version
+      - name: Build and zip
+        run: packaging/web/package.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: stitchfoundry-web
+          path: dist/release/*
+          if-no-files-found: error
