@@ -85,6 +85,8 @@ mod tests_font_menu;
 #[cfg(test)]
 mod tests_fonts;
 #[cfg(test)]
+mod tests_guide_escape;
+#[cfg(test)]
 mod tests_home;
 #[cfg(test)]
 mod tests_labels;

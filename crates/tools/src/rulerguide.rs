@@ -208,6 +208,13 @@ impl GuideEdit {
         self.drag.is_some()
     }
 
+    /// Escape drops a pressed guide; a begun preview is rolled back without a history step.
+    pub fn cancel(&mut self) -> Vec<Action> {
+        let drag = self.drag.take();
+        self.snap = GuideSnap::default();
+        if drag.is_some_and(|d| d.began) { vec![Action::Cancel] } else { vec![] }
+    }
+
     /// A press `ev` on a ruler guide: it gets selected and the drag starts. None (and nothing
     /// done) when no guide is there.
     pub fn press(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {

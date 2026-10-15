@@ -364,6 +364,9 @@ impl Tool for DirectSelectionTool {
     /// Escape during a drag (anchors, handles, segments, objects, type areas, blend spines, a
     /// marquee) cancels it: what it moved goes back and the tool waits for the next press (#1743).
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && self.guide.busy() {
+            return self.guide.cancel();
+        }
         if key != ToolKey::Escape || matches!(self.state, State::Idle | State::Mesh | State::Corner(_) | State::Bracket(_)) {
             return vec![];
         }

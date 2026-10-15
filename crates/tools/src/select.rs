@@ -23,7 +23,7 @@ use crate::guides::Targets;
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::rulerguide::GuideEdit;
 use crate::typewidget;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
 #[derive(Clone, Debug, Default)]
 enum State {
@@ -243,6 +243,10 @@ impl Tool for SelectionTool {
 
     fn busy(&self) -> bool {
         !matches!(self.state, State::Idle) || self.guide.busy()
+    }
+
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape { self.guide.cancel() } else { vec![] }
     }
 
     fn transforming(&self) -> bool {
