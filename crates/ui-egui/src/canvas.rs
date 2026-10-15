@@ -816,6 +816,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         // A double-click on type switched a selection tool to the Type tool: the caret goes where
         // the type was clicked, so typing edits it at once.
         if before != "type" && app.session.tool_id() == "type" {
+            app.session.set_tool_option("prevTool", &json!(before));
             for kind in [PointerKind::Down, PointerKind::Up] {
                 dispatch(app, &PointerEvent { kind, ..ev }, view);
             }
@@ -4339,6 +4340,106 @@ mod tests {
         app.session.tool_text("X", app.view_info()).unwrap();
         let t = text(&app);
         assert_eq!((t.len(), t.find('X')), (12, Some(caret as usize)), "{t}");
+    }
+
+    #[test]
+    fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("directSelection");
+        let ctx = egui::Context::default();
+        let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+                crate::shortcuts::handle(app, ui.ctx());
+                show(app, ui)
+            });
+            out.textures_delta.clear();
+        };
+        timed(&mut app, 0.0, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let text = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        // Double-click the middle of the text with Direct Selection.
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        let at = xf.to_screen(b.center());
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(&mut app, 1.1, vec![]);
+        // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
+        // into the text, not to tool shortcuts.
+        assert_eq!(app.session.tool_id(), "type");
+        assert!(app.session.tool_wants_text());
+        let o = app.session.tool_options();
+        assert_eq!(o["editing"], json!(id));
+        let caret = o["caret"].as_u64().unwrap();
+        assert!((1..11).contains(&caret), "caret {caret}");
+        app.session.tool_text("X", app.view_info()).unwrap();
+        let t = text(&app);
+        assert_eq!((t.len(), t.find('X')), (12, Some(caret as usize)), "{t}");
+
+        // Pressing Escape exits text editing and returns to Direct Selection tool.
+        let esc = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        timed(&mut app, 1.2, vec![esc(true), esc(false)]);
+        assert_eq!(app.session.tool_id(), "directSelection");
+        assert!(!app.session.tool_wants_text());
+    }
+
+    #[test]
+    fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolation_until_second_escape() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let tid =
+            app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Nested hello", "size": 24})).unwrap()["id"].as_u64().unwrap();
+        // Group the text inside a group.
+        app.session.execute("select.all", &json!({})).unwrap();
+        app.session.execute("object.group", &json!({})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+                crate::shortcuts::handle(app, ui.ctx());
+                show(app, ui)
+            });
+            out.textures_delta.clear();
+        };
+        timed(&mut app, 0.0, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(tid)).unwrap().geometric_bounds().unwrap();
+        let at = xf.to_screen(b.center());
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let esc = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+
+        // 1st double-click on group enters isolation mode.
+        timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(&mut app, 1.1, vec![]);
+        assert!(app.session.active().unwrap().isolation.is_some(), "should be in isolation mode");
+        assert_eq!(app.session.tool_id(), "selection");
+
+        // 2nd double-click on the text inside the isolated group enters text editing.
+        timed(&mut app, 2.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(&mut app, 2.1, vec![]);
+        assert_eq!(app.session.tool_id(), "type");
+        assert!(app.session.tool_wants_text());
+        assert!(app.session.active().unwrap().isolation.is_some(), "isolation mode still active while editing text");
+
+        // 1st Escape exits text edit mode, returns to Selection tool, but keeps isolation mode.
+        timed(&mut app, 3.0, vec![esc(true), esc(false)]);
+        timed(&mut app, 3.1, vec![]);
+        assert_eq!(app.session.tool_id(), "selection");
+        assert!(!app.session.tool_wants_text());
+        assert!(app.session.active().unwrap().isolation.is_some(), "1st Escape must NOT end isolation mode");
+
+        // 2nd Escape exits isolation mode.
+        timed(&mut app, 4.0, vec![esc(true), esc(false)]);
+        timed(&mut app, 4.1, vec![]);
+        assert_eq!(app.session.tool_id(), "selection");
+        assert!(app.session.active().unwrap().isolation.is_none(), "2nd Escape must exit isolation mode");
     }
 
     #[test]
