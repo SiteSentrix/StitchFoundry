@@ -761,6 +761,16 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(feature = "wgpu")]
     let startup = std::sync::Arc::new(gpu::Startup::default());
+    // A driver that crashes the process while the window starts leaves this start recorded in the
+    // log folder; the next start leaves that adapter out (#2243). Runs without preferences, which
+    // write no log file, don't record their starts.
+    #[cfg(feature = "wgpu")]
+    let left_out = match log_dir().filter(|_| prefs_enabled()) {
+        Some(dir) => startup.track(&dir, gpu_pref, gpu::explicit_choice()),
+        None => gpu::LeftOut::default(),
+    };
+    #[cfg(feature = "wgpu")]
+    let crash = left_out.crash.clone();
     let custom_titlebar = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
@@ -790,13 +800,14 @@ fn main() -> std::process::ExitCode {
         options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-            create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, startup.clone()));
+            create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, left_out.adapters.clone(), startup.clone()));
             // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
             // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
             // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
-            create.instance_descriptor.backends = gpu::backends(create.instance_descriptor.backends, std::env::var_os("WGPU_BACKEND").is_some());
+            create.instance_descriptor.backends =
+                left_out.backends(gpu::backends(create.instance_descriptor.backends, std::env::var_os("WGPU_BACKEND").is_some()));
             // DX12 shaders compile with FXC, part of Windows: wgpu's default loads whichever
             // dxcompiler.dll the search path finds, and one without its dxil.dll fails every shader,
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
@@ -871,6 +882,15 @@ fn main() -> std::process::ExitCode {
                         app.status(format!(
                             "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}{hint}"
                         ));
+                    } else if let Some(crash) = &crash {
+                        app.status(match crash {
+                            gpu::Crash::Adapter { name, .. } => format!(
+                                "The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set"
+                            ),
+                            gpu::Crash::Listing => format!(
+                                "The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set"
+                            ),
+                        });
                     }
                     app.graphics_adapter = Some(summary);
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
