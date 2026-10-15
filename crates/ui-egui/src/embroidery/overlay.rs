@@ -188,6 +188,8 @@ fn build_range(
     (mesh, jumps, pen)
 }
 
+/// The whole mesh in one go (the tests check the pieces against it).
+#[cfg(test)]
 fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool, visible: egui::Rect) -> (Mesh, Vec<[Pos2; 2]>) {
     let n = upto.min(pattern.stitches.len());
     let records = pattern.stitches.get(..n).unwrap_or_default();

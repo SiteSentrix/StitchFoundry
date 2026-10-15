@@ -117,7 +117,10 @@ fn edit_drags(n: usize) -> Result<(f64, f64), String> {
 /// 100,000 stitches at 120), its stitches planned from nothing, again after one object's
 /// settings change and after one object moves, its statistics and two machine files written.
 /// Returns the rows and the design's stitch count.
-fn embroidery_rows(shapes: usize) -> Result<(Vec<(&'static str, f64, f64)>, usize), String> {
+/// A budget row: what is timed, the milliseconds it took and its budget.
+type Row = (&'static str, f64, f64);
+
+fn embroidery_rows(shapes: usize) -> Result<(Vec<Row>, usize), String> {
     let err = |e: vectorcraft_engine::EngineError| e.to_string();
     let mut s = vectorcraft_engine::Session::new();
     s.execute("file.new", &json!({"width": 1400, "height": 1400})).map_err(err)?;
