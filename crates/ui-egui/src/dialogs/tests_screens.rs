@@ -1,5 +1,6 @@
 //! Export for Screens, drawn headlessly: the fields it opens on (defaults, then the document's last
-//! settings), the artboard choice, Format Settings, desktop folders and web downloads.
+//! settings, and the artboards the Artboard tool has selected), the artboard choice, Format
+//! Settings, desktop folders and web downloads.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,6 +8,7 @@ use std::rc::Rc;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use super::tests_export::{frame, kind, set};
 use super::*;
@@ -97,6 +99,82 @@ fn checked_artboards_read_as_a_range() {
     ] {
         assert_eq!(export_for_screens::range_text(&boards), text);
     }
+}
+
+#[test]
+fn opens_with_the_artboards_the_artboard_tool_selected_and_exports_only_them() {
+    let (mut app, log) = app(4, true);
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let view = app.view_info();
+    let click = |app: &mut VectorcraftApp, i: usize, shift: bool| {
+        let mods = Mods { shift, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, pressure: 1.0 }, view);
+        }
+    };
+    // A click on artboard 2 and a Shift-click on artboard 3 select those two. The dialog opens with
+    // them checked, and Download writes only them.
+    click(&mut app, 1, false);
+    click(&mut app, 2, true);
+    open(&mut app);
+    assert_eq!(
+        (field(&app, "select"), field(&app, "range"), field(&app, "boards")),
+        (json!("range"), json!("2-3"), json!([false, true, true, false]))
+    );
+    frame(&mut app);
+    assert_eq!(field(&app, "boards"), json!([false, true, true, false]), "drawing the dialog keeps them");
+    let r = confirm(&mut app).unwrap();
+    assert_eq!(r["files"], json!(["Artboard-2.png", "Artboard-3.png"]));
+    assert_eq!(log.borrow().len(), 1, "one zip");
+    // With every artboard selected it opens on All.
+    click(&mut app, 0, true);
+    click(&mut app, 3, true);
+    open(&mut app);
+    assert_eq!((field(&app, "select"), field(&app, "range"), field(&app, "boards")), (json!("all"), json!("1-4"), json!([true, true, true, true])));
+}
+
+#[test]
+fn opens_with_the_rows_selected_in_the_artboards_panel_else_on_the_saved_choice() {
+    let (mut app, _) = app(4, true);
+    // An export of the full document with a prefix and a JPEG row is the saved choice.
+    app.run("file.exportForScreens", json!({"fullDocument": true, "prefix": "proof-", "formats": [{"format": "jpg", "quality": 80, "scale": "2x"}]}))
+        .unwrap();
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    let ctx = egui::Context::default();
+    let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 400.0)));
+    let panel = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let raw = egui::RawInput { events, time: Some(time), screen_rect: screen, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| crate::panels::artboards::show(app, ui));
+        out.textures_delta.clear();
+        out
+    };
+    // With the Artboard tool in use, a click on Artboard 2's row and a Shift-click on Artboard 3's
+    // select those two. The dialog opens with them checked instead of the saved Full Document.
+    let rows = panel(&mut app, 0.0, vec![]);
+    for (time, label, modifiers) in [(1.0, "Artboard 2", egui::Modifiers::NONE), (2.0, "Artboard 3", egui::Modifiers::SHIFT)] {
+        let at = screen_text_at(&rows, label);
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        panel(&mut app, time, vec![egui::Event::ModifiersChanged(modifiers), egui::Event::PointerMoved(at), button(true), button(false)]);
+    }
+    assert_eq!(crate::panels::artboards::picked(&app, 4), [1, 2], "the panel highlights rows 2 and 3");
+    open(&mut app);
+    let picked = app.ui.dialog.take().expect("a dialog is open").fields;
+    assert_eq!((&picked["select"], &picked["range"], &picked["boards"]), (&json!("range"), &json!("2-3"), &json!([false, true, true, false])));
+    // With the Selection tool in use, the dialog opens on the saved choice.
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    open(&mut app);
+    assert_eq!((field(&app, "select"), field(&app, "range"), field(&app, "boards")), (json!("full"), json!("1-4"), json!([true, true, true, true])));
+    assert_eq!((field(&app, "prefix"), field(&app, "formats")[0]["format"].clone()), (json!("proof-"), json!("jpg")));
+    // Only the artboard fields differ.
+    let others = |fields: &serde_json::Map<String, Value>| {
+        let mut f = fields.clone();
+        for k in ["select", "range", "boards"] {
+            f.remove(k);
+        }
+        f
+    };
+    assert_eq!(others(&picked), others(&app.ui.dialog.as_ref().expect("a dialog is open").fields));
 }
 
 #[test]

@@ -3,7 +3,8 @@
 //! checkboxes), the destination (folder picker, Open Location after Export, Create Sub-folders;
 //! the web downloads instead), the format rows (scale as `2x`, `100w`, `100h` or `72ppi`, suffix,
 //! format), the presets, Format Settings (the gear) and the prefix. It opens on the settings the
-//! document last exported with; the format rows are the Asset Export panel's too ([`formats`]).
+//! document last exported with, except that while the Artboard tool is in use the artboards it has
+//! selected are the ones chosen; the format rows are the Asset Export panel's too ([`formats`]).
 //!
 //! Fields (`ui.dialog.set`): `tab` (artboards|assets), `select` (all|range|full), `range`,
 //! `boards` ([bool] per artboard), `assets` ([asset id] checked on the Assets tab), `includeBleed`,
@@ -86,7 +87,8 @@ pub(crate) fn open_assets(app: &mut VectorcraftApp, checked: Option<&[u64]>) {
 }
 
 /// Open the dialog on the settings the active document last exported with (else one PNG row at
-/// 1x, into the Desktop), every asset checked.
+/// 1x, into the Desktop), every asset checked. While the Artboard tool is in use, the artboards it
+/// has selected (the rows the Artboards panel highlights) are the ones chosen instead.
 pub fn open(app: &mut VectorcraftApp) {
     let (n, saved, assets) = app
         .session
@@ -95,9 +97,12 @@ pub fn open(app: &mut VectorcraftApp) {
         .unwrap_or_default();
     let get = |k: &str| saved.get(k).filter(|v| !v.is_null());
     let flag = |k: &str, default: bool| get(k).and_then(Value::as_bool).unwrap_or(default);
-    // The artboards: Full Document, a range (or a list of them), else all.
-    let chosen = ArtboardPick::deserialize(&Value::Object(saved.clone())).ok().and_then(|p| p.resolve(n).ok().flatten());
-    let select = match (flag("fullDocument", false), &chosen) {
+    // The artboards are those the Artboard tool has selected while it is in use, else Full
+    // Document, a range (or a list of them), else all.
+    let picked = (app.session.tool_id() == "artboard").then(|| crate::panels::artboards::picked(app, n));
+    let full = picked.is_none() && flag("fullDocument", false);
+    let chosen = picked.or_else(|| ArtboardPick::deserialize(&Value::Object(saved.clone())).ok().and_then(|p| p.resolve(n).ok().flatten()));
+    let select = match (full, &chosen) {
         (true, _) => "full",
         (false, Some(c)) if c.len() < n => "range",
         _ => "all",
