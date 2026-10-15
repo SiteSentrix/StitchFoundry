@@ -1127,8 +1127,9 @@ fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
 /// #569: merging the regions of a rosette of unfilled ellipses (each off the centre, petals
 /// overlapping) merges every region the drags touch into one shape whose outline is only the
 /// merged area's border: no edge between merged regions stays in, as a stray line or a spur.
-#[test]
-fn shape_builder_merges_rosette_rings_cleanly() {
+/// Petal `k` turns about the center by 45° × `k`, or by each angle `turns` lists for it in turn.
+#[track_caller]
+fn rosette_rings_merge_cleanly(turns: &[(u32, &[f64])]) {
     let mut s = session();
     s.execute("paint.setFill", &json!({"none": true})).unwrap();
     let c = [400.0, 320.0];
@@ -1137,7 +1138,10 @@ fn shape_builder_merges_rosette_rings_cleanly() {
         let id =
             s.execute("shape.ellipse", &json!({"x": c[0] - 60.0, "y": c[1] - 172.0, "width": 120, "height": 324})).unwrap()["id"].as_u64().unwrap();
         s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute("object.rotate", &json!({"angle": 45.0 * f64::from(k), "origin": c})).unwrap();
+        let angles = turns.iter().find(|t| t.0 == k).map_or_else(|| vec![45.0 * f64::from(k)], |t| t.1.to_vec());
+        for angle in angles {
+            s.execute("object.rotate", &json!({"angle": angle, "origin": c})).unwrap();
+        }
         petals.push(id);
     }
     s.execute("select.set", &json!({"ids": petals})).unwrap();
@@ -1186,4 +1190,19 @@ fn shape_builder_merges_rosette_rings_cleanly() {
     // An inner edge would be a second outline over the merged area: normalising would drop it.
     let clean = vectorcraft_pathops::normalize(&ring, rule);
     assert!((ring.length() - clean.length()).abs() < 1.0, "{} pt of outline, {} without inner edges", ring.length(), clean.length());
+}
+
+#[test]
+fn shape_builder_merges_rosette_rings_cleanly() {
+    rosette_rings_merge_cleanly(&[]);
+}
+
+/// #1770: the rosette merges as cleanly with a petal turned by an equivalent angle (-180° for 180°,
+/// -855° for 225°, -45° for 315°) or in two steps, which moves its outline by a rounding error.
+#[test]
+fn shape_builder_merges_rosette_rings_cleanly_however_a_petal_turns() {
+    rosette_rings_merge_cleanly(&[(4, &[-180.0])]);
+    rosette_rings_merge_cleanly(&[(5, &[-855.0])]);
+    rosette_rings_merge_cleanly(&[(7, &[-45.0])]);
+    rosette_rings_merge_cleanly(&[(4, &[100.0, 80.0])]);
 }

@@ -150,7 +150,7 @@ struct Edge {
 }
 
 /// `segs` (a chain) moved to start at `a` and end at `b`, the handles next to each moving with it.
-fn pin_ends(segs: &mut [Seg], a: Point, b: Point) {
+pub(crate) fn pin_ends(segs: &mut [Seg], a: Point, b: Point) {
     if let Some(s) = segs.first_mut() {
         let d = a - s.c.p0;
         s.c.p0 = a;
