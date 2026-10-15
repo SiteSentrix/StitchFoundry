@@ -31,6 +31,7 @@ pub mod io;
 pub mod machines;
 pub mod model;
 pub mod pattern;
+pub mod quilt;
 pub mod satin_line;
 pub mod sequence;
 pub mod stamps;
