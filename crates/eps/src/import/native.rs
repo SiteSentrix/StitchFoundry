@@ -872,7 +872,9 @@ struct Frame<'a> {
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects.
 fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, trust: bool) -> Result<(Document, Vec<String>), String> {
-    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data)?;
+    // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
+    // space, as its PDF part may (#2031).
+    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data, matches!(page, Page::Art))?;
     let (mut shown, mut hidden) = (vec![], vec![]);
     let mut frame = None;
     if let Some(visible) = visible {

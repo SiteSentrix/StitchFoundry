@@ -114,9 +114,12 @@ pub(crate) fn slot_frame(name: Option<&str>) -> usize {
     name.and_then(|n| n.strip_prefix(TEXT_SLOT)).and_then(|rest| rest.split_once(':')).and_then(|(_, f)| f.parse().ok()).unwrap_or(0)
 }
 
-/// Read the structure of the editing data `data`.
-pub fn read(data: &[u8]) -> Result<Structure, String> {
+/// Read the structure of the editing data `data`, applying the file's `%AI24_LargeCanvasScale` only
+/// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
+/// keep the reduced one, which the PDF import reads as it is (#2031).
+pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
     let mut r = Reader::new(data);
+    r.large_canvas = large_canvas.then_some(1.0);
     r.run()?;
     r.finish()
 }
@@ -392,8 +395,9 @@ struct Reader<'a> {
     art_size: Option<(f64, f64)>,
     template_center: Option<(f64, f64)>,
     /// `%AI24_LargeCanvasScale`: a Large Canvas document's editing data is written at 1/N scale
-    /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one.
-    large_canvas: f64,
+    /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
+    /// when the declared factor is not applied ([`read`]).
+    large_canvas: Option<f64>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
     pattern: Option<PatternHead>,
     /// The tile's top left (y down) of each pattern read, by name.
@@ -528,7 +532,7 @@ impl<'a> Reader<'a> {
             slot_names: HashMap::new(),
             art_size: None,
             template_center: None,
-            large_canvas: 1.0,
+            large_canvas: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
             text: None,
@@ -669,10 +673,10 @@ impl<'a> Reader<'a> {
             // being this; the printed page applies the same factor, so the art reaches the page's
             // size once it is applied to the art space ([`Self::ensure_space`]). A value outside
             // the range Illustrator writes is left alone.
-            if let Ok(n) = v.trim().parse::<f64>()
+            if let (Some(scale), Ok(n)) = (&mut self.large_canvas, v.trim().parse::<f64>())
                 && (1.0..=100.0).contains(&n)
             {
-                self.large_canvas = n;
+                *scale = n;
             }
         } else if let Some(v) = line.strip_prefix("AI9_ColorModel:") {
             self.color_model = Some(v.trim() == "2");
@@ -1881,7 +1885,7 @@ impl<'a> Reader<'a> {
         }
         let first = self.first_board().or_else(|| self.bbox_board());
         let top_left = first.map_or(Point::new(0.0, 792.0), |r| Point::new(r.x0, r.y1));
-        let s = self.large_canvas;
+        let s = self.large_canvas.unwrap_or(1.0);
         let m = Affine::new([s, 0.0, 0.0, -s, -s * top_left.x, s * top_left.y]);
         self.to_doc = Some(m);
         m

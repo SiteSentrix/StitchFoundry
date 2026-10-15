@@ -269,6 +269,10 @@ fn a_large_canvas_eps_keeps_its_layers_at_the_pages_size() {
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
     assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("different page")), "{:?}", r.warnings);
+    // A `.ai` keeps its art space: its PDF part is read at the size it declares.
+    let art = native_large_canvas(100.0, 10.0, &layer("Art", true, &square(10, 10)));
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false);
+    assert!(read && names(&d) == ["Art"], "{w:?}");
 }
 
 /// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its
