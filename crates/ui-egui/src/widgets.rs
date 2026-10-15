@@ -840,17 +840,33 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
     inner
 }
 
-/// The body of a menu or popup list: as tall as its items up to the bottom of the window, and
-/// scrolling only past that, so long menus (Window, Effect, a panel's menu) stay reachable on
-/// small windows.
-pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    // Room left below the popup's first item, less the popup frame and a small gap.
+/// Records where the bottom bars (status and hint bars) start this frame, so menus can stop above
+/// them (#2086). Without bars it is the bottom of the window.
+pub fn set_menu_floor(ctx: &egui::Context, y: f32) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("menu_floor"), y));
+}
+
+/// The height a menu list may take: from `top` down to `floor` less a small gap, at least 120 pt.
+pub fn menu_room(floor: f32, top: f32) -> f32 {
     const BOTTOM_GAP: f32 = 12.0;
     const MIN_HEIGHT: f32 = 120.0;
-    let room = (ui.ctx().content_rect().bottom() - ui.next_widget_position().y - BOTTOM_GAP).max(MIN_HEIGHT);
-    // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
-    // its items when they need less.
-    egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).show(ui, add_contents).inner
+    (floor - top - BOTTOM_GAP).max(MIN_HEIGHT)
+}
+
+/// The body of a menu or popup list: as tall as its items up to the bottom bars of the window, and
+/// scrolling only past that, so long menus (Window, Effect, a panel's menu) stay reachable on
+/// small windows. Its scroll bar has a column of its own, so it never covers the shortcuts or the
+/// submenu arrows (#2086).
+pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    let floor = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("menu_floor"))).unwrap_or_else(|| ui.ctx().content_rect().bottom());
+    let room = menu_room(floor, ui.next_widget_position().y);
+    ui.scope(|ui| {
+        ui.spacing_mut().scroll = egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() };
+        // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
+        // its items when they need less.
+        egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).show(ui, add_contents).inner
+    })
+    .inner
 }
 
 /// A column of tool or panel buttons (the toolbar, the dock's icon column) that scrolls when the
@@ -1948,5 +1964,21 @@ mod spinner_modifier_tests {
         assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE), 15.0);
         assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND), 13.9);
         assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 0.0);
+    }
+}
+
+#[cfg(test)]
+mod menu_room_tests {
+    use super::*;
+
+    #[test]
+    fn menu_stops_above_the_bottom_bars() {
+        // Window 1000 pt tall, bars start at 948: a menu opening at y = 100 gets 836 pt, not 888.
+        assert_eq!(menu_room(948.0, 100.0), 836.0);
+    }
+
+    #[test]
+    fn menu_keeps_a_minimum_height() {
+        assert_eq!(menu_room(300.0, 290.0), 120.0);
     }
 }
