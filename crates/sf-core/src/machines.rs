@@ -295,22 +295,110 @@ pub struct HomeMachine {
     pub hoops: &'static [&'static str],
 }
 
-const HUSQVARNA_HOOPS: &[&str] = &["Husqvarna 240 × 150", "Husqvarna 260 × 200", "Husqvarna 120 × 120", "Husqvarna 360 × 200", "Husqvarna 360 × 350"];
-const BROTHER_HOOPS: &[&str] =
-    &["Brother 130 × 180 (5×7)", "Brother 100 × 100 (4×4)", "Brother 160 × 260 (6×10)", "Brother 200 × 200 (8×8)", "Brother 200 × 300 (8×12)"];
+/// The Designer Diamond deLuxe's hoops: the three it comes with first (Crown 260 × 200, Royal
+/// 360 × 200 and Splendid Square 120 × 120, as Husqvarna Viking's feature sheet lists them), then
+/// the optional ones it takes.
+const DIAMOND_HOOPS: &[&str] = &[
+    "Husqvarna 260 × 200",
+    "Husqvarna 360 × 200",
+    "Husqvarna 120 × 120",
+    "Husqvarna 240 × 150",
+    "Husqvarna 360 × 350",
+    "Husqvarna Quilter's 200 × 200",
+    "Husqvarna Mega Endless 260 × 150",
+    "Husqvarna Small Square 80 × 80",
+    "Husqvarna 100 × 100",
+];
+const HUSQVARNA_HOOPS: &[&str] = &[
+    "Husqvarna 240 × 150",
+    "Husqvarna 260 × 200",
+    "Husqvarna 120 × 120",
+    "Husqvarna 360 × 200",
+    "Husqvarna 360 × 350",
+    "Husqvarna Imperial 360 × 260",
+    "Husqvarna Quilter's 200 × 200",
+    "Husqvarna Mega Endless 260 × 150",
+    "Husqvarna Small Square 80 × 80",
+    "Husqvarna 100 × 100",
+];
+const PFAFF_HOOPS: &[&str] = &[
+    "Pfaff creative Grand Metal 240 × 150",
+    "Pfaff creative 120 × 115",
+    "Pfaff creative Elite 260 × 200",
+    "Pfaff creative Deluxe 360 × 200",
+    "Pfaff creative Grand Dream 360 × 350",
+    "Pfaff creative Quilters 200 × 200",
+    "Pfaff creative Grand Quilters 260 × 260",
+    "Pfaff creative Grand Endless 260 × 150",
+    "Pfaff creative Petite Square 80 × 80",
+];
+const BROTHER_HOOPS: &[&str] = &[
+    "Brother 130 × 180 (5×7)",
+    "Brother 100 × 100 (4×4)",
+    "Brother 160 × 260 (6×10)",
+    "Brother 200 × 200 (8×8)",
+    "Brother 200 × 300 (8×12)",
+    "Brother 240 × 240 (9.5×9.5)",
+    "Brother 240 × 360 (9.5×14)",
+];
+const BROTHER_MULTI_HOOPS: &[&str] = &[
+    "Brother 200 × 300 (8×12)",
+    "Brother 130 × 180 (5×7)",
+    "Brother 100 × 100 (4×4)",
+    "Brother 200 × 200 (8×8)",
+    "Cap frame 130 × 60",
+    "Wide cap frame 160 × 60",
+    "Sleeve 80 × 300",
+];
+const COMMERCIAL_HOOPS: &[&str] = &[
+    "Tajima Round 15 cm",
+    "Tajima Round 12 cm",
+    "Tajima Round 18 cm",
+    "Tajima Round 21 cm",
+    "Tajima Round 24 cm",
+    "Tajima Square 30 × 30 cm",
+    "Cap frame 130 × 60",
+    "Wide cap frame 160 × 60",
+    "Jacket back 360 × 360",
+    "Sleeve 80 × 300",
+    "Magnetic frame 130 × 130",
+    "Magnetic pocket frame 100 × 70",
+];
 
 /// The machines My Machine offers.
 pub const HOME_MACHINES: &[HomeMachine] = &[
-    HomeMachine { name: "Husqvarna Viking Designer Diamond deLuxe", format: "vp3", hoops: HUSQVARNA_HOOPS },
+    HomeMachine { name: "Husqvarna Viking Designer Diamond deLuxe", format: "vp3", hoops: DIAMOND_HOOPS },
     HomeMachine { name: "Husqvarna Viking (other models)", format: "vp3", hoops: HUSQVARNA_HOOPS },
+    HomeMachine { name: "Pfaff creative", format: "vp3", hoops: PFAFF_HOOPS },
     HomeMachine { name: "Brother or Baby Lock", format: "pes", hoops: BROTHER_HOOPS },
+    HomeMachine { name: "Brother or Baby Lock multi-needle", format: "pes", hoops: BROTHER_MULTI_HOOPS },
     HomeMachine {
         name: "Janome or Elna",
         format: "jef",
-        hoops: &["Janome RE20b 140 × 200", "Janome SQ14 140 × 140", "Janome SQ20b 200 × 200", "Janome RE28b 200 × 280"],
+        hoops: &[
+            "Janome RE20b 140 × 200",
+            "Janome SQ14 140 × 140",
+            "Janome SQ20b 200 × 200",
+            "Janome RE28b 200 × 280",
+            "Janome SQ23 230 × 230",
+            "Janome GR 230 × 300",
+            "Janome RE36b 200 × 360",
+        ],
     },
-    HomeMachine { name: "Bernina", format: "exp", hoops: &["Bernina Medium 130 × 100", "Bernina Large Oval 145 × 255"] },
+    HomeMachine {
+        name: "Bernina",
+        format: "exp",
+        hoops: &[
+            "Bernina Medium 130 × 100",
+            "Bernina Large Oval 145 × 255",
+            "Bernina Midi 165 × 265",
+            "Bernina Maxi 210 × 400",
+            "Bernina Jumbo 260 × 400",
+            "Bernina Mega 150 × 400",
+        ],
+    },
     HomeMachine { name: "Singer", format: "xxx", hoops: BROTHER_HOOPS },
+    HomeMachine { name: "Commercial multi-needle (DST)", format: "dst", hoops: COMMERCIAL_HOOPS },
     HomeMachine {
         name: "Another machine (DST)",
         format: "dst",

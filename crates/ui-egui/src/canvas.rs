@@ -2004,11 +2004,16 @@ pub(crate) fn home_hoops(mine: &serde_json::Value) -> Vec<(String, String, f64, 
             Some((hoop_label(w, ht), name.to_string(), w, ht))
         })
         .collect();
-    if theirs.is_empty() {
-        HOME_HOOPS.iter().map(|(label, hoop, w, h)| ((*label).to_string(), (*hoop).to_string(), *w, *h)).collect()
-    } else {
-        theirs
+    if !theirs.is_empty() {
+        // the machine's hoops, one's own among them
+        return theirs;
     }
+    // no machine chosen: the usual sizes, then one's own hoops
+    let own = mine["own"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|h| {
+        let (name, w, ht) = (h["name"].as_str()?, h["width"].as_f64()?, h["height"].as_f64()?);
+        Some((hoop_label(w, ht), name.to_string(), w, ht))
+    });
+    HOME_HOOPS.iter().map(|(label, hoop, w, h)| ((*label).to_string(), (*hoop).to_string(), *w, *h)).chain(own).collect()
 }
 
 /// A hoop card's label: its sewing field in millimetres and inches (`240 × 150 mm (9.4 × 5.9″)`).

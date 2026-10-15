@@ -984,8 +984,9 @@ recolourings of one design side by side.
 ## Hoops
 
 The Embroidery panel's Design section picks the design's hoop from the standard ones (Brother,
-Janome, Bernina, Husqvarna, Tajima, cap, sleeve and jacket-back frames, and magnetic frames by
-size) and one's own. **Smallest That Fits** (`embroidery.hoop.auto {brand?, turn?, special?}`)
+Janome, Bernina, Husqvarna Viking, Pfaff creative, Tajima, cap, sleeve and jacket-back frames, and
+magnetic frames by size; 60 in all, their sewing fields from the makers' public product pages) and
+one's own. **Smallest That Fits** (`embroidery.hoop.auto {brand?, turn?, special?}`)
 chooses the smallest hoop that holds the design, turned a quarter when that fits better (`turn:
 false` keeps hoops as they are; cap, sleeve and jacket-back frames only with `special`; `brand`
 keeps to hoops whose names have it). **Rotate Hoop** (`embroidery.hoop.rotate`) turns the hoop a
@@ -1063,13 +1064,20 @@ These are exports only: they aren't read back.
 ## My Machine
 
 **File › My Machine…** (also on the Embroidery menu and the Home screen) asks once which machine
-you have: Husqvarna Viking Designer Diamond deLuxe, other Husqvarna Viking models, Brother or Baby
-Lock, Janome or Elna, Bernina, Singer, or another machine (DST). It also asks whether to measure
-in millimetres or inches, and which folder or USB stick designs go to. From then on:
+you have: Husqvarna Viking Designer Diamond deLuxe, other Husqvarna Viking models, Pfaff creative,
+Brother or Baby Lock (home or multi-needle), Janome or Elna, Bernina, Singer, a commercial
+multi-needle machine (DST), or another machine (DST). It also asks whether to measure in
+millimetres or inches, and which folder or USB stick designs go to. From then on:
 
-- the Home screen offers that machine's hoops (for the Designer Diamond deLuxe 240 × 150, 260 ×
-  200, 120 × 120, 360 × 200 and 360 × 350 mm), and a new design uses its first hoop when none is
-  named (`embroidery.newDesign`);
+- the Home screen and Make a Design offer that machine's hoops, and a new design uses its first
+  hoop when none is named (`embroidery.newDesign`). For the Designer Diamond deLuxe they are the
+  three it comes with, Crown 260 × 200, Royal 360 × 200 and Splendid Square 120 × 120 mm (as
+  Husqvarna Viking's feature sheet lists them), then the optional 240 × 150, Majestic 360 × 350,
+  Quilter's 200 × 200, Mega Endless 260 × 150, Small Square 80 × 80 and 100 × 100 mm;
+- **My own hoops**, at the bottom of the window, adds a hoop that isn't listed: its name, width and
+  height (in the units chosen) and square or oval. It joins the machine's hoops on the Home screen,
+  in Make a Design and everywhere a hoop is chosen, and Remove takes it away again
+  (`embroidery.hoop.saveCustom`, `.deleteCustom`);
 - new designs and exports use the machine's format (VP3 for Husqvarna Viking, PES for Brother,
   JEF for Janome, EXP for Bernina, XXX for Singer, DST otherwise);
 - **File › Save for My Machine** writes the design in that format to the chosen folder in one step
@@ -1077,8 +1085,8 @@ in millimetres or inches, and which folder or USB stick designs go to. From then
   plugged in. In the web app, which has no folders, it downloads the file instead: copy it to the
   USB stick.
 
-Commands: `embroidery.myMachine` (the machine, its format, hoops and folder, and the list to choose
-from), `embroidery.myMachine.set {machine: name|null}`, `ui.myMachine`, `ui.saveForMyMachine
+Commands: `embroidery.myMachine` (the machine, its format, hoops and folder, one's own hoops
+(`own`), and the list to choose from), `embroidery.myMachine.set {machine: name|null}`, `ui.myMachine`, `ui.saveForMyMachine
 {folder?}`.
 
 ## Send queue
