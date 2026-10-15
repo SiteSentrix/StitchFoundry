@@ -220,6 +220,36 @@ fn editing_data_false_opens_only_what_the_page_prints() {
     assert!(e.contains("placeholder"), "{e}");
 }
 
+/// A CMYK image opens with the same ink amounts from a `.ai` file's editing data as from its PDF
+/// part.
+#[test]
+fn a_cmyk_image_keeps_its_inks_from_the_editing_data_as_from_the_pdf_part() {
+    // 3 × 1: cyan, 100% black, then a mix, as hex samples in both parts.
+    let inks = [255u8, 0, 0, 0, 0, 0, 0, 255, 12, 34, 56, 78];
+    let hex: String = inks.iter().map(|b| format!("{b:02x}")).collect();
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceCMYK XN\n[ 10 0 0 10 10 60 ] 3 1 0 Xh\n\
+         [ 10 0 0 10 10 60 ] 0 0 3 1 3 1 8 4 0 0 0 0 4 4 0 0\n%%BeginData: {}\rXI\n{hex}\n%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\r\n",
+        hex.len() + 2
+    );
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &raster));
+    let page = format!("q 30 0 0 10 10 50 cm BI /W 3 /H 1 /CS /CMYK /BPC 8 /F /AHx ID {hex}> EI Q");
+    let file = ai::ai(&compressed(data.as_bytes()), &page);
+    let opened = |s: &Session| {
+        let doc = &s.doc().unwrap().doc;
+        let mut found = vec![];
+        doc.visit_images(|_, im| found.push(doc.images[&im.key].cmyk().map(|i| i.data)));
+        found
+    };
+    let mut s = Session::new();
+    let r = open(&mut s, "cmyk.ai", &file, json!({})).unwrap();
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+    assert_eq!(opened(&s), [Some(inks.to_vec())], "from the editing data");
+    let r = open(&mut s, "cmyk.ai", &file, json!({"editingData": false})).unwrap();
+    assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+    assert_eq!(opened(&s), [Some(inks.to_vec())], "from the PDF part");
+}
+
 #[test]
 fn fit_to_artwork_bounds_leaves_out_the_hidden_art_and_guides_the_editing_data_has() {
     // A shown square; a hidden one and a long guide far from it, which the page doesn't draw.

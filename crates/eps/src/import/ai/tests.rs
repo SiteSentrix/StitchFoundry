@@ -605,6 +605,44 @@ fn images_with_alpha_channels() {
     assert!(art(&r.doc).is_empty() && r.warnings.iter().any(|w| w.contains("cut short")));
 }
 
+/// CMYK images keep their ink amounts, as the file's PDF part keeps them, and an alpha channel
+/// becomes their opacity mask: a grayscale image over the image.
+#[test]
+fn cmyk_images_keep_their_ink_amounts() {
+    // 3 × 1: cyan, 100% black, then a mix.
+    let inks = [255, 0, 0, 0, 0, 0, 0, 255, 12, 34, 56, 78];
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 0), &inks, 14)).unwrap().doc;
+    let a = art(&doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let blob = &doc.images[&im.key];
+    assert!(blob.is_cmyk(), "{}", blob.mime);
+    assert_eq!(blob.cmyk().map(|i| (i.width, i.height, i.data)), Some((3, 1, inks.to_vec())));
+    assert!(a[0].extras().mask.is_none(), "no alpha channel, no mask");
+    // The same samples with an alpha channel.
+    let data = [&inks[..], &[255, 128, 0]].concat();
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 1), &data, 17)).unwrap().doc;
+    let a = art(&doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(doc.images[&im.key].cmyk().map(|i| i.data), Some(inks.to_vec()), "the inks are the same");
+    let m = a[0].extras().mask.clone().expect("the alpha channel is an opacity mask");
+    assert!(m.clip);
+    let NodeKind::Image(mi) = &m.art.kind else { panic!("{:?}", m.art.kind) };
+    assert_eq!((mi.width, mi.height, mi.xf), (3, 1, im.xf), "the mask covers the image");
+    let gray = image::load_from_memory(&doc.images[&mi.key].bytes).unwrap().to_luma8();
+    assert_eq!(gray.into_raw(), [255, 128, 0]);
+    // An alpha channel that hides nothing adds no mask.
+    let data = [&inks[..], &[255; 3]].concat();
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 1), &data, 17)).unwrap().doc;
+    let a = art(&doc);
+    assert!(a[0].extras().mask.is_none());
+    // Hex samples, and a four-channel image whose space the data doesn't name.
+    let hex: String = inks.iter().map(|b| format!("{b:02x}")).collect();
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (3, 1), ("Other", 4, 0), hex.as_bytes(), 26)).unwrap();
+    let doc = read(text.replacen("8 4 0 0 1 0 4 4 0 0", "8 4 0 0 0 0 4 4 0 0", 1).as_bytes()).unwrap().doc;
+    let NodeKind::Image(im) = &art(&doc)[0].kind else { panic!() };
+    assert_eq!(doc.images[&im.key].cmyk().map(|i| i.data), Some(inks.to_vec()));
+}
+
 /// Editing data with one layer (showing or not) holding a placed file: its matrix, the file at
 /// `path` in the box 10 20 14 22, and `preview` (what its preview section holds), then `after`.
 fn placed(visible: bool, matrix: &str, path: &str, preview: Option<&[u8]>, after: &str) -> Vec<u8> {

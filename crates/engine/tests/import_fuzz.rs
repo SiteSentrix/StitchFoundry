@@ -1860,6 +1860,10 @@ fn editing_text() -> String {
         "0 0 0 1 (Black global) 0.4 0 Xk".into(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p".into(),
         square(60),
+        // A 2 × 1 CMYK image with an alpha channel, its samples in hex.
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceCMYK XN\n[ 4 0 0 4 10 30 ] 2 1 0 Xh\n[ 4 0 0 4 10 30 ] 0 0 2 1 2 1 8 4 1 0 0 0 4 4 0 0\n\
+         %%BeginData: 18\rXI\nff000000000000ff80ff\n%%EndData\nXH\n%AI5_EndRaster\nN"
+            .into(),
     ]
     .join("\n");
     let layer = |name: &str, visible: u8, body: &str| {
@@ -1884,6 +1888,17 @@ fn editing_eps(editing: &str) -> Vec<u8> {
         lines.join("\n")
     )
     .into_bytes()
+}
+
+/// The fuzzed editing data, as it is, reads its CMYK image with its ink amounts and its alpha
+/// channel as an opacity mask.
+#[test]
+fn the_editing_fixture_reads_its_cmyk_image_with_its_mask() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing_text())].concat();
+    let (doc, warnings, layers) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true);
+    let mut found = vec![];
+    doc.visit_images(|n, im| found.push((doc.images[&im.key].cmyk().map(|i| i.data), n.extras().mask.is_some())));
+    assert!(layers && found.contains(&(Some(vec![255, 0, 0, 0, 0, 0, 0, 255]), true)), "{found:?} {warnings:?}");
 }
 
 /// The text document of a story of centred type with two styles, as an editing copy keeps it.
