@@ -654,6 +654,69 @@ proptest! {
     }
 }
 
+/// A dictionary value: one the reader reads, or one it skips over but can't parse (a name with a
+/// broken `#` escape, a number with a stray `-`).
+fn arb_dict_value() -> impl Strategy<Value = &'static str> {
+    prop::sample::select(vec!["/Fine", "/#zz", "12-.5"])
+}
+
+/// A page's resources: `space` in the color space dictionary before a Separation space, `font`
+/// in the font dictionary before a font, and a calculator function (`function`: plain, with
+/// decode parameters the reader can't apply, or decoding past the cap) written as the shading's
+/// function, or inside an array or a dictionary under `/Properties` (`held`). Returns the
+/// resources and whether a file with them is refused.
+fn unreadable_resources(space: &str, font: &str, function: &str, held: &str) -> (String, bool) {
+    let program = deflated(b"{ dup 1 exch sub 0 }");
+    let (function, refused) = match function {
+        "Columns 0" => (calculator(&program, "/DecodeParms [null << /Predictor 2 /Columns 0 >>]"), true),
+        "a huge Columns" => (calculator(&program, "/DecodeParms [null << /Predictor 12 /Colors 4 /Columns 99999999999 >>]"), true),
+        "spaces past the cap" => (spaces_past_the_cap_once().to_string(), true),
+        _ => (calculator(&program, ""), false),
+    };
+    let ramp = "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >>";
+    let (shaded, other) = match held {
+        "in an array" => (ramp, format!("/Properties << /P0 [{function}] >>")),
+        "in a dictionary" => (ramp, format!("/Properties << /P0 << /K {function} >> >>")),
+        _ => (function.as_str(), String::new()),
+    };
+    let tint = "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 1 0] /N 1 >>";
+    let resources = format!(
+        "<< /ColorSpace << /A {space} /CS0 [/Separation /Gold /DeviceCMYK {tint}] >> \
+         /Font << /A {font} /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> \
+         /Shading << /Sh0 << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function {shaded} >> >> {other} >>"
+    );
+    (resources, refused)
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A page that paints with each of [`unreadable_resources`] is imported without a panic. The
+    /// file opens with its art, or is refused when its calculator function decodes past the cap or
+    /// has decode parameters the reader can't apply.
+    #[test]
+    fn pdf_resources_the_reader_cannot_parse_never_panic(
+        space in arb_dict_value(),
+        font in arb_dict_value(),
+        function in prop::sample::select(vec!["plain", "Columns 0", "a huge Columns", "spaces past the cap"]),
+        held in prop::sample::select(vec!["as the shading's function", "in an array", "in a dictionary"]),
+    ) {
+        let (resources, refused) = unreadable_resources(space, font, function, held);
+        let pdf = handmade_pdf("/CS0 cs 1 scn 0 0 50 50 re f BT /F1 12 Tf 10 60 Td (Hi) Tj ET /Sh0 sh", &resources, "[0 0 100 100]");
+        let what = format!("{space} and {font}, a function ({function}) {held}");
+        let mut read = None;
+        survive(&what, || {
+            let r = vectorcraft_pdf::import(&pdf);
+            read = Some(r.as_ref().map(|d| d.layers.iter().any(|l| l.children().is_some_and(|c| !c.is_empty()))).map_err(ToString::to_string));
+            r.ok()
+        })?;
+        match read.expect("the import ran") {
+            Ok(art) => prop_assert!(!refused && art, "{what}: opened (its art read: {art})"),
+            Err(e) => prop_assert!(refused && e.contains("would decode to more than 256 MB"), "{what}: {e}"),
+        }
+    }
+}
+
 /// A page box with junk in it: inverted, empty, huge, NaN or outside the media box.
 fn arb_box() -> impl Strategy<Value = Option<[f64; 4]>> {
     prop_oneof![
@@ -3080,6 +3143,21 @@ fn spaces_past_the_cap() -> Vec<u8> {
     e.finish().unwrap()
 }
 
+/// [`calculator`] of [`spaces_past_the_cap`], made once.
+fn spaces_past_the_cap_once() -> &'static str {
+    static FUNCTION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    FUNCTION.get_or_init(|| calculator(&spaces_past_the_cap(), ""))
+}
+
+/// A calculator function with the deflated program `z` and the decode parameters `dp`, to write
+/// inside another object. Its data is in hexadecimal digits with spaces between them, so the
+/// object around it still reads.
+fn calculator(z: &[u8], dp: &str) -> String {
+    let data: String = z.iter().map(|b| format!("{:X} {:X} ", b >> 4, b & 15)).collect();
+    let dict = format!("/FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1] /Filter [/ASCIIHexDecode /FlateDecode] {dp}");
+    format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len())
+}
+
 // Streams the reader would fail on (#1700, #1701): it applies a predictor before checking its
 // parameters (`Columns 0` divides by zero, a huge `Columns` allocates a row that large), and
 // inflates without a ceiling.
@@ -3094,13 +3172,6 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
         format!("q 10 0 0 10 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 /F [/AHx /Fl] /DP [null {dp}] ID {data}> EI Q")
     };
     let form = |dict: &str, content: &str| pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed(&format!("{FORM} {dict}"), content)]);
-    // A calculator function with the deflated program `z`, to write inside another object. Its
-    // data is in hexadecimal digits with spaces between them, so the object around it still reads.
-    let calculator = |z: &[u8], dp: &str| {
-        let data: String = z.iter().map(|b| format!("{:X} {:X} ", b >> 4, b & 15)).collect();
-        let dict = format!("/FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1] /Filter [/ASCIIHexDecode /FlateDecode] {dp}");
-        format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len())
-    };
     let held = |object: String| pdf_with("0 0 5 5 re f", "<< >>", &[object.into_bytes()]);
     let shaded = |function: &str| {
         let shading = format!("<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function {function} >>");
