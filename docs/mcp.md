@@ -986,25 +986,17 @@ already walks Image Trace. Short agent entry points:
   `symbol.replace`, `symbol.edit`, `symbol.duplicate`, `symbol.selectInstances {name}`.
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?}`, `brush.freehand`, `object.expandBrush {ids?}`.
-- Variables: `variable.list`, `variable.define {name, kind: text|visibility}` (image and graph kinds land in
-  open PRs), `variable.bind {variable, ids?}`, `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`,
-  `variable.unbind`, `variable.rename`, `variable.delete`, `variable.highlight`.
+- Variables: `variable.list`, `variable.define {name, kind: text|visibility|image|graph}`, `variable.bind {variable, ids?}`,
+  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`,
+  `variable.unbind`, `variable.rename`, `variable.delete`, `variable.highlight` (image values are file paths, graph
+  values CSV as `graph.setData`).
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, values?}`, `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
-  `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object).
-- Variables: `variable.list`, `variable.define {name, kind: text|visibility}`, `variable.bind {variable, ids?}`,
-  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.unbind`, `dataset.new` / `dataset.set` /
-  `dataset.select`.
+  `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
+  `dataset.export {path?}` (CSV: `name`, then one column per variable).
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
   action on every file in a folder or every data set (the Actions panel menu's Batch…).
-- Variables: `variable.list`, `variable.define {name, kind: text|visibility|graph}`, `variable.bind {variable, ids?}`,
-  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeGraphDynamic`, `variable.unbind`,
-  `dataset.new` / `dataset.set` / `dataset.select` (graph values are CSV as `graph.setData`).
-- Variables: `variable.list`, `variable.define {name, kind: text|visibility|image}`, `variable.bind {variable, ids?}`,
-  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.unbind`,
-  `dataset.new` / `dataset.set` / `dataset.select` (image values are file path strings; apply keeps object bounds),
-  `dataset.import {path|data|dataBase64|csv}` / `dataset.export {path?}` (CSV: header `name` then variable names).
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`.
 
