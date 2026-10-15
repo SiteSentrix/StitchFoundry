@@ -71,13 +71,16 @@ pub const FILE_HEAD: usize = 4096;
 
 /// What a file copied in a file manager pastes as, if one of `mimes` (`image/*`: any bitmap):
 /// SVG, PDF, EPS, a Windows metafile or a bitmap (its own `image/…` type), told from its first
-/// [`FILE_HEAD`] bytes and its name. The file's bytes are that flavour's data.
+/// [`FILE_HEAD`] bytes and its name. A `.ai` or `.ait` file pastes as PDF when its bytes are a
+/// PDF and as EPS when they are PostScript. The file's bytes are that flavour's data.
 pub fn file_flavour(name: &str, head: &[u8], mimes: &[&str]) -> Option<&'static str> {
     let f = fileio::detect(name, head)?;
     let (asked, mime) = match f.id {
         "svg" => (SVG, SVG),
         "pdf" => (PDF, PDF),
         "eps" => (EPS, EPS),
+        "ai" | "ait" if head.starts_with(b"%PDF") => (PDF, PDF),
+        "ai" | "ait" if vectorcraft_pdf::is_postscript(head) => (EPS, EPS),
         "emf" | "wmf" => (EMF, EMF),
         _ if f.raster => (BITMAP, f.mime),
         _ => return None,
