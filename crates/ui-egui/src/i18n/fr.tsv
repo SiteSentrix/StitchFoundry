@@ -5287,3 +5287,4 @@ machine	Stop	Arrêt
 @msg	{_1} {name}	{_1} {name}
 	Blend from Gradient	Fondu depuis le dégradé
 	Sew the gradient's colours blended the way it runs	Broder les couleurs du dégradé fondues dans son sens
+	Cutwork	Découpe (cutwork)

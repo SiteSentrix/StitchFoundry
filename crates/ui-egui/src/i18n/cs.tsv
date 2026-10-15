@@ -5304,3 +5304,4 @@ machine	Stop	Zastavení
 @msg	{_1} {name}	{_1} {name}
 	Blend from Gradient	Prolnutí z přechodu
 	Sew the gradient's colours blended the way it runs	Vyšít barvy přechodu prolnuté ve směru přechodu
+	Cutwork	Výšivka s prořezáváním

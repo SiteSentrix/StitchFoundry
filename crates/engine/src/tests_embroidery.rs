@@ -5437,6 +5437,31 @@ fn echo_and_background_quilting_go_round_the_art() {
 }
 
 /// NEW-01: Multi Blend as one object: the layers sew from the one fill, each in its thread and
+/// BEY-05: cutwork splits a line by direction for the cutting needles, grouped by needle, and
+/// Undo puts the line back.
+#[test]
+fn cutwork_splits_lines_by_direction_for_the_needles() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 100.0);
+    let r = s.execute("embroidery.cutwork", &json!({})).unwrap();
+    let needles = r["needles"].as_array().unwrap();
+    // a box: its sides across for needle 1 (0°), up and down for needle 3 (90°)
+    let got: Vec<u64> = needles.iter().map(|n| n["needle"].as_u64().unwrap()).collect();
+    assert_eq!(got, vec![1, 3], "{r}");
+    assert!(needles.iter().all(|n| n["lines"].as_u64().unwrap() >= 2), "{r}");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(a).is_none(), "the line is replaced");
+    let g = d.node(vectorcraft_doc::NodeId(r["id"].as_u64().unwrap())).unwrap();
+    let kids = g.children().unwrap();
+    // needle 1's lines first, then needle 3's, each named for its needle
+    let names: Vec<String> = kids.iter().map(|k| k.embroidery.as_deref().unwrap().thread.clone().unwrap().name).collect();
+    assert!(names.first().unwrap().starts_with("Cutwork needle 1") && names.last().unwrap().starts_with("Cutwork needle 3"), "{names:?}");
+    assert!(stitches(&s) > 50);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).is_some(), "one undo step");
+    assert!(s.execute("embroidery.cutwork", &json!({"needles": 5})).is_err());
+}
+
 /// BEY-05: a fill painted with a linear gradient blends its stops' colours the way the gradient
 /// runs, each colour where its stop is, and the art keeps its gradient.
 #[test]

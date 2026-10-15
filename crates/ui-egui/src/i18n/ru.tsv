@@ -5275,3 +5275,4 @@ machine	Stop	Остановка
 @msg	{_1} {name}	{_1} {name}
 	Blend from Gradient	Переход из градиента
 	Sew the gradient's colours blended the way it runs	Вышить цвета градиента с переходом в его направлении
+	Cutwork	Вырезная вышивка

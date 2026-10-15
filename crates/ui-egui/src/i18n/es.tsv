@@ -5277,3 +5277,4 @@ machine	Stop	Parada
 @msg	{_1} {name}	{_1} {name}
 	Blend from Gradient	Degradado desde el gradiente
 	Sew the gradient's colours blended the way it runs	Bordar los colores del gradiente fundidos en su dirección
+	Cutwork	Calado (cutwork)
