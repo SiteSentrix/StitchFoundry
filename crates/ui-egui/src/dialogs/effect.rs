@@ -17,7 +17,13 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| heading_label(d), body, confirm, preview: true, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |d| if super::warp_effect::is_warp(&d.str("__effect")) { tl!("Warp Options").to_string() } else { heading_label(d) },
+    body,
+    confirm,
+    preview: true,
+    ..DialogSpec::FORM
+};
 
 /// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
 /// without its trailing ellipsis. A plug-in effect's name is shown as it is.
@@ -127,6 +133,12 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (id, relative) = (d.str("__effect"), d.bool("relative"));
+    if super::warp_effect::is_warp(&id) {
+        super::warp_effect::body(ui, d);
+        let (cmd, params) = command(d);
+        form::preview(app, ui, d, "Warp Options", cmd, params);
+        return false;
+    }
     if vectorcraft_effects::is_three_d(&id) {
         super::revolve::body(app, ui, d);
         let (cmd, params) = command(d);
@@ -522,7 +534,14 @@ fn command(d: &Dialog) -> (&'static str, Value) {
     let params = form::params(d);
     let item = d.fields.get("__item").cloned();
     if let Some(index) = d.fields.get("__index") {
-        return ("effect.setParams", json!({"index": index, "item": item.unwrap_or(Value::Null), "params": params}));
+        let mut p = json!({"index": index, "item": item.unwrap_or(Value::Null), "params": params});
+        let id = d.str("__effect");
+        // The displayed style comes from the first target. Preserve other targets' Warp IDs
+        // unless the user deliberately chooses Style, including after a preview rollback.
+        if super::warp_effect::is_warp(&id) && d.bool("__warp_style_changed") {
+            p["warpStyle"] = json!(id.strip_prefix("warp."));
+        }
+        return ("effect.setParams", p);
     }
     let mut p = json!({"effect": d.str("__effect"), "params": params});
     if let Some(item) = item {
@@ -533,6 +552,13 @@ fn command(d: &Dialog) -> (&'static str, Value) {
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (cmd, p) = command(d);
+    if super::warp_effect::is_warp(&d.str("__effect")) {
+        let r = form::commit_preview(app, cmd, p.clone())?;
+        if cmd == "effect.apply" {
+            app.last_effect = Some((d.str("__effect"), p["params"].clone()));
+        }
+        return Ok(r);
+    }
     let r = if app.session.in_interaction() {
         // Live preview already applied: keep it (the interaction commits as one undo step).
         let _ = app.session.preview(cmd, &p);
