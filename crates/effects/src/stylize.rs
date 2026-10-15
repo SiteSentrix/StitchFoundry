@@ -112,14 +112,19 @@ fn crosses_outline(p: Point, q: Point, polys: &[Vec<Point>]) -> bool {
 }
 
 /// Scribble (simplified): a zig-zag hatching across the filled area at `angle`, one per region
-/// of the shape, outlined to `strokeWidth` so the fill paints it.
+/// of the shape, outlined to `strokeWidth` so the fill paints it. `overlapVariation` moves each
+/// line's ends along it by up to that many points, `spacingVariation` moves them across it, and
+/// each turn's curviness moves from `curviness` by up to `curvinessVariation` percent.
 pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
     let angle = num(p, "angle", 30.0).to_radians();
     let overlap = num(p, "overlap", 0.0);
     let width = num(p, "strokeWidth", 3.0).clamp(0.01, 1000.0);
-    let curvy = num(p, "curviness", 5.0).clamp(0.0, 100.0) / 100.0;
+    let curviness = num(p, "curviness", 5.0).clamp(0.0, 100.0);
+    let curvy = curviness / 100.0;
+    let curvy_var = num(p, "curvinessVariation", 0.0).clamp(0.0, 100.0);
     let spacing = num(p, "spacing", 5.0).max(0.1);
-    let variation = num(p, "variation", 0.5).clamp(0.0, 100.0);
+    let along = num(p, "overlapVariation", 0.5).clamp(0.0, 100.0);
+    let across = num(p, "spacingVariation", 0.5).clamp(0.0, 100.0);
     let seed = seed(p);
     let c = b.center();
     let to_local = Affine::translate(c.to_vec2()) * Affine::rotate(angle) * Affine::translate(-c.to_vec2());
@@ -140,6 +145,8 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
     // stays inside: one chain, as before.
     struct Chain {
         pts: Vec<Point>,
+        // Each point's curviness noise in [-1, 1].
+        bends: Vec<f64>,
         end: Point,
         row: u64,
     }
@@ -160,10 +167,12 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
         let spans: Vec<(f64, f64)> = xs.as_chunks::<2>().0.iter().map(|s| (s[0] - overlap, s[1] + overlap)).collect();
         let open = chains.len();
         for (a, bx) in spans {
-            let jitter = |k: u64| variation * noise(seed, row, k, 3);
-            let (l, r) = (Point::new(a + jitter(0), y + jitter(1)), Point::new(bx + jitter(2), y + jitter(3)));
+            let jitter = |k: u64, v: f64| v * noise(seed, row, k, 3);
+            let (l, r) = (Point::new(a + jitter(0, along), y + jitter(1, across)), Point::new(bx + jitter(2, along), y + jitter(3, across)));
             let even = row.is_multiple_of(2);
             let pair = if even { [l, r] } else { [r, l] };
+            let bend = [noise(seed, row, 4, 3), noise(seed, row, 5, 3)];
+            let bend = if even { bend } else { [bend[1], bend[0]] };
             // Un-jittered ends of the span in drawing order.
             let (start, end) = if even { (Point::new(a, y), Point::new(bx, y)) } else { (Point::new(bx, y), Point::new(a, y)) };
             // The nearest chain of the previous row that this span can join without leaving
@@ -176,9 +185,10 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
                 Some(k) => {
                     let c = &mut chains[k];
                     c.pts.extend(pair);
+                    c.bends.extend(bend);
                     (c.end, c.row) = (end, row);
                 }
-                None => chains.push(Chain { pts: pair.to_vec(), end, row }),
+                None => chains.push(Chain { pts: pair.to_vec(), bends: bend.to_vec(), end, row }),
             }
         }
         row += 1;
@@ -187,7 +197,15 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
     let lines: Vec<SubPath> = chains
         .into_iter()
         .filter(|c| c.pts.len() >= 2)
-        .map(|c| if curvy > 0.0 { catmull_rom(&c.pts, false, curvy * 2.0) } else { SubPath::polyline(&c.pts, false) })
+        .map(|c| {
+            if curvy_var > 0.0 {
+                varied_curves(&c.pts, &c.bends, curviness, curvy_var)
+            } else if curvy > 0.0 {
+                catmull_rom(&c.pts, false, curvy * 2.0)
+            } else {
+                SubPath::polyline(&c.pts, false)
+            }
+        })
         .collect();
     if lines.is_empty() {
         return PathData::default();
@@ -197,4 +215,18 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
     let stroke = kurbo::Stroke::new(width).with_join(kurbo::Join::Round).with_caps(kurbo::Cap::Round);
     let outline = kurbo::stroke(center.to_bezpath(), &stroke, &kurbo::StrokeOpts::default(), 0.05);
     PathData::from_bezpath(&outline)
+}
+
+/// A scribble line through `pts` whose curviness at each point is `curviness` percent plus
+/// `variation` percent times that point's `bends` noise (in -1..1), kept within 0 to 100 percent.
+fn varied_curves(pts: &[Point], bends: &[f64], curviness: f64, variation: f64) -> SubPath {
+    // A tension of 6 makes each handle the whole Catmull-Rom tangent; each point then scales its
+    // own to the tension `catmull_rom` takes for that curviness (curviness / 100 × 2).
+    let mut line = catmull_rom(pts, false, 6.0);
+    for (a, bend) in line.anchors.iter_mut().zip(bends) {
+        let k = (curviness + variation * bend).clamp(0.0, 100.0) / 300.0;
+        a.h_in = a.p + (a.h_in - a.p) * k;
+        a.h_out = a.p + (a.h_out - a.p) * k;
+    }
+    line
 }
