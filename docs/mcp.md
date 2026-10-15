@@ -1615,11 +1615,11 @@ the path it had begun while that stays selected. Its reply's `tool` is the tool 
 The Curvature tool edits any selected path, whatever drew it, keeping its shape except where edited (#798). Each edit
 is one undo step and leaves the anchor it edited direct-selected (the tool's current point):
 `path.curvatureEdit {id, subpath?, op, …}` answers `{anchor}`. `op: "move"` with `anchor`, `x`, `y` moves a point and
-re-curves only its two segments: a smooth point turns along the line through its neighbours, and the neighbours'
-handles keep their directions (their lengths scale with the chord), so the segments beyond don't change.
+re-curves only its two segments: a smooth point takes the tool's handles (along the circle through it and its neighbours; the one handle into
+the curve at an end), and the neighbours' handles keep their directions (their lengths scale with the chord), so the segments beyond don't change.
 `op: "insert"` with `segment`, `t` adds a smooth point there without changing the shape (with `x`, `y` it is then
 moved there: the tool's click-and-drag on a segment). `op: "extend"` with `x`, `y` goes on from the `end` (default)
-or the `start` of an open subpath, and `op: "close"` closes it from that end; `from` says how the old end bends into
+or the `start` of an open subpath (the new end curves into the path unless `corner` is true), and `op: "close"` closes it from that end; `from` says how the old end bends into
 the new segment: `"keep"` (default) keeps its curve, `"smooth"` curves it through its neighbours (a point the tool
 placed), `"corner"` leaves it without handles. Alt-click or double-click toggles a point with `path.convertAnchor`, and
 Backspace/Delete removes the current point with `path.removeAnchor`.

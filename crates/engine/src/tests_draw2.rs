@@ -186,6 +186,94 @@ fn paintbrush_uses_stroke_blob_brush_fills() {
     assert!(area(&ps[1].1) > 1500.0);
 }
 
+/// Three points already curve in the saved path: both ends carry a handle into the curve.
+#[test]
+fn path_curvature_with_three_points_saves_end_handles() {
+    let mut s = session();
+    let pts = json!([{"x": 0, "y": 0}, {"x": 100, "y": -100}, {"x": 200, "y": 0}]);
+    let id = NodeId(s.execute("path.curvature", &json!({ "points": pts })).unwrap()["id"].as_u64().unwrap());
+    let sp = path(&s, id).subpaths[0].clone();
+    assert_eq!(sp.anchors.len(), 3);
+    let (first, mid, last) = (sp.anchors[0], sp.anchors[1], sp.anchors[2]);
+    assert!(first.has_out() && !first.has_in(), "{first:?}");
+    assert!(last.has_in() && !last.has_out(), "{last:?}");
+    assert_eq!(mid.kind, vectorcraft_geom::AnchorKind::Smooth);
+    assert!(!sp.segment_is_line(0) && !sp.segment_is_line(1));
+    // Two points stay a straight line.
+    let two = json!([{"x": 0, "y": 0}, {"x": 100, "y": -100}]);
+    let id = NodeId(s.execute("path.curvature", &json!({ "points": two })).unwrap()["id"].as_u64().unwrap());
+    assert!(path(&s, id).subpaths[0].segment_is_line(0));
+}
+
+/// The rubber band while drawing, and while going on from a selected path's end, is the path the
+/// click then makes.
+#[test]
+fn curvature_rubber_band_is_the_path_the_click_makes() {
+    let band = |s: &mut Session| {
+        s.overlays(view()).into_iter().find_map(|o| if let vectorcraft_tools::Overlay::Path { path, .. } = o { Some(path) } else { None }).unwrap()
+    };
+    let bez = |sp: &vectorcraft_geom::SubPath| {
+        let mut bp = kurbo::BezPath::new();
+        sp.to_bezpath_into(&mut bp);
+        bp
+    };
+    let mut s = session();
+    let v = view();
+    s.select_tool("curvature", v).unwrap();
+    for (x, y) in [(100.0, 300.0), (130.0, 280.0), (300.0, 360.0)] {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, y), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, y), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Move, 420.0, 200.0), v).unwrap();
+    let preview = band(&mut s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 420.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 420.0, 200.0), v).unwrap();
+    let id = paths(&s)[0].0;
+    let made = path(&s, id).subpaths[0].clone();
+    assert_eq!(made.anchors.len(), 4);
+    assert_eq!(preview, bez(&made));
+    // Going on from the end of a selected pen path: the band is its last segment and the new one.
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    let anchors = json!([{"x": 100, "y": 500}, {"x": 200, "y": 420, "in": [160, 430], "out": [240, 410]}, {"x": 320, "y": 480, "in": [290, 440]}]);
+    let id = NodeId(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2]], "mode": "set"})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 450.0, 400.0), v).unwrap();
+    let preview = band(&mut s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 450.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 450.0, 400.0), v).unwrap();
+    let made = path(&s, id).subpaths[0].clone();
+    assert_eq!(made.anchors.len(), 4);
+    let tail = vectorcraft_geom::SubPath::new(made.anchors[1..].to_vec(), false);
+    assert_eq!(preview, bez(&tail));
+}
+
+/// Without a handle position, `path.convertAnchor` to smooth curves the point as the Curvature
+/// tool does: along the circle through it and its neighbours.
+#[test]
+fn convert_anchor_to_smooth_uses_the_curvature_rule() {
+    let mut s = session();
+    let anchors = json!([{"x": 0, "y": 0}, {"x": 10, "y": 0}, {"x": 200, "y": 100}]);
+    let id = NodeId(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    s.execute("path.convertAnchor", &json!({"id": id.0, "subpath": 0, "anchor": 1, "to": "smooth"})).unwrap();
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert_eq!(a.kind, vectorcraft_geom::AnchorKind::Smooth);
+    // Along the circle through it and its neighbours, each between a third and two thirds of
+    // its own chord; the shorter side's handle is the shorter.
+    let (prev, next) = (Point::new(0.0, 0.0), Point::new(200.0, 100.0));
+    for (h, to) in [(a.h_in, prev), (a.h_out, next)] {
+        let r = a.p.distance(h) / a.p.distance(to);
+        assert!((1.0 / 3.0 - 1e-9..=2.0 / 3.0 + 1e-9).contains(&r), "{r}");
+    }
+    assert!(a.p.distance(a.h_in) < a.p.distance(a.h_out));
+    let (u_in, u_out) = ((a.p - a.h_in).normalize(), (a.h_out - a.p).normalize());
+    assert!((u_in - u_out).hypot() < 1e-9, "the handles are in line");
+    // Converting back takes the handles off.
+    s.execute("path.convertAnchor", &json!({"id": id.0, "subpath": 0, "anchor": 1, "to": "corner"})).unwrap();
+    assert!(!path(&s, id).subpaths[0].anchors[1].has_out());
+    assert!(s.execute("path.convertAnchor", &json!({"id": id.0, "subpath": 0, "anchor": 9, "to": "smooth"})).is_err());
+}
+
 #[test]
 fn curvature_clicks_build_smooth_path() {
     let mut s = session();
