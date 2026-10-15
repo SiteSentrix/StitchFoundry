@@ -4882,3 +4882,7 @@ theme	Appearance	Външен вид
 	Locked	Заключени
 	Color Panel Options	Опции на панела „Цвят“
 	Filter Layers Panel Rows	Филтриране на редовете в панела „Слоеве“
+
+# View › Hide Template / Show Template
+	Hide Template	Скриване на шаблона
+	Show Template	Показване на шаблона
