@@ -396,11 +396,13 @@ fn transform(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["dx", "dy"], "object.move")?;
     let ids = selected_roots(s)?;
     apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p, true)
 }
 
 fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["dx", "dy"], "object.nudge")?;
     let k = s.prefs.keyboard_increment * if bool_or(p, "big", false) { 10.0 } else { 1.0 };
     let dx = f64_or(p, "dx", 0.0) * k;
     let dy = f64_or(p, "dy", 0.0) * k;
@@ -428,6 +430,7 @@ fn about(o: Point, a: Affine) -> Affine {
 }
 
 fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["angle"], "object.rotate")?;
     let ids = selected_roots(s)?;
     let o = origin_of(s, p, &ids)?;
     let mut angle = f64_or(p, "angle", 0.0);
@@ -440,6 +443,7 @@ fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn scale(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["sy"], "object.scale")?;
     let ids = selected_roots(s)?;
     let o = origin_of(s, p, &ids)?;
     let sx = f64_req(p, "sx", "object.scale")? / 100.0;
@@ -470,6 +474,7 @@ fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn shear(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["angle"], "object.shear")?;
     let ids = selected_roots(s)?;
     let o = origin_of(s, p, &ids)?;
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
@@ -1436,6 +1441,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["x", "y", "width", "height"], "object.setBounds")?;
     let ids = selected_roots(s)?;
     let st = s.doc()?;
     if transforms_objects(p)

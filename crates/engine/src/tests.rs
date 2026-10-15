@@ -914,6 +914,42 @@ fn transforms_act_on_direct_selected_anchors() {
     assert_eq!(points(&s), [(25.0, 0.0), (75.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
 }
 
+/// #1952: an optional number given as a string (`"60 mm"`) is an error naming the key, not a value
+/// silently ignored; the object and its undo history stay as they were.
+#[test]
+fn a_string_for_an_optional_transform_number_is_an_error() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 50.0, 40.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let before = history(&s);
+    let bounds = |s: &Session| s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    let box0 = bounds(&s);
+    let calls = [
+        ("object.setBounds", json!({"width": "60 mm"})),
+        ("object.setBounds", json!({"x": "abc"})),
+        ("object.move", json!({"dx": "5"})),
+        ("object.nudge", json!({"dy": true})),
+        ("object.rotate", json!({"angle": "45"})),
+        ("object.scale", json!({"sx": 50, "sy": "50%"})),
+        ("object.shear", json!({"angle": [10]})),
+    ];
+    for (cmd, p) in calls {
+        let key = p.as_object().unwrap().keys().rfind(|k| !p[*k].is_number()).unwrap().clone();
+        match s.execute(cmd, &p) {
+            Err(EngineError::BadParams { cmd: c, msg }) => {
+                assert_eq!(c, cmd);
+                assert!(msg.contains(&format!("`{key}`")), "{cmd}: {msg}");
+            }
+            other => panic!("{cmd} {p}: expected BadParams, got {other:?}"),
+        }
+        assert_eq!(history(&s), before, "{cmd} {p}");
+        assert_eq!(bounds(&s), box0, "{cmd} {p}");
+    }
+    // Numbers (and null, as when the key is left out) still work.
+    s.execute("object.setBounds", &json!({"width": 60, "height": null})).unwrap();
+    assert!((bounds(&s).width() - 60.0).abs() < 1e-9);
+}
+
 /// #1824: with anchors selected with Direct Selection, the Transform panel's X/Y/W/H
 /// (`object.setBounds`) are the box around those anchors, and only they move or scale.
 #[test]
