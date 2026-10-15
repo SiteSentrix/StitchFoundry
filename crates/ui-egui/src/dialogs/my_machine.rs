@@ -36,6 +36,10 @@ pub fn save(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         app.ui.my_machine.open = true;
         return Ok(json!({ "open": true }));
     }
+    // the web app has no folders: the machine file downloads, to copy onto the USB stick
+    if crate::io::is_web(app) && p.get("folder").is_none() {
+        return download(app);
+    }
     let ready = app.session.execute("embroidery.send.targets", &json!({})).ok().and_then(|t| t["targets"].get(0).and_then(|x| x["ready"].as_bool()));
     let folder = match p.get("folder").and_then(Value::as_str) {
         Some(f) => f.to_string(),
@@ -50,6 +54,19 @@ pub fn save(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = r["path"].as_str().unwrap_or_default();
     app.status(format!("{} {}", tl!("Saved for your machine:"), path));
     Ok(r)
+}
+
+/// Web: the design's machine file in My Machine's format, downloaded.
+fn download(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let title = app.session.active().map(|d| d.doc.title.clone()).unwrap_or_default();
+    let stem = vectorcraft_engine::cmd::fileio::file_stem(&title);
+    let stem = if stem.trim().is_empty() { "Design".to_string() } else { stem };
+    let r = app.session.execute("embroidery.export", &json!({ "center": true, "name": stem })).map_err(|e| e.to_string())?;
+    let bytes = r["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode).ok_or("the machine file didn't encode")?;
+    let name = format!("{stem}.{}", r["format"].as_str().unwrap_or("dst"));
+    crate::io::write_to(&mut app.services, &name, &bytes)?;
+    app.status(format!("{} {name}", tl!("Downloaded for your machine:")));
+    Ok(json!({ "downloaded": name, "format": r["format"], "bytes": bytes.len() }))
 }
 
 /// The window, while open.
@@ -89,19 +106,29 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             });
             ui.add_space(10.0);
-            ui.label(egui::RichText::new(tl!("Save designs to")).size(14.0));
-            ui.horizontal(|ui| {
-                let folder = mine["folder"].as_str().map(str::to_string);
-                ui.label(egui::RichText::new(folder.unwrap_or_else(|| tl!("No folder chosen yet").into())).color(t.text_dim));
-                if ui.button(tl!("Choose Folder…")).clicked() {
-                    crate::picks::button(app, |app| {
-                        if let Some(f) = crate::picks::folder(app) {
-                            app.session.execute("embroidery.send.targets", &json!({ "add": f })).ok();
-                        }
-                    });
-                }
-            });
-            ui.label(egui::RichText::new(tl!("Plug in the USB stick you take to your machine, then choose it here.")).size(12.0).color(t.text_dim));
+            if crate::io::is_web(app) {
+                ui.label(
+                    egui::RichText::new(tl!("Save for My Machine downloads the design: copy it to the USB stick you take to your machine."))
+                        .size(12.0)
+                        .color(t.text_dim),
+                );
+            } else {
+                ui.label(egui::RichText::new(tl!("Save designs to")).size(14.0));
+                ui.horizontal(|ui| {
+                    let folder = mine["folder"].as_str().map(str::to_string);
+                    ui.label(egui::RichText::new(folder.unwrap_or_else(|| tl!("No folder chosen yet").into())).color(t.text_dim));
+                    if ui.button(tl!("Choose Folder…")).clicked() {
+                        crate::picks::button(app, |app| {
+                            if let Some(f) = crate::picks::folder(app) {
+                                app.session.execute("embroidery.send.targets", &json!({ "add": f })).ok();
+                            }
+                        });
+                    }
+                });
+                ui.label(
+                    egui::RichText::new(tl!("Plug in the USB stick you take to your machine, then choose it here.")).size(12.0).color(t.text_dim),
+                );
+            }
             ui.add_space(12.0);
             if crate::widgets::primary_button(ui, tl!("Done")).clicked() {
                 done = true;

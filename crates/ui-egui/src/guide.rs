@@ -381,17 +381,29 @@ fn details(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                     .clicked()
                 {
                     crate::picks::button(app, |app| {
-                        if let Some(folder) = crate::picks::folder(app) {
+                        // the web app has no folders: the files download in one zip
+                        let folder = if crate::io::is_web(app) { Some(None) } else { crate::picks::folder(app).map(Some) };
+                        if let Some(folder) = folder {
                             let kind = match (app.guide.border, app.guide.corner) {
                                 (true, _) => "borders",
                                 (_, true) => "corners",
                                 _ => "blocks",
                             };
-                            let q = json!({ "folder": folder, "pattern": app.guide.pattern, "spacing": app.guide.spacing, "kind": kind });
+                            let mut q = json!({ "pattern": app.guide.pattern, "spacing": app.guide.spacing, "kind": kind });
+                            if let Some(f) = folder {
+                                q["folder"] = json!(f);
+                            }
                             match app.run("embroidery.quiltBlock.set", q) {
                                 Ok(r) => {
                                     let n = r["files"].as_array().map_or(0, Vec::len);
-                                    app.status(format!("{} {n}", tl!("Quilt blocks saved:")));
+                                    let zip = r["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode);
+                                    match (zip, r["name"].as_str()) {
+                                        (Some(bytes), Some(name)) => match crate::io::write_to(&mut app.services, name, &bytes) {
+                                            Ok(()) => app.status(format!("{} {name}", tl!("Downloaded:"))),
+                                            Err(e) => app.guide.error = Some(e),
+                                        },
+                                        _ => app.status(format!("{} {n}", tl!("Quilt blocks saved:"))),
+                                    }
                                 }
                                 Err(e) => app.guide.error = Some(e),
                             }
