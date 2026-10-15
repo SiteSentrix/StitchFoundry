@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 
 use vectorcraft_color::Color;
 
-use super::{DialogSpec, form, transform_each};
+use super::{DialogSpec, form, free_distort, transform_each};
 use crate::panels::c32;
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -141,6 +141,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         None if id == ZIG_ZAG => zig_zag_fields(ui, d, app.session.general_unit()),
         None if id == DROP_SHADOW => drop_shadow_fields(ui, d, app.session.general_unit()),
         None if id == "artistic.filmGrain" => film_grain_fields(ui, d),
+        None if id == free_distort::FREE_DISTORT => {
+            free_distort::fields(app, ui, d);
+            values_changed(d)
+        }
         None => {
             let doc = vectorcraft_effects::effect_info(&id).map(|e| e.params).unwrap_or_default();
             let unit = app.session.general_unit();

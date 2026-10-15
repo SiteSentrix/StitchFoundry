@@ -73,6 +73,21 @@ fn an_effect_name_opens_its_dialog_prefilled_and_ok_edits_it_in_place() {
 }
 
 #[test]
+fn free_distorts_inline_editor_opens_its_dialog_for_the_corners() {
+    let mut app = app_with_rect();
+    let corners = json!([[0.2, 0.0], [1.0, 0.1], [1.0, 1.0], [0.0, 1.0]]);
+    run(&mut app, "effect.apply", json!({"effect": "distort.freeDistort", "params": {"corners": corners}}));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, "ap-fx-open-None-0", true);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    click(&ctx, &mut app, text_rect(&texts, "Edit…").center(), appearance::show);
+    let d = app.ui.dialog.clone().expect("Free Distort's dialog");
+    assert_eq!((d.kind.as_str(), d.str("__effect"), d.fields["__index"].clone()), ("effect", "distort.freeDistort".into(), json!(0)));
+    assert_eq!(d.fields["corners"], corners);
+}
+
+#[test]
 fn choosing_an_applied_effect_asks_to_edit_it_or_add_another() {
     let mut app = app_with_rect();
     run(&mut app, "effect.apply", json!({"effect": "distort.roughen", "item": 0, "params": {"size": 9}}));
