@@ -4361,5 +4361,52 @@ lighting	Light	Світло
 	Ambient Light	Навколишнє світло
 	Light behind the object	Світло позаду об'єкта
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	Розмір
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Креслення : реальний розмір — при 1:10 1 одиниця на сторінці підписується як 10.
+	Preview (1 inch on the page)	Попередній перегляд (1 дюйм на сторінці)
+	Set as Default	Встановити за замовчуванням
+	 out from a highlighted edge to place its dimension  |  	 назовні від підсвіченого краю, щоб розмістити його розмір  |  
+	 cancels  |  Double-click the tool for options	 скасовує  |  Подвійне клацання по інструменту відкриває параметри
+	Linear	Лінійний
+	Angular	Кутовий
+	Away from the Line	Далі від лінії
+	Between Line and Object	Між лінією та об'єктом
+	Drag out from a segment, or click two points, then click to place.	Перетягніть назовні від сегмента або клацніть дві точки, потім клацніть, щоб розмістити.
+	Drag out from a corner, or click two straight lines, then click to place.	Перетягніть назовні від кута або клацніть дві прямі лінії, потім клацніть, щоб розмістити.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Перетягніть від кола або дуги назовні — радіус, усередину — діаметр.
+@msg	Choose a circle or a perfect arc	Виберіть коло або правильну дугу
+@msg	Choose a precision from 0 to 6	Виберіть точність від 0 до 6
+	Create Dimension	Створити розмір
+	Dimension Tool	Інструмент «Розмір»
+	Dimension Tool Options	Параметри інструмента «Розмір»
+	Display	Відображення
+	Font Family:	Сімейство шрифтів:
+	Font Style:	Накреслення:
+	Precision:	Точність:
+	Update Dimensions	Оновити розміри
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	Для кута потрібні два прямі сегменти
+@msg	Choose two different points	Виберіть дві різні точки
+@msg	Choose two non-parallel straight segments	Виберіть два непаралельні прямі сегменти
+@msg	Choose two nonzero angle arms	Виберіть дві сторони кута ненульової довжини
+@msg	Dimension point is outside the canvas	Точка розміру знаходиться за межами полотна
+@msg	Dimension size is outside its supported range	Розмір виходить за підтримувані межі
+@msg	First measured segment no longer exists	Перший виміряний сегмент більше не існує
+@msg	Invalid dimension distance	Неприпустима відстань розміру
+@msg	Invalid dimension font name	Неприпустима назва шрифту розміру
+@msg	Invalid drawing scale	Неприпустимий масштаб креслення
+@msg	Invalid real scale	Неприпустимий реальний масштаб
+@msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
+@msg	Measured segment no longer exists	Виміряний сегмент більше не існує
+@msg	Non-finite dimension	Розмір не є скінченним числом
+@msg	Scale must be drawing:real, for example 1:10	Масштаб має бути у вигляді креслення:реальність, наприклад 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Співвідношення масштабу має бути від 1:1000000 до 1000000:1
+@msg	Second measured segment no longer exists	Другий виміряний сегмент більше не існує
+@msg	Unknown dimension mode	Невідомий режим розміру
+@msg	Unknown dimension option {k}	Невідомий параметр розміру {k}
+@msg	Unknown dimension style	Невідомий стиль розміру
+@msg	Unknown unit	Невідома одиниця
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закриває круглі торці відкритих профілів. За неповного обертання бічні зрізи залишаються відкритими.

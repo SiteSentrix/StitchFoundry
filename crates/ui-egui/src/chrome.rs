@@ -610,6 +610,12 @@ const ANIMATED_ZOOM_HINT: &str = "zoom.animated";
 
 fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
     Some(match tool {
+        "dimension" => &[
+            ("Drag", true),
+            (" out from a highlighted edge to place its dimension  |  ", false),
+            ("Esc", true),
+            (" cancels  |  Double-click the tool for options", false),
+        ],
         "selection" => &[
             ("Click", true),
             (" the object to select  |  ", false),

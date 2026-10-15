@@ -4336,5 +4336,52 @@ theme	Appearance	Erscheinungsbild
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	Bemaßung
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Zeichnung : reale Größe — 1:10 beschriftet 1 Einheit auf der Seite als 10.
+	Preview (1 inch on the page)	Vorschau (1 Zoll auf der Seite)
+	Set as Default	Als Standard festlegen
+	 out from a highlighted edge to place its dimension  |  	 von einer hervorgehobenen Kante nach außen, um ihre Bemaßung zu platzieren  |  
+	 cancels  |  Double-click the tool for options	 bricht ab  |  Doppelklick auf das Werkzeug für Optionen
+	Linear	Linear
+	Angular	Winkel
+	Away from the Line	Abseits der Linie
+	Between Line and Object	Zwischen Linie und Objekt
+	Drag out from a segment, or click two points, then click to place.	Von einem Segment nach außen ziehen oder zwei Punkte anklicken, dann zum Platzieren klicken.
+	Drag out from a corner, or click two straight lines, then click to place.	Von einer Ecke nach außen ziehen oder zwei gerade Linien anklicken, dann zum Platzieren klicken.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Von einem Kreis oder Bogen nach außen ziehen für den Radius, nach innen für den Durchmesser.
+@msg	Choose a circle or a perfect arc	Wählen Sie einen Kreis oder einen perfekten Bogen
+@msg	Choose a precision from 0 to 6	Wählen Sie eine Genauigkeit von 0 bis 6
+	Create Dimension	Bemaßung erstellen
+	Dimension Tool	Bemaßungswerkzeug
+	Dimension Tool Options	Optionen für Bemaßungswerkzeug
+	Display	Anzeige
+	Font Family:	Schriftfamilie:
+	Font Style:	Schriftschnitt:
+	Precision:	Genauigkeit:
+	Update Dimensions	Bemaßungen aktualisieren
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	Winkel erfordern zwei gerade Segmente
+@msg	Choose two different points	Wählen Sie zwei verschiedene Punkte
+@msg	Choose two non-parallel straight segments	Wählen Sie zwei nicht parallele gerade Segmente
+@msg	Choose two nonzero angle arms	Wählen Sie zwei Winkelschenkel mit einer Länge ungleich null
+@msg	Dimension point is outside the canvas	Der Bemaßungspunkt liegt außerhalb der Arbeitsfläche
+@msg	Dimension size is outside its supported range	Die Bemaßungsgröße liegt außerhalb des unterstützten Bereichs
+@msg	First measured segment no longer exists	Das erste gemessene Segment existiert nicht mehr
+@msg	Invalid dimension distance	Ungültiger Bemaßungsabstand
+@msg	Invalid dimension font name	Ungültiger Schriftname für die Bemaßung
+@msg	Invalid drawing scale	Ungültiger Zeichnungsmaßstab
+@msg	Invalid real scale	Ungültiger realer Maßstab
+@msg	Measured anchor no longer exists	Der gemessene Ankerpunkt existiert nicht mehr
+@msg	Measured segment no longer exists	Das gemessene Segment existiert nicht mehr
+@msg	Non-finite dimension	Die Bemaßung ist keine endliche Zahl
+@msg	Scale must be drawing:real, for example 1:10	Der Maßstab muss Zeichnung:Realität sein, zum Beispiel 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Das Maßstabsverhältnis muss zwischen 1:1000000 und 1000000:1 liegen
+@msg	Second measured segment no longer exists	Das zweite gemessene Segment existiert nicht mehr
+@msg	Unknown dimension mode	Unbekannter Bemaßungsmodus
+@msg	Unknown dimension option {k}	Unbekannte Bemaßungsoption {k}
+@msg	Unknown dimension style	Unbekannter Bemaßungsstil
+@msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung bleiben die Schnittseiten offen.

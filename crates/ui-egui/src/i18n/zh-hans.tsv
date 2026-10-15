@@ -3957,6 +3957,31 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+# Dimension tool (linked dimension annotations)
+	Create Dimension	创建尺寸标注
+	Dimension Tool	尺寸标注工具
+	Dimension Tool Options	尺寸标注工具选项
+	Font Family:	字体系列：
+	Font Style:	字体样式：
+	Precision:	精度：
+	Update Dimensions	更新尺寸标注
+	Display	显示
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	尺寸
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	图纸 : 实际尺寸 — 1:10 会将页面上的 1 个单位标注为 10。
+	Preview (1 inch on the page)	预览（页面上 1 英寸）
+	Set as Default	设为默认
+	 out from a highlighted edge to place its dimension  |  	 从高亮的边向外拖动以放置其尺寸  |  
+	 cancels  |  Double-click the tool for options	 取消  |  双击工具打开选项
+	Linear	线性
+	Angular	角度
+	Away from the Line	远离尺寸线
+	Between Line and Object	在尺寸线与对象之间
+	Drag out from a segment, or click two points, then click to place.	从线段向外拖动，或单击两个点，然后单击以放置。
+	Drag out from a corner, or click two straight lines, then click to place.	从角向外拖动，或单击两条直线，然后单击以放置。
+	Drag out from a circle or arc for its radius, inwards for its diameter.	从圆或圆弧向外拖动得到半径，向内拖动得到直径。
+@msg	Choose a circle or a perfect arc	请选择圆或标准圆弧
+@msg	Choose a precision from 0 to 6	请选择 0 到 6 之间的精度
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封闭开放轮廓的圆形端部。部分旋转的切割侧面保持开放。

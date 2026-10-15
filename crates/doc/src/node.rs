@@ -555,6 +555,9 @@ pub struct NodeExtras {
     pub slice: Option<Box<crate::SliceOptions>>,
     /// Object › Perspective: the perspective grid plane the object is attached to.
     pub perspective: Option<Box<crate::PerspectiveAttachment>>,
+    /// Dimension object: the live measurement it draws; its ordinary group children hold its
+    /// exportable appearance (Object › Dimensions, the Dimension tool).
+    pub dimension: Option<Box<crate::dimension::Dimension>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -569,6 +572,7 @@ static NO_EXTRAS: NodeExtras = NodeExtras {
     attrs: None,
     slice: None,
     perspective: None,
+    dimension: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal
@@ -699,6 +703,7 @@ impl Serialize for Node {
             e.slice.is_none(),
             is_default(&self.bbox_angle),
             e.perspective.is_none(),
+            e.dimension.is_none(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -733,6 +738,7 @@ impl Serialize for Node {
         field!("slice", &e.slice);
         field!("bbox_angle", &self.bbox_angle);
         field!("perspective", &e.perspective);
+        field!("dimension", &e.dimension);
         st.end()
     }
 }
@@ -784,6 +790,8 @@ struct NodeWire {
     bbox_angle: f64,
     #[serde(default)]
     perspective: Option<Box<crate::PerspectiveAttachment>>,
+    #[serde(default)]
+    dimension: Option<Box<crate::dimension::Dimension>>,
 }
 
 impl From<NodeWire> for Node {
@@ -799,6 +807,7 @@ impl From<NodeWire> for Node {
             attrs: w.attrs,
             slice: w.slice,
             perspective: w.perspective,
+            dimension: w.dimension,
         };
         Node {
             id: w.id,
@@ -1159,6 +1168,12 @@ impl Node {
         self.transform_scaled(a, &scaling.into());
     }
     fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
+        // A dimension's measurement moves with it.
+        if let Some(e) = self.extras_if_any()
+            && let Some(dimension) = &mut e.dimension
+        {
+            dimension.transform(a);
+        }
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }

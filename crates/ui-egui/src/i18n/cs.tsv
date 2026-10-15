@@ -4808,6 +4808,51 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+# Dimension tool (linked dimension annotations)
+	Display	Zobrazení
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	Rozměr
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Výkres : skutečná velikost — 1:10 označí 1 jednotku na stránce jako 10.
+	Preview (1 inch on the page)	Náhled (1 palec na stránce)
+	Set as Default	Nastavit jako výchozí
+	 out from a highlighted edge to place its dimension  |  	 ze zvýrazněné hrany ven a umístíte její kótu  |  
+	 cancels  |  Double-click the tool for options	 zruší  |  Dvojitým kliknutím na nástroj otevřete volby
+	Angular	Úhlová
+	Away from the Line	Dál od čáry
+	Between Line and Object	Mezi čárou a objektem
+	Drag out from a segment, or click two points, then click to place.	Táhněte ven od úsečky, nebo klikněte na dva body a potom klikněním umístěte.
+	Drag out from a corner, or click two straight lines, then click to place.	Táhněte ven od rohu, nebo klikněte na dvě rovné čáry a potom klikněním umístěte.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Táhněte od kruhu nebo oblouku ven pro poloměr, dovnitř pro průměr.
+@msg	Choose a circle or a perfect arc	Vyberte kruh nebo dokonalý oblouk
+@msg	Choose a precision from 0 to 6	Zvolte přesnost od 0 do 6
+	Create Dimension	Vytvořit kótu
+	Dimension Tool	Nástroj Kóta
+	Dimension Tool Options	Volby nástroje Kóta
+	Font Family:	Rodina písma:
+	Font Style:	Řez písma:
+	Precision:	Přesnost:
+	Update Dimensions	Aktualizovat kóty
+@msg	Angles require two straight segments	Úhly vyžadují dva přímé segmenty
+@msg	Choose two different points	Vyberte dva různé body
+@msg	Choose two non-parallel straight segments	Vyberte dva nerovnoběžné přímé segmenty
+@msg	Choose two nonzero angle arms	Vyberte dvě ramena úhlu nenulové délky
+@msg	Dimension point is outside the canvas	Bod kóty leží mimo plátno
+@msg	Dimension size is outside its supported range	Velikost kóty je mimo podporovaný rozsah
+@msg	First measured segment no longer exists	První měřený segment už neexistuje
+@msg	Invalid dimension distance	Neplatná vzdálenost kóty
+@msg	Invalid dimension font name	Neplatný název písma kóty
+@msg	Invalid drawing scale	Neplatné měřítko výkresu
+@msg	Invalid real scale	Neplatné skutečné měřítko
+@msg	Measured anchor no longer exists	Měřený kotevní bod už neexistuje
+@msg	Measured segment no longer exists	Měřený segment už neexistuje
+@msg	Non-finite dimension	Kóta není konečné číslo
+@msg	Scale must be drawing:real, for example 1:10	Měřítko musí mít tvar výkres:skutečnost, například 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Poměr měřítka musí být mezi 1:1000000 a 1000000:1
+@msg	Second measured segment no longer exists	Druhý měřený segment už neexistuje
+@msg	Unknown dimension mode	Neznámý režim kóty
+@msg	Unknown dimension option {k}	Neznámá volba kóty {k}
+@msg	Unknown dimension style	Neznámý styl kóty
+@msg	Unknown unit	Neznámá jednotka
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Uzavře kruhové konce otevřených profilů. Boční řezy částečného otočení zůstávají otevřené.

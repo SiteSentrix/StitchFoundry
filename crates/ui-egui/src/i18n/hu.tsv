@@ -4776,5 +4776,49 @@ imageTrace	Outline	Körvonal
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	Méret
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Rajz : valós méret — 1:10 esetén az oldalon 1 egység 10-ként jelenik meg.
+	Preview (1 inch on the page)	Előnézet (1 hüvelyk az oldalon)
+	Set as Default	Beállítás alapértelmezettként
+	 out from a highlighted edge to place its dimension  |  	 egy kiemelt élről kifelé a méret elhelyezéséhez  |  
+	 cancels  |  Double-click the tool for options	 megszakítja  |  Dupla kattintás az eszközre a beállításokhoz
+	Angular	Szög
+	Away from the Line	A vonaltól távol
+	Between Line and Object	A vonal és az objektum között
+	Drag out from a segment, or click two points, then click to place.	Húzzon kifelé egy szakaszról, vagy kattintson két pontra, majd kattintson az elhelyezéshez.
+	Drag out from a corner, or click two straight lines, then click to place.	Húzzon kifelé egy sarokról, vagy kattintson két egyenes vonalra, majd kattintson az elhelyezéshez.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Húzzon egy körről vagy ívről kifelé a sugárhoz, befelé az átmérőhöz.
+@msg	Choose a circle or a perfect arc	Válasszon egy kört vagy egy tökéletes ívet
+@msg	Choose a precision from 0 to 6	Válasszon 0 és 6 közötti pontosságot
+	Create Dimension	Méretvonal létrehozása
+	Dimension Tool	Méretezés eszköz
+	Dimension Tool Options	Méretezés eszköz beállításai
+	Display	Megjelenítés
+	Font Family:	Betűcsalád:
+	Font Style:	Betűstílus:
+	Precision:	Pontosság:
+	Update Dimensions	Méretek frissítése
+@msg	Angles require two straight segments	A szöghöz két egyenes szakasz kell
+@msg	Choose two different points	Válassz két különböző pontot
+@msg	Choose two non-parallel straight segments	Válassz két nem párhuzamos egyenes szakaszt
+@msg	Choose two nonzero angle arms	Válassz két nem nulla hosszúságú szögszárat
+@msg	Dimension point is outside the canvas	A méretvonal pontja a vásznon kívül esik
+@msg	Dimension size is outside its supported range	A méret a támogatott tartományon kívül esik
+@msg	First measured segment no longer exists	Az első mért szakasz már nem létezik
+@msg	Invalid dimension distance	Érvénytelen méretezési távolság
+@msg	Invalid dimension font name	Érvénytelen méretezési betűtípusnév
+@msg	Invalid drawing scale	Érvénytelen rajzlépték
+@msg	Invalid real scale	Érvénytelen valós lépték
+@msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
+@msg	Measured segment no longer exists	A mért szakasz már nem létezik
+@msg	Non-finite dimension	Nem véges méret
+@msg	Scale must be drawing:real, for example 1:10	A léptéknek rajz:valós alakúnak kell lennie, például 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	A lépték aránya 1:1000000 és 1000000:1 között lehet
+@msg	Second measured segment no longer exists	A második mért szakasz már nem létezik
+@msg	Unknown dimension mode	Ismeretlen méretezési mód
+@msg	Unknown dimension option {k}	Ismeretlen méretezési beállítás: {k}
+@msg	Unknown dimension style	Ismeretlen méretezési stílus
+@msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.

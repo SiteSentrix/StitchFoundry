@@ -12,6 +12,7 @@ pub mod clipnest;
 pub mod cmyk;
 pub mod corners;
 pub mod depth;
+pub mod dimension;
 pub mod graph;
 pub mod hit;
 mod id_index;
@@ -686,6 +687,10 @@ pub struct Document {
     /// state, never saved.
     #[serde(skip)]
     pub puppet: Option<Arc<PuppetPins>>,
+    /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
+    /// is set, so documents without any pay nothing for them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dimensions: bool,
     /// Where each node is in the tree, for lookups by id ([`id_index`]): a cache, never saved.
     #[serde(skip)]
     index: id_index::IdIndex,
@@ -766,6 +771,7 @@ impl Document {
             print_setup: None,
             assets: vec![],
             puppet: None,
+            dimensions: false,
             index: Default::default(),
         };
         let id = d.alloc_id();
@@ -1399,6 +1405,13 @@ impl Document {
     pub fn reid(&mut self, node: &Node) -> Node {
         let mut n = node.clone();
         n.id = self.alloc_id();
+        // A copied annotation must never bind its source ids to unrelated art in a different
+        // document. Keep the measured geometry; new measurements can be linked after pasting.
+        if let Some(e) = n.extras_if_any()
+            && let Some(dimension) = &mut e.dimension
+        {
+            dimension.source = None;
+        }
         if let Some(ch) = n.children_mut() {
             let old: Vec<Arc<Node>> = std::mem::take(ch);
             *ch = old.iter().map(|c| Arc::new(self.reid(c))).collect();

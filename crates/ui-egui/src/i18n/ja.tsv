@@ -4374,6 +4374,54 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+# Dimension tool (linked dimension annotations)
+	Create Dimension	寸法を作成
+	Dimension Tool	寸法ツール
+	Dimension Tool Options	寸法ツールオプション
+	Font Family:	フォントファミリー:
+	Font Style:	フォントスタイル:
+	Precision:	精度:
+	Update Dimensions	寸法を更新
+	Display	表示
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	寸法
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	図面 : 実寸 — 1:10 では、ページ上の 1 単位を 10 と表示します。
+	Preview (1 inch on the page)	プレビュー（ページ上の 1 インチ）
+	Set as Default	デフォルトに設定
+	 out from a highlighted edge to place its dimension  |  	 でハイライトされた辺から外側へ寸法を配置  |  
+	 cancels  |  Double-click the tool for options	 でキャンセル  |  ツールをダブルクリックしてオプション
+	Linear	直線
+	Angular	角度
+	Away from the Line	寸法線から離す
+	Between Line and Object	寸法線とオブジェクトの間
+	Drag out from a segment, or click two points, then click to place.	セグメントから外側へドラッグするか、2 点をクリックしてからクリックして配置します。
+	Drag out from a corner, or click two straight lines, then click to place.	角から外側へドラッグするか、2 本の直線をクリックしてからクリックして配置します。
+	Drag out from a circle or arc for its radius, inwards for its diameter.	円または円弧から外側へドラッグすると半径、内側へドラッグすると直径になります。
+@msg	Choose a circle or a perfect arc	円または正確な円弧を選択してください
+@msg	Choose a precision from 0 to 6	精度は 0〜6 で選択してください
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	角度には直線セグメントが 2 つ必要です
+@msg	Choose two different points	異なる 2 点を選択してください
+@msg	Choose two non-parallel straight segments	平行でない直線セグメントを 2 つ選択してください
+@msg	Choose two nonzero angle arms	長さが 0 でない角度の辺を 2 つ選択してください
+@msg	Dimension point is outside the canvas	寸法の点がカンバスの外にあります
+@msg	Dimension size is outside its supported range	寸法のサイズがサポート範囲外です
+@msg	First measured segment no longer exists	最初の測定セグメントはもう存在しません
+@msg	Invalid dimension distance	寸法の距離が無効です
+@msg	Invalid dimension font name	寸法のフォント名が無効です
+@msg	Invalid drawing scale	図面の縮尺が無効です
+@msg	Invalid real scale	実寸の縮尺が無効です
+@msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
+@msg	Measured segment no longer exists	測定したセグメントはもう存在しません
+@msg	Non-finite dimension	寸法が有限ではありません
+@msg	Scale must be drawing:real, for example 1:10	縮尺は 図面:実寸 の形式にしてください (例: 1:10)
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	縮尺の比率は 1:1000000 から 1000000:1 の間にしてください
+@msg	Second measured segment no longer exists	2 番目の測定セグメントはもう存在しません
+@msg	Unknown dimension mode	寸法のモードが不明です
+@msg	Unknown dimension option {k}	不明な寸法オプション {k}
+@msg	Unknown dimension style	寸法のスタイルが不明です
+@msg	Unknown unit	単位が不明です
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面は開いたままです。

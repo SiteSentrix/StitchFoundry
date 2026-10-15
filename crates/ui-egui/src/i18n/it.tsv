@@ -4381,5 +4381,52 @@ lighting	Light	Luce
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	Quota
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Disegno : dimensione reale — 1:10 indica 1 unità sulla pagina come 10.
+	Preview (1 inch on the page)	Anteprima (1 pollice sulla pagina)
+	Set as Default	Imposta come predefinito
+	 out from a highlighted edge to place its dimension  |  	 verso l'esterno da un bordo evidenziato per posizionarne la quota  |  
+	 cancels  |  Double-click the tool for options	 annulla  |  Doppio clic sullo strumento per le opzioni
+	Linear	Lineare
+	Angular	Angolare
+	Away from the Line	Lontano dalla linea
+	Between Line and Object	Tra linea e oggetto
+	Drag out from a segment, or click two points, then click to place.	Trascina verso l'esterno da un segmento, oppure fai clic su due punti, poi fai clic per posizionare.
+	Drag out from a corner, or click two straight lines, then click to place.	Trascina verso l'esterno da un angolo, oppure fai clic su due linee rette, poi fai clic per posizionare.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Trascina da un cerchio o un arco verso l'esterno per il raggio, verso l'interno per il diametro.
+@msg	Choose a circle or a perfect arc	Scegli un cerchio o un arco perfetto
+@msg	Choose a precision from 0 to 6	Scegli una precisione da 0 a 6
+	Create Dimension	Crea quota
+	Dimension Tool	Strumento Quota
+	Dimension Tool Options	Opzioni strumento Quota
+	Display	Visualizzazione
+	Font Family:	Famiglia di font:
+	Font Style:	Stile font:
+	Precision:	Precisione:
+	Update Dimensions	Aggiorna quote
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	Gli angoli richiedono due segmenti rettilinei
+@msg	Choose two different points	Scegli due punti diversi
+@msg	Choose two non-parallel straight segments	Scegli due segmenti rettilinei non paralleli
+@msg	Choose two nonzero angle arms	Scegli due lati dell’angolo di lunghezza non nulla
+@msg	Dimension point is outside the canvas	Il punto della quota è fuori dalla tela
+@msg	Dimension size is outside its supported range	La dimensione della quota è fuori dall’intervallo supportato
+@msg	First measured segment no longer exists	Il primo segmento misurato non esiste più
+@msg	Invalid dimension distance	Distanza della quota non valida
+@msg	Invalid dimension font name	Nome del font della quota non valido
+@msg	Invalid drawing scale	Scala del disegno non valida
+@msg	Invalid real scale	Scala reale non valida
+@msg	Measured anchor no longer exists	Il punto di ancoraggio misurato non esiste più
+@msg	Measured segment no longer exists	Il segmento misurato non esiste più
+@msg	Non-finite dimension	Quota non finita
+@msg	Scale must be drawing:real, for example 1:10	La scala deve essere disegno:reale, ad esempio 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Il rapporto di scala deve essere compreso tra 1:1000000 e 1000000:1
+@msg	Second measured segment no longer exists	Il secondo segmento misurato non esiste più
+@msg	Unknown dimension mode	Modalità di quota sconosciuta
+@msg	Unknown dimension option {k}	Opzione di quota sconosciuta {k}
+@msg	Unknown dimension style	Stile di quota sconosciuto
+@msg	Unknown unit	Unità sconosciuta
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Chiude le estremità circolari dei profili aperti. Le rotazioni parziali mantengono aperti i lati di taglio.

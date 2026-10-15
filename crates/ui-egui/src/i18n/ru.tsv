@@ -4377,5 +4377,52 @@ lighting	Light	Свет
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
 
+# Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
+	Dimension	Размер
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Чертёж : реальный размер — при 1:10 1 единица на странице подписывается как 10.
+	Preview (1 inch on the page)	Просмотр (1 дюйм на странице)
+	Set as Default	Установить по умолчанию
+	 out from a highlighted edge to place its dimension  |  	 наружу от подсвеченного края, чтобы разместить его размер  |  
+	 cancels  |  Double-click the tool for options	 отменяет  |  Двойной щелчок по инструменту открывает параметры
+	Linear	Линейный
+	Angular	Угловой
+	Away from the Line	Вдали от линии
+	Between Line and Object	Между линией и объектом
+	Drag out from a segment, or click two points, then click to place.	Перетащите наружу от сегмента или щёлкните две точки, затем щёлкните, чтобы разместить.
+	Drag out from a corner, or click two straight lines, then click to place.	Перетащите наружу от угла или щёлкните две прямые линии, затем щёлкните, чтобы разместить.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Перетащите от окружности или дуги наружу — радиус, внутрь — диаметр.
+@msg	Choose a circle or a perfect arc	Выберите окружность или правильную дугу
+@msg	Choose a precision from 0 to 6	Выберите точность от 0 до 6
+	Create Dimension	Создать размер
+	Dimension Tool	Инструмент «Размер»
+	Dimension Tool Options	Параметры инструмента «Размер»
+	Display	Отображение
+	Font Family:	Семейство шрифтов:
+	Font Style:	Начертание:
+	Precision:	Точность:
+	Update Dimensions	Обновить размеры
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	Для угла нужны два прямых сегмента
+@msg	Choose two different points	Выберите две разные точки
+@msg	Choose two non-parallel straight segments	Выберите два непараллельных прямых сегмента
+@msg	Choose two nonzero angle arms	Выберите две стороны угла ненулевой длины
+@msg	Dimension point is outside the canvas	Точка размера находится за пределами холста
+@msg	Dimension size is outside its supported range	Размер выходит за поддерживаемые пределы
+@msg	First measured segment no longer exists	Первый измеряемый сегмент больше не существует
+@msg	Invalid dimension distance	Недопустимое расстояние размера
+@msg	Invalid dimension font name	Недопустимое имя шрифта размера
+@msg	Invalid drawing scale	Недопустимый масштаб чертежа
+@msg	Invalid real scale	Недопустимый реальный масштаб
+@msg	Measured anchor no longer exists	Измеряемая опорная точка больше не существует
+@msg	Measured segment no longer exists	Измеряемый сегмент больше не существует
+@msg	Non-finite dimension	Размер не является конечным числом
+@msg	Scale must be drawing:real, for example 1:10	Масштаб должен быть в виде чертёж:реальность, например 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Соотношение масштаба должно быть от 1:1000000 до 1000000:1
+@msg	Second measured segment no longer exists	Второй измеряемый сегмент больше не существует
+@msg	Unknown dimension mode	Неизвестный режим размера
+@msg	Unknown dimension option {k}	Неизвестный параметр размера {k}
+@msg	Unknown dimension style	Неизвестный стиль размера
+@msg	Unknown unit	Неизвестная единица
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы остаются открытыми.
