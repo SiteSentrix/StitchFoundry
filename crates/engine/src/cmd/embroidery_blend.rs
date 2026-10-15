@@ -129,9 +129,10 @@ fn gradient_blend(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, stops, angle) in &jobs {
             let node = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
             let Some(e) = node.embroidery.as_deref_mut() else { continue };
+            // rows across the gradient: they stack the way it runs (the angle set, not picked)
+            e.auto_direction = false;
             let StitchType::Fill(f) = &mut e.stitch else { continue };
             let dense = spacing.unwrap_or(f.spacing).clamp(0.2, 5.0);
-            // rows across the gradient: they stack the way it runs
             f.angle = (angle + 90.0).rem_euclid(360.0);
             f.spacing_profile.clear();
             f.spacing_end = 0.0;

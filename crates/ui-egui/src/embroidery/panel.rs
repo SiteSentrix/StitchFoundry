@@ -2499,14 +2499,10 @@ fn profile_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillP
         }
     });
     // art painted with a linear gradient: its colours blended the way it runs
-    let linear = app.session.active().and_then(|st| st.doc.node(vectorcraft_doc::NodeId(id))).is_some_and(|n| {
-        matches!(n.appearance.fill_paint(), vectorcraft_color::Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Linear)
-    });
-    if linear
-        && button(ui, tl!("Blend from Gradient"))
-            .on_hover_text(tl!("Sew the gradient's colours blended the way it runs"))
-            .clicked()
-    {
+    let linear = app.session.active().and_then(|st| st.doc.node(vectorcraft_doc::NodeId(id))).is_some_and(
+        |n| matches!(n.appearance.fill_paint(), vectorcraft_color::Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Linear),
+    );
+    if linear && button(ui, tl!("Blend from Gradient")).on_hover_text(tl!("Sew the gradient's colours blended the way it runs")).clicked() {
         app.run("embroidery.gradientBlend", json!({ "ids": [id] })).ok();
     }
 }

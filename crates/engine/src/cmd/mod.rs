@@ -28,6 +28,7 @@ pub mod embroidery_charts;
 pub mod embroidery_clipart;
 pub mod embroidery_colorways;
 pub mod embroidery_cutfile;
+pub mod embroidery_cutwork;
 pub mod embroidery_decor;
 pub mod embroidery_edit;
 pub mod embroidery_flow;
@@ -304,6 +305,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_ith::specs());
         v.extend(embroidery_tiles::specs());
         v.extend(embroidery_decor::specs());
+        v.extend(embroidery_cutwork::specs());
         v.extend(embroidery_merge::specs());
         v.extend(embroidery_sheet_setup::specs());
         v.extend(embroidery_scatter::specs());
