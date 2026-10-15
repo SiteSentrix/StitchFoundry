@@ -66,7 +66,7 @@ fn in_turn(a: &[NodeId], b: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// Runs `f` on `s` on a thread of its own and fails the test when it takes more than 20 s.
-fn soon<T: Send + 'static>(mut s: Session, what: &'static str, f: impl FnOnce(&mut Session) -> T + Send + 'static) -> (Session, T) {
+pub(crate) fn soon<T: Send + 'static>(mut s: Session, what: &'static str, f: impl FnOnce(&mut Session) -> T + Send + 'static) -> (Session, T) {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let r = f(&mut s);
