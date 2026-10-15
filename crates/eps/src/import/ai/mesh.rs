@@ -20,6 +20,9 @@ use super::obj::V;
 
 /// The most patches read from one mesh.
 const MAX_PATCHES: usize = 4096;
+/// The most points kept from one mesh: a patch with anchors on its edges is cut into cells, up to
+/// 34 × 34 points, so the patch cap alone doesn't bound them.
+const MAX_POINTS: usize = MAX_PATCHES * 16;
 
 #[derive(Debug, Default)]
 pub(super) struct MeshReader {
@@ -28,6 +31,8 @@ pub(super) struct MeshReader {
     /// The patch's anchors between its corners (`/A`, `/S`): the edge, and a point and its two handles.
     anchors: Vec<(usize, [f64; 6])>,
     pub patches: Vec<GradientMesh>,
+    /// The points of [`Self::patches`].
+    points: usize,
     /// Something in it this doesn't read.
     pub unread: bool,
 }
@@ -66,7 +71,10 @@ impl MeshReader {
                 let corners = std::mem::take(&mut self.corners);
                 let anchors = std::mem::take(&mut self.anchors);
                 match self.patch(&corners, &anchors, to_doc) {
-                    Some(m) if self.patches.len() < MAX_PATCHES => self.patches.push(m),
+                    Some(m) if self.patches.len() < MAX_PATCHES && self.points + m.points.len() <= MAX_POINTS => {
+                        self.points += m.points.len();
+                        self.patches.push(m);
+                    }
                     _ => self.unread = true,
                 }
             }
@@ -335,6 +343,10 @@ mod tests {
             patch(&mut reader, &[0.5, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
         }
         assert!(reader.unread && reader.patches.len() == MAX_PATCHES);
+        // Patches cut into cells count by their points.
+        let mut reader = MeshReader { space: "DeviceGray".into(), points: MAX_POINTS - 3, ..MeshReader::default() };
+        patch(&mut reader, &[0.5, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
+        assert!(reader.unread && reader.patches.is_empty());
         // NaN passes `clamp`: a non-finite opacity or colour leaves the patch unread.
         for bad in [[0.5, f64::NAN], [f64::INFINITY, 1.0]] {
             let mut reader = MeshReader { space: "DeviceGray".into(), ..MeshReader::default() };
