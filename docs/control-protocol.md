@@ -132,7 +132,7 @@ swatch of its kind in the Swatches panel with Alt held replaces it (`swatch.edit
 Confirmations: deleting swatches from the Swatches panel opens a `confirm` dialog (fields `message`, `detail`);
 `ui.dialog.confirm` runs the command it asks about (here `swatch.delete`) and `ui.dialog.cancel` drops it.
 
-New swatches and colour groups: `ui.newSwatch {spot?, group?}` opens the `newSwatch` dialog prefilled from the active
+New swatches and colour groups: `ui.newSwatch {spot?, global?, group?}` opens the `newSwatch` dialog prefilled from the active
 fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern only takes `name`) and
 `ui.newColorGroup {swatches?}` opens `newColorGroup` (fields `name`, `fromArtwork`, `toGlobal`, `includeTints`,
 `swatches`); `ui.dialog.confirm` runs `swatch.new` / `swatch.newGroup`.

@@ -401,7 +401,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.newSwatch",
         "New Swatch…",
         "",
-        "{spot?, group?: colour group name} open New Swatch for the active fill or stroke (dialog `newSwatch`, engine: swatch.new)",
+        "{spot?, global?, group?: colour group name} open New Swatch for the active fill or stroke (dialog `newSwatch`, engine: swatch.new); a color opens as a spot color with `spot`, and as a global process color with `global` alone",
     ),
     (
         "ui.newColorGroup",
@@ -1345,7 +1345,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(name) => crate::dialogs::swatch_options::open(app, &name),
             None => Err("missing `name`".into()),
         },
-        "ui.newSwatch" => crate::dialogs::new_swatch::open(app, p.get("spot").and_then(Value::as_bool).unwrap_or(false), s("group").as_deref()),
+        "ui.newSwatch" => {
+            let on = |k: &str| p.get(k).and_then(Value::as_bool).unwrap_or(false);
+            crate::dialogs::new_swatch::open(app, on("spot"), on("global"), s("group").as_deref())
+        }
         "ui.newColorGroup" => {
             let names = p.get("swatches").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
