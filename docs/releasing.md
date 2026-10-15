@@ -150,12 +150,14 @@ image raises that floor, so do it deliberately. After packaging, the job prints 
 metadata and contents, runs `ldd` on the binary and runs each AppImage with `--version`.
 
 **RPM dependencies.** The x86_64 and aarch64 RPMs require 64-bit shared-library
-capabilities rather than distribution-specific package names: glibc's `GLIBC_2.35`,
-`libm`, `libgcc_s`, `libxkbcommon`, and either Vulkan or EGL. Windowing and GPU
+capabilities rather than distribution-specific package names: `libc`, libm's `GLIBC_2.35`,
+`libgcc_s`, `libxkbcommon`, and either Vulkan or EGL. Windowing and GPU
 libraries are loaded at runtime, so `ldd` alone does not list every requirement.
 The glibc capability enforces the same floor as the `.deb`; a distribution with
-an older glibc is not supported by these binaries. Weak recommendations still use
-package names and do not block installation.
+an older glibc is not supported by these binaries. It names libm, whose `hypot` and `hypotf`
+are the binaries' GLIBC_2.35 symbols: RHEL 9's glibc 2.34 provides `libc.so.6(GLIBC_2.35)`
+through backports, so a libc capability let it install binaries that can't start. Weak
+recommendations still use package names and do not block installation.
 
 Before publishing a Linux release:
 
@@ -224,4 +226,5 @@ warning, never a failed build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | minor | RPM glibc floor names libm's `GLIBC_2.35`: RHEL 9's glibc 2.34 provides libc's through backports |
 | 2026-10-12 | minor | RPM dependencies use 64-bit runtime capabilities and enforce glibc 2.35 (#1275); real distro install/start-up checks remain pending |
