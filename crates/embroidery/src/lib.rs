@@ -390,6 +390,51 @@ impl Planner {
         plan
     }
 
+    /// The embroidery objects of each node in `stitched` that isn't cached as it is (by index;
+    /// `None` for the cached ones). On the desktop many are converted on several threads.
+    fn convert_changed(&self, stitched: &[Arc<Node>]) -> Vec<Option<Vec<ObjectKind>>> {
+        let mut seen: HashMap<NodeId, usize> = HashMap::new();
+        let todo: Vec<usize> = stitched
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| {
+                let occurrence = seen.entry(n.id).or_insert(0);
+                let key = (n.id, *occurrence);
+                *occurrence += 1;
+                n.embroidery.is_some() && !self.nodes.get(&key).is_some_and(|entry| Arc::ptr_eq(&entry.node, n))
+            })
+            .map(|(i, _)| i)
+            .collect();
+        let mut out: Vec<Option<Vec<ObjectKind>>> = vec![None; stitched.len()];
+        let one = |i: usize| stitched.get(i).and_then(|n| n.embroidery.as_deref().map(|e| convert::convert(n, e)));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            const MIN_PARALLEL: usize = 8;
+            let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 8);
+            if todo.len() >= MIN_PARALLEL && threads > 1 {
+                let chunk = todo.len().div_ceil(threads).max(1);
+                let results: Vec<Vec<(usize, Option<Vec<ObjectKind>>)>> = std::thread::scope(|sc| {
+                    let handles: Vec<_> =
+                        todo.chunks(chunk).map(|part| sc.spawn(move || part.iter().map(|&i| (i, one(i))).collect::<Vec<_>>())).collect();
+                    // a thread that failed leaves its nodes to be converted one by one below
+                    handles.into_iter().filter_map(|h| h.join().ok()).collect()
+                });
+                for (i, kinds) in results.into_iter().flatten() {
+                    if let Some(slot) = out.get_mut(i) {
+                        *slot = kinds;
+                    }
+                }
+                return out;
+            }
+        }
+        for i in todo {
+            if let Some(slot) = out.get_mut(i) {
+                *slot = one(i);
+            }
+        }
+        out
+    }
+
     fn build(&mut self, doc: &Document, stitched: &[Arc<Node>]) -> StitchPlan {
         let settings = doc.embroidery.as_ref().map(|e| e.settings.clone()).unwrap_or_default();
         let mut design = Design::new();
@@ -402,7 +447,10 @@ impl Planner {
         let mut cuts: Vec<(usize, Vec<Polygon>)> = Vec::new();
         let mut fresh: HashMap<(NodeId, usize), NodeEntry> = HashMap::with_capacity(stitched.len());
         let mut seen: HashMap<NodeId, usize> = HashMap::new();
-        for n in stitched {
+        // the nodes not cached (new or changed) converted first, side by side where there are
+        // many: each node's conversion stands alone
+        let mut converted = self.convert_changed(stitched);
+        for (index, n) in stitched.iter().enumerate() {
             let Some(e) = n.embroidery.as_deref() else { continue };
             // the copies of a repeat share their source's id: tell them apart
             let occurrence = seen.entry(n.id).or_insert(0);
@@ -413,9 +461,10 @@ impl Planner {
                 _ => {
                     let thread = node_thread(n, e);
                     let name = n.name.clone().unwrap_or_else(|| e.stitch.label().to_string());
+                    let kinds = converted.get_mut(index).and_then(Option::take).unwrap_or_else(|| convert::convert(n, e));
                     // a Multi Blend fill: one object per layer, each in its own thread
                     let mut parts: Vec<(ObjectKind, Rgb, bool)> = Vec::new();
-                    for kind in convert::convert(n, e) {
+                    for kind in kinds {
                         match &kind {
                             ObjectKind::Fill(f) if !f.params.blend.is_empty() => {
                                 for (k, (params, layer)) in f.params.blend_layers().into_iter().enumerate() {

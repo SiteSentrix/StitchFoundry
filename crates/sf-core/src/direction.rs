@@ -334,6 +334,21 @@ pub fn auto_guides(ring: &[Point]) -> Option<Vec<Guide>> {
     // A rung lying along a straight stretch of the outline (across a square end)
     // stays in the shape: its midpoint is on the outline, not outside it.
     let inside = |p: Point| poly.contains(p) || poly.distance_to_boundary(p) < 1e-6;
+    // whether the rung between sample points a and b has its middle in the shape, worked out
+    // once per pair (the search below asks about the same pairs many times)
+    let mut memo: Vec<Option<bool>> = vec![None; N * N];
+    let mut rung_inside = |a: usize, b: usize, pa: Point, pb: Point| -> bool {
+        let key = a.min(b) * N + a.max(b);
+        match memo.get_mut(key) {
+            Some(Some(v)) => *v,
+            Some(slot) => {
+                let v = inside(pa.midpoint(pb));
+                *slot = Some(v);
+                v
+            }
+            None => inside(pa.midpoint(pb)),
+        }
+    };
     let min_gap = N / 6;
     let mut best: Option<(f64, usize, usize)> = None;
     for i in 0..N {
@@ -349,7 +364,7 @@ pub fn auto_guides(ring: &[Point]) -> Option<Vec<Guide>> {
                 let ib = ((i + N) as f64 - t * len_b).round() as usize % N;
                 let (pa, pb) = (pts[ia], pts[ib]);
                 let mut rung = pa.distance(pb);
-                if !inside(pa.midpoint(pb)) {
+                if !rung_inside(ia, ib, pa, pb) {
                     rung *= 8.0;
                 }
                 score += rung;

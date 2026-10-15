@@ -113,12 +113,86 @@ fn edit_drags(n: usize) -> Result<(f64, f64), String> {
     Ok((handle, segment))
 }
 
+/// The embroidery rows: a synthetic design of `shapes` filled squares and satin rings (well over
+/// 100,000 stitches at 120), its stitches planned from nothing, again after one object's
+/// settings change and after one object moves, its statistics and two machine files written.
+/// Returns the rows and the design's stitch count.
+fn embroidery_rows(shapes: usize) -> Result<(Vec<(&'static str, f64, f64)>, usize), String> {
+    let err = |e: vectorcraft_engine::EngineError| e.to_string();
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 1400, "height": 1400})).map_err(err)?;
+    let per_row = (shapes as f64).sqrt().ceil().max(1.0) as usize;
+    let mut ids = Vec::new();
+    for i in 0..shapes {
+        let (x, y) = (20.0 + (i % per_row) as f64 * 110.0, 20.0 + (i / per_row) as f64 * 110.0);
+        let r = s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 100, "height": 100})).map_err(err)?;
+        let id = r["id"].as_u64().ok_or("no rectangle id")?;
+        s.execute("select.set", &json!({"ids": [id]})).map_err(err)?;
+        s.execute("embroidery.set", &json!({"type": "fill"})).map_err(err)?;
+        s.execute("embroidery.setThread", &json!({"color": if i % 2 == 0 { "#c62828" } else { "#1565c0" }})).map_err(err)?;
+        // a satin ring round every fourth square
+        if i % 4 == 0 {
+            let e = s.execute("shape.ellipse", &json!({"x": x + 20.0, "y": y + 20.0, "width": 60, "height": 60})).map_err(err)?;
+            let eid = e["id"].as_u64().ok_or("no ellipse id")?;
+            s.execute("select.set", &json!({"ids": [eid]})).map_err(err)?;
+            s.execute("embroidery.set", &json!({"type": "satin"})).map_err(err)?;
+        }
+        ids.push(id);
+    }
+    s.execute("select.set", &json!({"ids": []})).map_err(err)?;
+    let mut rows = Vec::new();
+    // planned from nothing: a fresh session per run, so no object is cached
+    let doc = s.doc().map_err(err)?.doc.as_ref().clone();
+    let cold = median_ms(3, || {
+        let mut fresh = vectorcraft_engine::Session::new();
+        fresh.add_document(doc.clone(), None);
+        drop(fresh.embroidery_plan());
+    });
+    rows.push(("embroidery: plan every stitch", cold, 1500.0));
+    let stitches = s.embroidery_plan().map_or(0, |p| p.pattern().stitch_count());
+    // one object's density changed: only it is stitched again
+    let one = *ids.get(ids.len() / 2).ok_or("no shapes")?;
+    s.execute("select.set", &json!({"ids": [one]})).map_err(err)?;
+    let mut spacing = 0.4;
+    let mut edit_failed = None;
+    let edit = median_ms(5, || {
+        spacing = if spacing > 0.41 { 0.4 } else { 0.45 };
+        if let Err(e) = s.execute("embroidery.setParams", &json!({"ids": [one], "params": {"spacing": spacing}})) {
+            edit_failed = Some(e.to_string());
+        }
+        drop(s.embroidery_plan());
+    });
+    if let Some(e) = edit_failed {
+        return Err(format!("changing a setting: {e}"));
+    }
+    rows.push(("embroidery: re-plan after a setting change", edit, 50.0));
+    let mv = median_ms(5, || {
+        let _ = s.execute("object.move", &json!({"dx": 1.0, "dy": 0.0}));
+        drop(s.embroidery_plan());
+    });
+    rows.push(("embroidery: re-plan after moving one object", mv, 50.0));
+    rows.push(("embroidery: design statistics", median_ms(5, || drop(s.execute("embroidery.info", &json!({})))), 50.0));
+    rows.push(("embroidery: write DST", median_ms(3, || drop(s.execute("embroidery.export", &json!({"format": "dst"})))), 200.0));
+    rows.push(("embroidery: write VP3", median_ms(3, || drop(s.execute("embroidery.export", &json!({"format": "vp3"})))), 200.0));
+    Ok((rows, stitches))
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut n = 50_000usize;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--paths" => n = it.next().and_then(|v| v.parse().ok()).ok_or("--paths needs a number")?,
+            // only the embroidery rows, on a design of this many shapes (120: over 100,000 stitches)
+            "--embroidery" => {
+                let shapes = it.next().and_then(|v| v.parse().ok()).ok_or("--embroidery needs a number of shapes")?;
+                let (rows, stitches) = embroidery_rows(shapes)?;
+                outln!("StitchFoundry embroidery budgets — {stitches} stitches");
+                for (name, ms, budget) in &rows {
+                    outln!("  {name:<44} {ms:>9.2} ms {budget:>7.0} ms  {}", if ms <= budget { "ok" } else { "OVER" });
+                }
+                return Ok(());
+            }
             other => return Err(format!("unknown perf option `{other}`")),
         }
     }
@@ -197,6 +271,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     });
     rows.push(("handle drag, 5,000-anchor path (per move)", handle, 8.0));
     rows.push(("segment drag, 5,000-anchor path (per move)", segment, 8.0));
+    match embroidery_rows(120) {
+        Ok((emb, stitches)) => {
+            outln!("  (embroidery design: {stitches} stitches)");
+            rows.extend(emb);
+        }
+        Err(e) => failed = Some(format!("embroidery: {e}")),
+    }
     if let Some(e) = failed {
         return Err(e);
     }
