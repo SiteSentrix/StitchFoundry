@@ -85,3 +85,21 @@ fn constant_alpha_masks_are_white() {
         assert!(t.contains("/S/Alpha") && t.contains("111rg") && !t.contains("000rg"), "grouped {grouped}: {t}");
     }
 }
+
+#[test]
+fn a_cmyk_page_without_blending_through_is_an_isolated_group() {
+    // #2156: CoreGraphics drops most of a page put in a non-isolated group. Without a blend mode
+    // reaching the paper, isolating the page's group changes nothing it draws.
+    let mut d = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
+    add(&mut d, rect(Rect::new(0.0, 0.0, 100.0, 100.0), Color::cmyk(0.0, 1.0, 0.0, 0.0)));
+    let mut top = rect(Rect::new(20.0, 20.0, 80.0, 80.0), Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    top.opacity = 0.6;
+    add(&mut d, top);
+    let t = text(&d);
+    assert!(t.contains("/Itrue") && t.contains("/CS/DeviceCMYK") && !t.contains("/S/Alpha"), "{t}");
+    // Blending that reaches the paper keeps the page's group non-isolated.
+    for grouped in [true, false] {
+        let t = text(&doc(ColorMode::Cmyk, grouped));
+        assert!(!t.contains("/Itrue") && t.contains("/S/Alpha"), "grouped {grouped}: {t}");
+    }
+}
