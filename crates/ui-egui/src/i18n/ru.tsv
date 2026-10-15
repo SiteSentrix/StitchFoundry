@@ -1395,6 +1395,44 @@
 	Keyboard Shortcut Conflicts	Конфликты сочетаний клавиш
 	Keyboard Shortcut Set	Набор сочетаний клавиш
 	Keyboard Shortcuts…	Сочетания клавиш…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Импорт набора сочетаний клавиш
+	Import Shortcut Set…	Импортировать набор сочетаний клавиш…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Каждая запись файла сопоставляется с инструментом, командой или панелью VectorCraft. Проверьте сопоставления и ответьте на оставшиеся вопросы.
+	Keys	Клавиши
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Файл записывает клавиши и модификаторы в виде кодов. Проверьте предложенные значения и укажите коды, которые ещё неизвестны.
+	Click, then press the key this code stands for (Esc cancels)	Щёлкните, затем нажмите клавишу, которую обозначает этот код (Esc отменяет)
+	Press a key…	Нажмите клавишу…
+	from your earlier imports	по вашим прошлым импортам
+	from the format's public description	по общедоступному описанию формата
+	not known yet	пока неизвестно
+	Shortcuts	Сочетания клавиш
+	Shortcut	Сочетание клавиш
+	In the File	В файле
+	In VectorCraft	В VectorCraft
+	Needs Attention Only	Только требующие внимания
+	Ready	Готово
+	Needs a choice	Нужен выбор
+	Needs a key	Нужна клавиша
+	No equivalent	Нет соответствия
+	Tools take a single key (optionally with Shift)	Инструментам назначается одна клавиша (можно с Shift)
+	A later row takes this shortcut	Это сочетание забирает строка ниже
+	Same item as a later row	Тот же элемент, что и в строке ниже
+	Start from VectorCraft Defaults	Начать со значений VectorCraft по умолчанию
+	Add to the Current Shortcuts	Добавить к текущим сочетаниям клавиш
+	Remember My Choices	Запомнить мой выбор
+	{ready} of {total} ready	Готово: {ready} из {total}
+	The file is too large to read in full, so only its first part is listed.	Файл слишком большой, чтобы прочитать его целиком, поэтому показана только его первая часть.
+	Report copied	Отчёт скопирован
+	Line {line}	Строка {line}
+	Line {line}: {name}: {status}	Строка {line}: {name}: {status}
+	Imported. Press OK to keep the imported set.	Импортировано. Нажмите «ОК», чтобы сохранить импортированный набор.
+	Read Shortcut Set File	Прочитать файл набора сочетаний клавиш
+	Import Matches	Сопоставления импорта
+	Remember Import Matches	Запомнить сопоставления импорта
+	Forget Import Matches	Забыть сопоставления импорта
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	совпадает с {n} сочетанием по умолчанию|совпадает с {n} сочетаниями по умолчанию|совпадает с {n} сочетаниями по умолчанию
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	не прочитана {n} часть файла|не прочитаны {n} части файла|не прочитано {n} частей файла
 	Keywords:	Ключевые слова:
 	Knife	Нож
 	Knockout Group	Группа с вырезанием
@@ -3522,6 +3560,7 @@ axis	Both	Оба
 @msg	Split Into Grid: select paths large enough for the grid	Разделение на сетку: выделите контуры, достаточно большие для сетки
 @msg	Targa files are RGB: colorModel rgb	файлы Targa являются RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обтекание текстом: выделите объект обтекания
+@msg	This shortcut file is in a form VectorCraft can't read.	Этот файл сочетаний клавиш записан в формате, который VectorCraft не может прочитать.
 @msg	`aspect` must be a number (%)	`aspect` должно быть числом (%)
 @msg	`at` must be [x, y]	`at` должно быть [x, y]
 @msg	`color` must be a colour	`color` должно быть цветом
@@ -3755,6 +3794,7 @@ axis	Both	Оба
 @msg	not a VectorCraft file: {0}	не является файлом VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не является набором сочетаний клавиш VectorCraft (отсутствует `overrides`)
 @msg	not a graphic style library (format `{_1}`)	не является библиотекой графических стилей (формат `{_1}`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	это не набор сочетаний клавиш: текст не начинается с имени с косой чертой и открывающей фигурной скобки
 @msg	not a stored central record	не является сохранённой центральной записью
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
 @msg	not an EMF or WMF file	не является файлом EMF или WMF

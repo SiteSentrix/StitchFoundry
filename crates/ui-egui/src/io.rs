@@ -16,10 +16,10 @@ const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
 /// graphic style library files open in the library panel, Libraries panel files are added to it,
-/// flattener, PDF, print and perspective grid presets files are imported, and a script written for
-/// the reference app (`.jsx`, `.jsxinc`, `.jsxbin`) shows its check (Check Script…). →
-/// `document.open`'s result for a document opened now (its `warnings` say what didn't come in as it
-/// was), else null.
+/// flattener, PDF, print and perspective grid presets files are imported, a shortcut set another
+/// app saved (`.kys`) opens Import Shortcut Set, and a script written for the reference app
+/// (`.jsx`, `.jsxinc`, `.jsxbin`) shows its check (Check Script…). → `document.open`'s result for
+/// a document opened now (its `warnings` say what didn't come in as it was), else null.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value, String> {
     let opens = opens_as(name);
     // A WebAssembly plug-in is installed.
@@ -28,6 +28,9 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
             app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}))?;
         app.status(format!("Installed plug-in {}", r["name"].as_str().unwrap_or(name)));
         return Ok(Value::Null);
+    }
+    if opens == Some(OpensAs::ShortcutSet) {
+        return dialogs::shortcut_import::open(app, name, bytes).map(|_| Value::Null);
     }
     if opens == Some(OpensAs::Script) {
         let p = match path {
@@ -66,12 +69,14 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
     open_document(app, name, bytes, path, &Value::Null)
 }
 
-/// The kinds of file File → Open installs, imports, checks or shows in the library panel or the
-/// Libraries panel ([`opens_as`]).
+/// The kinds of file File → Open installs, imports, checks, shows in the library panel or the
+/// Libraries panel, or reviews in Import Shortcut Set ([`opens_as`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OpensAs {
     /// A WebAssembly plug-in: installed.
     Plugin,
+    /// A shortcut set another app saved (`.kys`): reviewed in Import Shortcut Set.
+    ShortcutSet,
     /// A script written for the reference app: checked without running it (Check Script…).
     Script,
     /// Flattener, PDF, print or perspective grid presets: imported with command `import`, and
@@ -85,9 +90,10 @@ pub enum OpensAs {
     StyleLibrary,
 }
 
-/// The kind of file named `name` (by its extension) that File → Open installs, imports, checks or
-/// shows in the library panel or the Libraries panel ([`open_bytes`]), else `None`. A drop opens
-/// these files the same way, wherever they are dropped ([`VectorcraftApp::drop_target`]).
+/// The kind of file named `name` (by its extension) that File → Open installs, imports, checks,
+/// shows in the library panel or the Libraries panel, or reviews in Import Shortcut Set
+/// ([`open_bytes`]), else `None`. A drop opens these files the same way, wherever they are dropped
+/// ([`VectorcraftApp::drop_target`]).
 pub fn opens_as(name: &str) -> Option<OpensAs> {
     let ext = fileio::extension(name);
     let presets = [
@@ -98,6 +104,8 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
     ];
     if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
         Some(OpensAs::Plugin)
+    } else if vectorcraft_engine::cmd::shortcutset::EXTS.contains(&ext.as_str()) {
+        Some(OpensAs::ShortcutSet)
     } else if vectorcraft_engine::cmd::scripts::EXTS.contains(&ext.as_str()) {
         Some(OpensAs::Script)
     } else if let Some(&(_, import, what)) = presets.iter().find(|(exts, ..)| exts.contains(&ext.as_str())) {
@@ -214,6 +222,12 @@ pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> 
 /// [`open_path`]; with `background`, a document (not a file that installs, imports or asks
 /// first) is decoded off the UI thread ([`crate::opening::start`]).
 pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) -> Result<Value, String> {
+    // A shortcut set is read by Import Shortcut Set, up to its reader's cap.
+    if dialogs::shortcut_import::is_kys(path) {
+        dialogs::shortcut_import::command(app, &json!({ "path": path }))?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A script is read by `script.check`, up to its limit.
     if opens_as(path) == Some(OpensAs::Script) {
         dialogs::script_check::command(app, &json!({ "path": path }))?;

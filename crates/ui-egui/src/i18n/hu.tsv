@@ -1784,6 +1784,44 @@
 	Keyboard Shortcut Set	Billentyűparancs-készlet
 	Keyboard Shortcuts	Billentyűparancsok
 	Keyboard Shortcuts…	Billentyűparancsok…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Billentyűparancs-készlet importálása
+	Import Shortcut Set…	Billentyűparancs-készlet importálása…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	A VectorCraft a fájl minden bejegyzését megfelelteti valamelyik eszközének, parancsának vagy paneljének. Ellenőrizd a megfeleltetéseket, és válaszolj a még nyitott kérdésekre.
+	Keys	Billentyűk
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	A fájl a billentyűket és a módosítóbillentyűket kódként tárolja. Ellenőrizd a javasolt jelentéseket, és add meg a még ismeretlen kódok jelentését.
+	Click, then press the key this code stands for (Esc cancels)	Kattints, majd nyomd le azt a billentyűt, amelyet ez a kód jelöl (Esc: mégse)
+	Press a key…	Nyomj le egy billentyűt…
+	from your earlier imports	a korábbi importálásaidból
+	from the format's public description	a formátum nyilvános leírásából
+	not known yet	még ismeretlen
+	Shortcuts	Billentyűparancsok
+	In the File	A fájlban
+	In VectorCraft	A VectorCraftban
+	Needs Attention Only	Csak a figyelmet igénylő sorok
+	Ready	Kész
+	Needs a choice	Választás szükséges
+	Needs a key	Billentyű szükséges
+	No equivalent	Nincs megfelelője
+	Tools take a single key (optionally with Shift)	Eszközhöz egyetlen billentyű rendelhető (Shifttel vagy anélkül)
+	A later row takes this shortcut	Ezt a billentyűparancsot egy későbbi sor kapja meg
+	Same item as a later row	Ugyanaz az elem, mint egy későbbi sorban
+	Start from VectorCraft Defaults	Kiindulás a VectorCraft-alapértékekből
+	Add to the Current Shortcuts	Hozzáadás a jelenlegi billentyűparancsokhoz
+	Remember My Choices	Választásaim megjegyzése
+	{ready} of {total} ready	Kész: {ready}/{total}
+	The file is too large to read in full, so only its first part is listed.	A fájl túl nagy a teljes beolvasáshoz, ezért csak az első része szerepel a listában.
+	Report copied	Jelentés másolva
+	Line {line}	{line}. sor
+	Line {line}: {name}: {status}	{line}. sor: {name}: {status}
+	Read Shortcut Set File	Billentyűparancs-készlet beolvasása fájlból
+	Import Matches	Importálási megfeleltetések
+	Remember Import Matches	Importálási megfeleltetések megjegyzése
+	Forget Import Matches	Importálási megfeleltetések elfelejtése
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	{n} alapértelmezett billentyűparanccsal egyezik
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	Be nem olvasott fájlrész: {n}
+@msg	This shortcut file is in a form VectorCraft can't read.	Ez a billentyűparancsfájl olyan formátumú, amelyet a VectorCraft nem tud beolvasni.
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	nem billentyűparancs-készlet: a szöveg nem perjeles névvel és nyitó kapcsos zárójellel kezdődik
 	Keywords:	Kulcsszavak:
 	Kind	Típus
 	Kinsoku Set	Kinsoku-készlet

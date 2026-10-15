@@ -31,6 +31,7 @@ pub(crate) mod gradient;
 pub(crate) mod graph;
 mod halftone;
 pub mod help;
+pub mod importmatches;
 pub(crate) mod inline;
 mod layer;
 mod layerpanel;
@@ -67,6 +68,7 @@ pub mod recovery;
 pub mod scripts;
 mod select;
 pub(crate) mod shaper;
+pub mod shortcutset;
 pub(crate) mod slices;
 mod stroke;
 mod style;
@@ -283,6 +285,8 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(cut::specs());
         v.extend(halftone::specs());
         v.extend(perspgrid::specs());
+        v.extend(shortcutset::specs());
+        v.extend(importmatches::specs());
         v
     })
 }

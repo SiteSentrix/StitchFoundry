@@ -683,6 +683,7 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
         .chain(std::iter::once(("Flattener presets", super::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", super::pdfcmds::PRESET_EXTS)))
         .chain(std::iter::once(("Print presets", super::printpresets::PRESET_EXTS)))
+        .chain(std::iter::once(("Shortcut sets", super::shortcutset::EXTS)))
         .chain(std::iter::once(("Scripts", super::scripts::EXTS)))
         .chain(std::iter::once(("Plug-ins", super::plugin::EXTS)))
 }

@@ -1603,6 +1603,44 @@
 	Keyboard Increment	キー入力
 	Keyboard Shortcut Conflicts	キーボードショートカットの競合
 	Keyboard Shortcut Set	キーボードショートカットセット
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	ショートカットセットを読み込み
+	Import Shortcut Set…	ショートカットセットを読み込み…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	ファイルの各項目を VectorCraft のツール、コマンド、パネルに対応付けます。対応を確認して、残りの項目を指定してください。
+	Keys	キー
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	このファイルはキーと修飾キーをコードで記録しています。提案された意味を確認して、まだ分からないコードを指定してください。
+	Click, then press the key this code stands for (Esc cancels)	クリックしてから、このコードが表すキーを押します (Esc でキャンセル)
+	Press a key…	キーを押してください…
+	from your earlier imports	以前の読み込みより
+	from the format's public description	形式の公開されている説明より
+	not known yet	未確定
+	Shortcuts	ショートカット
+	Shortcut	ショートカット
+	In the File	ファイル内の名前
+	In VectorCraft	VectorCraft での対応
+	Needs Attention Only	要確認の行のみ
+	Ready	適用可能
+	Needs a choice	選択が必要
+	Needs a key	キーが必要
+	No equivalent	対応なし
+	Tools take a single key (optionally with Shift)	ツールには 1 つのキーのみ割り当てられます (Shift との組み合わせは可)
+	A later row takes this shortcut	後の行がこのショートカットを使用
+	Same item as a later row	後の行と同じ項目
+	Start from VectorCraft Defaults	VectorCraft の初期設定から開始
+	Add to the Current Shortcuts	現在のショートカットに追加
+	Remember My Choices	選択内容を記憶
+	{ready} of {total} ready	{total} 件中 {ready} 件が適用可能
+	The file is too large to read in full, so only its first part is listed.	ファイルが大きすぎて全体を読み込めないため、最初の部分のみを表示しています。
+	Report copied	レポートをコピーしました
+	Line {line}	{line} 行目
+	Line {line}: {name}: {status}	{line} 行目: {name}: {status}
+	Imported. Press OK to keep the imported set.	読み込みました。読み込んだセットを保持するには OK を押してください。
+	Read Shortcut Set File	ショートカットセットファイルを読む
+	Import Matches	読み込み時の対応付け
+	Remember Import Matches	読み込み時の対応付けを記憶
+	Forget Import Matches	読み込み時の対応付けを消去
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	{n} 個の初期設定ショートカットと一致
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	ファイルの {n} 箇所を読み込めませんでした
 	Keywords:	キーワード:
 	Knife	ナイフ
 	Knockout Group	グループの抜き
@@ -4008,6 +4046,7 @@ theme	Appearance	外観
 @msg	Discarded {_1} recovered document(s)	復帰用データのドキュメントを {_1} 件破棄しました
 @msg	Restored {_1} recovered document(s): save them to keep them	復帰用データからドキュメントを {_1} 件復元しました: 残すには保存してください
 @msg	Saving recovery data for {_1}	{_1} の復帰用データを保存中
+@msg	This shortcut file is in a form VectorCraft can't read.	このショートカットファイルは VectorCraft で読み込めない形式です。
 @msg	bad shortcut	ショートカットが正しくありません
 @msg	can't parse shortcut `{c}`	ショートカット `{c}` を解釈できません
 @msg	can't parse shortcut `{s}` for `{k}`	`{k}` のショートカット `{s}` を解釈できません
@@ -4015,6 +4054,7 @@ theme	Appearance	外観
 @msg	no file reader	ファイルの読み込み機能がありません
 @msg	no file writer	ファイルの書き込み機能がありません
 @msg	not a VectorCraft shortcut set (missing `overrides`)	VectorCraft のショートカットセットではありません (`overrides` がありません)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	ショートカットセットではありません: テキストの先頭にスラッシュ付きの名前と開き波かっこがありません
 @msg	shortcut for `{k}` must be a string	`{k}` のショートカットは文字列で指定してください
 @msg	tool shortcuts must be a single key (optionally with Shift)	ツールのショートカットには 1 つのキーを指定してください (Shift との組み合わせも可)
 @msg	unknown preset (one of {_1})	不明なプリセットです ({_1} のいずれかを指定してください)
