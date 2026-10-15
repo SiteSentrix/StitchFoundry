@@ -411,7 +411,7 @@ fn inks_are_found_past_dictionary_values_the_reader_cannot_parse() {
         // Opened by the reader alone, without the checks of `pages::open`.
         let pdf = craft_pdf::syntax::Pdf::new(pdf(&[page], None)).unwrap();
         let mut c = Colors::new(&pdf, vec![]);
-        let space = c.space_of(&format!("ColorSpace(Separation(Separation {{ tint_transform: {key} }}))"), 1);
+        let space = c.space_of(&format!("ColorSpace(Separation(Separation {{ tint_transform: {key} }}))"), 1, None);
         assert_eq!(space, Space::Inks(0), "{junk}");
         let gold = c.native(space, &[1.0]).unwrap();
         assert_eq!(gold.link, Some(("Gold".to_string(), 1.0)), "{junk}");
