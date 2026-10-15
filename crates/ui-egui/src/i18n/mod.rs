@@ -472,6 +472,12 @@ pub fn tr_ctx<'a>(lang: Lang, context: &str, s: &'a str) -> &'a str {
     lang.catalog().contextual(context, s).unwrap_or_else(|| tr(lang, s))
 }
 
+/// A name the app gives something (a default swatch's), translated where the current language has
+/// a `context` row for it; any other name (one the user gave) comes back as it is.
+pub fn t_name<'a>(context: &str, name: &'a str) -> &'a str {
+    current().catalog().contextual(context, name).unwrap_or(name)
+}
+
 /// A string keyed by its command id, falling back to the translation of the English `label`.
 pub fn tr_id<'a>(lang: Lang, id: &str, label: &'a str) -> &'a str {
     lang.catalog().id(id).unwrap_or_else(|| tr(lang, label))

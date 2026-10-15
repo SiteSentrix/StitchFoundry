@@ -429,12 +429,14 @@ fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String
         egui::DragAndDrop::set_payload(ui.ctx(), drag_of(e, names));
     }
     tile_drop(ui, &resp, e, list, ev);
+    // The default swatches' names show in the UI's language; the document keeps them as they are.
+    let shown = crate::i18n::t_name("swatch", name);
     let resp = match e {
-        Entry::Folder(n) => resp.on_hover_text(crate::i18n::fmt(tl!("Color Group: {name}"), &[("name", n)])),
+        Entry::Folder(_) => resp.on_hover_text(crate::i18n::fmt(tl!("Color Group: {name}"), &[("name", shown)])),
         Entry::Swatch { paint, global, spot, .. } if list => resp.on_hover_ui(|ui| {
-            ui.label(format!("{name} ({})", describe(paint, *global, *spot)));
+            ui.label(format!("{shown} ({})", describe(paint, *global, *spot)));
         }),
-        _ => resp.on_hover_text(name),
+        _ => resp.on_hover_text(shown),
     };
     if resp.clicked() {
         ev.clicked = Some((e.clone(), ui.input(|i| i.modifiers)));
@@ -682,7 +684,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                         }
                         Entry::Folder(_) => draw_folder(ui, chip),
                     }
-                    list_row_name(ui, r, chip, name);
+                    list_row_name(ui, r, chip, crate::i18n::t_name("swatch", name));
                     tile_input(ui, resp, e, &items, sel, true, &mut ev);
                 }
             } else {

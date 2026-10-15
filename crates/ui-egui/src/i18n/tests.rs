@@ -1469,3 +1469,20 @@ fn polish_reads_as_polish() {
     let nested = "command `object.group` is not available right now: nothing selected";
     assert_eq!(message(pl(), nested), "polecenie `object.group` jest teraz niedostępne: nic nie zaznaczono");
 }
+
+/// Japanese names every default swatch and colour group the Swatches panel shows (the greys'
+/// `K=` values read the same in any language); a name the user gave a swatch has no row.
+#[test]
+fn japanese_names_the_default_swatches() {
+    let ja = Lang::from_code("ja").unwrap().catalog();
+    let (swatches, groups) = vectorcraft_color::default_swatches(vectorcraft_color::cms::Model::Rgb);
+    let names = swatches
+        .iter()
+        .map(|s| s.name.clone())
+        .chain(groups.iter().flat_map(|g| std::iter::once(g.name.clone()).chain(g.swatches.iter().map(|s| s.name.clone()))))
+        .chain([vectorcraft_color::swatch::REGISTRATION.to_string()]);
+    let missing: Vec<String> = names.filter(|n| !n.starts_with("K=") && ja.contextual("swatch", n).is_none()).collect();
+    assert!(missing.is_empty(), "{missing:?}");
+    assert_eq!(ja.contextual("swatch", "White"), Some("ホワイト"));
+    assert_eq!(ja.contextual("swatch", "My Red"), None);
+}
