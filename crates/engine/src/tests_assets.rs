@@ -1,6 +1,7 @@
 //! Asset Export: collecting art as assets (single and multiple), assets following their art
 //! (moves, deletions), names, undo, the native round trip, the shared export settings and
-//! exporting assets alone, cropped to their art.
+//! exporting assets alone, cropped to their art. Art Optimized PNG exports are supersampled
+//! so abutting shapes leave no ghost seam (#983 / #1037).
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -282,6 +283,31 @@ fn assets_export_into_a_folder() {
     assert_eq!(r["files"], json!([format!("{folder}/2x/Logo@2x.png"), format!("{folder}/PDF/Logo.pdf")]));
     assert!(dir.join("2x/Logo@2x.png").is_file() && dir.join("PDF/Logo.pdf").is_file());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// #983: Asset Export Art Optimized PNG supersamples, so two abutting fills leave no white seam
+/// on the shared edge (same idea as `supersampled_art_leaves_no_seam_between_shapes_that_meet`).
+#[test]
+fn assets_export_leaves_no_seam_between_abutting_shapes() {
+    let mut s = session();
+    s.paint.fill = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    // Share the edge at x = 30; the crop is (10, 10)–(50, 30).
+    let (a, b) = (rect(&mut s, 10.0, 10.0, 20.0, 20.0), rect(&mut s, 30.0, 10.0, 20.0, 20.0));
+    run(&mut s, "assets.add", json!({"ids": [a, b], "multiple": false}));
+    let out = files(&run(
+        &mut s,
+        "assets.export",
+        json!({
+            "formats": [{"format": "png", "scale": "1x", "background": "white"}],
+            "antiAlias": "art",
+        }),
+    ));
+    assert_eq!(out[0].0, "Asset-1.png");
+    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    assert_eq!(img.dimensions(), (40, 20));
+    // Column 20 is the shared edge in crop space; green must stay red (no white bleed).
+    let palest_g = (2..18).map(|y| img.get_pixel(20, y).0[1].max(img.get_pixel(19, y).0[1])).max().unwrap();
+    assert_eq!(palest_g, 0, "supersampled Asset Export: no seam on the shared edge (G={palest_g})");
 }
 
 #[test]

@@ -22,7 +22,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | Draw and edit paths precisely: Pen, Curvature, Direct Selection on anchors and handles, smart guides and snapping, Pathfinder | yes | `crates/tools/src/pen.rs`, `direct.rs`, `guides.rs` and their tests; 10 exact Pathfinder booleans; [ui-parity.md](ui-parity.md). Shape Builder misses regions in some files (#937), Pathfinder covers the same results | 0 |
 | Paint and style: fills and strokes, global and spot swatches, gradients, Appearance, transparency, graphic styles | yes | M3 done (92 tasks); area scores 92–97% in [target-app-parity.md](target-app-parity.md#feature-areas) | 0 |
 | Set type: point and area type, Character and Paragraph styles, threading, outlines | yes | type core 80%; styles, threading, Create Outlines and font matching tested ([type-parity.md](type-parity.md)); hyphenation and justification options missing (not blocking) | 0 |
-| Organise layers and artboards and export assets (Export for Screens, SVG, PNG, PDF per artboard) | yes | Layers panel rework, Artboards panel and tool, Export for Screens and Asset Export done; ghost borders in some Asset Export output (#983) | 0 |
+| Organise layers and artboards and export assets (Export for Screens, SVG, PNG, PDF per artboard) | yes | Layers panel rework, Artboards panel and tool, Export for Screens and Asset Export done; Art Optimized supersample closes ghost borders (#983 / #1037) | 0 |
 | Print production: CMYK and spot colour, bleed and marks, PDF/X out, separations preview | yes | PDF/X-1a/3/4, presets, marks and bleed, ICC output intent, Separations Preview, Print with PostScript output | 0 |
 | Exchange files with Illustrator users: open their `.ai`/EPS/PDF, hand back a file they can open | partial (doesn't block alpha) | `.ai`, EPS and PDF open as editable art, but real files can get the wrong layer structure (#951) and lose guides (#779); Save As `.ai` is PDF-compatible, which Illustrator opens without its own editing data (#868), or legacy version 7, which keeps layers, groups and type as text, one artboard per file, and waits for users' testing. This is the beta main-format gap ([gaps.md](gaps.md) G9) | 10–20 (for beta) |
 
@@ -32,7 +32,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
    Selection, smart guides and snapping first. 60–90 h, parallel by tool.
 2. **`.ai` files from real users** (G9): layer structure (#951), guides (#779). 10–20 h.
 3. **Launch and stability** (G10): the Windows and Linux start-up reports. 20–35 h.
-4. **Core-tool bugs** (G11): Shape Builder regions (#937), Asset Export borders (#983). 8–15 h.
+4. **Core-tool bugs** (G11): Shape Builder regions (#937). Asset Export ghost borders closed (#983 / #1037). 8–15 h.
 5. **Raster effects** (G2) continue alongside: Artistic (Film Grain done; 14 left), Sketch, then the Effect Gallery. 23–39 h.
 
 ## Next
