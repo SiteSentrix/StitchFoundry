@@ -86,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Quilt Block Set",
             [],
             None,
-            "{folder, pattern?, kind?: blocks|borders|corners (blocks; corners: a square for each border strip width), sizes?: [{width, height}] (inches; the usual block or border strip sizes), spacing?, stitch?, color?, format?: dst|exp|jef|pes|vp3|xxx (My Machine's)} one machine file per block size in the folder, named \"<Pattern> <w>x<h> in.<ext>\" (borders: \"Border <Pattern> …\"); sizes no hoop fits are left out and said → {files: [path], skipped: [{width, height, reason}]}",
+            "{folder?: where the files go (none: they come back in one zip, for the web app), pattern?, kind?: blocks|borders|corners (blocks; corners: a square for each border strip width), sizes?: [{width, height}] (inches; the usual block or border strip sizes), spacing?, stitch?, color?, format?: dst|exp|jef|pes|vp3|xxx (My Machine's)} one machine file per block size in the folder, named \"<Pattern> <w>x<h> in.<ext>\" (borders: \"Border <Pattern> …\"); sizes no hoop fits are left out and said → {files: [path], skipped: [{width, height, reason}]} (no folder: files are their names, plus {name: \"<Pattern> quilt blocks.zip\", dataBase64})",
             always,
             quilt_set
         ),
@@ -764,7 +764,8 @@ fn quilt_block(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn quilt_set(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.quiltBlock.set";
-    let folder = str_param(p, "folder").ok_or_else(|| bad(CMD, "missing `folder`: where the files go"))?.to_string();
+    // no folder (the web app): the files come back in one zip to download
+    let folder = str_param(p, "folder").map(str::to_string);
     let pattern = str_param(p, "pattern").unwrap_or("stipple").to_string();
     let name = PATTERNS
         .iter()
@@ -794,6 +795,7 @@ fn quilt_set(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(CMD, "`sizes` is a list of {width, height} in inches"));
     }
     let mut files = Vec::new();
+    let mut zipped: Vec<(String, Vec<u8>)> = Vec::new();
     let mut skipped = Vec::new();
     for (w, h) in sizes {
         let mut q = json!({ "width": w, "height": h, "pattern": pattern, "corner": corners });
@@ -804,19 +806,61 @@ fn quilt_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
         match s.execute("embroidery.quiltBlock", &q) {
             Ok(_) => {
-                let mut send = json!({ "folder": folder, "name": format!("{}{name} {}x{} in", if borders { "Border " } else if corners { "Corner " } else { "" }, num(w), num(h)) });
-                if let Some(f) = p.get("format").filter(|v| !v.is_null()) {
-                    send["format"] = f.clone();
+                let file = format!(
+                    "{}{name} {}x{} in",
+                    if borders {
+                        "Border "
+                    } else if corners {
+                        "Corner "
+                    } else {
+                        ""
+                    },
+                    num(w),
+                    num(h)
+                );
+                let format = p.get("format").filter(|v| !v.is_null());
+                if let Some(folder) = &folder {
+                    let mut send = json!({ "folder": folder, "name": file });
+                    if let Some(f) = format {
+                        send["format"] = f.clone();
+                    }
+                    let r = s.execute("embroidery.send", &send)?;
+                    files.push(r["path"].clone());
+                } else {
+                    let mut q = json!({ "center": true, "name": file });
+                    if let Some(f) = format {
+                        q["format"] = f.clone();
+                    }
+                    let r = s.execute("embroidery.export", &q)?;
+                    let bytes = r["dataBase64"]
+                        .as_str()
+                        .and_then(vectorcraft_format::base64_decode)
+                        .ok_or_else(|| bad(CMD, "the machine file didn't encode"))?;
+                    let name = format!("{}.{}", super::embroidery_lettering::safe_name(&file), r["format"].as_str().unwrap_or("dst"));
+                    files.push(json!(name));
+                    zipped.push((name, bytes));
                 }
-                let r = s.execute("embroidery.send", &send)?;
-                files.push(r["path"].clone());
                 // the block's document is done with
                 s.execute("file.close", &json!({ "save": false })).ok();
             }
             Err(e) => skipped.push(json!({ "width": w, "height": h, "reason": e.to_string() })),
         }
     }
-    Ok(json!({ "files": files, "skipped": skipped }))
+    if folder.is_some() || zipped.is_empty() {
+        return Ok(json!({ "files": files, "skipped": skipped }));
+    }
+    let list: Vec<(String, &[u8])> = zipped.iter().map(|(n, b)| (n.clone(), b.as_slice())).collect();
+    let zip = super::package::zip(&list)?;
+    let what = if borders {
+        "border strips"
+    } else if corners {
+        "corners"
+    } else {
+        "blocks"
+    };
+    Ok(
+        json!({ "files": files, "skipped": skipped, "name": format!("{name} quilt {what}.zip"), "dataBase64": vectorcraft_format::base64_encode(&zip) }),
+    )
 }
 
 #[cfg(test)]
@@ -928,6 +972,14 @@ mod tests {
         let c = s.execute("embroidery.quiltBlock.set", &json!({"folder": dir.to_string_lossy(), "pattern": "loops", "kind": "corners"})).unwrap();
         let corners: Vec<&str> = c["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect();
         assert!(corners.iter().any(|f| f.ends_with("Corner Loops 2x2 in.vp3")), "{corners:?}");
+        // no folder (the web app): one zip holding a file per size, nothing written
+        let z = s
+            .execute("embroidery.quiltBlock.set", &json!({"pattern": "pebbles", "sizes": [{"width": 4, "height": 4}, {"width": 5, "height": 5}]}))
+            .unwrap();
+        assert_eq!(z["name"], "Pebbles quilt blocks.zip", "{z}");
+        assert_eq!(z["files"], json!(["Pebbles 4x4 in.vp3", "Pebbles 5x5 in.vp3"]), "{z}");
+        let zip = vectorcraft_format::base64_decode(z["dataBase64"].as_str().unwrap()).unwrap();
+        assert!(zip.starts_with(b"PK") && zip.len() > 500, "{}", zip.len());
         for (pattern, _) in PATTERNS {
             s.execute("embroidery.quiltBlock", &json!({"width": 7, "height": 1, "pattern": pattern})).unwrap_or_else(|e| panic!("{pattern}: {e}"));
             let info = s.execute("embroidery.info", &json!({})).unwrap();
