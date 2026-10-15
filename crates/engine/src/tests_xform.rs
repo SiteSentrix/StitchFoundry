@@ -9,7 +9,8 @@ use super::*;
 
 fn session() -> Session {
     let mut s = Session::new();
-    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    // Separately created fixtures must compare equal across clock ticks.
+    s.execute("file.new", &json!({"width": 800, "height": 600, "created": null})).unwrap();
     s
 }
 
