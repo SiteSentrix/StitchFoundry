@@ -519,6 +519,19 @@ fn japanese_text_uses_the_craft_fonts_mincho_after_the_bundled_fonts() {
 }
 
 #[test]
+fn all_supplied_craft_font_families_are_registered_without_system_fonts() {
+    if CRAFT_FONTS.is_empty() {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a checkout)");
+        return;
+    }
+    let db = FontDb::with_font_dirs(vec![]);
+    for font in CRAFT_FONTS {
+        let face = db.face(font.family, font.style).unwrap();
+        assert_eq!(face.family, font.family, "{} {}", font.family, font.style);
+    }
+}
+
+#[test]
 fn japanese_text_lays_out_without_the_craft_fonts() {
     // Built either way, Japanese text lays out (as missing glyphs when no font has them).
     let l = layout(db(), &point("日本語の文字 abc", style(20.0)));

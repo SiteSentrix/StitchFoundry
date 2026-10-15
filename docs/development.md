@@ -1,6 +1,6 @@
 # Development
 
-> **Last updated:** 2026-10-13 · **Change:** verified PngSuite downloads (#1729).
+> **Last updated:** 2026-10-14 · **Change:** document-font registration for all explicitly supplied faces.
 
 ## Web build
 
@@ -139,6 +139,9 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   so they are the fallback for Japanese after the requested font; installed system fonts come after.
   Noto Sans Thai (when the checkout has it) is the fallback for Thai where no Thai font is
   installed, and the web build fetches it before the app starts (`crates/text/web-fonts.txt`).
+  All other supplied faces follow those existing document fallbacks in manifest order, so they
+  can also be selected by family name. This does not change which faces the web build embeds
+  or fetches, and no craft-fonts faces are registered when the optional input is absent.
 - UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first), after
   the UI fonts and before the installed fonts `ui_fonts.rs` discovers for other scripts.
 - Tests that need Japanese glyphs skip with a message when built without craft-fonts. The FreeBSD
@@ -343,4 +346,5 @@ do not replace expected hashes automatically in response to a download mismatch.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
