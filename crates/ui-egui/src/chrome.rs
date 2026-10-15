@@ -529,6 +529,91 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Draws the artboard navigator's field, which shows the active artboard (`cur`) by number and
+/// name. The field's list shows every artboard by number and name, as the Artboards panel lists
+/// them, and opens with the active artboard's row in view. The list lays out only the rows in view
+/// and at most one more. Returns the artboard chosen in the list.
+fn artboard_list(app: &VectorcraftApp, ui: &mut Ui, cur: usize) -> Option<usize> {
+    /// The width of the field.
+    const FIELD_W: f32 = 140.0;
+    /// The least width of the list.
+    const LIST_W: f32 = 220.0;
+    /// The height of a row, as in the Artboards panel.
+    const ROW_H: f32 = 24.0;
+    /// The rows the list shows at once.
+    const ROWS: f32 = 10.0;
+    let t = Tokens::get(ui.ctx());
+    let boards = app.session.active().map(|d| d.doc.artboards.as_slice()).unwrap_or_default();
+    let shown = boards.get(cur).map_or_else(|| "–".to_string(), |a| format!("{}  {}", cur + 1, a.name));
+    // Under `drawn`, egui's temp data stores the pass the list was last drawn in.
+    let drawn = ui.id().with("artboard-list");
+    let height = ROW_H * ROWS;
+    ui.add_enabled_ui(!boards.is_empty(), |ui| {
+        ui.set_max_width(FIELD_W);
+        egui::ComboBox::from_id_salt("artboard-list")
+            .selected_text(egui::RichText::new(shown).size(11.5))
+            .width(FIELD_W)
+            .wrap_mode(egui::TextWrapMode::Truncate)
+            .height(height)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show_ui(ui, |ui| {
+                let pass = ui.ctx().cumulative_pass_nr();
+                let last = ui.data(|d| d.get_temp::<u64>(drawn)).unwrap_or_default();
+                ui.data_mut(|d| d.insert_temp(drawn, pass));
+                let mut area = egui::ScrollArea::vertical().max_height(height);
+                // As the list opens, it scrolls the active row as close to the middle as the list allows.
+                if last + 1 < pass || last == 0 {
+                    area = area.vertical_scroll_offset((cur as f32 * ROW_H - (height - ROW_H) * 0.5).max(0.0));
+                }
+                // Every number ends where the widest one ends.
+                let numbers = ui.painter().layout_no_wrap(boards.len().to_string(), egui::FontId::proportional(12.0), t.text_dim).size().x;
+                let width = ui.available_width().max(LIST_W);
+                let mut chosen = None;
+                ui.spacing_mut().item_spacing.y = 0.0;
+                area.show_rows(ui, ROW_H, boards.len(), |ui, range| {
+                    for i in range {
+                        let Some(board) = boards.get(i) else { continue };
+                        let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
+                        if i == cur {
+                            ui.painter().rect_filled(r, 0.0, t.row_selected);
+                        } else if resp.hovered() {
+                            ui.painter().rect_filled(r, 0.0, t.hover);
+                        }
+                        let number_end = r.left() + 8.0 + numbers;
+                        ui.painter().text(
+                            egui::pos2(number_end, r.center().y),
+                            egui::Align2::RIGHT_CENTER,
+                            (i + 1).to_string(),
+                            egui::FontId::proportional(12.0),
+                            t.text_dim,
+                        );
+                        let name_start = number_end + 10.0;
+                        let name = egui::WidgetText::from(egui::RichText::new(&board.name).size(12.5)).into_galley(
+                            ui,
+                            Some(egui::TextWrapMode::Truncate),
+                            r.right() - 8.0 - name_start,
+                            egui::TextStyle::Body,
+                        );
+                        ui.painter().galley(egui::pos2(name_start, r.center().y - name.size().y / 2.0), name, t.text);
+                        resp.widget_info(|| {
+                            egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == cur, format!("{}  {}", i + 1, board.name))
+                        });
+                        if resp.clicked() {
+                            chosen = Some(i);
+                        }
+                    }
+                });
+                if chosen.is_some() {
+                    ui.close();
+                }
+                chosen
+            })
+            .inner
+            .flatten()
+    })
+    .inner
+}
+
 pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     egui::Panel::bottom("status_bar")
@@ -567,19 +652,22 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     },
                 );
                 ui.separator();
-                // The artboard navigator: first, previous, the current artboard's number, next, last.
+                // The artboard navigator has First and Previous, a field with the current artboard's
+                // number and name and a list of every artboard, then Next and Last.
                 let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
-                let cur = app.view().map_or(0, |v| v.artboard).min(nab.saturating_sub(1));
+                let cur = crate::panels::artboards::selected(app, nab);
                 let mut go = None;
                 for (icon, to) in [("chevrons-left", "first"), ("chevron-left", "previous")] {
                     if widgets::icon_button_enabled(ui, icon, "", false, cur > 0, 18.0).clicked() {
-                        go = Some(to);
+                        go = Some(json!(to));
                     }
                 }
-                ui.label(egui::RichText::new(if nab > 0 { (cur + 1).to_string() } else { "–".into() }).size(11.5));
+                if let Some(i) = artboard_list(app, ui, cur) {
+                    go = Some(json!(i));
+                }
                 for (icon, to) in [("chevron-right", "next"), ("chevrons-right", "last")] {
                     if widgets::icon_button_enabled(ui, icon, "", false, cur + 1 < nab, 18.0).clicked() {
-                        go = Some(to);
+                        go = Some(json!(to));
                     }
                 }
                 if let Some(to) = go
@@ -1012,6 +1100,99 @@ mod tests {
         // The command also takes an index, clamped to the last artboard.
         assert_eq!(app.run("view.goToArtboard", json!({"index": 9})), Ok(json!({"index": 2})));
         assert!(app.run("view.goToArtboard", json!({"index": "sideways"})).is_err());
+    }
+
+    /// One headless frame of the status bar, with room above it for the artboard list; returns the
+    /// texts painted and where they are.
+    fn status_texts(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 600.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A click at `at` in the status bar; returns the texts of the frame after it.
+    fn status_click(app: &mut crate::VectorcraftApp, ctx: &egui::Context, at: egui::Pos2) -> Vec<(String, egui::Rect)> {
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
+            status_texts(app, ctx, vec![event]);
+        }
+        status_texts(app, ctx, vec![])
+    }
+
+    /// The navigator shows the active artboard's number and name, and its list shows every artboard
+    /// by number and name. Choosing one goes to it as the navigator's buttons do
+    /// (`view.goToArtboard`): it becomes the active artboard and the Artboard tool's, the view
+    /// centers on it, and the list closes.
+    #[test]
+    fn the_artboard_navigator_lists_the_artboards_by_number_and_name() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.run("artboard.setProps", json!({"index": 0, "name": "Front"})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "name": "Back"})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
+        app.select_tool("artboard");
+        app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+        let first = app.session.active().unwrap().doc.artboards[0].rect.center();
+        let ctx = egui::Context::default();
+        let texts = status_texts(&mut app, &ctx, vec![]);
+        let field = texts.iter().find(|(s, _)| s == "2  Back").map(|(_, r)| *r).expect("the field shows artboard 2's number and name");
+        assert!(!texts.iter().any(|(s, _)| s == "Front"), "the list is closed: {texts:?}");
+        let texts = status_click(&mut app, &ctx, field.center());
+        let at = |s: &str| texts.iter().find(|(t, _)| t == s).map(|(_, r)| *r).unwrap_or_else(|| panic!("no {s:?} in {texts:?}"));
+        let rows: Vec<egui::Rect> = [("1", "Front"), ("2", "Back"), ("3", "Artboard 3")]
+            .into_iter()
+            .map(|(number, name)| {
+                let (n, r) = (at(number), at(name));
+                assert!(r.y_range().contains(n.center().y) && n.right() < r.left(), "{number} before {name} on one row: {texts:?}");
+                r
+            })
+            .collect();
+        assert!(rows.windows(2).all(|w| w[0].bottom() <= w[1].top()), "the rows in the artboards' order: {rows:?}");
+        let texts = status_click(&mut app, &ctx, at("Front").center());
+        assert_eq!((app.view().unwrap().artboard, app.view().unwrap().center), (0, first), "Front, fitted in the window");
+        assert_eq!(app.session.tool_options()["active"], json!(0));
+        assert!(texts.iter().any(|(s, _)| s == "1  Front"), "{texts:?}");
+        assert!(!texts.iter().any(|(s, _)| s == "Back"), "the list closed: {texts:?}");
+    }
+
+    /// With 1,000 artboards the list lays out at most 12 rows. It opens on the active
+    /// artboard's row, a swipe scrolls it to the last artboard, and choosing that row goes there.
+    #[test]
+    fn the_artboard_list_lays_out_only_the_rows_near_the_view() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100, "artboards": 1000})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
+        app.run("view.goToArtboard", json!({"index": 699})).unwrap();
+        let ctx = egui::Context::default();
+        let rows = |texts: &[(String, egui::Rect)]| texts.iter().filter(|(s, _)| s.starts_with("Artboard ")).cloned().collect::<Vec<_>>();
+        let texts = status_texts(&mut app, &ctx, vec![]);
+        let field = texts.iter().find(|(s, _)| s == "700  Artboard 700").map(|(_, r)| *r).expect("the field");
+        let shown = rows(&status_click(&mut app, &ctx, field.center()));
+        assert!((1..=12).contains(&shown.len()), "{} rows laid out", shown.len());
+        let active = shown.iter().find(|(s, _)| s == "Artboard 700").map(|(_, r)| *r).expect("the active artboard's row in view");
+        let swipe = |phase, dy| egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, dy),
+            phase,
+            modifiers: Default::default(),
+        };
+        status_texts(
+            &mut app,
+            &ctx,
+            vec![egui::Event::PointerMoved(active.center()), swipe(egui::TouchPhase::Start, 0.0), swipe(egui::TouchPhase::Move, -100_000.0)],
+        );
+        let shown = rows(&status_texts(&mut app, &ctx, vec![swipe(egui::TouchPhase::End, 0.0)]));
+        assert!((1..=12).contains(&shown.len()), "{} rows laid out", shown.len());
+        let last = shown.iter().find(|(s, _)| s == "Artboard 1000").map(|(_, r)| *r).expect("the last row after the swipe");
+        status_click(&mut app, &ctx, last.center());
+        assert_eq!(app.view().unwrap().artboard, 999);
     }
 
     fn artboard_navigation_app(tool: &str) -> (crate::VectorcraftApp, vectorcraft_doc::NodeId) {
