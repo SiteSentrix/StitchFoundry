@@ -454,12 +454,12 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
         }
         ui.add_space(10.0);
-        // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical
-        // line (the left-right flip), flip-horizontal-2 a horizontal one (top-bottom).
-        if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Along Horizontal Axis"), false, 24.0).clicked() {
+        // Same mapping as the Transform panel (#1910): Lucide flip-vertical-2 is the vertical
+        // mirror line (Flip Horizontal / left-right); flip-horizontal-2 is Flip Vertical.
+        if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Horizontal"), false, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "vertical"})).ok();
         }
-        if widgets::icon_button(ui, "flip-horizontal-2", tl!("Flip Along Vertical Axis"), false, 24.0).clicked() {
+        if widgets::icon_button(ui, "flip-horizontal-2", tl!("Flip Vertical"), false, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "horizontal"})).ok();
         }
         // More Options: the Transform panel's Scale Corners and Scale Strokes & Effects, open
