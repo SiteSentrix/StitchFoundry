@@ -1503,6 +1503,45 @@ proptest! {
         });
         r.map_err(|msg| TestCaseError::fail(format!("placing hostile PostScript panicked: {msg}")))?;
     }
+
+    /// Damaged or hostile CMYK images (a CMYK JPEG, an image with a key color): read as images,
+    /// or as an error.
+    #[test]
+    fn eps_cmyk_images_never_panic(cut in 0usize..2_500, edits in prop::collection::vec((0usize..2_500, prop::sample::select(vec!['0', '9', 'f', 'a', ' ', '\n', '<', '>', '/', '[', ']', '(', ')', '-'])), 0..12)) {
+        let text = mutate_text(&cmyk_images_eps(), cut, &edits);
+        survive("mutated EPS CMYK images", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
+    }
+}
+
+/// An EPS with CMYK images that the PostScript interpreter reads: a CMYK JPEG through `DCTDecode`
+/// (Adobe's inverted samples), and an image whose key color hides a pixel.
+fn cmyk_images_eps() -> String {
+    use vectorcraft_render::encode::jpeg::{ColorModel, JpegOptions, encode};
+    let o = JpegOptions { color_model: ColorModel::Cmyk, embed_icc: false, ..JpegOptions::default() };
+    let jpeg = encode(&[0, 102, 255, 0].repeat(16), 4, 4, 90, None, &o).unwrap();
+    let hex: String = jpeg.iter().map(|b| format!("{b:02x}")).collect();
+    format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n/DeviceCMYK setcolorspace gsave 40 40 scale \
+         << /ImageType 1 /Width 4 /Height 4 /BitsPerComponent 8 /Decode [1 0 1 0 1 0 1 0] /ImageMatrix [4 0 0 -4 0 4] \
+         /DataSource currentfile /ASCIIHexDecode filter /DCTDecode filter >> image\n{hex}>\ngrestore 50 50 translate 40 40 scale \
+         << /ImageType 4 /Width 2 /Height 1 /BitsPerComponent 8 /Decode [0 1 0 1 0 1 0 1] /ImageMatrix [2 0 0 -1 0 1] \
+         /MaskColor [10 20 30 40] /DataSource <0a141e28 00667f08> >> image\nshowpage\n%%EOF\n"
+    )
+}
+
+/// [`cmyk_images_eps`] as it is: both images keep their ink amounts, the keyed one with its mask.
+#[test]
+fn the_cmyk_images_fixture_reads_its_inks_and_mask() {
+    let r = vectorcraft_eps::import(cmyk_images_eps().as_bytes()).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let d = &r.document;
+    let mut found = vec![];
+    d.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            found.push((d.images[&im.key].cmyk().map(|i| i.data.len()), n.extras().mask.is_some()));
+        }
+    });
+    assert_eq!(found, [(Some(64), false), (Some(8), true)]);
 }
 
 /// [`eps_sample`] as another app would write it: without the document it carries, so its
@@ -1561,6 +1600,8 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             // Masked images.
             "<< /ImageType 3 /InterleaveType 1 /DataDict << /ImageType 1 /Width 2 /Height 2 /BitsPerComponent 8 /ImageMatrix [2 0 0 2 0 0] /DataSource (abcdefghijklmnop) >> /MaskDict << /ImageType 1 /Width 2 /Height 2 /BitsPerComponent 1 /ImageMatrix [2 0 0 2 0 0] >> >>",
             "<< /ImageType 3 /InterleaveType 2 /DataDict << /ImageType 1 /Width 3 /Height 1 /BitsPerComponent 8 /ImageMatrix [3 0 0 1 0 0] /DataSource (abcdefghijklmnop) >> /MaskDict << /ImageType 1 /Width 3 /Height 5 /BitsPerComponent 1 /ImageMatrix [3 0 0 5 0 0] >> >>",
+            "<< /ImageType 4 /Width 2 /Height 2 /BitsPerComponent 8 /Decode [0 1 0 1 0 1 0 1] /ImageMatrix [2 0 0 2 0 0] /MaskColor [97 98 99 100] /DataSource (abcdefghijklmnop) >>",
+            "2 2 8 [2 0 0 2 0 0] (abcdefghijklmnop) false 4 colorimage",
             // Type 3 fonts and the show operators that space their glyphs.
             "/T3 << /FontType 3 /FontMatrix [0.1 0 0 0.1 0 0] /FontBBox [0 0 9 9] /Encoding [/a /b] /BuildChar { pop pop 9 0 setcharwidth 0 0 5 5 rectfill } >> definefont setfont",
             "/T4 << /FontType 3 /FontMatrix [1 0 0 1 0 0] /BuildGlyph { pop pop (x) show } /Encoding [/a] >> definefont setfont",
