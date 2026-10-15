@@ -13,7 +13,9 @@
 //!   row it passes to the same state, in one undo step. Ctrl/Cmd-click an eye switches the layer
 //!   between Preview and Outline. Alt-click an eye hides the other layers (`layer.hideOthers`), or
 //!   shows every layer when they are hidden (`layer.showAll`); Alt-click a lock does the same with
-//!   `layer.lockOthers` and `layer.unlockAll`.
+//!   `layer.lockOthers` and `layer.unlockAll`. Ctrl/Cmd+Alt-click an eye switches the other layers
+//!   to Outline and the row's layer to Preview (`layer.outlineOthers`), or switches every layer to
+//!   Preview when the others are in Outline (`layer.previewAll`).
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
 //!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Dropped on
 //!   the trash they are deleted, on New Layer duplicated.
@@ -801,6 +803,19 @@ fn others_action(doc: &Document, n: &Node, eye: bool) -> (String, Value) {
     (cmd.into(), params)
 }
 
+/// Ctrl/Cmd+Alt-clicking row `n`'s eye runs Outline Others, which puts every top-level layer but the
+/// one holding the row in Outline and puts that one in Preview. When all the other layers are in
+/// Outline already, it runs Preview All Layers. Each is one undo step.
+fn outline_others_action(doc: &Document, n: &Node) -> (String, Value) {
+    let own = doc.layer_of(n.id);
+    if doc.layers.iter().any(|l| Some(l.id) != own && !matches!(l.kind, NodeKind::Layer { preview: false, .. })) {
+        ("layer.outlineOthers".into(), json!({ "ids": [n.id.0] }))
+    } else {
+        // Preview All takes no rows.
+        ("layer.previewAll".into(), json!({}))
+    }
+}
+
 /// The eye and lock columns of row `n` at `r`.
 fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out) {
     let t = &view.t;
@@ -832,7 +847,9 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
     }
     let m = ui.input(|i| i.modifiers);
     if er.clicked() {
-        if m.alt {
+        if m.alt && m.command {
+            out.actions.push(outline_others_action(view.doc, n));
+        } else if m.alt {
             out.actions.push(others_action(view.doc, n, true));
         } else if m.command && n.is_layer() {
             // Ctrl/Cmd-click: Preview ↔ Outline for this layer.
@@ -1484,6 +1501,44 @@ mod tests {
         assert_eq!(state(&app), [(false, false), (true, false), (false, false)]);
         let doc = &app.session.active().unwrap().doc;
         assert!(doc.node(NodeId(sub["id"].as_u64().unwrap())).unwrap().visible);
+    }
+
+    #[test]
+    fn ctrl_alt_clicking_an_eye_switches_the_other_layers_between_outline_and_preview() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        run(&mut app, "layer.new", json!({}));
+        run(&mut app, "layer.new", json!({}));
+        let ctx = egui::Context::default();
+        // Rows top first: Layers 3, 2, 1.
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 3);
+        // Each layer bottom first: (visible, preview).
+        let state = |app: &VectorcraftApp| -> Vec<(bool, bool)> {
+            let doc = &app.session.active().unwrap().doc;
+            doc.layers.iter().map(|l| (l.visible, !matches!(l.kind, NodeKind::Layer { preview: false, .. }))).collect()
+        };
+        let last = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().map(|u| u.label.clone());
+        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let eye = |i: usize| egui::pos2(12.0, circles[i].y);
+        let ctrl_alt = egui::Modifiers { alt: true, command: true, ..Default::default() };
+        let before = undo(&app);
+        // Ctrl/Cmd+Alt-click Layer 1's eye: Layers 2 and 3 go to Outline in one step, and stay visible.
+        click_with(&mut app, &ctx, eye(2), ctrl_alt);
+        assert_eq!(state(&app), [(true, true), (true, false), (true, false)]);
+        assert_eq!(undo(&app), before + 1);
+        assert_eq!(last(&app).as_deref(), Some("Outline Others"));
+        // Again: every layer previews, in one step.
+        click_with(&mut app, &ctx, eye(2), ctrl_alt);
+        assert_eq!(state(&app), [(true, true); 3]);
+        assert_eq!(undo(&app), before + 2);
+        assert_eq!(last(&app).as_deref(), Some("Preview All Layers"));
+        // On a layer in Outline whose others preview: the others go to Outline and it previews.
+        click_with(&mut app, &ctx, eye(0), egui::Modifiers::COMMAND);
+        assert_eq!(state(&app), [(true, true), (true, true), (true, false)]);
+        click_with(&mut app, &ctx, eye(0), ctrl_alt);
+        assert_eq!(state(&app), [(true, false), (true, false), (true, true)]);
     }
 
     /// A document with two rectangles on one layer → (app, layer, [bottom, top]).
