@@ -1,11 +1,21 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::Effect;
-use vectorcraft_geom::{PathData, Point, Rect, Shape, SubPath, shapes};
+use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
+}
+
+/// Every image under `n`, in document order (its placement's x).
+fn image_xs(n: &Node, out: &mut Vec<f64>) {
+    if let NodeKind::Image(im) = &n.kind {
+        out.push(im.xf.as_coeffs()[4]);
+    }
+    for c in n.children().into_iter().flatten() {
+        image_xs(c, out);
+    }
 }
 
 fn square() -> PathData {
@@ -224,10 +234,103 @@ fn stacked_transform_copies_stay_within_the_anchor_budget() {
     assert_eq!(run("distort.transform", p, &square()).subpaths.len(), 1001);
 }
 
+/// #2042: stacked Transform effects multiply their image copies as they do their anchors; the
+/// image nodes they make are bounded, whatever each one's count.
+#[test]
+fn stacked_transform_copies_stay_within_the_image_budget() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::{ImageObject, NodeId};
+    let id = NodeId(9);
+    let image = || {
+        Node::new(
+            id,
+            NodeKind::Image(Box::new(ImageObject {
+                key: "k".into(),
+                width: 40,
+                height: 40,
+                xf: Affine::translate((10.0, 0.0)),
+                link: None,
+                placement: Default::default(),
+            })),
+        )
+    };
+    let count = |art: &Node| {
+        let mut xs = vec![];
+        image_xs(art, &mut xs);
+        xs.len()
+    };
+    let m = Affine::translate((70.0, 0.0));
+    let mut art = Node::group(id, vec![Arc::new(image())]);
+    let mut counts = vec![];
+    for _ in 0..3 {
+        crate::reshape::transform_images_within(&mut art, m, 1000, 100);
+        counts.push(count(&art));
+    }
+    assert_eq!(counts, [100, 100, 100], "99 copies, then no room for a copy of them");
+    // Within the budget every copy is made, and the effect's own budget takes a thousand copies.
+    let mut art = Node::group(id, vec![Arc::new(image())]);
+    crate::reshape::transform_images_within(&mut art, m, 24, 100);
+    assert_eq!(count(&art), 25);
+    let mut g = Node::group(id, vec![Arc::new(image())]);
+    g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 1000})));
+    assert_eq!(count(&evaluate_container(&g).unwrap()), 1001);
+}
+
 #[test]
 fn transform_copies_stop_before_they_overflow() {
     let out = run("distort.transform", json!({"scaleH": 100000, "scaleV": 100000, "copies": 1000}), &square());
     assert!(all_finite(&out) && out.subpaths.len() < 10, "{}", out.subpaths.len());
+}
+
+/// #2023: a Transform effect on a group moves, scales and copies its images like its paths: the
+/// map goes into each image's placement, and every copy is an image node of its own.
+#[test]
+fn transform_on_a_group_moves_and_copies_its_images() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::{Appearance, ImageObject, Node, NodeId, NodeKind};
+    let id = NodeId(9);
+    let sq = Node::path(id, square(), Appearance::default());
+    let image = Node::new(
+        id,
+        NodeKind::Image(Box::new(ImageObject {
+            key: "k".into(),
+            width: 40,
+            height: 40,
+            xf: Affine::translate((10.0, 0.0)),
+            link: None,
+            placement: Default::default(),
+        })),
+    );
+    let mut g = Node::group(id, vec![Arc::new(sq), Arc::new(image)]);
+    g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 2})));
+    let art = evaluate_container(&g).unwrap();
+    let mut xs = vec![];
+    image_xs(&art, &mut xs);
+    xs.sort_by(f64::total_cmp);
+    assert_eq!(xs, [10.0, 80.0, 150.0], "the image and its two copies, 70 pt apart");
+    // Without copies the image itself takes the transform, as a path does.
+    let mut g = Node::group(
+        id,
+        vec![Arc::new(Node::new(
+            id,
+            NodeKind::Image(Box::new(ImageObject {
+                key: "k".into(),
+                width: 40,
+                height: 40,
+                xf: Affine::translate((10.0, 0.0)),
+                link: None,
+                placement: Default::default(),
+            })),
+        ))],
+    );
+    g.appearance.effects.push(fx("distort.transform", json!({"scaleH": 50, "scaleV": 50, "reference": 8})));
+    let art = evaluate_container(&g).unwrap();
+    let mut xs = vec![];
+    image_xs(&art, &mut xs);
+    // The bounds are the image itself, so the bottom-right reference is its own: it halves in place.
+    assert_eq!(xs, [30.0], "scaled about its own bottom-right corner");
 }
 
 #[test]

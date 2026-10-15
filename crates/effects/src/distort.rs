@@ -112,6 +112,11 @@ const MAX_REACH: f64 = 1.0e9;
 /// a 2000-anchor path. Stacked Transform effects multiply their copies (three of 1000 copies make
 /// a thousand million of one square), so the limit is on the result, not on each effect's count.
 pub(crate) const MAX_COPY_ANCHORS: usize = 2_000_000;
+/// Most image nodes a Transform effect's copies make of an art, the originals included: 1000
+/// copies of a 2000-image art. Stacked Transform effects multiply their copies (three of 1000
+/// copies make a thousand million of one image), so the limit is on the result, not on each
+/// effect's count.
+pub(crate) const MAX_COPY_IMAGES: usize = 2_000_000;
 
 /// Transform effect: scale, rotate and reflect about reference point `reference` of the bounds
 /// (the 9-point grid, 4 = centre), then move; `copies` more times, each from the last. With
@@ -124,19 +129,7 @@ pub fn transform(path: &PathData, b: Rect, p: &Value, seed: u64) -> PathData {
 
 /// [`transform`] whose copies make at most `max` anchors of the path, the original included.
 pub(crate) fn transform_within(path: &PathData, b: Rect, p: &Value, seed: u64, max: usize) -> PathData {
-    let random = flag(p, "random", false);
-    // The share (0..1) of value `k` applied.
-    let share = |k: u64| if random { (noise(seed, k, 0, 0) + 1.0) / 2.0 } else { 1.0 };
-    let scale = |key: &str, k: u64| 1.0 + (num(p, key, 100.0).clamp(-MAX_SCALE, MAX_SCALE) / 100.0 - 1.0) * share(k);
-    let moved = |key: &str, k: u64| num(p, key, 0.0).clamp(-MAX_MOVE, MAX_MOVE) * share(k);
-    let reflect = |key: &str| if flag(p, key, false) { -1.0 } else { 1.0 };
-    let o = vectorcraft_geom::reference_point(b, num(p, "reference", 4.0).clamp(0.0, 8.0) as usize).to_vec2();
-    // Reflect X flips the x coordinates (left to right), Reflect Y the y coordinates.
-    let m = Affine::translate(Vec2::new(moved("moveH", 2), moved("moveV", 3)) + o)
-        * Affine::rotate(-(num(p, "rotate", 0.0) * share(4)).to_radians())
-        * Affine::scale_non_uniform(scale("scaleH", 0) * reflect("reflectX"), scale("scaleV", 1) * reflect("reflectY"))
-        * Affine::translate(-o);
-    let copies = num(p, "copies", 0.0).clamp(0.0, 1000.0) as usize;
+    let (m, copies) = transform_map(b, p, seed);
     if copies == 0 {
         return path.transformed(m);
     }
@@ -159,6 +152,28 @@ pub(crate) fn transform_within(path: &PathData, b: Rect, p: &Value, seed: u64, m
         out.subpaths.extend(cur.subpaths.iter().cloned());
     }
     out
+}
+
+/// The Transform effect's map and how many copies of what it is applied to it makes, for bounds
+/// `b` (the reference point lies on them), params `p` and the object's `seed` for Random: the map
+/// applies to the object itself when `copies` is 0, and once more to each of `copies` copies
+/// otherwise (see [`transform_within`], and images, whose copies count nodes against
+/// [`MAX_COPY_IMAGES`]).
+pub(crate) fn transform_map(b: Rect, p: &Value, seed: u64) -> (Affine, usize) {
+    let random = flag(p, "random", false);
+    // The share (0..1) of value `k` applied.
+    let share = |k: u64| if random { (noise(seed, k, 0, 0) + 1.0) / 2.0 } else { 1.0 };
+    let scale = |key: &str, k: u64| 1.0 + (num(p, key, 100.0).clamp(-MAX_SCALE, MAX_SCALE) / 100.0 - 1.0) * share(k);
+    let moved = |key: &str, k: u64| num(p, key, 0.0).clamp(-MAX_MOVE, MAX_MOVE) * share(k);
+    let reflect = |key: &str| if flag(p, key, false) { -1.0 } else { 1.0 };
+    let o = vectorcraft_geom::reference_point(b, num(p, "reference", 4.0).clamp(0.0, 8.0) as usize).to_vec2();
+    // Reflect X flips the x coordinates (left to right), Reflect Y the y coordinates.
+    let m = Affine::translate(Vec2::new(moved("moveH", 2), moved("moveV", 3)) + o)
+        * Affine::rotate(-(num(p, "rotate", 0.0) * share(4)).to_radians())
+        * Affine::scale_non_uniform(scale("scaleH", 0) * reflect("reflectX"), scale("scaleV", 1) * reflect("reflectY"))
+        * Affine::translate(-o);
+    let copies = num(p, "copies", 0.0).clamp(0.0, 1000.0) as usize;
+    (m, copies)
 }
 
 /// Tweak: random displacement of anchors and/or control points.
