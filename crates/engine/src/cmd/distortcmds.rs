@@ -257,7 +257,22 @@ fn place(points: &mut Vec<(f64, f64, f64)>, mut pt: (f64, f64, f64), from_below:
 /// points at other positions either side change in proportion (by the same amount from zero).
 fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f64), new: (f64, f64, f64)) {
     let t = points[i].0;
-    let scale = |v: f64, o: f64, n: f64| if o > 1e-9 { v * n / o } else { v + n - o }.max(0.0);
+    let scale = |v: f64, o: f64, n: f64| {
+        let width = if o > 1e-9 {
+            let product = v * n;
+            if product.is_finite() {
+                // Keep the existing rounding, including small products that n/o would lose.
+                product / o
+            } else {
+                // With finite nonnegative factors, an overflowing product has both factors
+                // above one. Divide the larger first so this fallback cannot underflow.
+                (v.max(n) / o) * v.min(n)
+            }
+        } else {
+            v + n - o
+        };
+        width.max(0.0)
+    };
     let before = (0..i).rev().find(|j| (points[*j].0 - t).abs() > SAME_T);
     let after = (i + 1..points.len()).find(|j| (points[*j].0 - t).abs() > SAME_T);
     for j in before.into_iter().chain(after) {
@@ -293,8 +308,11 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
         let st = weighted_stroke(d, id)?;
         let before = st.profile.clone();
         let half = st.width / 2.0;
-        let mut prof = st.profile.take().unwrap_or_else(uniform);
         let pt = (t, left / half, right / half);
+        if !half.is_finite() || half <= 0.0 || !pt.1.is_finite() || !pt.2.is_finite() {
+            return Err(bad(C, "width factors must be finite"));
+        }
+        let mut prof = st.profile.take().unwrap_or_else(uniform);
         pos = match point_index(p, &prof, C)? {
             Some(i) => {
                 let old = prof.points[i];
@@ -320,6 +338,11 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
                 i
             }
         };
+        // Validate on edit_counted's copy: a failed adjoining adjustment must not change
+        // the document, its dirty state or either side of its history.
+        if prof.points.iter().any(|p| !p.1.is_finite() || !p.2.is_finite()) {
+            return Err(bad(C, "width factors must be finite"));
+        }
         st.profile = Some(prof);
         Ok(usize::from(!same_points(st.profile.as_ref(), before.as_ref())))
     })?;
