@@ -99,7 +99,8 @@ fn the_selection_is_the_default_target_and_angle_and_radial_are_kept() {
     assert!(near(geom.start, Point::new(150.0, 0.0)) && near(geom.end, Point::new(150.0, 200.0)), "{geom:?}");
     assert_eq!(fill_gradient(&s, a).geom, Some(geom));
     // Radial: centred on the union, radius half its larger side, aspect kept.
-    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial", "aspect": 50, "stops": black_to_white()["stops"]}, "span": "selection"})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial", "aspect": 50, "stops": black_to_white()["stops"]}, "span": "selection"}))
+        .unwrap();
     let geom = fill_gradient(&s, a).geom.unwrap();
     assert!(near(geom.start, Point::new(150.0, 100.0)), "{geom:?}");
     assert!(((geom.end - geom.start).hypot() - 150.0).abs() < 1e-6, "{geom:?}");

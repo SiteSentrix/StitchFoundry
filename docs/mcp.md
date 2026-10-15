@@ -278,6 +278,9 @@ explicit `ids`.
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).
+A gradient given to several objects fits each one's own bounds; `paint.setFill` / `paint.setStroke` with
+`span: "selection"` place a linear or radial gradient once on the union of the targets' bounds instead, so one
+ramp runs across them.
 For `draw_shape` and `draw_path`, omitted paint fields inherit the current [new-art appearance](#new-art).
 For a filled shape or path without an outline, pass an explicit `fill` and `stroke: "none"`.
 Lines start with no fill and a visible stroke.
