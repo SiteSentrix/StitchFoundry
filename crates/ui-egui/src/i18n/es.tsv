@@ -4792,6 +4792,7 @@ mark-style	Japanese	Japonesas
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	La relación de escala debe estar entre 1:1000000 y 1000000:1
 @msg	Second measured segment no longer exists	El segundo segmento medido ya no existe
 @msg	Unknown dimension mode	Modo de cota desconocido
+@msg	Unknown dimension option {k}	Opción de cota desconocida {k}
 @msg	Unknown dimension style	Estilo de cota desconocido
 @msg	Unknown unit	Unidad desconocida
 # Revolve cap description

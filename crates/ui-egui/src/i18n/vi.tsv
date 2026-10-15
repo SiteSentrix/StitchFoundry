@@ -4404,6 +4404,7 @@ theme	Appearance	Giao diện
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Tỷ lệ phải nằm trong khoảng 1:1000000 đến 1000000:1
 @msg	Second measured segment no longer exists	Đoạn được đo thứ hai không còn tồn tại
 @msg	Unknown dimension mode	Chế độ kích thước không xác định
+@msg	Unknown dimension option {k}	Tùy chọn kích thước không xác định {k}
 @msg	Unknown dimension style	Kiểu kích thước không xác định
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description

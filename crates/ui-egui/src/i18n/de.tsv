@@ -4380,6 +4380,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Das Maßstabsverhältnis muss zwischen 1:1000000 und 1000000:1 liegen
 @msg	Second measured segment no longer exists	Das zweite gemessene Segment existiert nicht mehr
 @msg	Unknown dimension mode	Unbekannter Bemaßungsmodus
+@msg	Unknown dimension option {k}	Unbekannte Bemaßungsoption {k}
 @msg	Unknown dimension style	Unbekannter Bemaßungsstil
 @msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description

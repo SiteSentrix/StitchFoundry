@@ -4420,6 +4420,7 @@ lighting	Light	ライト
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	縮尺の比率は 1:1000000 から 1000000:1 の間にしてください
 @msg	Second measured segment no longer exists	2 番目の測定セグメントはもう存在しません
 @msg	Unknown dimension mode	寸法のモードが不明です
+@msg	Unknown dimension option {k}	不明な寸法オプション {k}
 @msg	Unknown dimension style	寸法のスタイルが不明です
 @msg	Unknown unit	単位が不明です
 # Revolve cap description

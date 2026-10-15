@@ -4421,6 +4421,7 @@ lighting	Light	Свет
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Соотношение масштаба должно быть от 1:1000000 до 1000000:1
 @msg	Second measured segment no longer exists	Второй измеряемый сегмент больше не существует
 @msg	Unknown dimension mode	Неизвестный режим размера
+@msg	Unknown dimension option {k}	Неизвестный параметр размера {k}
 @msg	Unknown dimension style	Неизвестный стиль размера
 @msg	Unknown unit	Неизвестная единица
 # Revolve cap description

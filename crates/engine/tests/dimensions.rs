@@ -357,3 +357,35 @@ fn dimension_cannot_measure_its_own_generated_art() {
     let child = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap()[0].id;
     assert!(s.execute("dimension.create", &json!({"source":{"kind":"segment","edge":{"node":child,"subpath":0,"segment":0}}})).is_err());
 }
+
+#[test]
+fn unknown_dimension_options_are_refused_by_commands_but_a_newer_file_still_opens() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let source = json!({"kind":"segment","edge":{"node":line,"subpath":0,"segment":0}});
+    let bad = s.execute("dimension.create", &json!({"source":source,"options":{"units":"in","color":"red"}}));
+    assert!(bad.unwrap_err().to_string().contains("Unknown dimension option color"));
+    assert!(s.set_tool_option_cmd(&json!({"tool":"dimension","values":{"style":{"precison":2}}})).is_err());
+    let id = dim(&mut s, line);
+    let saved = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let mut v: Value = serde_json::from_slice(&saved).unwrap();
+    // A later version's dimension carries fields this one doesn't know.
+    fn add_unknown(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                if let Some(Value::Object(d)) = m.get_mut("dimension") {
+                    d.insert("later".into(), json!(1));
+                    if let Some(Value::Object(o)) = d.get_mut("options") {
+                        o.insert("later".into(), json!(true));
+                    }
+                }
+                m.values_mut().for_each(add_unknown);
+            }
+            Value::Array(a) => a.iter_mut().for_each(add_unknown),
+            _ => {}
+        }
+    }
+    add_unknown(&mut v);
+    let doc = vectorcraft_format::load(&serde_json::to_vec(&v).unwrap()).unwrap();
+    assert!(doc.node(NodeId(id)).unwrap().extras().dimension.is_some());
+}

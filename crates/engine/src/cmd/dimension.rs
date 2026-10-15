@@ -46,9 +46,7 @@ fn error(s: impl ToString) -> EngineError {
 fn options(s: &Session, p: &Value) -> Result<DimensionOptions> {
     let default = s.tool_options_of("dimension");
     let value = p.get("options").cloned().unwrap_or_else(|| default.get("style").cloned().unwrap_or(json!({})));
-    let o: DimensionOptions = serde_json::from_value(value).map_err(error)?;
-    o.validate().map_err(error)?;
-    Ok(o)
+    DimensionOptions::from_params(value).map_err(error)
 }
 
 fn point(p: &Value, key: &str) -> Result<Point> {

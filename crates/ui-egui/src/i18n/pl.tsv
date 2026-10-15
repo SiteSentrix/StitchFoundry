@@ -4692,6 +4692,7 @@ mark-style	Japanese	Japońskie
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Współczynnik skali musi mieścić się między 1:1000000 a 1000000:1
 @msg	Second measured segment no longer exists	Drugi mierzony odcinek już nie istnieje
 @msg	Unknown dimension mode	Nieznany tryb wymiaru
+@msg	Unknown dimension option {k}	Nieznana opcja wymiaru {k}
 @msg	Unknown dimension style	Nieznany styl wymiaru
 @msg	Unknown unit	Nieznana jednostka
 # Revolve cap description

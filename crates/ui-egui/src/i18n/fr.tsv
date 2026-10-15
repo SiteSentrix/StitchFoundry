@@ -4850,6 +4850,7 @@ theme	Appearance	Apparence
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Le rapport d’échelle doit être compris entre 1:1000000 et 1000000:1
 @msg	Second measured segment no longer exists	Le second segment mesuré n’existe plus
 @msg	Unknown dimension mode	Mode de cote inconnu
+@msg	Unknown dimension option {k}	Option de cote inconnue {k}
 @msg	Unknown dimension style	Style de cote inconnu
 @msg	Unknown unit	Unité inconnue
 # Revolve cap description

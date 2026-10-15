@@ -123,7 +123,7 @@ pub enum TextAlignment {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+#[serde(default, rename_all = "camelCase")]
 pub struct DimensionOptions {
     pub units: LengthUnit,
     pub precision: usize,
@@ -182,6 +182,18 @@ impl Default for DimensionOptions {
 }
 
 impl DimensionOptions {
+    /// Options given to a command or a tool: unknown keys are refused there, while files load
+    /// tolerantly so a newer version's options don't stop a document opening.
+    pub fn from_params(v: serde_json::Value) -> Result<Self, String> {
+        if let (Some(given), Ok(serde_json::Value::Object(known))) = (v.as_object(), serde_json::to_value(Self::default()))
+            && let Some(k) = given.keys().find(|k| !known.contains_key(*k))
+        {
+            return Err(format!("Unknown dimension option {k}"));
+        }
+        let o: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;
+        o.validate()?;
+        Ok(o)
+    }
     pub fn factor(&self) -> Result<f64, String> {
         let (a, b) = self.scale.split_once(':').ok_or("Scale must be drawing:real, for example 1:10")?;
         let parse = |s: &str| s.trim().parse::<f64>().ok().filter(|n| n.is_finite() && *n > 0.0 && *n <= 1e9);
@@ -236,7 +248,7 @@ impl DimensionOptions {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct SegmentRef {
     pub node: NodeId,
     pub subpath: usize,
@@ -263,7 +275,7 @@ impl SegmentRef {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum DimensionSource {
     Segment {
         edge: SegmentRef,
@@ -312,7 +324,7 @@ impl DimensionSource {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct PointRef {
     pub node: NodeId,
     pub subpath: usize,
@@ -326,7 +338,7 @@ impl PointRef {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct Dimension {
     pub mode: DimensionMode,
     pub a: Point,

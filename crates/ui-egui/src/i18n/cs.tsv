@@ -4851,6 +4851,7 @@ mark-style	Japanese	Japonské
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Poměr měřítka musí být mezi 1:1000000 a 1000000:1
 @msg	Second measured segment no longer exists	Druhý měřený segment už neexistuje
 @msg	Unknown dimension mode	Neznámý režim kóty
+@msg	Unknown dimension option {k}	Neznámá volba kóty {k}
 @msg	Unknown dimension style	Neznámý styl kóty
 @msg	Unknown unit	Neznámá jednotka
 # Revolve cap description

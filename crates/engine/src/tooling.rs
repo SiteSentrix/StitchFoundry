@@ -455,8 +455,7 @@ impl Session {
         }
         if tool.unwrap_or(self.tool_id()) == "dimension" {
             if let Some(style) = values.get("style") {
-                let options: vectorcraft_doc::dimension::DimensionOptions = serde_json::from_value(style.clone()).map_err(|e| e.to_string())?;
-                options.validate()?;
+                vectorcraft_doc::dimension::DimensionOptions::from_params(style.clone())?;
             }
             if let Some(mode) = values.get("mode")
                 && !mode.as_str().is_some_and(|m| ["linear", "angular", "radial", "radius", "diameter"].contains(&m))

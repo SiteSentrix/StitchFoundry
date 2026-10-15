@@ -4425,6 +4425,7 @@ lighting	Light	Luce
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Il rapporto di scala deve essere compreso tra 1:1000000 e 1000000:1
 @msg	Second measured segment no longer exists	Il secondo segmento misurato non esiste più
 @msg	Unknown dimension mode	Modalità di quota sconosciuta
+@msg	Unknown dimension option {k}	Opzione di quota sconosciuta {k}
 @msg	Unknown dimension style	Stile di quota sconosciuto
 @msg	Unknown unit	Unità sconosciuta
 # Revolve cap description
