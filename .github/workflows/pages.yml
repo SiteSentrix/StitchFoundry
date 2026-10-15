@@ -1,0 +1,89 @@
+# The web app on GitHub Pages (free for a public repository): every push to main builds the
+# browser version and publishes it at https://stitchwright.github.io/StitchFoundry/. Also run by
+# hand from Actions › Web app › Run workflow.
+#
+# One-time setting (repository owner): Settings › Pages › Build and deployment › Source:
+# "GitHub Actions". Until then the deploy step fails with "Not Found".
+#
+# GitHub Pages can't set custom headers, but it already serves .wasm as application/wasm, gzips
+# it and uses HTTPS (WebGPU needs a secure page), which is all the app needs
+# (packaging/web/README.md).
+name: Web app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push replaces a queued one but never cuts one off mid-way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  VECTORCRAFT_BUILD_SHA: ${{ github.sha }}
+  CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+  CRAFT_FONTS_REQUIRED: "1"
+
+jobs:
+  build:
+    name: Build the web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TRUNK_VERSION: 0.21.14
+    steps:
+      - uses: actions/checkout@v7
+      # Japanese, Chinese, Arabic and Thai fonts for the menus, embedded by crates/text/build.rs
+      # (the same commit as release.yml; see craftrules standards/fonts.md).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: pages-web
+      - name: Install trunk
+        run: |
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.cargo/bin" trunk
+          trunk --version
+      - name: Build
+        working-directory: apps/vectorcraft-web
+        run: trunk build --release
+      - name: Check the site
+        run: |
+          test -f dist/web/index.html
+          ls dist/web/*.wasm
+          # relative URLs only: Pages serves the site under /StitchFoundry/
+          if grep -Eq '(src|href)="/[^/]' dist/web/index.html; then
+            echo "::error::index.html has root-absolute URLs"
+            exit 1
+          fi
+          # no Jekyll processing (it would hide files whose names start with _)
+          touch dist/web/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/web
+
+  deploy:
+    name: Publish on GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
