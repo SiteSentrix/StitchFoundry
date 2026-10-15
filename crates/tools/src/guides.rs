@@ -82,6 +82,9 @@ pub struct Targets {
     /// The bounds of the objects a moved selection spaces itself evenly with (Spacing Guides):
     /// gathered only for moves ([`Self::for_move`]).
     boxes: Vec<Rect>,
+    /// The artboards (the hoop's sewing field in a design): their centres say "page center" and
+    /// their centre lines show faintly while something moves over them.
+    pages: Vec<Rect>,
     /// How the guides these targets produce look.
     style: GuideStyle,
 }
@@ -318,6 +321,7 @@ impl Targets {
         };
         for (_, ab) in doc.artboards.iter().enumerate().filter(|(i, _)| Some(*i) != skip_artboard) {
             add_rect(&mut t, ab.rect, Kind::Artboard);
+            t.pages.push(ab.rect);
             if doc.setup.has_bleed() {
                 add_rect(&mut t, doc.setup.bleed_rect(ab.rect), Kind::Bleed);
             }
@@ -583,6 +587,10 @@ impl Targets {
     /// ([`Self::even_spacing`]). Returns the shift and the guides.
     pub fn snap_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>) {
         let (mut d, mut ov, aligned) = self.align_rects(rects, tol);
+        // the page's (hoop's) centre lines, faint, under whatever moves over it
+        if let [r] = rects {
+            ov.extend(self.page_lines(*r + d));
+        }
         if let [r] = rects
             && !self.boxes.is_empty()
         {
@@ -679,31 +687,98 @@ impl Targets {
     /// (even with Alignment Guides off, or already in line, when there is no line or shift to
     /// tell).
     fn align_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
+        // The nearest target line within `tol` of any rectangle's edges or centre (`k`: 0 the low
+        // edge, 1 the centre, 2 the high edge). A centre lining up with a centre wins over an
+        // edge a little nearer, so things go middle to middle unless an edge is clearly closer.
         let nearest = |targets: &[(f64, Point, Kind)], along: fn(&Rect) -> [f64; 3]| {
             rects
                 .iter()
-                .flat_map(|r| along(r).into_iter().map(move |v| (v, *r)))
-                .flat_map(|(v, r)| lines_near(targets, v, tol).iter().map(move |(t, from, _)| (t - v, *from, v, r)))
+                .flat_map(|r| along(r).into_iter().enumerate().map(move |(k, v)| (k, v, *r)))
+                .flat_map(|(k, v, r)| {
+                    lines_near(targets, v, tol).iter().map(move |(t, from, kind)| (t - v, *from, v, r, k == 1 && *kind == Kind::Center))
+                })
                 .filter(|(d, ..)| d.abs() <= tol)
-                .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
+                .min_by(|a, b| {
+                    let score = |m: &(f64, Point, f64, Rect, bool)| m.0.abs() - if m.4 { tol * 0.5 } else { 0.0 };
+                    score(a).total_cmp(&score(b))
+                })
         };
         let best_x = nearest(&self.xs, |r| [r.x0, r.center().x, r.x1]);
         let best_y = nearest(&self.ys, |r| [r.y0, r.center().y, r.y1]);
         let mut d = Vec2::ZERO;
         let mut ov = vec![];
-        if let Some((dx, from, x, r)) = best_x {
+        // centre to centre: a long line through both (across the whole page for its centre), each
+        // centre ringed, and a label saying which
+        let mut centred: Vec<(Point, bool)> = vec![];
+        if let Some((dx, from, x, r, centre)) = best_x {
             d.x = dx;
             let x = x + dx;
-            let (y0, y1) = (from.y.min(r.y0), from.y.max(r.y1));
+            let (mut y0, mut y1) = (from.y.min(r.y0), from.y.max(r.y1));
+            if centre {
+                let page = self.page_at(from);
+                (y0, y1) = match page {
+                    Some(p) => (p.y0.min(y0), p.y1.max(y1)),
+                    None => (y0 - 2.0 * tol, y1 + 2.0 * tol),
+                };
+                centred.push((from, page.is_some()));
+            }
             ov.extend(self.line(Point::new(x, y0), Point::new(x, y1)));
         }
-        if let Some((dy, from, y, r)) = best_y {
+        if let Some((dy, from, y, r, centre)) = best_y {
             d.y = dy;
             let y = y + dy;
-            let (x0, x1) = (from.x.min(r.x0), from.x.max(r.x1));
+            let (mut x0, mut x1) = (from.x.min(r.x0), from.x.max(r.x1));
+            if centre {
+                let page = self.page_at(from);
+                (x0, x1) = match page {
+                    Some(p) => (p.x0.min(x0), p.x1.max(x1)),
+                    None => (x0 - 2.0 * tol, x1 + 2.0 * tol),
+                };
+                centred.push((from, page.is_some()));
+            }
             ov.extend(self.line(Point::new(x0, y), Point::new(x1, y)));
         }
+        if !centred.is_empty() && self.style.lines {
+            if let [r] = rects {
+                let c = (*r + d).center();
+                ov.push(Overlay::Handle { p: c, color: self.style.color });
+                for (from, _) in &centred {
+                    if from.distance(c) > 1e-6 {
+                        ov.push(Overlay::Handle { p: *from, color: self.style.color });
+                    }
+                }
+                let on_page = centred.iter().all(|(_, page)| *page);
+                let text = match (centred.len(), on_page) {
+                    (2, true) => "page center",
+                    (2, false) => "centered",
+                    (_, true) => "page center line",
+                    _ => "center line",
+                };
+                ov.extend(self.label(c, text));
+            }
+        }
         (d, ov, [best_x.is_some(), best_y.is_some()])
+    }
+
+    /// The page (artboard) whose centre is `p`, if any.
+    fn page_at(&self, p: Point) -> Option<Rect> {
+        self.pages.iter().copied().find(|r| r.center().distance(p) < 1e-6)
+    }
+
+    /// The faint centre lines of the page under `r` (its centre on it), across the page.
+    fn page_lines(&self, r: Rect) -> Vec<Overlay> {
+        if !self.style.lines {
+            return vec![];
+        }
+        let c = r.center();
+        let Some(p) = self.pages.iter().find(|p| p.contains(c)) else { return vec![] };
+        let [cr, cg, cb] = self.style.color;
+        let color = [cr, cg, cb, 70];
+        let m = p.center();
+        vec![
+            Overlay::GridLine { a: Point::new(m.x, p.y0), b: Point::new(m.x, p.y1), color },
+            Overlay::GridLine { a: Point::new(p.x0, m.y), b: Point::new(p.x1, m.y), color },
+        ]
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
