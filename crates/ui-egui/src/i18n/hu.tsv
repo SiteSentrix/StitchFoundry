@@ -4569,6 +4569,8 @@ imageTrace	Outline	Körvonal
 @msg	the art is too light for any dots	a grafika túl világos, egyetlen raszterpont sem keletkezik
 @msg	the art on them differs from the page's in {_1}% of it	a rajtuk lévő grafika az oldalétól ennyiben tér el: {_1}%
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	a rajtuk lévő grafika az oldalétól ennyiben tér el: {_1}%; ennek ellenére a szerkesztési adataiból származnak
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	a fájl rétegei nem olvashatók ({_1}): az oldalaként, egyetlen rétegben nyílik meg
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	a fájl rétegei nem olvashatók a szerkesztési adataiból ({_1}): a PDF-részéből származnak
 @msg	the artboard to fit must be a positive size up to {_1} pt	az illesztendő rajztábla mérete pozitív, legfeljebb {_1} pt lehet
 @msg	the background worker stopped	a háttérfolyamat leállt
 @msg	the compressed file unpacks to more than {_1} MB	a tömörített fájl kicsomagolva nagyobb lenne, mint {_1} MB

@@ -3623,6 +3623,8 @@ imageTrace	Outline	Kontur
 @msg	its type is to come in as outlines, which only its page has	jego tekst ma zostać wczytany jako kontury, które ma tylko jego strona
 @msg	the art on them differs from the page's in {_1}% of it	kompozycja na nich różni się od strony w {_1}%
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	kompozycja na nich różni się od strony w {_1}%: mimo to są wczytywane z danych edycyjnych
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	nie odczytano warstw pliku ({_1}): plik jest wczytywany jako jego strona, na jednej warstwie
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	nie odczytano warstw pliku z jego danych edycyjnych ({_1}): pochodzą z jego części PDF
 @msg	`to` must be "corner" or "smooth"	`to` musi mieć wartość "corner" lub "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Pliki BMP są w RGB lub skali szarości: colorModel rgb lub gray
 @msg	Blend colors: select at least three objects with filled colours	Przejście kolorów: zaznacz co najmniej trzy obiekty z wypełnieniem kolorem
