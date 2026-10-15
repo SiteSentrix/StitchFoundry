@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_color::BlendMode;
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_geom::corners::cut_corners;
 use vectorcraft_geom::shapes::{self, CornerKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
@@ -873,6 +873,38 @@ pub struct OpacityMask {
 impl OpacityMask {
     pub fn new(art: Node, clip: bool) -> Self {
         Self { art: Arc::new(art), clip, invert: false, disabled: false, linked: true }
+    }
+}
+
+/// Every paint of `n` (and its children) white, opacities kept: an alpha mask's art as an opacity
+/// mask's, whose luminance over the black outside the art is then the art's alpha.
+pub fn whiten(n: &mut Node) {
+    let white = |p: &mut Paint| match p {
+        Paint::Solid { color, swatch, tint } => {
+            (*color, *swatch, *tint) = (Color::WHITE, None, 1.0);
+        }
+        Paint::Gradient(g) => {
+            for s in &mut g.gradient.stops {
+                (s.color, s.swatch, s.tint) = (Color::WHITE, None, 1.0);
+            }
+        }
+        Paint::None | Paint::Pattern { .. } => {}
+    };
+    for item in &mut n.appearance.items {
+        white(item.paint_mut());
+    }
+    match &mut n.kind {
+        NodeKind::Mesh(m) => m.points.iter_mut().for_each(|p| p.color = Color::WHITE),
+        NodeKind::Text(t) => t.runs.iter_mut().for_each(|r| {
+            white(&mut r.style.fill);
+            white(&mut r.style.stroke);
+        }),
+        _ => {}
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch {
+            whiten(Arc::make_mut(c));
+        }
     }
 }
 
