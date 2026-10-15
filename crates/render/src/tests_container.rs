@@ -155,6 +155,74 @@ fn group_geometry_effects_move_and_copy_images_too() {
     assert_eq!(img.pixel(5, 10), BLUE, "the path itself");
 }
 
+/// A 100×100 document holding a group of a red square (10..90) and black 40 pt type "IIII" over
+/// it, the type changed by `ty` and the group changed by `group`.
+fn type_group_doc(ty: impl FnOnce(&mut Node), group: impl FnOnce(&mut Node)) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let a = rect(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), solid(1.0, 0.0, 0.0));
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+    ty(&mut t);
+    let mut g = Node::group(d.alloc_id(), vec![a, Arc::new(t)]);
+    group(&mut g);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    d
+}
+
+#[test]
+fn type_in_a_group_keeps_its_transparency_and_visibility_under_the_groups_geometry_effects() {
+    // Offset Path 0 leaves every path as it is, so the group is drawn the same with it as without
+    // it, for type at 50 %, hidden type, and type at 50 % defining its knockout shape in a
+    // knockout group.
+    let half: fn(&mut Node) = |t| t.opacity = 0.5;
+    let hidden: fn(&mut Node) = |t| t.visible = false;
+    let shape: fn(&mut Node) = |t| (t.opacity, t.knockout_shape) = (0.5, true);
+    let plain: fn(&mut Node) = |_| {};
+    let knockout: fn(&mut Node) = |g| g.knockout = Knockout::On;
+    for (case, ty, group) in [("50 %", half, plain), ("hidden", hidden, plain), ("knockout shape", shape, knockout)] {
+        let without = render(&type_group_doc(ty, group));
+        let with = render(&type_group_doc(ty, |g| {
+            group(g);
+            g.appearance.effects.push(fx("path.offsetPath", json!({"offset": 0})));
+        }));
+        let worst = without.pixels.iter().zip(&with.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(worst <= 4, "{case}: max channel difference {worst}");
+    }
+}
+
+#[test]
+fn type_in_a_clipping_path_clips_alike_under_the_groups_geometry_effects() {
+    // The red square is clipped by type with a Transform of its own, which the clip leaves out,
+    // then by a group of that type and a small square, with the type shown and hidden. Offset
+    // Path 0 on the clip group leaves every path as it is.
+    let doc = |effect: bool, grouped: bool, hidden: bool| {
+        let mut d = Document::new(100.0, 100.0);
+        let style = CharStyle { size: 40.0, fill: Paint::None, ..Default::default() };
+        let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+        t.appearance.effects.push(fx("distort.transform", json!({"moveH": 30})));
+        t.visible = !hidden;
+        let mut clip = Arc::new(t);
+        if grouped {
+            let small = rect(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), Paint::None);
+            clip = Arc::new(Node::group(d.alloc_id(), vec![clip, small]));
+        }
+        let a = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), solid(1.0, 0.0, 0.0));
+        let mut g = Node::new(d.alloc_id(), NodeKind::Group { children: vec![clip, a], clip: true });
+        if effect {
+            g.appearance.effects.push(fx("path.offsetPath", json!({"offset": 0})));
+        }
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        d
+    };
+    for (grouped, hidden) in [(false, false), (true, false), (true, true)] {
+        let (without, with) = (render(&doc(false, grouped, hidden)), render(&doc(true, grouped, hidden)));
+        let worst = without.pixels.iter().zip(&with.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(worst <= 4, "grouped {grouped}, hidden {hidden}: max channel difference {worst}");
+    }
+}
+
 #[test]
 fn a_layer_paints_its_own_fill_and_a_knockout_group_keeps_knocking_out() {
     let mut d = group_doc(|_| {});

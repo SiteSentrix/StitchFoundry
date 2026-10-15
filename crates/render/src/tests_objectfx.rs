@@ -344,6 +344,29 @@ fn blur_on_a_symbol_instance_softens_its_edges() {
 }
 
 #[test]
+fn type_in_a_symbols_art_keeps_its_opacity_under_the_instances_effects() {
+    // The symbol's art is 50 % black type. Offset Path 0 and a shadow at 0 % opacity on the
+    // instance paint nothing of their own, so the instance is drawn the same with them as without
+    // them.
+    let doc = |effects| {
+        let mut d = symbol_doc(effects);
+        let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+        let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(-45.0, 10.0), "IIII", style))));
+        t.opacity = 0.5;
+        d.symbols[0].art = Arc::new(t);
+        d
+    };
+    let plain = render(&doc(vec![]));
+    let offset = fx("path.offsetPath", json!({"offset": 0}));
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 0, "mode": "normal"}));
+    for effect in [offset, shadow] {
+        let img = render(&doc(vec![effect.clone()]));
+        let worst = plain.pixels.iter().zip(&img.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(worst <= 4, "{}: max channel difference {worst}", effect.id);
+    }
+}
+
+#[test]
 fn geometry_effects_reshape_type_through_its_outlines() {
     let plain = inked_columns(&render(&text_doc(vec![])));
     assert!(!plain.is_empty() && plain[0] < 30, "{plain:?}");
