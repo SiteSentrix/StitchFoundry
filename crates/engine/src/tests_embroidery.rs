@@ -5437,6 +5437,33 @@ fn echo_and_background_quilting_go_round_the_art() {
 }
 
 /// NEW-01: Multi Blend as one object: the layers sew from the one fill, each in its thread and
+/// BEY-05: a tartan fill lays the sett down the shape and across it, one fill per colour each
+/// way, the warp first and the weft open on top; Undo puts the shape back.
+#[test]
+fn a_tartan_fill_weaves_the_sett_both_ways() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    let r = s.execute("embroidery.tartan", &json!({})).unwrap();
+    assert_eq!(r["colors"].as_array().unwrap().len(), 4, "{r}");
+    assert_eq!(r["objects"], 8, "{r}");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(a).is_none());
+    let g = d.node(vectorcraft_doc::NodeId(r["id"].as_u64().unwrap())).unwrap();
+    let kids = g.children().unwrap();
+    let names: Vec<String> = kids.iter().map(|k| k.embroidery.as_deref().unwrap().thread.clone().unwrap().name).collect();
+    assert!(names[..4].iter().all(|n| n.starts_with("Tartan warp")) && names[4..].iter().all(|n| n.starts_with("Tartan weft")), "{names:?}");
+    // the warp's rows run down, the weft's across
+    let angle = |k: usize| match &kids[k].embroidery.as_deref().unwrap().stitch {
+        sf_core::attr::StitchType::Fill(f) => f.angle,
+        _ => f64::NAN,
+    };
+    assert_eq!((angle(0), angle(4)), (90.0, 0.0));
+    assert!(stitches(&s) > 1000);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).is_some());
+    assert!(s.execute("embroidery.tartan", &json!({"sett": [{"color": "#ff0000", "width": 99}]})).is_err());
+}
+
 /// BEY-05: cutwork splits a line by direction for the cutting needles, grouped by needle, and
 /// Undo puts the line back.
 #[test]
