@@ -4853,3 +4853,5 @@ machine	Stop	停止
 	Downloaded:	已下载：
 	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	“为我的绣花机保存”会下载绣花机要绣的文件：请把它复制到绣花机的U盘。
 @msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	按渐变混色
+	Sew the gradient's colours blended the way it runs	按渐变的方向混合缝出它的颜色

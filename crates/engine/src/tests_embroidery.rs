@@ -5437,6 +5437,42 @@ fn echo_and_background_quilting_go_round_the_art() {
 }
 
 /// NEW-01: Multi Blend as one object: the layers sew from the one fill, each in its thread and
+/// BEY-05: a fill painted with a linear gradient blends its stops' colours the way the gradient
+/// runs, each colour where its stop is, and the art keeps its gradient.
+#[test]
+fn a_linear_gradient_fill_blends_its_colours_along_the_gradient() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 120.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    // nothing to blend from a solid fill
+    assert!(s.execute("embroidery.gradientBlend", &json!({})).is_err());
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 0.3, "color": "#ffff00"}, {"offset": 1, "color": "#0000ff"}]);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear", "stops": stops}})).unwrap();
+    let r = s.execute("embroidery.gradientBlend", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]));
+    let f = fill_params(&s, a);
+    assert_eq!(f.blend.len(), 3);
+    assert_eq!(f.blend[1].spacing_profile[1][0], 0.3_f32 as f64);
+    assert!(matches!(s.doc().unwrap().doc.node(a).unwrap().appearance.fill_paint(), Paint::Gradient(_)), "the art keeps its gradient");
+    // red sews on the left, yellow nearer it than the middle, blue on the right
+    let plan = s.embroidery_plan().unwrap();
+    let mean_x = |k: usize| {
+        let own = &plan.built.spans[k].own;
+        own.iter().map(|st| st.pos().x).sum::<f64>() / own.len() as f64
+    };
+    let (red, yellow, blue) = (mean_x(0), mean_x(1), mean_x(2));
+    assert!(red < yellow && yellow < blue, "{red} {yellow} {blue}");
+    // turned: a gradient running down blends top to bottom
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear", "stops": stops, "angle": -90}})).unwrap();
+    s.execute("embroidery.gradientBlend", &json!({})).unwrap();
+    let plan = s.embroidery_plan().unwrap();
+    let mean_y = |k: usize| {
+        let own = &plan.built.spans[k].own;
+        own.iter().map(|st| st.pos().y).sum::<f64>() / own.len() as f64
+    };
+    assert!(mean_y(0) < mean_y(2), "{} {}", mean_y(0), mean_y(2));
+}
+
 /// with its own spacing, underlay under the first only; taking the blend out sews it plain again.
 #[test]
 fn a_blend_stays_one_object_and_sews_its_layers_in_their_threads() {
