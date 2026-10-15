@@ -3,7 +3,7 @@
 //! non-zero, repeated keys for Merge) at a few counts.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use vectorcraft_geom::{FillRule, Point, Rect, shapes};
+use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath, shapes};
 use vectorcraft_pathops::{PathfinderOp, Shape, pathfinder};
 
 fn shapes_of(n: usize, seed: u64) -> Vec<Shape> {
@@ -20,13 +20,43 @@ fn shapes_of(n: usize, seed: u64) -> Vec<Shape> {
             let path = match i % 3 {
                 0 => shapes::ellipse(Rect::from_center_size(Point::new(x, y), (2.0 * s, 1.4 * s))),
                 1 => shapes::rectangle(Rect::new(x, y, x + 1.5 * s, y + s)),
-                _ => shapes::star(Point::new(x, y), s, s / 2.0, 5, 0.3),
+                _ => star(Point::new(x, y), s, s / 2.0),
             };
             let rule = if i % 4 == 3 { FillRule::EvenOdd } else { FillRule::NonZero };
             Shape::new(path, rule, (i % 5) as u64)
         })
         .collect()
 }
+
+/// Builds a star as `shapes::star(center, r1, r2, 5, 0.3)` does, with the cosines and sines read
+/// from `STAR_UNIT_VECTORS`.
+fn star(center: Point, r1: f64, r2: f64) -> PathData {
+    let pts: Vec<Point> = STAR_UNIT_VECTORS
+        .iter()
+        .enumerate()
+        .map(|(i, &(cos, sin))| {
+            let r = if i % 2 == 0 { r1 } else { r2 };
+            Point::new(center.x + r * f64::from_bits(cos), center.y + r * f64::from_bits(sin))
+        })
+        .collect();
+    PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// Each row holds the correctly rounded cosine and sine, as bits, of one of the 10 angles that
+/// `shapes::star` computes for 5 points and a rotation of 0.3°. A platform's libm can differ from
+/// them in the last bit.
+const STAR_UNIT_VECTORS: [(u64, u64); 10] = [
+    (0x3f75_724e_56b4_2a6c, 0xbfef_ffe3_40b4_d4f6),
+    (0x3fe2_f1c5_9f37_cbf7, 0xbfe9_ca2a_1be5_b900),
+    (0x3fee_7c33_ee44_9408, 0xbfd3_7547_1564_f9f7),
+    (0x3fee_61b1_8a0e_c1cb, 0x3fd4_1873_d064_86bd),
+    (0x3fe2_ac5e_9e54_9166, 0x3fe9_fc96_97b3_dc51),
+    (0xbf75_724e_56b4_29df, 0x3fef_ffe3_40b4_d4f6),
+    (0xbfe2_f1c5_9f37_cbf5, 0x3fe9_ca2a_1be5_b901),
+    (0xbfee_7c33_ee44_9407, 0x3fd3_7547_1564_f9fd),
+    (0xbfee_61b1_8a0e_c1cc, 0xbfd4_1873_d064_86b7),
+    (0xbfe2_ac5e_9e54_9169, 0xbfe9_fc96_97b3_dc4f),
+];
 
 fn fnv(s: &str) -> u64 {
     s.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3))
