@@ -16,7 +16,7 @@ set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 LINUX="$ROOT/packaging/linux"
-APP_ID=com.sitesentrix.stitchfoundry
+APP_ID=com.stitchwright.stitchfoundry
 
 SKIP_BUILD=0
 while [ $# -gt 0 ]; do

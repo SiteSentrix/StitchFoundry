@@ -9,9 +9,9 @@
 # Wayland, xkbcommon and Vulkan at runtime; the freedesktop runtime has all of them, and the
 # GPU driver comes from its org.freedesktop.Platform.GL extension.
 #
-# com.sitesentrix.stitchfoundry.yml (same directory) is the from-source manifest for Flathub. Keep
+# com.stitchwright.stitchfoundry.yml (same directory) is the from-source manifest for Flathub. Keep
 # runtime, runtime-version, sdk and finish-args identical in both (packaging-lint checks this).
-id: com.sitesentrix.stitchfoundry
+id: com.stitchwright.stitchfoundry
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
@@ -39,10 +39,10 @@ modules:
     build-commands:
       - install -Dm755 bin/stitchfoundry /app/bin/stitchfoundry
       - install -Dm755 bin/stitchfoundry-cli /app/bin/stitchfoundry-cli
-      - install -Dm644 share/applications/com.sitesentrix.stitchfoundry.desktop /app/share/applications/com.sitesentrix.stitchfoundry.desktop
-      - install -Dm644 share/mime/packages/com.sitesentrix.stitchfoundry.xml /app/share/mime/packages/com.sitesentrix.stitchfoundry.xml
+      - install -Dm644 share/applications/com.stitchwright.stitchfoundry.desktop /app/share/applications/com.stitchwright.stitchfoundry.desktop
+      - install -Dm644 share/mime/packages/com.stitchwright.stitchfoundry.xml /app/share/mime/packages/com.stitchwright.stitchfoundry.xml
       # Already has the release's version and date substituted by package.sh.
-      - install -Dm644 share/metainfo/com.sitesentrix.stitchfoundry.metainfo.xml /app/share/metainfo/com.sitesentrix.stitchfoundry.metainfo.xml
+      - install -Dm644 share/metainfo/com.stitchwright.stitchfoundry.metainfo.xml /app/share/metainfo/com.stitchwright.stitchfoundry.metainfo.xml
       - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/stitchfoundry /app/share/doc/
     sources:
       - type: dir

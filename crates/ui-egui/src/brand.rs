@@ -5,7 +5,7 @@
 use egui::{Color32, Context, Id, Rect, TextureHandle, TextureOptions, Ui, pos2};
 
 /// 128 px: sharp at 44 pt on a 2× display, and the mipmaps keep 22 pt clean.
-const ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/com.sitesentrix.stitchfoundry.png");
+const ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/com.stitchwright.stitchfoundry.png");
 
 /// The icon's pixels (one transparent pixel if it couldn't be decoded, which a test rules out).
 fn decode() -> egui::ColorImage {

@@ -5,7 +5,7 @@
 <h1 align="center">StitchFoundry</h1>
 
 <p align="center">
-  <b>Open-source machine-embroidery digitizing, by SiteSentrix.</b>
+  <b>Open-source machine-embroidery digitizing, by Stitchwright.</b>
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/SiteSentrix/StitchFoundry/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SiteSentrix/StitchFoundry/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/Stitchwright/StitchFoundry/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Stitchwright/StitchFoundry/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-f2546b">
   <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-b83a24?logo=rust&logoColor=white">
   <img alt="Runs on macOS, Windows, Linux, FreeBSD and the web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20FreeBSD%20%C2%B7%20Web-555555">
@@ -120,7 +120,7 @@ commercial embroidery software.
 
 StitchFoundry is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
-Copyright (c) 2026 SiteSentrix and the StitchFoundry contributors.<br>
+Copyright (c) 2026 Stitchwright and the StitchFoundry contributors.<br>
 Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors.
 
 Required notices are in [NOTICE](NOTICE). Bundled fonts, icons, images and other assets keep their

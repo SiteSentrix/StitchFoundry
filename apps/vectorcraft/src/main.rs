@@ -537,12 +537,12 @@ fn open_file(path: &str) -> Result<(), String> {
 
 /// The window, Dock, taskbar and app-switcher icon (`assets/app-icon/`, see its README). macOS gets
 /// the version with Apple's transparent margin; elsewhere the full-bleed tile. The app ID matches
-/// `packaging/linux/com.sitesentrix.stitchfoundry.desktop` so Wayland docks find the launcher icon.
+/// `packaging/linux/com.stitchwright.stitchfoundry.desktop` so Wayland docks find the launcher icon.
 fn app_icon() -> egui::IconData {
     #[cfg(target_os = "macos")]
     let png: &[u8] = include_bytes!("../../../assets/app-icon/stitchfoundry-macos-512.png");
     #[cfg(not(target_os = "macos"))]
-    let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/com.sitesentrix.stitchfoundry.png");
+    let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/com.stitchwright.stitchfoundry.png");
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }
 
@@ -587,7 +587,7 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
             .with_titlebar_shown(false)
             .with_title_shown(false)
             .with_icon(app_icon())
-            .with_app_id("com.sitesentrix.stitchfoundry"),
+            .with_app_id("com.stitchwright.stitchfoundry"),
         #[cfg(feature = "windows7")]
         renderer: eframe::Renderer::Glow,
         ..Default::default()

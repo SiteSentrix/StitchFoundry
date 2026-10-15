@@ -55,7 +55,7 @@ if (-not $haveCert -and -not $haveAzure) {
 }
 
 $script:SignTool = Find-SignTool
-$common = @('sign', '/v', '/fd', 'SHA256', '/td', 'SHA256', '/d', 'StitchFoundry', '/du', 'https://github.com/SiteSentrix/StitchFoundry')
+$common = @('sign', '/v', '/fd', 'SHA256', '/td', 'SHA256', '/d', 'StitchFoundry', '/du', 'https://github.com/Stitchwright/StitchFoundry')
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "vectorcraft-sign-$PID"
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 

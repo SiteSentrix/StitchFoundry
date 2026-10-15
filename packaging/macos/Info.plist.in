@@ -13,7 +13,7 @@
   <key>CFBundleExecutable</key>
   <string>StitchFoundry</string>
   <key>CFBundleIdentifier</key>
-  <string>com.sitesentrix.stitchfoundry</string>
+  <string>com.stitchwright.stitchfoundry</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundlePackageType</key>
@@ -43,7 +43,7 @@
   <key>NSRequiresAquaSystemAppearance</key>
   <false/>
   <key>NSHumanReadableCopyright</key>
-  <string>Copyright © SiteSentrix and the VectorCraft authors. MIT OR Apache-2.0.</string>
+  <string>Copyright © Stitchwright and the VectorCraft authors. MIT OR Apache-2.0.</string>
 
   <!-- Every format File › Open reads (OPEN_EXTS in crates/engine/src/cmd/fileio/mod.rs; a test in
        apps/vectorcraft checks this list), so Finder offers StitchFoundry for them (Open With,
@@ -54,7 +54,7 @@
   <array>
     <dict>
       <key>CFBundleTypeName</key><string>StitchFoundry Document</string>
-      <key>LSItemContentTypes</key><array><string>com.sitesentrix.stitchfoundry.document</string></array>
+      <key>LSItemContentTypes</key><array><string>com.stitchwright.stitchfoundry.document</string></array>
       <key>CFBundleTypeRole</key><string>Editor</string>
       <key>LSHandlerRank</key><string>Owner</string>
     </dict>
@@ -134,7 +134,7 @@
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>com.sitesentrix.stitchfoundry.document</string>
+      <string>com.stitchwright.stitchfoundry.document</string>
       <key>UTTypeDescription</key>
       <string>StitchFoundry Document</string>
       <key>UTTypeConformsTo</key>

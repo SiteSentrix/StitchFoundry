@@ -10,7 +10,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIR="$ROOT/assets/app-icon"
 SVG="$DIR/stitchfoundry.svg"
-ID="com.sitesentrix.stitchfoundry"
+ID="com.stitchwright.stitchfoundry"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

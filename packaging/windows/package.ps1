@@ -127,7 +127,7 @@ function New-InstallerArt([string] $IconPng, [string] $BannerOut, [string] $Dial
 }
 $Banner = Join-Path $Stage 'installer-banner.bmp'
 $Dialog = Join-Path $Stage 'installer-dialog.bmp'
-New-InstallerArt (Join-Path $Root 'assets\app-icon\hicolor\256x256\apps\com.sitesentrix.stitchfoundry.png') $Banner $Dialog
+New-InstallerArt (Join-Path $Root 'assets\app-icon\hicolor\256x256\apps\com.stitchwright.stitchfoundry.png') $Banner $Dialog
 
 $Msi = Join-Path $Dist "stitchfoundry-$Version-windows-$Arch.msi"
 Invoke-Native 'wix build' {

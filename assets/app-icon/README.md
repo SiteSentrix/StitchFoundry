@@ -29,8 +29,8 @@ is the same file for `hicolor/scalable`. Licence: see `LICENSE.txt`.
 | `stitchfoundry-macos-512.png` | tile with Apple margin, 512 px | runtime Dock icon (`apps/vectorcraft/src/main.rs`) |
 | `stitchfoundry.icns` | macOS icon set, 16 to 1024 px | `cargo xtask bundle` (`CFBundleIconFile`) |
 | `stitchfoundry.ico` | Windows icon, 16 to 256 px | `apps/vectorcraft/build.rs` (embedded in the `.exe`) |
-| `hicolor/<size>/apps/com.sitesentrix.stitchfoundry.png` | Linux theme icons, 16 to 512 px; the 256 one is also the runtime icon on Windows and Linux, the 128 one the brand mark in the app bar and About box (`crates/ui-egui/src/brand.rs`) | `packaging/linux/com.sitesentrix.stitchfoundry.desktop` |
-| `hicolor/scalable/apps/com.sitesentrix.stitchfoundry.svg` | Linux scalable icon | as above |
+| `hicolor/<size>/apps/com.stitchwright.stitchfoundry.png` | Linux theme icons, 16 to 512 px; the 256 one is also the runtime icon on Windows and Linux, the 128 one the brand mark in the app bar and About box (`crates/ui-egui/src/brand.rs`) | `packaging/linux/com.stitchwright.stitchfoundry.desktop` |
+| `hicolor/scalable/apps/com.stitchwright.stitchfoundry.svg` | Linux scalable icon | as above |
 
 ## How it reaches each OS
 
@@ -38,9 +38,9 @@ is the same file for `hicolor/scalable`. Licence: see `LICENSE.txt`.
   `.app` from `cargo xtask bundle` carries `stitchfoundry.icns`.
 - **Windows:** `build.rs` embeds `stitchfoundry.ico` and VERSIONINFO with `winresource` (taskbar, Start
   menu, Explorer, Alt-Tab); the runtime icon covers the title bar.
-- **Linux:** install `packaging/linux/com.sitesentrix.stitchfoundry.desktop` to `share/applications/`
+- **Linux:** install `packaging/linux/com.stitchwright.stitchfoundry.desktop` to `share/applications/`
   and `hicolor/` to `share/icons/`. The app sets its Wayland app ID / X11 class to
-  `com.sitesentrix.stitchfoundry`, so the dock matches the window to the launcher.
+  `com.stitchwright.stitchfoundry`, so the dock matches the window to the launcher.
 
 ## Regenerate
 
