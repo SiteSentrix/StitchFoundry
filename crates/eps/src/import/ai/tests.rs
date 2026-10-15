@@ -304,6 +304,24 @@ fn a_group_whose_state_has_no_transparency_takes_the_current_one() {
 }
 
 #[test]
+fn a_layer_keeps_its_own_transparency() {
+    // Illustrator writes a layer's own opacity, blend and knockout after its art, before `LB`
+    // (`Xy`, `Xd`, then `n () XW`); they belong to the layer, not to its last object (#2003).
+    let art_ = format!("{RED}{}f\n0 0.35 0 2 0 Xy\n0 0 Xd\n7 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&art_)).doc;
+    let l = &doc.layers[0];
+    assert_eq!((l.opacity, l.blend), (0.35, BlendMode::Normal), "the layer's own state");
+    assert_eq!((l.isolate, l.knockout), (false, Knockout::Neutral));
+    // The art inside keeps its own state.
+    assert_eq!(art(&doc)[0].opacity, 1.0);
+    // A layer whose last object is a group keeps that group's state apart from the layer's.
+    let art_ = format!("0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n0 0 Xd\n6 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&art_)).doc;
+    assert_eq!(doc.layers[0].opacity, 1.0, "no layer state written: the layer stays opaque");
+    assert_eq!(art(&doc)[0].opacity, 0.5, "the group's own state");
+}
+
+#[test]
 fn transparency_of_objects_and_groups() {
     let art_ = format!(
         "{RED}1 0.5 0 0 0 Xy\n{}f\n0 Ae\nu\n0 1 0 0 0 Xy\n{}f\nU\n2 0.7 1 1 0 Xy\n0 0 Xd\n6 () XW\n0 1 0 0 0 Xy\n{}f\n",
