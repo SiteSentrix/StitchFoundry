@@ -116,9 +116,9 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "command_batch",
             "Run several commands",
-            "Run steps in order; each edit is its own undo step, or with atomic:true the whole batch is one (named `label`, else after its first edit). A param string that is exactly \"$N.path\" (N: 0-based step index) or \"$last.path\" takes that value from an earlier step's result, e.g. {\"id\":\"$1.id\"}; \"$$\" starts a literal \"$\". Returns completed, failed and results. Stops on the first error by default. At most 256 steps; kept step results total at most 8 MiB, past which the batch stops with the reason.",
+            "Run steps in order; each edit is its own undo step, or with atomic:true the whole batch is one (named `label`, else after its first edit). A step's id is a command id, or draw_path / draw_shape with that tool's arguments as params (its result is the tool's: the new object's `id`). A param string that is exactly \"$N.path\" (N: 0-based step index) or \"$last.path\" takes that value from an earlier step's result, e.g. {\"id\":\"$1.id\"}; \"$$\" starts a literal \"$\". Returns completed, failed, results and created (the ids draw_path / draw_shape steps made, in order). Stops on the first error by default. At most 256 steps; kept step results total at most 8 MiB, past which the batch stops with the reason.",
             obj(
-                json!({"steps": {"type":"array", "maxItems": 256, "items":obj(json!({"id":string("Command id"),"params":{"type":"object"}}), &["id"])}, "stop_on_error":{"type":"boolean", "default":true}, "atomic":{"type":"boolean", "default":false, "description":"Make the batch's edits one undo step (needs an open document)"}, "label":string("The undo step's name with atomic")}),
+                json!({"steps": {"type":"array", "maxItems": 256, "items":obj(json!({"id":string("Command id, or draw_path / draw_shape"),"params":{"type":"object"}}), &["id"])}, "stop_on_error":{"type":"boolean", "default":true}, "atomic":{"type":"boolean", "default":false, "description":"Make the batch's edits one undo step (needs an open document)"}, "label":string("The undo step's name with atomic")}),
                 &["steps"],
             ),
             false,
@@ -1038,6 +1038,17 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
 pub(crate) const MAX_COMMAND_BATCH_STEPS: usize = 256;
 pub(crate) const MAX_COMMAND_BATCH_BYTES: usize = 8 * 1024 * 1024;
 
+/// Refuses an argument the tool's schema doesn't list, as `tools/call` does (#713).
+pub(crate) fn check_tool_arguments(name: &str, args: &Args) -> Result<(), String> {
+    let defs = tool_definitions();
+    let props =
+        defs.iter().find(|t| t.get("name").and_then(Value::as_str) == Some(name)).and_then(|t| t.get("inputSchema")?.get("properties")?.as_object());
+    match props.and_then(|p| args.keys().find(|k| !p.contains_key(*k))) {
+        Some(key) => Err(format!("unknown argument `{key}` for `{name}`")),
+        None => Ok(()),
+    }
+}
+
 fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     let steps = a.get("steps").and_then(Value::as_array).ok_or("`steps` must be an array")?;
     if steps.len() > MAX_COMMAND_BATCH_STEPS {
@@ -1063,6 +1074,8 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     // The kept results all go back in the reply, so their total size is capped: one batch can't
     // pile up an unbounded answer (#1727).
     let mut kept_bytes = 0usize;
+    // The objects the drawing steps made (#2113).
+    let mut created: Vec<Value> = vec![];
     for step in steps {
         let result = vectorcraft_engine::guard::catch_panic(|| {
             let args = step.as_object().ok_or("each step must be an object")?;
@@ -1075,7 +1088,19 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
                 Some(v @ Value::Object(_)) => vectorcraft_engine::steps::resolve(v, &values)?,
                 Some(_) => return Err("`params` must be an object".into()),
             };
-            b.call("engine.execute", json!({"command":id,"params":params}))
+            match id {
+                // The drawing tools, with the arguments `tools/call` takes (#2113).
+                "draw_path" | "draw_shape" => {
+                    let args = params.as_object().cloned().unwrap_or_default();
+                    check_tool_arguments(id, &args)?;
+                    let made = if id == "draw_path" { draw_path(b, &args)? } else { draw_shape(b, &args)? };
+                    if let Some(new) = made.get("id").filter(|v| v.is_u64()) {
+                        created.push(new.clone());
+                    }
+                    Ok(made)
+                }
+                _ => b.call("engine.execute", json!({"command":id,"params":params})),
+            }
         })
         .unwrap_or_else(|e| Err(format!("internal error: {e}")));
         match result {
@@ -1110,7 +1135,7 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     if atomic {
         b.call("engine.execute", json!({"command":"edit.undoGroup.end","params":{}}))?;
     }
-    let mut r = ToolResult::json(&json!({"completed":completed,"failed":failed,"results":results}));
+    let mut r = ToolResult::json(&json!({"completed":completed,"failed":failed,"results":results,"created":created}));
     r.is_error = failed > 0;
     Ok(r)
 }
