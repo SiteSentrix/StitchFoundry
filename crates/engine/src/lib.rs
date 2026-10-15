@@ -1904,6 +1904,8 @@ mod tests_ids_without_selection;
 #[cfg(test)]
 mod tests_inline;
 #[cfg(test)]
+mod tests_intertwine;
+#[cfg(test)]
 mod tests_journal;
 #[cfg(test)]
 mod tests_knockout;

@@ -249,7 +249,12 @@ impl Renderer {
         match &a.kind {
             NodeKind::PlacedDocument(p) => self.draw_placed(ctx, f, p),
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Repeat(_)
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Group { .. }
+            | NodeKind::Layer { .. } => {
                 let items = self.live_expanded(f.doc, a, cache);
                 // An evaluation the cache did not keep is made again in the next frame.
                 let kept = cache && self.live.expanded.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &items));
