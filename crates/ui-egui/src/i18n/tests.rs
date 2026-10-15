@@ -373,6 +373,32 @@ fn zh_hans_is_simplified_and_mainland() {
     assert!(bad.is_empty(), "in zh-hans.tsv:\n{}", bad.join("\n"));
 }
 
+/// No translated word mixes Latin, Cyrillic and Greek letters, such as a Latin "A" typed in place
+/// of a Cyrillic "А". A word written in one script, such as "PDF" or "X" in a Russian row, is
+/// allowed.
+#[test]
+fn no_translated_word_mixes_latin_cyrillic_and_greek_letters() {
+    let script = |c: char| match c as u32 {
+        0x41..=0x5A | 0x61..=0x7A | 0xC0..=0x24F | 0x1E00..=0x1EFF => Some("Latin"),
+        0x370..=0x3FF | 0x1F00..=0x1FFF => Some("Greek"),
+        0x400..=0x52F => Some("Cyrillic"),
+        _ => None,
+    };
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries {
+            for word in tr.split(|c: char| !c.is_alphabetic()) {
+                let scripts: std::collections::BTreeSet<_> = word.chars().filter_map(script).collect();
+                if scripts.len() > 1 {
+                    bad.push(format!("{}: {ctx} {src:?} → {tr:?} has {word:?} ({scripts:?})", l.code));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "words that mix scripts:\n{}", bad.join("\n"));
+}
+
 /// Every menu string (top-level titles, submenu names, item labels, section headers, UI and
 /// engine command labels and menu paths) has an entry in each language that claims complete menus.
 #[test]
