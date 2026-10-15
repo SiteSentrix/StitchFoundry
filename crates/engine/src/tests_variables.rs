@@ -877,3 +877,73 @@ fn image_datasets_swap_pixels_and_keep_bounds() {
     s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
     assert!(s.execute("variable.makeImageDynamic", &json!({})).is_err(), "type is not an image");
 }
+
+/// A text value with commas, quotes and line breaks comes back from the exported CSV as it went out.
+#[test]
+fn datasets_csv_keeps_line_breaks_in_quoted_cells() {
+    let mut s = session();
+    let t = text(&mut s, "One");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    let value = "Line one, \"quoted\"\nLine two";
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": value}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    let sets = &s.doc().unwrap().doc.variables.datasets;
+    assert_eq!(sets.len(), 1);
+    assert_eq!(sets[0].values.get("Name"), Some(&vectorcraft_doc::DataValue::Text(value.into())));
+    assert!(s.execute("dataset.import", &json!({"csv": "name,Name\nX,\"open"})).is_err(), "unclosed quote");
+}
+
+/// Import / export datasets as CSV: header `name` then variables; round-trip keeps values.
+#[test]
+fn datasets_csv_round_trips_and_rejects_bad_input() {
+    let dir = Folder::new("vars-csv");
+    let red_path = dir.file("red.png");
+    let blue_path = dir.file("blue.png");
+    write(&red_path, &png(8, 8, RED));
+    write(&blue_path, &png(8, 8, BLUE));
+
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    let img = place(&mut s, &red_path);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Photo", "kind": "image"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Photo", "ids": [img.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Alice", "Show": true, "Photo": red_path}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Bob", "Show": false, "Photo": blue_path}})).unwrap();
+
+    let exported = s.execute("dataset.export", &json!({})).unwrap();
+    let csv = exported["csv"].as_str().unwrap().to_string();
+    assert!(csv.starts_with("name,Name,Show,Photo\n"), "{csv}");
+    assert!(csv.contains("Alice") && csv.contains("Bob") && csv.contains("false"), "{csv}");
+
+    // Clear rows, import again, apply B.
+    s.execute("dataset.delete", &json!({"names": ["A", "B"]})).unwrap();
+    let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!((imp["imported"].as_u64(), imp["updated"].as_u64()), (Some(2), Some(0)));
+    s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob");
+    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
+    assert_eq!(image(&s, img).link.as_ref().map(|l| l.path.as_str()), Some(blue_path.as_str()));
+
+    // Re-import updates in place; unknown variable and bad visibility are errors.
+    let again = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!((again["imported"].as_u64(), again["updated"].as_u64()), (Some(0), Some(2)));
+    assert!(s.execute("dataset.import", &json!({"csv": "name,Ghost\nX,y"})).is_err());
+    assert!(s.execute("dataset.import", &json!({"csv": "name,Show\nX,maybe"})).is_err());
+    assert!(s.execute("dataset.import", &json!({"csv": "Title,Name\nX,y"})).is_err(), "first column must be name");
+
+    let out = dir.file("sets.csv");
+    s.execute("dataset.export", &json!({"path": out})).unwrap();
+    let from_file = s.execute("dataset.import", &json!({"path": out})).unwrap();
+    assert_eq!(from_file["updated"].as_u64(), Some(2));
+
+    // One undo undoes the last import's replacements.
+    s.execute("edit.undo", &json!({})).unwrap();
+}

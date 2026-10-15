@@ -988,7 +988,8 @@ already walks Image Trace. Short agent entry points:
   `brush.setCurrent {name}`, `brush.options {name, params?}`, `brush.freehand`, `object.expandBrush {ids?}`.
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|image}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.unbind`,
-  `dataset.new` / `dataset.set` / `dataset.select` (image values are file path strings; apply keeps object bounds).
+  `dataset.new` / `dataset.set` / `dataset.select` (image values are file path strings; apply keeps object bounds),
+  `dataset.import {path|data|dataBase64|csv}` / `dataset.export {path?}` (CSV: header `name` then variable names).
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`.
 
