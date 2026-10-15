@@ -114,11 +114,16 @@ impl Backend for Remote {
         let id = self.next_id;
         self.next_id += 1;
         let line = json!({"id": id, "method": method, "params": params}).to_string();
-        let reply = self.roundtrip(&line).map_err(|e| {
-            self.conn = None;
-            format!("VectorCraft app at {}: `{method}` failed: {e}; operation may have completed; inspect state before retrying", self.addr)
-        })?;
-        let v: Value = serde_json::from_str(reply.trim()).map_err(|e| format!("bad reply from app: {e}"))?;
+        let v: Value = self
+            .roundtrip(&line)
+            .and_then(|reply| {
+                serde_json::from_str(reply.trim())
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, format!("bad reply from app: {e}")))
+            })
+            .map_err(|e| {
+                self.conn = None;
+                format!("VectorCraft app at {}: `{method}` failed: {e}; operation may have completed; inspect state before retrying", self.addr)
+            })?;
         if v.get("id").is_none() && v.get("ok").and_then(Value::as_bool) == Some(false) {
             // The app's refusals carry no id (too many connections, a line it would not read):
             // it ran nothing and closes the connection, so the next call starts a fresh one.
