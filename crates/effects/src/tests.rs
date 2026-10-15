@@ -18,6 +18,16 @@ fn image_xs(n: &Node, out: &mut Vec<f64>) {
     }
 }
 
+/// Every symbol instance under `n`, in document order (its placement's x).
+fn instance_xs(n: &Node, out: &mut Vec<f64>) {
+    if let NodeKind::SymbolInstance { xf, .. } = &n.kind {
+        out.push(xf.as_coeffs()[4]);
+    }
+    for c in n.children().into_iter().flatten() {
+        instance_xs(c, out);
+    }
+}
+
 fn square() -> PathData {
     shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0))
 }
@@ -264,13 +274,13 @@ fn stacked_transform_copies_stay_within_the_image_budget() {
     let mut art = Node::group(id, vec![Arc::new(image())]);
     let mut counts = vec![];
     for _ in 0..3 {
-        crate::reshape::transform_images_within(&mut art, m, 1000, 100);
+        crate::reshape::transform_placed_within(&mut art, m, 1000, 100);
         counts.push(count(&art));
     }
     assert_eq!(counts, [100, 100, 100], "99 copies, then no room for a copy of them");
     // Within the budget every copy is made, and the effect's own budget takes a thousand copies.
     let mut art = Node::group(id, vec![Arc::new(image())]);
-    crate::reshape::transform_images_within(&mut art, m, 24, 100);
+    crate::reshape::transform_placed_within(&mut art, m, 24, 100);
     assert_eq!(count(&art), 25);
     let mut g = Node::group(id, vec![Arc::new(image())]);
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 1000})));
@@ -331,6 +341,87 @@ fn transform_on_a_group_moves_and_copies_its_images() {
     image_xs(&art, &mut xs);
     // The bounds are the image itself, so the bottom-right reference is its own: it halves in place.
     assert_eq!(xs, [30.0], "scaled about its own bottom-right corner");
+}
+
+/// #2023: a Transform effect on a group moves and copies its symbol instances as it does its paths
+/// and images: the map goes into each instance's placement, and every copy is an instance of its
+/// own.
+#[test]
+fn transform_on_a_group_moves_and_copies_its_symbol_instances() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind};
+    let id = NodeId(9);
+    let instance = || Node::new(id, NodeKind::SymbolInstance { symbol: "s".into(), xf: Affine::translate((5.0, 40.0)) });
+    let xs = |art: &Node| {
+        let mut xs = vec![];
+        instance_xs(art, &mut xs);
+        xs.sort_by(f64::total_cmp);
+        xs
+    };
+    let mut g = Node::group(id, vec![Arc::new(Node::path(id, square(), Appearance::default())), Arc::new(instance())]);
+    g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 2})));
+    assert_eq!(xs(&evaluate_container(&g).unwrap()), [5.0, 75.0, 145.0], "the instance and its two copies, 70 pt apart");
+    // Without copies the instance itself takes the transform, as a path does.
+    let mut g = Node::group(id, vec![Arc::new(instance())]);
+    g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70})));
+    assert_eq!(xs(&evaluate_container(&g).unwrap()), [75.0]);
+}
+
+/// Images and symbol instances share the copy budget: copies of one leave less room for the other.
+#[test]
+fn images_and_symbol_instances_share_the_copy_budget() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::{ImageObject, NodeId};
+    let id = NodeId(9);
+    let image = Node::new(
+        id,
+        NodeKind::Image(Box::new(ImageObject {
+            key: "k".into(),
+            width: 40,
+            height: 40,
+            xf: Affine::translate((10.0, 0.0)),
+            link: None,
+            placement: Default::default(),
+        })),
+    );
+    let instance = Node::new(id, NodeKind::SymbolInstance { symbol: "s".into(), xf: Affine::IDENTITY });
+    let mut art = Node::group(id, vec![Arc::new(image), Arc::new(instance)]);
+    crate::reshape::transform_placed_within(&mut art, Affine::translate((70.0, 0.0)), 1000, 100);
+    let (mut images, mut instances) = (vec![], vec![]);
+    image_xs(&art, &mut images);
+    instance_xs(&art, &mut instances);
+    // The image takes the 98 copies there is room for; none is left for the instance.
+    assert_eq!((images.len(), instances.len()), (99, 1));
+}
+
+/// As a path's do, a Transform effect's copies of an image stop before one reaches further than
+/// `MAX_REACH` from the origin.
+#[test]
+fn transform_copies_of_images_stop_at_the_reach_limit() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::{ImageObject, NodeId};
+    let id = NodeId(9);
+    let image = Node::new(
+        id,
+        NodeKind::Image(Box::new(ImageObject {
+            key: "k".into(),
+            width: 40,
+            height: 40,
+            xf: Affine::translate((10.0, 0.0)),
+            link: None,
+            placement: Default::default(),
+        })),
+    );
+    let mut g = Node::group(id, vec![Arc::new(image)]);
+    // The largest move: every copy is 1e7 pt further right, so the 100th would end past 1e9.
+    g.appearance.effects.push(fx("distort.transform", json!({"moveH": 1.0e7, "copies": 1000})));
+    let mut xs = vec![];
+    image_xs(&evaluate_container(&g).unwrap(), &mut xs);
+    assert_eq!(xs.len(), 100, "the image and the 99 copies that stay within reach");
+    assert!(xs.iter().all(|x| x + 40.0 <= 1.0e9));
 }
 
 #[test]
