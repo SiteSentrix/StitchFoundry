@@ -335,6 +335,7 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::RotateToward(octant) => rotate(ink, p, octant),
         Cursor::CornerRadius => corner_radius(ink, p),
         Cursor::Pen => pen(ink, p, "*"),
+        Cursor::PenDrawing => pen(ink, p, ""),
         Cursor::PenAdd => pen(ink, p, "+"),
         Cursor::PenDelete => pen(ink, p, "-"),
         Cursor::PenClose => pen(ink, p, "o"),
@@ -507,7 +508,7 @@ mod tests {
     use crate::VectorcraftApp;
 
     /// Every cursor with a glyph.
-    const GLYPHS: [Cursor; 38] = [
+    const GLYPHS: [Cursor; 39] = [
         Cursor::Hand,
         Cursor::HandGrab,
         Cursor::ZoomIn,
@@ -524,6 +525,7 @@ mod tests {
         Cursor::RotateToward(1),
         Cursor::CornerRadius,
         Cursor::Pen,
+        Cursor::PenDrawing,
         Cursor::PenAdd,
         Cursor::PenDelete,
         Cursor::PenClose,
@@ -601,6 +603,27 @@ mod tests {
         let [bx, by] = big.hotspot.map(usize::from);
         let body = pixel(&big, bx + 4, by + 16);
         assert!(body[3] == 255 && body[..3].iter().all(|&c| c < 40), "{body:?}");
+    }
+
+    /// The Pen drawing a path is the same nib as the new-path Pen, without the asterisk.
+    #[test]
+    fn the_drawing_pen_has_no_new_path_asterisk() {
+        for ppp in [1.0, 2.0] {
+            let (new, drawing) = (rasterize(Cursor::Pen, ppp).unwrap(), rasterize(Cursor::PenDrawing, ppp).unwrap());
+            assert_eq!(new.hotspot, drawing.hotspot, "at {ppp}");
+            // The asterisk's center, 19 × 17 points from the hotspot.
+            let at = |img: &CustomCursorImage| {
+                let [hx, hy] = img.hotspot.map(usize::from);
+                let (x, y) = (hx + (19.0 * ppp) as usize, hy + (17.0 * ppp) as usize);
+                if x < img.size[0] as usize && y < img.size[1] as usize { pixel(img, x, y)[3] } else { 0 }
+            };
+            assert_eq!(at(&new), 255, "the new-path Pen has its asterisk at {ppp}");
+            assert_eq!(at(&drawing), 0, "the drawing Pen has no badge at {ppp}");
+            // The nib is the same.
+            let [hx, hy] = drawing.hotspot.map(usize::from);
+            let nib = (hx + (8.0 * ppp) as usize, hy + (8.0 * ppp) as usize);
+            assert_eq!(pixel(&new, nib.0, nib.1), pixel(&drawing, nib.0, nib.1), "at {ppp}");
+        }
     }
 
     #[test]
