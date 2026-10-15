@@ -30,7 +30,7 @@ const ROWS: &[Row] = &[
     (&["spiral"], None, &["decay", "segments", "clockwise"]),
     (&["rectangularGrid"], None, &["rows", "columns", "rowSkew", "columnSkew", "frame", "fill"]),
     (&["polarGrid"], None, &["concentric", "radial", "concentricSkew", "radialSkew", "compound", "fill"]),
-    (&["pencil", "paintbrush"], None, &["fidelity", "fill", "editWithin", "closeWithin"]),
+    (&["pencil", "paintbrush"], None, &["fidelity", "fill", "keepSelected", "editWithin", "closeWithin"]),
     (&["smooth"], None, &["fidelity"]),
     (&["blobBrush", "eraser"], None, &["size"]),
     (&["polygon"], None, &["sides"]),

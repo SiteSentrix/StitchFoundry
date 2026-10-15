@@ -95,6 +95,12 @@ pub(crate) fn add_node(s: &mut Session, label: &str, kind: NodeKind, appearance:
 
 /// Insert a new object looking like `look` (drawing modes apply); select it.
 pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>) -> Result<Value> {
+    insert_look(s, label, kind, look, name, true)
+}
+
+/// [`add_look`] that selects the new object only when `select` is set; otherwise the selection
+/// stays as it was.
+pub(crate) fn insert_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>, select: bool) -> Result<Value> {
     let parent = s.doc()?.target_parent()?;
     let mode = s.draw_mode;
     let inside = s.draw_inside;
@@ -137,7 +143,9 @@ pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewAr
                 d.insert(parent, usize::MAX, n)?;
             }
         }
-        sel.set([id]);
+        if select {
+            sel.set([id]);
+        }
         Ok(id)
     })?;
     Ok(json!({ "id": id.0 }))
