@@ -154,6 +154,8 @@ pub struct EmbroideryUi {
     pub repeat_gap: f64,
     /// The Buttonholes section's settings.
     pub buttonholes: Buttonholes,
+    /// The Longarm Quilting section's sizes (mm).
+    pub quilt: QuiltSizes,
     /// The Embroidery Lettering section: the font, the text and its size (mm; 0: the font's own).
     pub lettering_font: String,
     pub lettering_text: String,
@@ -230,6 +232,26 @@ pub struct EmbroideryUi {
     pub send_status: String,
 }
 
+/// The Longarm Quilting section's sizes (mm): the quilt for edge-to-edge rows, the rows' spacing
+/// (0: the line's own height) and nesting, and a border's length, depth and corner leg (0: none).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct QuiltSizes {
+    pub width: f64,
+    pub height: f64,
+    pub row: f64,
+    pub nest: bool,
+    pub length: f64,
+    pub depth: f64,
+    pub down: f64,
+}
+
+impl Default for QuiltSizes {
+    fn default() -> Self {
+        // a twin quilt, 70 × 90″; a border 60″ long and 4″ deep
+        QuiltSizes { width: 1778.0, height: 2286.0, row: 0.0, nest: true, length: 1524.0, depth: 101.6, down: 0.0 }
+    }
+}
+
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Buttonholes {
@@ -297,6 +319,7 @@ impl Default for EmbroideryUi {
             repeats: [1, 1],
             repeat_gap: 5.0,
             buttonholes: Buttonholes::default(),
+            quilt: QuiltSizes::default(),
             lettering_font: String::new(),
             lettering_text: String::new(),
             lettering_size: 0.0,

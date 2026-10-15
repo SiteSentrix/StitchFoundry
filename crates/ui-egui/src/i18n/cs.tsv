@@ -5360,3 +5360,40 @@ machine	Stop	Zastavení
 @msg	the font library answered {status} for {path}	knihovna písem odpověděla {status} pro {path}
 @msg	the font library answered {status}: try again later	knihovna písem odpověděla {status}: zkuste to později
 @msg	{_1} isn't published yet	{_1} ještě není zveřejněna
+	Border or Corner…	Okraj nebo roh…
+	Check Continuous Line	Zkontrolovat souvislou linii
+	Continuous Fill	Souvislá výplň
+	Continuous Fill…	Souvislá výplň…
+	Crib (36 × 52″)	Do postýlky (36 × 52″)
+	DXF Lines (.dxf)…	Linie DXF (.dxf)…
+	Echo	Ozvěna
+	Edge-to-Edge Rows	Řady od okraje k okraji
+	Edge-to-Edge Rows…	Řady od okraje k okraji…
+	Export Quilting Lines	Exportovat prošívací linie
+	Export Quilting Lines…	Exportovat prošívací linie…
+	HP-GL Plot (.plt)…	Plot HP-GL (.plt)…
+	Join into One Line	Spojit do jedné linie
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Prošívání longarm
+	Meander	Meandr
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Linie SVG (.svg)…
+	Start and End on the Edges	Začít a skončit na okrajích
+	Stitch in the Ditch	Prošití ve švu
+	Throw (50 × 65″)	Přehoz (50 × 65″)
+	Twin (70 × 90″)	Jednolůžko (70 × 90″)
+	A border of the selected line	Okraj z vybrané linie
+	Border depth	Hloubka okraje
+	Border length	Délka okraje
+	Corner leg (0: no corner)	Rameno rohu (0: bez rohu)
+	Edge-to-edge rows of the selected line	Řady od okraje k okraji z vybrané linie
+	Make Border	Vytvořit okraj
+	Make Rows	Vytvořit řady
+	Nest the rows	Zasunout řady do sebe
+	One continuous line, ready for a longarm	Jedna souvislá linie, připravená pro longarm
+	Quilt height	Výška quiltu
+	Quilt width	Šířka quiltu
+	Row spacing (0: the line's height)	Rozestup řad (0: výška linie)
+	joins needed: Join into One Line makes them	potřebných spojení: Spojit do jedné linie je vytvoří
+	longest	nejdelší
+@msg	nothing to add	není co přidat

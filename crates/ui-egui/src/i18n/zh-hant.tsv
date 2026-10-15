@@ -4689,3 +4689,39 @@ machine	Stop	停止
 	Try Again	重試
 	fonts	種字型
 	is ready for lettering	可用於文字
+	Border or Corner…	邊框或轉角…
+	Check Continuous Line	檢查連續線
+	Continuous Fill	連續填充
+	Continuous Fill…	連續填充…
+	Crib (36 × 52″)	嬰兒床 (36 × 52″)
+	DXF Lines (.dxf)…	DXF 線條 (.dxf)…
+	Echo	回聲
+	Edge-to-Edge Rows	邊到邊列
+	Edge-to-Edge Rows…	邊到邊列…
+	Export Quilting Lines	匯出壓線線條
+	Export Quilting Lines…	匯出壓線線條…
+	HP-GL Plot (.plt)…	HP-GL 繪圖 (.plt)…
+	Join into One Line	連接成一條線
+	King (108 × 108″)	特大 (108 × 108″)
+	Longarm Quilting	長臂壓線
+	Meander	曲線
+	Queen (90 × 108″)	大號 (90 × 108″)
+	SVG Lines (.svg)…	SVG 線條 (.svg)…
+	Start and End on the Edges	在邊緣開始和結束
+	Stitch in the Ditch	落針壓線
+	Throw (50 × 65″)	蓋毯 (50 × 65″)
+	Twin (70 × 90″)	單人 (70 × 90″)
+	A border of the selected line	所選線條的邊框
+	Border depth	邊框深度
+	Border length	邊框長度
+	Corner leg (0: no corner)	轉角邊 (0: 無轉角)
+	Edge-to-edge rows of the selected line	所選線條的邊到邊列
+	Make Border	產生邊框
+	Make Rows	產生列
+	Nest the rows	列彼此嵌套
+	One continuous line, ready for a longarm	一條連續線，可用於長臂機
+	Quilt height	被子高度
+	Quilt width	被子寬度
+	Row spacing (0: the line's height)	列距 (0: 線條高度)
+	joins needed: Join into One Line makes them	處需要連接：「連接成一條線」會產生
+	longest	最長

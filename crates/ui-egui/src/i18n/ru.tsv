@@ -5331,3 +5331,40 @@ machine	Stop	Остановка
 @msg	the font library answered {status} for {path}	библиотека шрифтов ответила {status} для {path}
 @msg	the font library answered {status}: try again later	библиотека шрифтов ответила {status}: попробуйте позже
 @msg	{_1} isn't published yet	{_1} ещё не опубликована
+	Border or Corner…	Бордюр или угол…
+	Check Continuous Line	Проверить непрерывную линию
+	Continuous Fill	Непрерывная заливка
+	Continuous Fill…	Непрерывная заливка…
+	Crib (36 × 52″)	Детское (36 × 52″)
+	DXF Lines (.dxf)…	Линии DXF (.dxf)…
+	Echo	Эхо
+	Edge-to-Edge Rows	Ряды от края до края
+	Edge-to-Edge Rows…	Ряды от края до края…
+	Export Quilting Lines	Экспорт линий стёжки
+	Export Quilting Lines…	Экспорт линий стёжки…
+	HP-GL Plot (.plt)…	Плот HP-GL (.plt)…
+	Join into One Line	Соединить в одну линию
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Стёжка на длинной руке
+	Meander	Меандр
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Линии SVG (.svg)…
+	Start and End on the Edges	Начинать и заканчивать по краям
+	Stitch in the Ditch	Стёжка в шов
+	Throw (50 × 65″)	Плед (50 × 65″)
+	Twin (70 × 90″)	Односпальное (70 × 90″)
+	A border of the selected line	Бордюр из выбранной линии
+	Border depth	Глубина бордюра
+	Border length	Длина бордюра
+	Corner leg (0: no corner)	Сторона угла (0: без угла)
+	Edge-to-edge rows of the selected line	Ряды от края до края из выбранной линии
+	Make Border	Создать бордюр
+	Make Rows	Создать ряды
+	Nest the rows	Вкладывать ряды друг в друга
+	One continuous line, ready for a longarm	Одна непрерывная линия, готова для длинной руки
+	Quilt height	Высота изделия
+	Quilt width	Ширина изделия
+	Row spacing (0: the line's height)	Шаг рядов (0: высота линии)
+	joins needed: Join into One Line makes them	нужно соединений: «Соединить в одну линию» их сделает
+	longest	самое длинное
+@msg	nothing to add	нечего добавить

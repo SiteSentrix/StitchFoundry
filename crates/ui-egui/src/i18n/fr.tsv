@@ -5343,3 +5343,40 @@ machine	Stop	Arrêt
 @msg	the font library answered {status} for {path}	la bibliothèque de polices a répondu {status} pour {path}
 @msg	the font library answered {status}: try again later	la bibliothèque de polices a répondu {status} : réessayez plus tard
 @msg	{_1} isn't published yet	{_1} n'est pas encore publiée
+	Border or Corner…	Bordure ou coin…
+	Check Continuous Line	Vérifier la ligne continue
+	Continuous Fill	Remplissage continu
+	Continuous Fill…	Remplissage continu…
+	Crib (36 × 52″)	Berceau (36 × 52″)
+	DXF Lines (.dxf)…	Lignes DXF (.dxf)…
+	Echo	Écho
+	Edge-to-Edge Rows	Rangées bord à bord
+	Edge-to-Edge Rows…	Rangées bord à bord…
+	Export Quilting Lines	Exporter les lignes de quilting
+	Export Quilting Lines…	Exporter les lignes de quilting…
+	HP-GL Plot (.plt)…	Tracé HP-GL (.plt)…
+	Join into One Line	Joindre en une seule ligne
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Quilting long bras
+	Meander	Méandre
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Lignes SVG (.svg)…
+	Start and End on the Edges	Commencer et finir sur les bords
+	Stitch in the Ditch	Piqûre dans la couture
+	Throw (50 × 65″)	Plaid (50 × 65″)
+	Twin (70 × 90″)	Une place (70 × 90″)
+	A border of the selected line	Une bordure de la ligne sélectionnée
+	Border depth	Profondeur de bordure
+	Border length	Longueur de bordure
+	Corner leg (0: no corner)	Branche de coin (0 : pas de coin)
+	Edge-to-edge rows of the selected line	Rangées bord à bord de la ligne sélectionnée
+	Make Border	Créer la bordure
+	Make Rows	Créer les rangées
+	Nest the rows	Imbriquer les rangées
+	One continuous line, ready for a longarm	Une ligne continue, prête pour un long bras
+	Quilt height	Hauteur du quilt
+	Quilt width	Largeur du quilt
+	Row spacing (0: the line's height)	Espacement des rangées (0 : hauteur de la ligne)
+	joins needed: Join into One Line makes them	jonctions nécessaires : Joindre en une seule ligne les crée
+	longest	la plus longue
+@msg	nothing to add	rien à ajouter

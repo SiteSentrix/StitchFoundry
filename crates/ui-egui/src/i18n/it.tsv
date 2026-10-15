@@ -5335,3 +5335,40 @@ machine	Stop	Arresto
 @msg	the font library answered {status} for {path}	la libreria di font ha risposto {status} per {path}
 @msg	the font library answered {status}: try again later	la libreria di font ha risposto {status}: riprova più tardi
 @msg	{_1} isn't published yet	{_1} non è ancora pubblicata
+	Border or Corner…	Bordo o angolo…
+	Check Continuous Line	Controlla linea continua
+	Continuous Fill	Riempimento continuo
+	Continuous Fill…	Riempimento continuo…
+	Crib (36 × 52″)	Culla (36 × 52″)
+	DXF Lines (.dxf)…	Linee DXF (.dxf)…
+	Echo	Eco
+	Edge-to-Edge Rows	File da bordo a bordo
+	Edge-to-Edge Rows…	File da bordo a bordo…
+	Export Quilting Lines	Esporta linee di trapuntatura
+	Export Quilting Lines…	Esporta linee di trapuntatura…
+	HP-GL Plot (.plt)…	Tracciato HP-GL (.plt)…
+	Join into One Line	Unisci in una linea
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Trapuntatura long arm
+	Meander	Meandro
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Linee SVG (.svg)…
+	Start and End on the Edges	Inizia e finisci sui bordi
+	Stitch in the Ditch	Cucitura nella cucitura
+	Throw (50 × 65″)	Plaid (50 × 65″)
+	Twin (70 × 90″)	Singolo (70 × 90″)
+	A border of the selected line	Un bordo della linea selezionata
+	Border depth	Profondità del bordo
+	Border length	Lunghezza del bordo
+	Corner leg (0: no corner)	Tratto d'angolo (0: nessun angolo)
+	Edge-to-edge rows of the selected line	File da bordo a bordo della linea selezionata
+	Make Border	Crea bordo
+	Make Rows	Crea file
+	Nest the rows	Incastra le file
+	One continuous line, ready for a longarm	Una linea continua, pronta per un long arm
+	Quilt height	Altezza della trapunta
+	Quilt width	Larghezza della trapunta
+	Row spacing (0: the line's height)	Distanza tra le file (0: altezza della linea)
+	joins needed: Join into One Line makes them	giunzioni necessarie: Unisci in una linea le crea
+	longest	la più lunga
+@msg	nothing to add	niente da aggiungere
