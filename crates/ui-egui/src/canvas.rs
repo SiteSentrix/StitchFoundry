@@ -2214,6 +2214,16 @@ pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
     ctx.memory(|m| m.areas().is_visible(&egui::LayerId::new(egui::Order::Middle, id)).then(|| m.area_rect(id)).flatten())
 }
 
+/// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
+/// a gradient's stops or a mesh's points, which Recolor Artwork can change.
+pub(crate) fn has_colors(doc: &vectorcraft_doc::Document, ids: &[vectorcraft_doc::NodeId]) -> bool {
+    ids.iter().filter_map(|id| doc.node(*id)).any(|n| {
+        let mut found = false;
+        vectorcraft_doc::swatches::node_colors(n, &mut |_, _| found = true);
+        found
+    })
+}
+
 /// The Contextual Task Bar: a floating pill under the selection with the most likely next actions.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
@@ -2251,6 +2261,7 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     }
     items.push((tl!("Duplicate"), "copy", "edit.duplicate"));
     let fill = first.as_ref().map(|f| f.appearance.fill_paint()).unwrap_or_default();
+    let colored = has_colors(&st.doc, &st.selection.objects);
     let doc = st.uid;
     let anchor = xf.to_screen(Point::new(b.center().x, b.y1));
     let est_w = 118.0 + items.iter().map(|(l, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
@@ -2323,6 +2334,10 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     if resp.on_hover_text(tl!("Fill")).clicked() {
                         app.session.fill_active = true;
                         app.ui.open_panel = Some("swatches".into());
+                    }
+                    // Recolor Artwork, when the selection has colours to recolour.
+                    if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 30.0).clicked() {
+                        run = Some(("ui.recolorDialog", json!({})));
                     }
                     if widgets::icon_button(ui, "lock", tl!("Lock (⌘2)"), false, 30.0).clicked() {
                         run = Some(("object.lock", json!({})));
@@ -4752,6 +4767,42 @@ mod tests {
         let doc = app.session.active().unwrap();
         assert_eq!(doc.selection.objects, vec![vectorcraft_doc::NodeId(id)]);
         assert_eq!(doc.doc.art_bounds(), before, "the tap moved nothing");
+    }
+
+    /// The Contextual Task Bar shows Recolor Artwork (a palette) when the selection has colours,
+    /// and it opens the Recolor Artwork dialog; art painted with None has no button.
+    #[test]
+    fn the_task_bar_recolors_coloured_art() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 40, "height": 40})).unwrap()["id"].clone();
+        app.session.execute("paint.setFill", &json!({"ids": [id], "color": "#cc3322"})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let click = |app: &mut VectorcraftApp| {
+            frame(app, &ctx, vec![]);
+            frame(app, &ctx, vec![]);
+            let bar = task_bar_rect(&ctx).expect("the task bar shows");
+            // Right to left: the frame's margin, More Options, Lock, then Recolor.
+            let at = pos2(bar.right() - 8.0 - 30.0 - 6.0 - 30.0 - 6.0 - 15.0, bar.center().y);
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(true)]);
+            frame(app, &ctx, vec![button(false)]);
+        };
+        let st = app.session.active().unwrap();
+        assert!(has_colors(&st.doc, &st.selection.objects));
+        click(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::recolor::KIND));
+
+        app.ui.dialog = None;
+        app.session.execute("paint.setFill", &json!({"ids": [id], "none": true})).unwrap();
+        app.session.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
+        let st = app.session.active().unwrap();
+        assert!(!has_colors(&st.doc, &st.selection.objects), "None paints have no colours");
+        click(&mut app);
+        assert!(app.ui.dialog.is_none(), "no Recolor button without colours");
     }
 
     /// The Contextual Task Bar's handle drags it: unpinned it keeps that offset as it follows the
