@@ -4264,6 +4264,9 @@ effect	Soft	Doux
 	Blocks	Blocs
 	Frosted	Dépoli
 	Tiny Lens	Petites lentilles
+	Loaded Texture	Texture chargée
+	Load Texture…	Charger une texture…
+	Texture Image	Image de texture
 	Rename Data Set	Renommer le jeu de données
 	Rename Variable	Renommer la variable
 	Variable Options	Options de variable
@@ -4839,6 +4842,7 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
+@msg	the image can't be read as a texture	l'image ne peut pas être lue comme texture
 	Fill and Stroke Controls	Commandes de fond et de contour
 	Coloring Controls	Commandes de couleur
 	Draw Mode Controls	Commandes de mode de dessin

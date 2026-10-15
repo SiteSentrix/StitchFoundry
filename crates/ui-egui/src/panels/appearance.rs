@@ -776,6 +776,11 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                             change = Some((key.clone(), json!(nx)));
                         }
                     }
+                    // Glass's loaded texture shows its size; its dialog's Load Texture… replaces it.
+                    Value::String(s) if key == vectorcraft_effects::pixel::TEXTURE_IMAGE => {
+                        let size = vectorcraft_effects::pixel::texture(s).map(|t| t.size());
+                        widgets::dim_label(ui, &size.map_or_else(String::new, |(w, h)| format!("{w} × {h} px")));
+                    }
                     Value::String(s) => {
                         let mut buf = s.clone();
                         let r = ui.add(egui::TextEdit::singleline(&mut buf).desired_width(90.0));

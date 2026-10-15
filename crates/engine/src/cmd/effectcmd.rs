@@ -142,6 +142,9 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     if id == effects::CROP_MARKS && params.get("style").is_none() {
         params["style"] = json!(s.crop_mark_style().id());
     }
+    if id == GLASS {
+        load_texture(&mut params, C)?;
+    }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
     if let Some(loose) = loose_for_pathfinder(s, p, id)? {
@@ -297,7 +300,7 @@ pub(crate) fn set_params_effects(s: &Session, p: &Value) -> Vec<String> {
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
-    let params = p.get("params").cloned().unwrap_or(Value::Null);
+    let mut params = p.get("params").cloned().unwrap_or(Value::Null);
     if !params.is_null() && !params.is_object() {
         return Err(bad(C, "`params` must be an object"));
     }
@@ -310,6 +313,9 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         .transpose()?;
     let visible = p.get("visible").and_then(Value::as_bool);
     let item = item_target(s, p, C)?;
+    if set_params_effects(s, p).iter().any(|e| e == GLASS) {
+        load_texture(&mut params, C)?;
+    }
     for id in appearance_targets(s, p)? {
         let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
         let target = item.effects_item(&n.appearance, C)?;
@@ -354,6 +360,31 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         true
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
+}
+
+// ---------- Load Texture ----------
+
+/// Effect › Distort › Glass.
+const GLASS: &str = "distort.glass";
+
+/// Glass's `textureImage` in `params` as Glass stores it: an image file (`{path}`, or `{name?,
+/// dataBase64}`) is read with [`fileio::texture_image`] and picked (`texture: "loaded"`) unless
+/// `params` give a `texture`; a string must be a texture as Glass stores it.
+fn load_texture(params: &mut Value, cmd: &str) -> Result<()> {
+    let pick = params.get("texture").is_none();
+    let Some(v) = params.get_mut(effects::pixel::TEXTURE_IMAGE) else { return Ok(()) };
+    match v {
+        Value::String(s) if effects::pixel::texture(s).is_some() => {}
+        Value::Object(_) => {
+            let bytes = fileio::source(v, cmd)?.bytes;
+            *v = json!(fileio::texture_image(&bytes).map_err(|e| bad(cmd, format!("textureImage: {e}")))?);
+            if pick {
+                params["texture"] = json!(effects::pixel::LOADED);
+            }
+        }
+        _ => return Err(bad(cmd, "textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it")),
+    }
+    Ok(())
 }
 
 // ---------- Expand Appearance ----------

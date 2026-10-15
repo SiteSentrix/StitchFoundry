@@ -36,7 +36,7 @@ fn at(d: &[u8], w: usize, x: usize, y: usize) -> [u8; 4] {
 fn fx(id: &str, p: serde_json::Value) -> PixelFx {
     let e = Effect { id: id.into(), params: p, visible: true };
     match raster_effects(&[e]).first() {
-        Some(RasterFx::Pixel(p)) => *p,
+        Some(RasterFx::Pixel(p)) => p.clone(),
         other => panic!("{id}: {other:?}"),
     }
 }
@@ -1417,6 +1417,68 @@ fn glass_bends_the_image_by_its_texture() {
     }
     // Smoother glass bends the stripes differently (more gently).
     assert_ne!(run(json!({"distortion": 12, "smoothness": 15})), run(json!({"distortion": 12, "smoothness": 1})));
+}
+
+/// The stored form of a `w` × `h` texture whose straight RGBA pixels `f` gives.
+fn stored(w: usize, h: usize, f: impl Fn(usize, usize) -> [u8; 4]) -> String {
+    LoadedTexture::from_rgba(w as u32, h as u32, &image(w, h, f)).and_then(|t| t.to_stored()).unwrap()
+}
+
+#[test]
+fn a_loaded_texture_is_its_gray_over_middle_gray() {
+    let t = stored(3, 1, |x, _| [[255, 255, 255, 255], [0, 0, 0, 0], [255, 0, 0, 255]][x]);
+    let loaded = texture(&t).unwrap();
+    assert_eq!(loaded.size(), (3, 1));
+    assert_eq!(texture(&t), Some(loaded.clone()), "read again from the cache");
+    // A white pixel is 1 high, a transparent one is middle gray and a red one is its luma. Heights
+    // between pixel centers are interpolated, and the image repeats: x = -1 is the first pixel's
+    // center, and x = 2 is the same pixel again.
+    let h = |x: f64| loaded.height(Point::new(x, 0.0));
+    assert_eq!(h(-1.0), 1.0);
+    assert_eq!(h(0.0), 128.0 / 255.0);
+    assert_eq!(h(1.0), 76.0 / 255.0);
+    assert_eq!(h(2.0), 1.0);
+    assert_eq!(h(-0.5), 0.5 * (1.0 + 128.0 / 255.0));
+    assert!(LoadedTexture::from_rgba(0, 4, &[]).is_none() && LoadedTexture::from_rgba(2, 2, &[0; 12]).is_none());
+    assert!(texture("not base64!").is_none() && texture("aGVsbG8=").is_none(), "base64 of a PNG only");
+}
+
+#[test]
+fn glass_bends_the_image_by_a_loaded_texture() {
+    let (w, h) = (48, 40);
+    let src = stripes(w, h);
+    let run = |p: serde_json::Value| {
+        let mut d = src.clone();
+        fx("distort.glass", p).apply(&mut d, w, h, &space(w, h));
+        d
+    };
+    // Rings around the texture's center, 9 × 7 pixels, repeated.
+    let rings = stored(9, 7, |x, y| grey((((x as f64 - 4.0).hypot(y as f64 - 3.0) * 60.0) as u32 % 256) as u8));
+    let loaded = json!({"texture": "loaded", "textureImage": rings, "distortion": 12});
+    let bent = run(loaded.clone());
+    assert_ne!(bent, src);
+    for (_, texture) in GLASS_TEXTURES {
+        assert_ne!(bent, run(json!({"texture": texture, "distortion": 12})), "differs from {texture}");
+    }
+    assert_ne!(run(json!({"texture": "loaded", "textureImage": rings, "distortion": 12, "invert": true})), bent, "inverted");
+    assert_ne!(run(json!({"texture": "loaded", "textureImage": rings, "distortion": 12, "scaling": 200})), bent, "scaled");
+    for (x, y) in (6..w - 6).flat_map(|x| (6..h - 6).map(move |y| (x, y))) {
+        let p = at(&bent, w, x, y);
+        assert!(p[3] == 255 && p[0] >= 20 && p[0] <= 230, "at ({x}, {y}): {p:?}");
+    }
+    assert_eq!(run(json!({"texture": "loaded", "textureImage": rings, "distortion": 0})), src, "no distortion, no change");
+    // A flat texture bends nothing, whatever its gray; so does a transparent one (middle gray).
+    for flat in [grey(0), grey(200), [0, 0, 0, 0]] {
+        assert_eq!(run(json!({"texture": "loaded", "textureImage": stored(5, 5, |_, _| flat), "distortion": 20})), src, "{flat:?}");
+    }
+    // The image is kept but not used with a built-in texture; without one, "loaded" is Frosted.
+    assert_eq!(run(json!({"texture": "blocks", "textureImage": rings, "distortion": 12})), run(json!({"texture": "blocks", "distortion": 12})));
+    assert_eq!(fx("distort.glass", json!({"texture": "loaded"})), fx("distort.glass", json!({})));
+    assert_eq!(fx("distort.glass", json!({"texture": "LOADED", "textureImage": "not a texture"})), fx("distort.glass", json!({})));
+    assert_eq!(
+        fx("distort.glass", loaded),
+        PixelFx::Glass { distortion: 12.0, smoothness: 3.0, texture: GlassTexture::Loaded(texture(&rings).unwrap()), scaling: 1.0, invert: false }
+    );
 }
 
 #[test]

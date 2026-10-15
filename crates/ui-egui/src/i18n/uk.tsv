@@ -4239,6 +4239,9 @@ axis	Both	Обидві
 	Blocks	Блоки
 	Frosted	Матове
 	Tiny Lens	Дрібні лінзи
+	Loaded Texture	Завантажена текстура
+	Load Texture…	Завантажити текстуру…
+	Texture Image	Зображення текстури
 	Rename Data Set	Перейменувати набір даних
 	Rename Variable	Перейменувати змінну
 	Variable Options	Параметри змінної
@@ -4391,6 +4394,7 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
+@msg	the image can't be read as a texture	зображення не вдається прочитати як текстуру
 	Basic	Базовий
 	Fill and Stroke Controls	Елементи керування заливкою та обведенням
 	Coloring Controls	Елементи керування кольором

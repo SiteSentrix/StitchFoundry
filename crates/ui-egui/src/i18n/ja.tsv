@@ -4251,6 +4251,9 @@ effect	Vertical	垂直
 	Blocks	ブロック
 	Frosted	すりガラス
 	Tiny Lens	小さなレンズ
+	Loaded Texture	読み込んだテクスチャ
+	Load Texture…	テクスチャを読み込み…
+	Texture Image	テクスチャ画像
 	Rename Data Set	データセットの名前を変更
 	Variable Options	変数のオプション
 	Edit Data Set	データセットを編集
@@ -4405,6 +4408,7 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
+@msg	the image can't be read as a texture	この画像はテクスチャとして読み込めません
 	Basic	基本
 	Fill and Stroke Controls	塗りと線のコントロール
 	Coloring Controls	カラーのコントロール

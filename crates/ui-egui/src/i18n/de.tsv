@@ -4182,6 +4182,9 @@ theme	Appearance	Erscheinungsbild
 	Blocks	Blöcke
 	Frosted	Mattiert
 	Tiny Lens	Kleine Linsen
+	Loaded Texture	Geladene Struktur
+	Load Texture…	Struktur laden…
+	Texture Image	Strukturbild
 	Canvas	Leinwand
 	Highlight Variable	Variable hervorheben
 	New Variable	Neue Variable
@@ -4366,6 +4369,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+@msg	the image can't be read as a texture	das Bild kann nicht als Struktur gelesen werden
 	Basic	Basis
 	Fill and Stroke Controls	Steuerelemente für Fläche und Kontur
 	Coloring Controls	Steuerelemente für Farbe

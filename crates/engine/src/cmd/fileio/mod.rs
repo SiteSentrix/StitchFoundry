@@ -60,7 +60,7 @@ pub(crate) use load::native_file;
 pub(crate) use load::source;
 pub use load::{
     Loaded, RasterImage, ReadFile, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_read, open_template, raster_image,
-    read_for_open,
+    read_for_open, texture_image,
 };
 pub use load::{losses_summary, overwrite_losses};
 pub(crate) use native::preview_png;

@@ -4229,6 +4229,9 @@ effect	Vertical	세로
 	Blocks	블록
 	Frosted	서리 낀 유리
 	Tiny Lens	작은 렌즈
+	Loaded Texture	불러온 텍스처
+	Load Texture…	텍스처 불러오기…
+	Texture Image	텍스처 이미지
 	Rename Data Set	데이터 세트 이름 바꾸기
 	Variable Options	변수 옵션
 	Edit Data Set	데이터 세트 편집
@@ -4375,6 +4378,7 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
+@msg	the image can't be read as a texture	이미지를 텍스처로 읽을 수 없습니다
 	Basic	기본
 	Fill and Stroke Controls	칠 및 획 컨트롤
 	Coloring Controls	색상 컨트롤
