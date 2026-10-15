@@ -309,7 +309,7 @@ impl<'p> Colors<'p> {
                 }
             }
             Object::Dict(d) => {
-                for (_, v) in d.entries() {
+                for v in values(&d) {
                     if let Some(v) = direct(v) {
                         self.visit(v, depth + 1);
                     }
@@ -384,6 +384,13 @@ pub(crate) fn direct(m: MaybeRef<Object<'_>>) -> Option<Object<'_>> {
         MaybeRef::NotRef(o) => Some(o),
         MaybeRef::Ref(_) => None,
     }
+}
+
+/// The values of `d` that the reader can parse, sorted by key as `Dict::entries` sorts them.
+pub(crate) fn values<'a>(d: &craft_pdf::syntax::object::Dict<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> {
+    let mut keys: Vec<Name<'a>> = d.keys().collect();
+    keys.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    keys.into_iter().filter_map(|k| d.get_raw::<Object<'a>>(k.as_ref()))
 }
 
 fn alt_model(o: &Object<'_>) -> Option<Alt> {
