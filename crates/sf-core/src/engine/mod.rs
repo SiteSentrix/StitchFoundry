@@ -587,6 +587,15 @@ fn without_last_stitch(st: &[Stitch]) -> Vec<Stitch> {
 }
 
 /// Builds the full machine pattern for a design.
+/// A continuous meander inside `polygon`, paths about `spacing` mm apart (randomised by
+/// `random`, 0 to 1), as one line of points (longarm quilting); a shape in several pieces gives
+/// them one after another.
+pub fn meander_line(polygon: &Polygon, spacing: f64, random: f64) -> Vec<Point> {
+    let mut out = Out::new();
+    special::meander(polygon, spacing, spacing * 0.5, random, &mut out, None, f64::INFINITY);
+    out.finish().iter().filter(|s| s.is_move()).map(Stitch::pos).collect()
+}
+
 pub fn build(design: &Design) -> Built {
     build_cached(design, &mut StitchCache::new())
 }
