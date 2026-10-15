@@ -103,3 +103,6 @@ sync_github_name = false
 real_name = "Osama Amin"
 display_name = "Osama Amin"
 sync_github_name = false
+
+[people.giang17]
+real_name = "Giang Nguyen"
