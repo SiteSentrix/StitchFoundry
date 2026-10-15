@@ -999,6 +999,9 @@
 	Export…	Експорт…
 	Extrude & Bevel…	Видавлювання та фаска…
 	Eyedropper	Піпетка
+	Sample Color from Screen	Взяти колір з екрана
+	This system has no screen color sampler	У цій системі немає засобу вибору кольору з екрана
+	The active document changed while the screen color sampler was open	Активний документ змінився, поки був відкритий засіб вибору кольору з екрана
 	Eyedropper Applies:	Піпетка застосовує:
 	Eyedropper Options	Параметри піпетки
 	Eyedropper Picks Up:	Піпетка бере:
@@ -3633,6 +3636,9 @@ axis	Both	Обидві
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
+@msg	the Color Picker is not open	палітра кольорів не відкрита
+@msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
+@msg	this system has no screen color sampler	у цій системі немає засобу вибору кольору з екрана
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
 @msg	bad page tree	неприпустиме дерево сторінок
 @msg	bad shortcut	неприпустиме поєднання клавіш

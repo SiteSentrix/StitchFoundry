@@ -162,6 +162,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "background": app.background.jobs.iter().map(|j| j.label.as_str()).collect::<Vec<_>>(),
         // Documents still being read off the UI thread (File › Open, Open Recent): their paths.
         "opening": app.opening.pending.iter().map(|p| p.path.as_str()).collect::<Vec<_>>(),
+        // The screen color sampler is shown, waiting for the person at the computer
+        // (`ui.sampleScreenColor`).
+        "screenSampler": app.screen_sampler.is_some(),
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),

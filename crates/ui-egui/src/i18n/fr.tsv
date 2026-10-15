@@ -1005,6 +1005,9 @@
 	Export…	Exporter…
 	Extrude & Bevel…	Extrusion et biseautage…
 	Eyedropper	Pipette
+	Sample Color from Screen	Prélever une couleur à l’écran
+	This system has no screen color sampler	Ce système n’a pas d’outil de prélèvement de couleur à l’écran
+	The active document changed while the screen color sampler was open	Le document actif a changé pendant que l’outil de prélèvement de couleur à l’écran était ouvert
 	Eyedropper Applies:	La pipette applique :
 	Eyedropper Options	Options de la pipette
 	Eyedropper Picks Up:	La pipette prélève :
@@ -3644,6 +3647,9 @@ axis	Both	Les deux
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis doit être "vertical", "horizontal" ou un angle en degrés, pas `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	arrière-plan {other} : transparent, white, black ou une couleur comme "#ff8800"
 @msg	bad color {v}	couleur non valide {v}
+@msg	the Color Picker is not open	le Sélecteur de couleurs n’est pas ouvert
+@msg	the screen color sampler is already open	l’outil de prélèvement de couleur à l’écran est déjà ouvert
+@msg	this system has no screen color sampler	ce système n’a pas d’outil de prélèvement de couleur à l’écran
 @msg	bad colour `{hex}` (#rrggbb)	couleur non valide `{hex}` (#rrggbb)
 @msg	bad page tree	arborescence des pages non valide
 @msg	bad shortcut	raccourci non valide

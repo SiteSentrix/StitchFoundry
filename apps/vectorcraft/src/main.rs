@@ -35,6 +35,8 @@ mod mac_fonts;
 #[cfg(target_os = "macos")]
 mod mac_menu;
 #[cfg(target_os = "macos")]
+mod mac_screen_color;
+#[cfg(target_os = "macos")]
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
@@ -504,6 +506,8 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
     use winit::raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
     let wayland = parent.as_ref().and_then(|w| w.window_handle().ok()).is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Wayland(_)));
     let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
+    #[cfg(target_os = "macos")]
+    let sampled_ui = ui.clone();
     Services {
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
         pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
@@ -535,6 +539,9 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
         // Links panel: Edit Original; Package: Show Package. Relink to Folder and Package pick folders.
         open_file: Some(Box::new(open_file)),
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
+        // Sample Color from Screen: the system's color sampler.
+        #[cfg(target_os = "macos")]
+        screen_color: Some(mac_screen_color::sampler(sampled_ui)),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
         ..Default::default()

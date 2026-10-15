@@ -1005,6 +1005,9 @@
 	Export…	Esporta…
 	Extrude & Bevel…	Estrusione e smusso…
 	Eyedropper	Contagocce
+	Sample Color from Screen	Campiona colore dallo schermo
+	This system has no screen color sampler	Questo sistema non ha un campionatore di colore dello schermo
+	The active document changed while the screen color sampler was open	Il documento attivo è cambiato mentre il campionatore di colore dello schermo era aperto
 	Eyedropper Applies:	Il contagocce applica:
 	Eyedropper Options	Opzioni contagocce
 	Eyedropper Picks Up:	Il contagocce preleva:
@@ -3649,6 +3652,9 @@ axis	Both	Entrambi
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve essere "vertical", "horizontal" o un angolo in gradi, non `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
+@msg	the Color Picker is not open	il Selettore colore non è aperto
+@msg	the screen color sampler is already open	il campionatore di colore dello schermo è già aperto
+@msg	this system has no screen color sampler	questo sistema non ha un campionatore di colore dello schermo
 @msg	bad colour `{hex}` (#rrggbb)	colore non valido `{hex}` (#rrggbb)
 @msg	bad page tree	albero delle pagine non valido
 @msg	bad shortcut	scelta rapida non valida

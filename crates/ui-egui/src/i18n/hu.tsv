@@ -1290,6 +1290,9 @@
 	Export…	Exportálás…
 	Extrude & Bevel…	Kihúzás és élletörés…
 	Eyedropper	Pipetta
+	Sample Color from Screen	Szín mintavétele a képernyőről
+	This system has no screen color sampler	Ezen a rendszeren nincs képernyős színmintavevő
+	The active document changed while the screen color sampler was open	Az aktív dokumentum megváltozott, amíg a képernyős színmintavevő nyitva volt
 	Eyedropper Applies:	A pipetta alkalmazza:
 	Eyedropper Options	Pipetta beállításai
 	Eyedropper Picks Up:	A pipetta felveszi:
@@ -4160,6 +4163,9 @@ imageTrace	Outline	Körvonal
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	az axis értéke "vertical", "horizontal" vagy fokban megadott szög lehet, ez nem az: `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black vagy egy szín, például "#ff8800"
 @msg	bad color {v}	hibás szín: {v}
+@msg	the Color Picker is not open	a Színválasztó nincs megnyitva
+@msg	the screen color sampler is already open	a képernyős színmintavevő már nyitva van
+@msg	this system has no screen color sampler	ezen a rendszeren nincs képernyős színmintavevő
 @msg	bad colour `{hex}` (#rrggbb)	hibás szín: `{hex}` (#rrggbb)
 @msg	bad page tree	hibás oldalfa
 @msg	bad shortcut	hibás billentyűparancs

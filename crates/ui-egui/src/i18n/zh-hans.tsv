@@ -958,6 +958,9 @@
 	Export…	导出…
 	Extrude & Bevel…	突出与斜角…
 	Eyedropper	吸管
+	Sample Color from Screen	从屏幕取样颜色
+	This system has no screen color sampler	此系统没有屏幕取色工具
+	The active document changed while the screen color sampler was open	屏幕取色工具打开期间，当前文档已更改
 	Eyedropper Applies:	吸管应用：
 	Eyedropper Options	吸管选项
 	Eyedropper Picks Up:	吸管拾取：

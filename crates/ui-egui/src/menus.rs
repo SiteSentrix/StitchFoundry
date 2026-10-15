@@ -410,6 +410,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
     ),
     (
+        "ui.sampleScreenColor",
+        "Sample Color from Screen",
+        "",
+        "{} or {stroke?: bool (default: the active proxy), picker?: bool (the open Color Picker instead)} show the system's color sampler (macOS; browsers with an EyeDropper) and answer at once; the color the person picks anywhere on the screen then runs paint.setFill / paint.setStroke (one undo step) or becomes the Color Picker's color (field `color`), converted from display sRGB into the working RGB space; Escape cancels it and the colors stay as they were. ui.inspect reports `screenSampler: true` until it answers. An error without a sampler, while one is open, or with `picker` and no Color Picker open",
+    ),
+    (
         "ui.brushOptions",
         "Brush Options…",
         "",
@@ -1328,6 +1334,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
         }
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
+        "ui.sampleScreenColor" => crate::screen_color::start(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
         "ui.symbolOptions" => crate::dialogs::symbol_options::open(app),
         "ui.brushOptions" => crate::dialogs::brush_options::open(app, s("name").as_deref()),
@@ -2017,6 +2024,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
+        "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
