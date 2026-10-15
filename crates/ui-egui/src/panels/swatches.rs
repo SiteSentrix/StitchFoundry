@@ -887,10 +887,10 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
         if widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0).clicked() {
             app.run("ui.newColorGroup", json!({"swatches": deletable(sel)})).ok();
         }
-        // Alt-click skips the dialog; Ctrl/Cmd-click makes a spot colour.
+        // Alt-click skips the dialog; Ctrl/Cmd-click makes a spot color, and Ctrl/Cmd+Shift-click
+        // makes a global process color.
         if widgets::icon_button(ui, "dc-new-item", tl!("New Swatch"), false, 24.0).clicked() {
-            let m = ui.input(|i| i.modifiers);
-            new_swatch(app, sel, m.command, m.alt);
+            new_swatch(app, sel, ui.input(|i| i.modifiers));
         }
         // Alt-click deletes without asking.
         let del = deletable(sel);
@@ -906,17 +906,22 @@ fn target_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
     group_of(&app.session.active()?.doc, sel.last()?)
 }
 
-/// New Swatch from the active paint (a colour goes into the selected colour group): opens the
-/// dialog, or saves at once with `now` (Alt-click). `spot` (Cmd/Ctrl-click) makes a spot colour.
-fn new_swatch(app: &mut VectorcraftApp, sel: &[String], spot: bool, now: bool) {
+/// New Swatch from the active paint (a color goes into the selected color group), for a click
+/// with modifiers `m`: a plain click opens the dialog and an Alt-click saves at once. Cmd/Ctrl
+/// makes a color a spot color, and Cmd/Ctrl+Shift makes it a global process color.
+fn new_swatch(app: &mut VectorcraftApp, sel: &[String], m: egui::Modifiers) {
     let paint = active_paint(app);
     let group = paint.color().and_then(|_| target_group(app, sel));
-    if !now {
-        app.run("ui.newSwatch", json!({"spot": spot, "group": group})).ok();
+    let (spot, global) = (m.command && !m.shift, m.command && m.shift);
+    if !m.alt {
+        app.run("ui.newSwatch", json!({"spot": spot, "global": global, "group": group})).ok();
         return;
     }
     let mut params = super::paint_params(&paint);
-    params["spot"] = json!(spot);
+    if paint.color().is_some() {
+        params["spot"] = json!(spot);
+        params["global"] = json!(global);
+    }
     if let Some(g) = group {
         params["group"] = json!(g);
     }
@@ -929,7 +934,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let del = deletable(&selected);
     let opts = editable(app, &selected);
     if menu_item(ui, tl!("New Swatch…"), true, false) {
-        new_swatch(app, &selected, false, false);
+        new_swatch(app, &selected, egui::Modifiers::NONE);
     }
     if menu_item(ui, tl!("New Color Group…"), true, false) {
         app.run("ui.newColorGroup", json!({"swatches": del})).ok();
@@ -1344,7 +1349,7 @@ mod tests {
         let mut app = app();
         let ctx = context();
         app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
-        new_swatch(&mut app, &["Bright Red".into()], true, false);
+        new_swatch(&mut app, &["Bright Red".into()], Modifiers::COMMAND);
         let d = app.ui.dialog.as_ref().expect("New Swatch opens its dialog");
         assert_eq!(
             (d.kind.as_str(), d.str("name").as_str(), d.str("group").as_str()),
@@ -1358,14 +1363,45 @@ mod tests {
         assert!(w.spot && doc.swatch_group_of(&w.name).is_some_and(|g| doc.swatch_groups[g].name == "Brights"));
         // Alt-click saves at once; a gradient takes only a name and stays out of colour groups.
         app.run("paint.setFill", json!({"swatch": "Sunset"})).unwrap();
-        new_swatch(&mut app, &["Brights".into()], false, true);
+        new_swatch(&mut app, &["Brights".into()], Modifiers::ALT);
         assert!(app.ui.dialog.is_none() && app.session.doc().unwrap().doc.swatch("New Gradient Swatch 1").is_some());
-        new_swatch(&mut app, &[], false, false);
+        new_swatch(&mut app, &[], Modifiers::NONE);
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.str("name").as_str(), d.fields.contains_key("__paint")), ("New Gradient Swatch 2", true));
         dialog_frame(&mut app, &ctx);
         crate::dialogs::confirm(&mut app).unwrap();
         assert!(app.session.doc().unwrap().doc.swatch("New Gradient Swatch 2").is_some_and(|w| matches!(w.paint, Paint::Gradient(_))));
+    }
+
+    #[test]
+    fn cmd_shift_click_on_new_swatch_makes_a_global_process_color() {
+        let mut app = app();
+        let ctx = context();
+        let global_process = Modifiers::COMMAND | Modifiers::SHIFT;
+        app.run("paint.setFill", json!({"color": "#2a6fb0"})).unwrap();
+        new_swatch(&mut app, &[], global_process);
+        let d = app.ui.dialog.as_ref().expect("New Swatch opens its dialog");
+        assert!(d.bool("global") && !d.bool("spot"), "Cmd/Ctrl+Shift-click opens a global process color");
+        let name = d.str("name");
+        dialog_frame(&mut app, &ctx);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let w = app.session.doc().unwrap().doc.swatch(&name).cloned().expect("created");
+        assert!(w.global && !w.spot);
+        // With Alt also held it saves at once.
+        app.run("paint.setFill", json!({"color": "#00a050"})).unwrap();
+        new_swatch(&mut app, &[], global_process | Modifiers::ALT);
+        assert!(app.ui.dialog.is_none());
+        let w = app.session.doc().unwrap().doc.swatches.last().cloned().unwrap();
+        assert_eq!(w.paint.color().map(|c| c.to_hex()), Some("#00a050".into()));
+        assert!(w.global && !w.spot);
+        // A gradient saves as a gradient swatch whether or not Cmd/Ctrl and Shift are held.
+        app.run("paint.setFill", json!({"swatch": "Sunset"})).unwrap();
+        new_swatch(&mut app, &[], Modifiers::COMMAND | Modifiers::ALT);
+        new_swatch(&mut app, &[], global_process | Modifiers::ALT);
+        let doc = &app.session.doc().unwrap().doc;
+        for n in ["New Gradient Swatch 1", "New Gradient Swatch 2"] {
+            assert!(doc.swatch(n).is_some_and(|w| matches!(w.paint, Paint::Gradient(_)) && !w.global && !w.spot), "{n}");
+        }
     }
 
     #[test]
