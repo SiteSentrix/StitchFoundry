@@ -45,7 +45,8 @@ pub use vectorcraft_doc::Composer;
 /// composer, OpenType features). [`layout`] takes rows/columns/inset/first baseline from the object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LayoutOptions {
-    /// Area type rows and columns (text flows down each column, then across).
+    /// Area type rows and columns (text flows down each column, then across). Layout clamps each
+    /// count to 1..=[`vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS`].
     pub rows: usize,
     pub columns: usize,
     /// Gutter between rows/columns in points.

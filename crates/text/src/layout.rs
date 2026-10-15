@@ -746,17 +746,20 @@ fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, re
     }
 }
 
+/// A flattened text wrap shape: (polygons, offset, invert).
+type FlatWrap = (Vec<Vec<Point>>, f64, bool);
+
 /// One cell of a flattened area-type frame (the whole frame, or one row/column of it).
 struct Region {
     /// The cell (frame bounds, or a grid cell of them).
     cell: Rect,
     /// Inset applied inside the frame edges.
     inset: f64,
-    polys: Vec<Vec<Point>>,
+    polys: std::sync::Arc<[Vec<Point>]>,
     /// The frame is its own bounding rectangle (spans need no polygon intersection).
     rect: bool,
-    /// Text Wrap shapes: (polygons, offset, invert).
-    wraps: Vec<(Vec<Vec<Point>>, f64, bool)>,
+    /// Text Wrap shapes.
+    wraps: std::sync::Arc<[FlatWrap]>,
     /// Vertical alignment: how far below the top-aligned position the first line starts.
     shift: f64,
     /// Vertical justification: extra space added between consecutive lines.
@@ -865,7 +868,9 @@ impl Region {
     fn cells(path: &BezPath, opts: &LayoutOptions, wrap: &[vectorcraft_doc::WrapShape]) -> Vec<Region> {
         // A frame out of range has no cells, and a wrap shape out of range is left out.
         let Some(polys) = polygons(path) else { return vec![] };
-        let wraps: Vec<(Vec<Vec<Point>>, f64, bool)> = wrap
+        // Every cell shares one copy of the frame's polygons and one copy of the text wrap shapes.
+        let polys: std::sync::Arc<[Vec<Point>]> = polys.into();
+        let wraps: std::sync::Arc<[FlatWrap]> = wrap
             .iter()
             .filter_map(|w| Some((polygons(&w.path.to_bezpath())?, w.wrap.offset.max(0.0), w.wrap.invert)))
             .filter(|w| !w.0.is_empty())
@@ -875,7 +880,8 @@ impl Region {
             let area: f64 = polys[0].iter().zip(polys[0].iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() * 0.5;
             (area - bbox.area()).abs() <= bbox.area() * 1e-6 + 1e-9
         };
-        let (rows, cols) = (opts.rows.max(1), opts.columns.max(1));
+        let max = vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS;
+        let (rows, cols) = (opts.rows.clamp(1, max), opts.columns.clamp(1, max));
         let gutter = opts.gutter.max(0.0);
         let cw = ((bbox.width() - gutter * (cols - 1) as f64) / cols as f64).max(0.0);
         let rh = ((bbox.height() - gutter * (rows - 1) as f64) / rows as f64).max(0.0);
@@ -903,7 +909,7 @@ impl Region {
     /// inside them, for Invert Wrap). Offsets grow each wrap shape vertically and horizontally.
     fn intervals(&self, y: f64) -> Vec<(f64, f64)> {
         let mut iv = if self.polys.is_empty() || self.rect { vec![(self.cell.x0, self.cell.x1)] } else { poly_intervals(&self.polys, y) };
-        for (polys, off, invert) in &self.wraps {
+        for (polys, off, invert) in self.wraps.iter() {
             let ys = if *off > 0.0 { vec![y - off, y - off * 0.5, y, y + off * 0.5, y + off] } else { vec![y] };
             let w = union_intervals(ys.into_iter().flat_map(|y| poly_intervals(polys, y)).map(|(a, b)| (a - off, b + off)).collect());
             iv = if *invert { intersect_intervals(&iv, &w) } else { subtract_intervals(&iv, &w) };
@@ -955,6 +961,21 @@ impl Region {
             })
             .collect()
     }
+}
+
+/// The 10,000 cells of a frame in 100 rows and 100 columns share one copy of the frame's polygons
+/// and one copy of the text wrap shapes.
+#[cfg(test)]
+#[test]
+fn the_cells_of_a_frame_share_its_polygons_and_the_wrap_shapes() {
+    let frame = kurbo::Circle::new((0.0, 0.0), 1000.0).to_path(0.1);
+    let square = PathData::from_bezpath(&Rect::new(-10.0, -10.0, 10.0, 10.0).to_path(0.1));
+    let wrap = vectorcraft_doc::WrapShape { path: square, wrap: Default::default() };
+    let cells = Region::cells(&frame, &LayoutOptions { rows: 100, columns: 100, ..LayoutOptions::default() }, &[wrap]);
+    assert_eq!(cells.len(), 10_000);
+    let first = &cells[0];
+    assert!(!first.polys.is_empty() && !first.wraps.is_empty());
+    assert!(cells.iter().all(|c| c.polys.as_ptr() == first.polys.as_ptr() && c.wraps.as_ptr() == first.wraps.as_ptr()));
 }
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).

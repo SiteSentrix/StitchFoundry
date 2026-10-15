@@ -662,8 +662,8 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         return options(s);
     }
     let mut opts: vectorcraft_doc::AreaOptions = serde_json::from_value(v).map_err(|e| bad(C, e.to_string()))?;
-    opts.rows = opts.rows.clamp(1, 100);
-    opts.columns = opts.columns.clamp(1, 100);
+    opts.rows = opts.rows.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
+    opts.columns = opts.columns.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
     let finite = |x: f64| if x.is_finite() { x } else { 0.0 };
     opts.gutter = finite(opts.gutter).clamp(0.0, 10_000.0);
     opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
