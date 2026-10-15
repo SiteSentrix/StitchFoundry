@@ -813,7 +813,9 @@ fn functions_and_colour_spaces_built_on_themselves_are_refused() {
     ] {
         let objects: Vec<&str> = objects.iter().map(String::as_str).collect();
         let e = import(&pdf_with(std::slice::from_ref(page), &objects, None)).err().map(|e| e.to_string());
-        assert!(e.as_deref().is_some_and(|e| e.contains("built on one another without end")), "{what}: {e:?}");
+        // A damaged array is refused as damaged: what it holds can't be looked at whole.
+        let refused = |e: &str| e.contains("built on one another without end") || e.contains("is damaged and can't be read");
+        assert!(e.as_deref().is_some_and(refused), "{what}: {e:?}");
     }
     for (what, page, objects) in [
         ("a function stitching one", &shaded, vec![stitch(&next), ramp.to_string()]),
