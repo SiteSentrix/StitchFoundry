@@ -1241,6 +1241,7 @@
 	Hide Print Tiling	隱藏列印分頁
 	Hide Rulers	隱藏尺標
 	Hide Slices	隱藏切片
+	Hide Template	隱藏範本
 	Hide Text Threads	隱藏文字串連
 	Hide Thumbnail	隱藏縮圖
 	Hide Thumbnails	隱藏縮圖
@@ -2747,6 +2748,7 @@
 	Show Slices	顯示切片
 	Show Swatch Bounds	顯示色票邊界
 	Show Swatch Kinds	顯示色票種類
+	Show Template	顯示範本
 	Show Text Threads	顯示文字串連
 	Show The Home Screen When No Documents Are Open	沒有開啟文件時顯示首頁
 	Show Thumbnail	顯示縮圖

@@ -200,6 +200,9 @@ pub struct ViewFlags {
     pub gradient_annotator: bool,
     /// Type → Show Hidden Characters.
     pub hidden_chars: bool,
+    /// View → Hide/Show Template: template layers drawn (dimmed) or left out of the canvas.
+    #[serde(default = "yes")]
+    pub templates: bool,
 }
 
 impl Default for ViewFlags {
@@ -222,6 +225,7 @@ impl Default for ViewFlags {
             text_threads: true,
             gradient_annotator: true,
             hidden_chars: false,
+            templates: true,
         }
     }
 }

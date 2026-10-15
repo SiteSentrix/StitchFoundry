@@ -321,6 +321,8 @@ pub struct CacheKey {
     pub h: u32,
     pub outline: bool,
     pub trim: bool,
+    /// View › Hide Template: template layers left out ([`vectorcraft_render::RenderOptions::skip_templates`]).
+    pub templates: bool,
     pub ppp: f32,
     pub hidden: Vec<u64>,
     pub rot: f64,
