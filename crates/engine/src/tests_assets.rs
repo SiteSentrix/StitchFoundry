@@ -68,12 +68,35 @@ fn multiple_gives_an_asset_per_object_and_single_one_of_them_all() {
     let again = run(&mut s, "assets.add", json!({"ids": [b, a]}));
     assert_eq!((again["added"].clone(), again["assets"].clone()), (json!(0), json!([list[0]["id"], list[1]["id"]])));
     assert_eq!(undo_len(&s), steps);
-    // Layers aren't art; nothing to collect is an error.
+    // A layer id collects the art under it (Layers panel Collect for Export / MCP).
     let layer = s.doc().unwrap().doc.layers[0].id.0;
-    assert!(s.execute("assets.add", &json!({"ids": [layer]})).is_err());
+    let from_layer = run(&mut s, "assets.add", json!({"ids": [layer]}));
+    assert_eq!(from_layer["added"], 0, "those objects are assets already");
+    assert_eq!(from_layer["assets"], json!([list[0]["id"], list[1]["id"]]));
+    // An empty layer has nothing to collect.
+    let empty = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    assert!(s.execute("assets.add", &json!({"ids": [empty]})).is_err());
     run(&mut s, "select.set", json!({"ids": []}));
     assert!(s.execute("assets.add", &json!({})).is_err());
     assert!(s.execute("assets.add", &json!({"ids": [a, b], "name": "Two"})).is_err(), "a name names one asset");
+}
+
+#[test]
+fn a_layer_id_collects_the_art_under_it_including_sublayers() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    let sub = run(&mut s, "layer.newSublayer", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "layer.setCurrent", json!({"id": sub}));
+    let b = rect(&mut s, 50.0, 10.0, 30.0, 20.0);
+    let layer = s.doc().unwrap().doc.layers[0].id.0;
+    let r = run(&mut s, "assets.add", json!({"ids": [layer]}));
+    assert_eq!(r["added"], 2);
+    let list = assets(&mut s);
+    assert_eq!(list.len(), 2);
+    assert_eq!((list[0]["nodes"].clone(), list[1]["nodes"].clone()), (json!([a]), json!([b])));
+    let one = run(&mut s, "assets.add", json!({"ids": [layer], "multiple": false}));
+    assert_eq!(one["added"], 1);
+    assert_eq!(assets(&mut s).last().unwrap()["nodes"], json!([a, b]));
 }
 
 #[test]
