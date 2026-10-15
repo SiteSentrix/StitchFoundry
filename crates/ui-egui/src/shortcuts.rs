@@ -178,13 +178,16 @@ fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let view = app.view_info();
     // Switching apps mid-composition needs nothing: the macOS IME keeps its marked text and goes
     // on with it when the window comes back (measured with Kotoeri), as the tool does.
+    // Cmd/Ctrl/Alt chords are shortcuts (Create Outlines, Bold, …): never type their letter into
+    // the text if a host still emits `Text` for them (#2094).
+    let shortcut_mods = ctx.input(|i| i.modifiers.command || i.modifiers.ctrl || i.modifiers.alt);
     let events: Vec<egui::Event> =
         ctx.input(|i| i.events.iter().filter(|e| matches!(e, egui::Event::Text(_) | egui::Event::Ime(_))).cloned().collect());
     for e in events {
         // Errors are already reported by the engine's interaction (a failed preview keeps it).
         let _ = match e {
             // Keys the IME passed through come as text only when nothing is marked.
-            egui::Event::Text(t) if !app.session.tool_composing() => app.session.tool_text(&t, view),
+            egui::Event::Text(t) if !app.session.tool_composing() && !shortcut_mods => app.session.tool_text(&t, view),
             egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
                 app.ime_marked = Some(text.clone()).filter(|t| !t.is_empty());
                 app.session.tool_preedit(&text, active_range_chars, view)
@@ -530,6 +533,47 @@ mod tests {
         });
         out.textures_delta.clear();
         out
+    }
+
+    /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
+    /// tool's Shift+O), with the Selection tool or while the Type tool edits the text.
+    #[test]
+    fn cmd_shift_o_creates_outlines() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        assert_eq!(crate::menus::shortcut_of("type.createOutlines"), Some("Cmd+Shift+O"));
+        let open = parse("Cmd+O").unwrap();
+        let outlines = parse("Cmd+Shift+O").unwrap();
+        let pos = |want: egui::KeyboardShortcut, id: &str| super::all_shortcuts().iter().position(|(sc, i, _)| *i == id && *sc == want);
+        assert!(pos(outlines, "type.createOutlines").unwrap() < pos(open, "file.open").unwrap(), "more modifiers win so Open does not eat the chord");
+        let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+        let chord = egui::Event::Key { key: Key::O, physical_key: None, pressed: true, repeat: false, modifiers: cmd_shift };
+        let is_text = |app: &VectorcraftApp, id: u64| {
+            matches!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Text(_)))
+        };
+        let group_kids = |app: &VectorcraftApp| -> usize {
+            let id = app.session.active().unwrap().selection.objects.first().copied().unwrap();
+            match &app.session.doc().unwrap().doc.node(id).unwrap().kind {
+                vectorcraft_doc::NodeKind::Group { children, .. } => children.len(),
+                _ => 0,
+            }
+        };
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        assert!(is_text(&app, id));
+        frame(&mut app, vec![chord.clone()]);
+        assert!(!is_text(&app, id), "Selection tool: the chord outlines the text");
+        assert_eq!(group_kids(&app), 2, "H and i");
+        assert_ne!(app.session.tool_id(), "artboard", "not the Artboard tool's Shift+O");
+        assert!(app.ui.dialog.is_none(), "not File › Open");
+        // While the Type tool edits, the same chord outlines; a Text event with Cmd held must not type.
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 80, "text": "Yo"})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        assert!(app.session.tool_wants_text());
+        frame(&mut app, vec![egui::Event::ModifiersChanged(cmd_shift), chord, egui::Event::Text("o".into())]);
+        assert!(!is_text(&app, id), "Type tool: the chord outlines the text being edited");
+        assert_eq!(group_kids(&app), 2, "Yo only: the stray Text with Cmd was not typed");
+        assert!(app.ui.dialog.is_none(), "not File › Open while typing");
     }
 
     /// Cmd+Shift+B while the Type tool edits text is Type › Bold, not Hide Bounding Box (#724).

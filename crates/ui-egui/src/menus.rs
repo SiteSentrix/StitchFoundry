@@ -4137,8 +4137,7 @@ mod tests {
                     Item::Cmd(_, id, _)
                         if vectorcraft_engine::find_command(id).is_none()
                             && !UI_COMMANDS.iter().any(|c| c.0 == *id)
-                            && !id.starts_with("object.path.")
-                            && *id != "type.createOutlines" =>
+                            && !id.starts_with("object.path.") =>
                     {
                         bad.push(id.to_string());
                     }
