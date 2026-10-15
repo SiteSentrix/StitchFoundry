@@ -15,8 +15,15 @@ pub fn parse(s: &str) -> Option<KeyboardShortcut> {
     if s.is_empty() {
         return None;
     }
-    let (mods_part, key_part) =
-        if let Some(stripped) = s.strip_suffix("++") { (stripped.trim_end_matches('+'), "+") } else { s.rsplit_once('+').unwrap_or(("", s)) };
+    // A bare `+` (the Add Anchor Point tool's key) is the key itself, not a separator with
+    // nothing on either side.
+    let (mods_part, key_part) = if s == "+" {
+        ("", "+")
+    } else if let Some(stripped) = s.strip_suffix("++") {
+        (stripped.trim_end_matches('+'), "+")
+    } else {
+        s.rsplit_once('+').unwrap_or(("", s))
+    };
     let mut m = Modifiers::NONE;
     for part in mods_part.split('+').filter(|p| !p.is_empty()) {
         match part {
@@ -973,6 +980,23 @@ mod tests {
         let before = zoom(&mut app);
         frame(&mut app, vec![press(Key::Minus, Modifiers::COMMAND)]);
         assert!(zoom(&mut app) < before, "Cmd+- zooms out");
+    }
+
+    /// `+` selects the Add Anchor Point tool, as `-` selects Delete Anchor Point (#2142): typed as
+    /// Shift+`=` on a US layout, or by a layout's own `+` key or the numpad's.
+    #[test]
+    fn plus_selects_the_add_anchor_point_tool() {
+        assert_eq!(parse("+"), parse("="), "a bare `+` is the `=` key");
+        assert_eq!(crate::shortcut_editor::tool_for_key("+"), Some("addAnchor"));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        for m in [Modifiers::SHIFT, Modifiers::NONE] {
+            app.select_tool("selection");
+            frame(&mut app, vec![egui::Event::ModifiersChanged(m), egui::Event::Text("+".into())]);
+            assert_eq!(app.session.tool_id(), "addAnchor", "`+` with {m:?}");
+        }
+        frame(&mut app, vec![egui::Event::ModifiersChanged(Modifiers::NONE), egui::Event::Text("-".into())]);
+        assert_eq!(app.session.tool_id(), "deleteAnchor");
     }
 
     #[test]
