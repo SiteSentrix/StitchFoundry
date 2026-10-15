@@ -307,6 +307,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.taskBar.reset", "Reset Bar Position", "", "{} unpin the Contextual Task Bar and put it back under the selection"),
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
+    (
+        "window.panels",
+        "Panels Except Tools and Control",
+        "Shift+Tab",
+        "{} show/hide the dock and the floating panels (hiding them closes a panel popped out of the icon column), leaving the toolbar and the Control bar as they are; returns whether the panels show",
+    ),
     ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
     (
         "window.panel.layout",
@@ -1225,6 +1231,17 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.ui.dock = on;
             app.ui.toolbar = on;
             app.ui.control_bar = on;
+            if !on {
+                app.ui.open_panel = None;
+            }
+            Ok(json!(on))
+        }
+        "window.panels" => {
+            let on = !app.ui.dock;
+            app.ui.dock = on;
+            if !on {
+                app.ui.open_panel = None;
+            }
             Ok(json!(on))
         }
         "window.collapseDock" => opt_bool(p, "collapsed").map(|collapsed| {
