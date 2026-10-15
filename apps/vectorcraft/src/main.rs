@@ -1,7 +1,7 @@
 //! VectorCraft desktop app.
 //!
 //! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>] [--automation-write-root <dir>]]
-//! [--in-window-menus] [files…]`
+//! [--in-window-menus] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
 //!
 //! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
 //! macOS instead of the macOS menu bar (`mac_menu`).
@@ -625,6 +625,26 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     }
 }
 
+/// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
+const USAGE: &str = "\
+Usage: vectorcraft [options] [files…]
+
+Opens the VectorCraft desktop app with the given files.
+
+Options:
+  --control <port>               Start the localhost JSON-lines control server on <port>
+                                 (or VECTORCRAFT_CONTROL_PORT)
+  --automation-read-root <dir>   Confine the files control requests read to <dir>
+  --automation-write-root <dir>  Confine the files control requests write to <dir>
+  --in-window-menus              Keep the menus inside the window on macOS
+                                 (or VECTORCRAFT_IN_WINDOW_MENUS=1)
+  --version                      Print the version and exit
+  -h, --help                     Print this help and exit
+
+Without a window (converting, scripting, the MCP server), use vectorcraft-cli:
+  vectorcraft-cli --help
+";
+
 fn main() -> std::process::ExitCode {
     // Validate roots before logging, font scans, preferences or the window: a missing value
     // must not clear an environment root and start the control channel without confinement.
@@ -648,6 +668,14 @@ fn main() -> std::process::ExitCode {
             "--in-window-menus" => in_window_menus = true,
             "--version" => {
                 println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
+                return std::process::ExitCode::SUCCESS;
+            }
+            // Before anything starts, like `--version`: from a terminal or an agent's shell the app
+            // used to open (or hang without a display) instead (#2110).
+            "--help" | "-h" => {
+                // Not `print!`, which panics when standard output is closed (`| head -0`):
+                // there is nothing left to tell then.
+                let _ = std::io::Write::write_all(&mut std::io::stdout(), USAGE.as_bytes());
                 return std::process::ExitCode::SUCCESS;
             }
             _ => files.push(a),
