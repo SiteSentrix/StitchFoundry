@@ -1,7 +1,9 @@
 //! Document file I/O for every frontend (desktop, web, CLI, control channel, headless MCP): open,
-//! save, export and serialize by path or bytes (base64), the format table, and `command.batch`.
+//! save, export and serialize by path or bytes (base64), the format table, `command.batch` and
+//! `action.batch` (the Actions panel menu's Batch…).
 //!
 //! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, DXF, raster images).
+//! - `action_batch`: play an action on every file in a folder or every data set.
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForOffice`.
@@ -19,6 +21,7 @@
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
 
+mod action_batch;
 mod affinity;
 mod batch;
 pub mod dxf;
@@ -145,6 +148,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{label?, commands: [{command, params}], artboard?: index (the active artboard; the app passes it: each edit.pasteInPlace, edit.pasteInFront, edit.pasteInBack, object.align, object.distribute, object.distributeSpacing or select.allOnArtboard step that names none gets it, and each artboard.fitToArt or artboard.fitToSelection step that names no index gets it as index, or the last artboard of a document with fewer)} run several commands as ONE undo step (one in each document they edit: steps may open, switch, close or revert documents); stops at the first error and rolls everything back, documents included",
             has_doc,
             batch::batch
+        ),
+        cmd!(
+            "action.batch",
+            "Batch…",
+            [],
+            None,
+            "{commands: [{command, params}] (the action's steps), source?: folder (default) | datasets, folder? (required for folder: the source folder), includeSubdirs?: false, destination?: none (default: leave each file open) | saveAndClose (save over the source and close) | folder (save or export into destinationFolder and close), destinationFolder? (required when destination is folder; also the folder Override Save/Export write into), overrideOpen?: true (skip document.open / file.open steps: the batch opens each source file), overrideSave?: true (point document.save / file.save / file.saveAs at destinationFolder/{stem}.{ext}), overrideExport?: true (point document.export / document.exportForScreens / document.exportSelection the same way), stopOnError?: true, label?} play the commands on every readable file in folder (and its subfolders when includeSubdirs), or on every data set of the open document (source: datasets; File + Data Set Name for Override Save/Export). Caps: 500 files or data sets, 8 folder levels, 256 steps. Batches cannot nest. → {processed: [{path|dataset, result|error}…], count, failed, stopped}",
+            always,
+            action_batch::action_batch
         ),
         cmd!(
             query "document.formats",

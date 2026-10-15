@@ -4451,3 +4451,14 @@ theme	Appearance	Erscheinungsbild
 	Import Data Sets…	Datensätze importieren…
 	Export Data Sets…	Datensätze exportieren…
 	Make Graph Dynamic	Diagramm dynamisch machen
+	Batch…	Stapelverarbeitung…
+	Source Folder:	Quellordner:
+	Destination Folder:	Zielordner:
+	Overrides	Überschreibungen
+	Uses every data set of the open document.	Verwendet jeden Datensatz des geöffneten Dokuments.
+@msg	Batch: {count} processed	Stapelverarbeitung: {count} verarbeitet
+@msg	Batch: {count} processed, {failed} failed	Stapelverarbeitung: {count} verarbeitet, {failed} fehlgeschlagen
+@msg	choose a destination folder	wählen Sie einen Zielordner
+@msg	choose a source folder	wählen Sie einen Quellordner
+@msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
+@msg	the action has no steps	die Aktion hat keine Schritte

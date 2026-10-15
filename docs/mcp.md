@@ -986,6 +986,12 @@ already walks Image Trace. Short agent entry points:
   `symbol.replace`, `symbol.edit`, `symbol.duplicate`, `symbol.selectInstances {name}`.
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?}`, `brush.freehand`, `object.expandBrush {ids?}`.
+- Variables: `variable.list`, `variable.define {name, kind: text|visibility}`, `variable.bind {variable, ids?}`,
+  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.unbind`, `dataset.new` / `dataset.set` /
+  `dataset.select`.
+- Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
+  destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
+  action on every file in a folder or every data set (the Actions panel menu's Batch…).
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|graph}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeGraphDynamic`, `variable.unbind`,
   `dataset.new` / `dataset.set` / `dataset.select` (graph values are CSV as `graph.setData`).
@@ -1795,7 +1801,10 @@ for `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack`, and to each
 none, when the step runs. When the document a step runs in has no artboard at that index (for example, after an
 earlier step deleted the active artboard when it was the last one), the step gets that document's last artboard. In
 remote mode, MCP's `run_command` calls and each step of the `command_batch` tool get the active artboard too. The
-Actions panel plays an action as a `command.batch`. An action recorded in the Actions panel leaves the artboard out,
+Actions panel plays an action as a `command.batch`. The Actions panel menu's Batch… runs
+`action.batch`: the same steps on every readable file in a folder (or every data set of the open document), with
+destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. Caps: 500 files or data sets, 8
+folder levels, 256 steps. An action recorded in the Actions panel leaves the artboard out,
 and its steps of these commands get the artboard that is active when the action plays. A press with the Selection,
 Direct Selection or Group Selection tool inside an artboard makes that artboard the active one; with the Selection
 tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection. Choosing the Artboard

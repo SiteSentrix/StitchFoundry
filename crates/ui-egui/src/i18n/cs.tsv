@@ -4915,3 +4915,14 @@ mark-style	Japanese	Japonské
 	Import Data Sets…	Importovat sady dat…
 	Export Data Sets…	Exportovat sady dat…
 	Make Graph Dynamic	Nastavit graf jako dynamický
+	Batch…	Dávka…
+	Source Folder:	Zdrojová složka:
+	Destination Folder:	Cílová složka:
+	Overrides	Přepsání
+	Uses every data set of the open document.	Použije každou sadu dat otevřeného dokumentu.
+@msg	Batch: {count} processed	Dávka: zpracováno {count}
+@msg	Batch: {count} processed, {failed} failed	Dávka: zpracováno {count}, selhalo {failed}
+@msg	choose a destination folder	vyberte cílovou složku
+@msg	choose a source folder	vyberte zdrojovou složku
+@msg	open a document with data sets	otevřete dokument se sadami dat
+@msg	the action has no steps	akce nemá žádné kroky

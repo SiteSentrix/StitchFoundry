@@ -4857,3 +4857,14 @@ mark-style	Japanese	Japonesas
 	Import Data Sets…	Importar conjuntos de datos…
 	Export Data Sets…	Exportar conjuntos de datos…
 	Make Graph Dynamic	Hacer gráfico dinámico
+	Batch…	Lote…
+	Source Folder:	Carpeta de origen:
+	Destination Folder:	Carpeta de destino:
+	Overrides	Anulaciones
+	Uses every data set of the open document.	Usa todos los conjuntos de datos del documento abierto.
+@msg	Batch: {count} processed	Lote: {count} procesados
+@msg	Batch: {count} processed, {failed} failed	Lote: {count} procesados, {failed} con error
+@msg	choose a destination folder	elija una carpeta de destino
+@msg	choose a source folder	elija una carpeta de origen
+@msg	open a document with data sets	abra un documento con conjuntos de datos
+@msg	the action has no steps	la acción no tiene pasos

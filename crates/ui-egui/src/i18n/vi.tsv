@@ -4471,3 +4471,14 @@ theme	Appearance	Giao diện
 	Import Data Sets…	Nhập tập dữ liệu…
 	Export Data Sets…	Xuất tập dữ liệu…
 	Make Graph Dynamic	Tạo biểu đồ động
+	Batch…	Hàng loạt…
+	Source Folder:	Thư mục nguồn:
+	Destination Folder:	Thư mục đích:
+	Overrides	Ghi đè
+	Uses every data set of the open document.	Dùng mọi tập dữ liệu của tài liệu đang mở.
+@msg	Batch: {count} processed	Hàng loạt: đã xử lý {count}
+@msg	Batch: {count} processed, {failed} failed	Hàng loạt: đã xử lý {count}, lỗi {failed}
+@msg	choose a destination folder	hãy chọn thư mục đích
+@msg	choose a source folder	hãy chọn thư mục nguồn
+@msg	open a document with data sets	hãy mở một tài liệu có tập dữ liệu
+@msg	the action has no steps	hành động không có bước nào
