@@ -120,7 +120,7 @@ const MAX_BANDS: f64 = 4096.0;
 
 /// Split lines in row space (rows run along x), sorted into bands of rows so a row only looks
 /// at the lines near it.
-struct Splits {
+pub(crate) struct Splits {
     /// Segments, each from its lower to its higher y.
     segs: Vec<(Point, Point)>,
     /// The segments reaching into each band.
@@ -156,6 +156,11 @@ impl Splits {
         if let Some(t) = cfg.texture {
             pattern_segments(t, &bb, &mut segs);
         }
+        Self::banded(segs, &bb, cfg.texture.is_some())
+    }
+
+    /// `segs` sorted into bands of rows over `bb`; `None` without any.
+    fn banded(segs: Vec<(Point, Point)>, bb: &BBox, pattern: bool) -> Option<Splits> {
         if segs.is_empty() {
             return None;
         }
@@ -173,11 +178,22 @@ impl Splits {
                 list.push(i);
             }
         }
-        Some(Splits { segs, bands, y0, band, pattern: cfg.texture.is_some() })
+        Some(Splits { segs, bands, y0, band, pattern })
+    }
+
+    /// The lines of texture `t` tiled over `bb` (row space: rows along x): an embossed satin's
+    /// pattern laid along its column (NEW-28). `None` when nothing crosses the rows.
+    pub(crate) fn of_texture(t: Texture, bb: &BBox) -> Option<Splits> {
+        if bb.is_empty() || !(bb.width().is_finite() && bb.height().is_finite()) {
+            return None;
+        }
+        let mut segs = Vec::new();
+        pattern_segments(t, bb, &mut segs);
+        Self::banded(segs, bb, true)
     }
 
     /// Where the row at `y` crosses the lines, in increasing x.
-    fn crossings(&self, y: f64, out: &mut Vec<f64>) {
+    pub(crate) fn crossings(&self, y: f64, out: &mut Vec<f64>) {
         out.clear();
         let k = ((y - self.y0) / self.band).floor();
         if k.is_nan() || k < 0.0 {

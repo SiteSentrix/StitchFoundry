@@ -2301,6 +2301,10 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             {
                 set(app, target, json!({ "random": v }));
             }
+            // a satin that turns (two inclination lines or more) takes a pattern pressed in along it
+            if f.kind == FillKind::Satin && e.guides.len() >= 2 {
+                texture_rows(app, ui, target, f, e);
+            }
             if f.kind == FillKind::Tatami {
                 texture_rows(app, ui, target, f, e);
                 if let Some(v) = check(ui, tl!("Trapunto (travel along the outline)"), f.trapunto) {

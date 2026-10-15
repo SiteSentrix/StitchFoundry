@@ -178,6 +178,22 @@ fn an_opened_machine_files_stitches_become_runs_satins_and_fills() {
     assert!(s.execute("embroidery.stitchesToObjects", &json!({"ids": [999_999]})).is_err());
 }
 
+/// NEW-28: a texture on a turning satin fill is pressed in along the turning.
+#[test]
+fn a_texture_embosses_a_turning_satin_fill() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 40.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [150, 90], "b": [150, 150]})).unwrap();
+    s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [250, 90], "b": [280, 150]})).unwrap();
+    let plain = stitches(&s);
+    s.execute("embroidery.setParams", &json!({"params": {"texture": {"pattern": "diamonds", "size": 4}}})).unwrap();
+    let embossed = stitches(&s);
+    assert!(embossed > plain + 100, "{plain} → {embossed}");
+    s.execute("embroidery.setParams", &json!({"params": {"texture": null}})).unwrap();
+    assert_eq!(stitches(&s), plain);
+}
+
 #[test]
 fn inclination_lines_turn_and_follow_the_object() {
     let mut s = session();

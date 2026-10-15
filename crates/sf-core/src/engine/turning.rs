@@ -1,12 +1,13 @@
 //! Turning fills: tatami rows or satin stitches that follow a [`Strip`], so the
 //! stitch direction bends from inclination line to inclination line.
 
+use super::fill::Splits;
 use super::out::Out;
 use super::run::CORNER_ANGLE;
 use super::satin;
 use crate::direction::{Strip, strip_pairs};
-use crate::geom::{Point, Polygon, poly, polyline};
-use crate::model::{FillKind, FillParams, SatinParams, SatinUnderlay};
+use crate::geom::{BBox, Point, Polygon, poly, polyline};
+use crate::model::{FillKind, FillParams, SatinParams, SatinUnderlay, Texture};
 
 /// Needle positions along a row from `a` to `b` with a staggered grid (tatami).
 fn tatami_row(a: Point, b: Point, row: usize, params: &FillParams, out: &mut Vec<Point>) {
@@ -107,7 +108,11 @@ pub(crate) fn turning_fill(piece: &Polygon, strip: &Strip, params: &FillParams, 
             underlay: SatinUnderlay { auto: false, center_run: false, ..SatinUnderlay::default() },
             ..SatinParams::default()
         };
-        out.stitches(satin::zigzag_points(&pairs, &sp, (params.pull_comp, params.pull_comp), true));
+        let pts = satin::zigzag_points(&pairs, &sp, (params.pull_comp, params.pull_comp), true);
+        out.stitches(match params.texture {
+            Some(t) => emboss(pts, &pairs, t),
+            None => pts,
+        });
     } else {
         let pc = params.pull_comp;
         let mut row = Vec::new();
@@ -124,6 +129,67 @@ pub(crate) fn turning_fill(piece: &Polygon, strip: &Strip, params: &FillParams, 
             out.stitches(row.iter().copied());
         }
     }
+}
+
+/// Shortest piece an embossed satin stitch is cut into (mm).
+const EMBOSS_EDGE: f64 = 0.8;
+
+/// An embossed turning satin (NEW-28): texture `t` laid along the column, its length along the
+/// column's middle and its width across it (mm from the middle), so the pattern bends with the
+/// turning; each stitch of `pts` gets a needle point where it crosses the pattern's lines.
+fn emboss(pts: Vec<Point>, pairs: &[(Point, Point)], t: Texture) -> Vec<Point> {
+    let mids: Vec<Point> = pairs.iter().map(|(a, b)| a.midpoint(*b)).collect();
+    let mut along = Vec::with_capacity(mids.len());
+    let mut acc = 0.0;
+    along.push(0.0);
+    for w in mids.windows(2) {
+        if let [a, b] = w {
+            acc += a.distance(*b);
+            along.push(acc);
+        }
+    }
+    let half = pairs.iter().map(|(a, b)| a.distance(*b)).fold(0.0, f64::max) * 0.5 + 2.0;
+    if !(acc.is_finite() && half.is_finite()) {
+        return pts;
+    }
+    // rows of the pattern run across the column (x), the column runs down (y)
+    let Some(lines) = Splits::of_texture(t, &BBox::new(Point::new(-half, -1.0), Point::new(half, acc + 1.0))) else {
+        return pts;
+    };
+    let mut out = Vec::with_capacity(pts.len() * 2);
+    let (mut k, mut cuts) = (0usize, Vec::new());
+    for (i, &p) in pts.iter().enumerate() {
+        out.push(p);
+        let Some(&q) = pts.get(i + 1) else { break };
+        // the pair the stitch belongs to: the stitches go along the pairs in order
+        let m = p.midpoint(q);
+        while let (Some(here), Some(next)) = (mids.get(k), mids.get(k + 1)) {
+            if next.distance(m) > here.distance(m) {
+                break;
+            }
+            k += 1;
+        }
+        let (Some(&(a, b)), Some(&c), Some(&y)) = (pairs.get(k), mids.get(k), along.get(k)) else { continue };
+        let d = (b - a).normalized();
+        let (vp, vq) = ((p - c).dot(d), (q - c).dot(d));
+        let span = (vq - vp).abs();
+        if span.is_nan() || span <= 2.0 * EMBOSS_EDGE {
+            continue;
+        }
+        lines.crossings(y, &mut cuts);
+        let (lo, hi) = (vp.min(vq), vp.max(vq));
+        let mut kept: Vec<f64> = Vec::with_capacity(cuts.len());
+        for &v in &cuts {
+            if v >= lo + EMBOSS_EDGE && v <= hi - EMBOSS_EDGE && kept.last().is_none_or(|&l| v - l >= EMBOSS_EDGE) {
+                kept.push(v);
+            }
+        }
+        if vq < vp {
+            kept.reverse();
+        }
+        out.extend(kept.into_iter().map(|v| p.lerp(q, (v - vp) / (vq - vp))));
+    }
+    out
 }
 
 /// Satin along `strip` with a satin object's column settings: spacing opened up on
@@ -202,6 +268,37 @@ mod tests {
         let inner_moved = min < 13.8;
         let outer_moved = max > 20.2;
         assert!(inner_moved != outer_moved, "exactly one side widened: {min} {max}");
+    }
+
+    /// NEW-28: a texture on a turning satin is pressed into it: the stitches are cut where they
+    /// cross the pattern, which is laid along the column, and they stay in the band.
+    #[test]
+    fn a_texture_embosses_a_turning_satin_along_the_column() {
+        let (poly, guides) = band();
+        let strip = strip_from_guides(&poly.outer, &guides).expect("strip");
+        let run = |texture: Option<Texture>| {
+            let params = FillParams { kind: FillKind::Satin, pull_comp: 0.0, texture, ..FillParams::default() };
+            let mut out = Out::new();
+            turning_fill(&poly, &strip, &params, &mut out, None, 2.0, 12.0);
+            out.finish()
+        };
+        let plain = run(None);
+        let t = Texture { pattern: crate::model::TexturePattern::Diamonds, size: 4.0, angle: 0.0 };
+        let embossed = run(Some(t));
+        assert!(embossed.len() > plain.len() + 100, "{} vs {}", embossed.len(), plain.len());
+        for s in &embossed {
+            let r = s.pos().length();
+            assert!(r > 13.9 && r < 20.1, "{s:?} r={r}");
+        }
+        // no piece shorter than the shortest cut, apart from the ends of rows the satin makes short
+        let pieces: Vec<f64> = embossed.windows(2).map(|w| w[0].pos().distance(w[1].pos())).collect();
+        let tiny = pieces.iter().filter(|&&d| d > 1e-6 && d < EMBOSS_EDGE * 0.9).count();
+        assert!(tiny * 20 < pieces.len(), "{tiny} of {}", pieces.len());
+        // the cuts follow the column: on both halves of the arch a cut sits at each width
+        let mid = |r: f64| (r - 17.0).abs() < 1.6;
+        let left = embossed.iter().filter(|s| s.pos().x < -5.0 && mid(s.pos().length())).count();
+        let right = embossed.iter().filter(|s| s.pos().x > 5.0 && mid(s.pos().length())).count();
+        assert!(left > 50 && right > 50, "{left} {right}");
     }
 
     #[test]

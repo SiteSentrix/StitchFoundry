@@ -390,9 +390,14 @@ the fill: an embossed texture without another thread.
 - Split lines show dashed on the selected fill, move, turn and
   scale with it, and stay its own: **Make Properties Current** and styles leave them out.
   **Embroidery › Clear Split Lines** (or the button in the panel) takes them out again.
-- Textures and split lines change only straight tatami rows: satin fills, turning fills (two
-  inclination lines or more) and underlay ignore them, and a textured tatami shape doesn't turn
-  along long thin shapes on its own.
+- **Embossed turning satin:** a satin fill that turns (two inclination lines or more) takes a
+  texture too. The pattern is laid along the column, its length along the column's middle and
+  its width across it, so it bends with the turning; each satin stitch gets a needle point where
+  it crosses the pattern's lines (none closer than 0.8 mm to another or to the edge). Set it with
+  the same *Texture* rows in the Embroidery panel (`embroidery.setParams {params: {texture}}`).
+- Otherwise textures and split lines change only straight tatami rows: straight satin fills,
+  turning tatami and underlay ignore them, and a textured tatami shape doesn't turn along long
+  thin shapes on its own.
 - **Flow lines** (Florentine and liquid effects): draw one or two lines across or beside a
   tatami fill, select them with it and choose **Embroidery › Fill Along Lines**. With one line,
   every row is a copy of it moved across the fill, so the stitches follow its curve; with two,
