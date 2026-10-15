@@ -14,12 +14,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use hayro_interpret::CacheKey;
-use hayro_syntax::Pdf;
-use hayro_syntax::content::TypedIter;
-use hayro_syntax::content::ops::TypedInstruction;
-use hayro_syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, dict_or_stream};
-use hayro_syntax::page::{Page, Resources};
+use craft_pdf::interpret::CacheKey;
+use craft_pdf::syntax::Pdf;
+use craft_pdf::syntax::content::TypedIter;
+use craft_pdf::syntax::content::ops::TypedInstruction;
+use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, dict_or_stream};
+use craft_pdf::syntax::page::{Page, Resources};
+
+use crate::PdfError;
 
 /// The interpreter's limit on nested form XObjects.
 const MAX_DEPTH: u32 = 50;
@@ -33,6 +35,9 @@ const MAX_OPS: usize = 64_000_000;
 const MAX_TAGS: usize = 4_000_000;
 /// The most groups read.
 const MAX_GROUPS: usize = 10_000;
+/// Match the interpreter's ordinary content window and maximum incomplete instruction.
+const CONTENT_WINDOW: usize = 64 << 10;
+const MAX_WINDOW: usize = 256 << 20;
 /// The deepest layers nest in the configuration's `/Order`.
 pub(crate) const MAX_NESTING: usize = 32;
 
@@ -104,7 +109,7 @@ impl Ocgs {
     /// lists that array's groups as its sublayers; an array starting with a label lists its
     /// groups under the label, which isn't a group (they go under `parent`). A group listed twice
     /// stays where it is first listed. `seen`: the entries read so far.
-    fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &hayro_syntax::xref::XRef, seen: &mut usize) {
+    fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &craft_pdf::syntax::xref::XRef, seen: &mut usize) {
         let mut prev = None;
         for item in order.raw_iter() {
             *seen += 1;
@@ -147,7 +152,7 @@ impl Ocgs {
         if let Some(i) = self.index.get(&id) {
             return *i;
         }
-        let name = d.get::<hayro_syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
+        let name = d.get::<craft_pdf::syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
         let print = usage(d, b"Print", b"PrintState") != Some(false);
         // A view state applies when the configuration says so on opening; an off one hides the
         // group all the same (it says how the group is meant to be seen).
@@ -170,7 +175,7 @@ impl Ocgs {
 
     /// The group content marked with `/OC` (`d`: the group or membership dictionary, `id` its
     /// object) belongs to: a membership dictionary's first group.
-    fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &hayro_syntax::xref::XRef) -> Option<usize> {
+    fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &craft_pdf::syntax::xref::XRef) -> Option<usize> {
         if d.get::<Name<'_>>(b"Type").is_some_and(|t| t.as_ref() == b"OCMD") {
             let first = d.get::<Array<'_>>(b"OCGs").and_then(|a| a.raw_iter().find_map(|i| i.as_obj_ref())).or_else(|| d.get_ref(b"OCGs"))?;
             let id = ObjectIdentifier::from(first);
@@ -219,7 +224,8 @@ pub(crate) struct Scan {
     pub tags: Vec<(u64, Option<usize>)>,
     /// Each form transparency group: isolated, knockout.
     pub groups: Vec<(bool, bool)>,
-    /// The walk stopped at [`MAX_OPS`] or [`MAX_TAGS`]: the rest of the page isn't told apart.
+    /// Content was incomplete or a scan limit was reached. No document may be returned from
+    /// this scan, since its routing no longer describes every object the interpreter draws.
     pub cut: bool,
     /// Each fill and each stroke of a path the interpreter draws (a fill-and-stroke operator is
     /// a fill, then a stroke; `sh` is a fill): whether it overprints.
@@ -278,15 +284,49 @@ fn max_ops() -> usize {
     TEST_MAX_OPS.with(std::cell::Cell::get)
 }
 
+#[cfg(not(test))]
+fn max_window() -> usize {
+    MAX_WINDOW
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_MAX_WINDOW: std::cell::Cell<usize> = const { std::cell::Cell::new(MAX_WINDOW) };
+}
+
+#[cfg(test)]
+fn max_window() -> usize {
+    TEST_MAX_WINDOW.with(std::cell::Cell::get)
+}
+
+pub(crate) fn incomplete_content() -> PdfError {
+    PdfError::Parse("PDF content is incomplete or exceeds the reader's limits; no document was imported".into())
+}
+
+/// Whitespace and comments after the final instruction do not make an incomplete tail.
+fn blank_tail(mut bytes: &[u8]) -> bool {
+    loop {
+        let first = bytes.iter().position(|b| !matches!(b, 0 | 9 | 10 | 12 | 13 | 32)).unwrap_or(bytes.len());
+        bytes = bytes.get(first..).unwrap_or_default();
+        if bytes.first() == Some(&b'%') {
+            let end = bytes.iter().position(|b| matches!(b, b'\r' | b'\n')).unwrap_or(bytes.len());
+            bytes = bytes.get(end..).unwrap_or_default();
+        } else {
+            return bytes.is_empty();
+        }
+    }
+}
+
 struct Walker<'w, 'p> {
     ocgs: &'w mut Ocgs,
     /// The groups that are off for the interpreter (none once [`all_on`] turned them on).
     off: HashSet<ObjectIdentifier>,
-    xref: &'p hayro_syntax::xref::XRef,
+    xref: &'p craft_pdf::syntax::xref::XRef,
     fonts: &'w mut FontNames,
     visible: Vec<bool>,
     ops: usize,
     max_ops: usize,
+    max_form_bytes: usize,
     out: Scan,
     /// A form XObject hidden by its own optional content was met.
     hidden_form: bool,
@@ -384,13 +424,63 @@ impl Walker<'_, '_> {
         }
     }
 
-    fn walk(&mut self, mut iter: TypedIter<'_>, res: &Resources<'_>, depth: u32) {
+    fn walk(&mut self, data: &[u8], res: &Resources<'_>, depth: u32) {
+        let mut iter = TypedIter::new(data);
         self.note_fonts(res);
         // The interpreter saves the state for each content stream, and restores what the stream
         // left saved when it ends.
         let saved = self.states.len();
         self.save();
         self.walk_ops(&mut iter, res, depth);
+        self.out.cut |= !blank_tail(data.get(iter.committed()..).unwrap_or_default());
+        self.states.truncate(saved);
+    }
+
+    /// Scan the same stream windows as the interpreter without materializing the page.
+    /// Graphics and optional-content state live across windows; page state is saved once.
+    fn page(&mut self, page: &Page<'_>) {
+        let resources = page.resources();
+        self.note_fonts(resources);
+        let saved = self.states.len();
+        self.save();
+        let mut content = page.content_reader();
+        let mut window = Vec::new();
+        let limit = max_window();
+        let mut exhausted = false;
+        loop {
+            let (committed, needs_more) = {
+                let mut ops = TypedIter::new_window(&window, exhausted);
+                self.walk_ops(&mut ops, resources, 0);
+                (ops.committed(), ops.needs_more())
+            };
+            if committed > window.len() {
+                self.out.cut = true;
+                break;
+            }
+            window.drain(..committed);
+            if self.out.cut {
+                break;
+            }
+            if !needs_more || exhausted {
+                // No success on an undecidable tail or on a parser stop before the source ends.
+                // The typed iterator does not expose every malformed-operator failure.
+                self.out.cut |= !exhausted || !blank_tail(&window);
+                break;
+            }
+            if window.len() >= limit {
+                self.out.cut = true;
+                break;
+            }
+            let want = window.len().max(CONTENT_WINDOW).min(limit.saturating_sub(window.len()));
+            if window.try_reserve(want).is_err() {
+                self.out.cut = true;
+                break;
+            }
+            if content.read_into(&mut window, want) == 0 {
+                exhausted = true;
+            }
+        }
+        self.out.cut |= content.truncated();
         self.states.truncate(saved);
     }
 
@@ -465,7 +555,7 @@ impl Walker<'_, '_> {
                 | TypedInstruction::NextLineAndShowText(_)
                 | TypedInstruction::ShowTextWithParameters(_) => self.shown(),
                 TypedInstruction::XObject(x) => {
-                    if !self.is_visible() || depth >= MAX_DEPTH {
+                    if !self.is_visible() {
                         continue;
                     }
                     let Some(s) = res.get_x_object(x.0) else { continue };
@@ -473,23 +563,41 @@ impl Walker<'_, '_> {
                     if d.get::<Name<'_>>(b"Subtype").as_deref() != Some(b"Form") || d.get::<[f32; 4]>(b"BBox").is_none() {
                         continue;
                     }
-                    let Ok(data) = s.decoded() else { continue };
+                    if depth >= MAX_DEPTH {
+                        self.out.cut = true;
+                        return;
+                    }
+                    let Ok(data) = s.decoded() else {
+                        self.out.cut = true;
+                        return;
+                    };
+                    // Ordinary filtered form decoders may return a prefix at their limit.
+                    // Reaching that bound cannot certify a complete form, even at an operator boundary.
+                    if !s.filters().is_empty() && data.len() >= self.max_form_bytes {
+                        self.out.cut = true;
+                        return;
+                    }
                     let oc = d.get::<Dict<'_>>(b"OC");
                     if let Some(oc) = &oc {
                         self.begin_oc(oc, d.get_ref(b"OC").map(ObjectIdentifier::from));
                         self.hidden_form |= !self.is_visible();
                     }
                     if self.is_visible() {
-                        if let Some(g) = d.get::<Dict<'_>>(b"Group")
-                            && self.out.groups.len() < MAX_GROUPS
-                        {
+                        if let Some(g) = d.get::<Dict<'_>>(b"Group") {
+                            if self.out.groups.len() >= MAX_GROUPS {
+                                self.out.cut = true;
+                                return;
+                            }
                             self.out.groups.push((g.get::<bool>(b"I").unwrap_or(false), g.get::<bool>(b"K").unwrap_or(false)));
                         }
                         // (Its own resources, or without any those of what draws it: as the interpreter reads them.)
-                        let inner = d.get::<Dict<'_>>(b"Resources").map(Resources::new).unwrap_or_else(|| res.clone());
+                        let inner = Resources::from_scope(d.get::<Dict<'_>>(b"Resources"), res.clone());
                         self.save();
-                        self.walk(TypedIter::new(data.as_ref()), &inner, depth + 1);
+                        self.walk(data.as_ref(), &inner, depth + 1);
                         self.restore();
+                        if self.out.cut {
+                            return;
+                        }
                     }
                     if oc.is_some() {
                         self.visible.pop();
@@ -522,11 +630,12 @@ fn embeds_glyphs(f: &Dict<'_>) -> bool {
 /// Walk `page` as the interpreter will: `all_on` when [`all_on`] turned every group on. Fonts
 /// found are noted in `fonts` (their cache key → base font name, and whether the file carries its
 /// glyphs).
-pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &mut FontNames) -> Scan {
-    walk_page(page, ocgs, all_on, fonts).out
+pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &mut FontNames, max_form_bytes: usize) -> Result<Scan, PdfError> {
+    let scan = walk_page(page, ocgs, all_on, fonts, max_form_bytes).out;
+    if scan.cut { Err(incomplete_content()) } else { Ok(scan) }
 }
 
-fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &'w mut FontNames) -> Walker<'w, 'p> {
+fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &'w mut FontNames, max_form_bytes: usize) -> Walker<'w, 'p> {
     let off = if all_on { HashSet::new() } else { ocgs.off.clone() };
     let mut w = Walker {
         ocgs,
@@ -536,20 +645,23 @@ fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &
         visible: vec![],
         ops: 0,
         max_ops: max_ops(),
+        max_form_bytes,
         out: Scan::default(),
         hidden_form: false,
         states: vec![Overprint::default()],
         text: TextOverprint::None,
     };
-    w.walk(page.typed_operations(), page.resources(), 0);
+    w.page(page);
     w.out.texts.push(w.text);
     w
 }
 
 /// Does `page` draw a form XObject that is off by its own optional content (not a marked-content
 /// sequence)? Its art couldn't be told apart by group once every group is on.
-pub(crate) fn hides_forms(page: &Page<'_>, ocgs: &mut Ocgs) -> bool {
-    walk_page(page, ocgs, false, &mut HashMap::new()).hidden_form
+pub(crate) fn hides_forms(page: &Page<'_>, ocgs: &mut Ocgs, max_form_bytes: usize) -> Result<bool, PdfError> {
+    let mut fonts = HashMap::new();
+    let walk = walk_page(page, ocgs, false, &mut fonts, max_form_bytes);
+    if walk.out.cut { Err(incomplete_content()) } else { Ok(walk.hidden_form) }
 }
 
 /// `bytes` with an update appended that drops the catalog's `/OCProperties`, so every group

@@ -3,10 +3,10 @@
 
 use std::collections::HashMap;
 
-use hayro_syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
-use hayro_syntax::page::Page;
-use hayro_syntax::xref::XRef;
-use hayro_syntax::{DecryptionError, LoadPdfError, Pdf};
+use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
+use craft_pdf::syntax::page::Page;
+use craft_pdf::syntax::xref::XRef;
+use craft_pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
@@ -37,13 +37,13 @@ pub fn is_postscript(bytes: &[u8]) -> bool {
     bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
 }
 
-/// The most functions and colour spaces that may be built on one another (a function stitching
-/// functions together, an indexed space on a space with an alternate). The interpreter (hayro)
-/// builds them by recursion, without a cap of its own: one built on itself, or thousands in a
-/// chain, overflows the stack, which is an abort, not an error. Files have two or three.
+/// The application's stricter refusal policy for functions and colour spaces built on one
+/// another (a function stitching functions together, an indexed space on an alternate).
+/// The shared interpreter also has function depth and node budgets; this preflight rejects
+/// cyclic or excessively linked objects before interpretation. Files usually have two or three.
 const MAX_LINKS: usize = 16;
 
-/// The deepest the procedures of a calculator function may nest: read by recursion, too.
+/// The application's calculator-procedure depth policy, layered over the shared reader's limits.
 const MAX_PROCEDURES: usize = 64;
 
 /// What the function or colour space `o` is built on: the functions a stitching function joins;
@@ -153,13 +153,24 @@ fn nests_without_end(pdf: &Pdf) -> bool {
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
 /// password opens a file too.
 ///
-/// What a hostile file nests or loops is the reader's to refuse (hayro 0.8 reads arrays and
+/// What a hostile file nests or loops is the shared reader's to refuse (it reads arrays and
 /// dictionaries 64 deep and no deeper, wherever they are: the file's text, an object stream, the
 /// content of a page, form, pattern or glyph; and follows a page tree or a chain of object streams
-/// once). What it reads beyond that is left out, as an object it can't read. What the interpreter
-/// builds by recursion with no cap, and streams it would decode without a ceiling or with a
-/// predictor it can't apply, are refused here ([`hostile`], [`crate::streams`]).
+/// once). What it reads beyond that is left out, as an object it can't read. The application also
+/// rejects overly linked functions and colour spaces, oversized streams and unsupported
+/// predictors before interpretation ([`hostile`], [`crate::streams`]), retaining its stricter
+/// refusal policy alongside the shared backend's bounded decoding and construction.
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
+    open_with_options(bytes, password, &open_options())
+}
+
+/// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
+/// uses the shared reader's immutable per-document limits, and its input copy is fallible.
+pub(crate) fn open_options() -> craft_pdf::OpenOptions {
+    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, ..Default::default() }
+}
+
+pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
     }
@@ -167,20 +178,22 @@ pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError
         return Err(PdfError::Parse(STREAM_NOTE.into()));
     }
     let password = password.unwrap_or_default();
-    let read = |pw: &str| Pdf::new_with_password(bytes.to_vec(), pw);
+    let read = |pw: &str| craft_pdf::open_slice_with_options(bytes, Some(pw), options);
     read(password)
         .or_else(|e| match e {
             // The reader takes only the open password of RC4 and 128-bit AES files: the
             // permissions password gives it.
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if !password.is_empty() => {
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if !password.is_empty() => {
                 crate::encrypt::user_password(bytes, password).map_or(Err(e), |user| read(&user))
             }
             e => Err(e),
         })
         .map_err(|e| match e {
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if password.is_empty() => PdfError::NeedsPassword,
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) => PdfError::WrongPassword,
-            e => PdfError::Parse(format!("{e:?}")),
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if password.is_empty() => {
+                PdfError::NeedsPassword
+            }
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
+            e => PdfError::Parse(e.to_string()),
         })
         // Twice: looking at every object makes the reader repair a damaged table of objects (once
         // only), and the objects are other ones after that.
@@ -200,10 +213,10 @@ pub fn info(bytes: &[u8], password: Option<&str>) -> Result<PdfInfo, PdfError> {
         .map(|page| {
             let (w, h) = page.render_dimensions();
             let rotation = match page.rotation() {
-                hayro_syntax::page::Rotation::None => 0,
-                hayro_syntax::page::Rotation::Horizontal => 90,
-                hayro_syntax::page::Rotation::Flipped => 180,
-                hayro_syntax::page::Rotation::FlippedHorizontal => 270,
+                craft_pdf::syntax::page::Rotation::None => 0,
+                craft_pdf::syntax::page::Rotation::Horizontal => 90,
+                craft_pdf::syntax::page::Rotation::Flipped => 180,
+                craft_pdf::syntax::page::Rotation::FlippedHorizontal => 270,
             };
             let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c))).collect();
             PageInfo { width: w as f64, height: h as f64, rotation, boxes }
@@ -232,7 +245,7 @@ pub(crate) fn picked(opts: &ImportOptions, count: usize) -> Result<Vec<usize>, P
     Ok(v)
 }
 
-fn rect(r: hayro_syntax::object::Rect) -> Rect {
+fn rect(r: craft_pdf::syntax::object::Rect) -> Rect {
     Rect::new(r.x0, r.y0, r.x1, r.y1).abs()
 }
 
@@ -249,7 +262,7 @@ pub(crate) fn page_box(page: &Page<'_>, which: CropTo) -> Rect {
         CropTo::Trim => b"TrimBox",
         CropTo::Art => b"ArtBox",
     };
-    page.raw().get::<hayro_syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
+    page.raw().get::<craft_pdf::syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
 }
 
 /// Where `page` draws on its artboard: the page transform (PDF user space → y-down page space

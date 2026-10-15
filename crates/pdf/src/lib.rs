@@ -220,6 +220,12 @@ pub enum PdfError {
     PlaceholderOnly,
 }
 
+impl From<craft_pdf::write::WriteError> for PdfError {
+    fn from(error: craft_pdf::write::WriteError) -> Self {
+        Self::Write(error.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -284,3 +290,9 @@ mod tests_strokeout;
 mod tests_textstroke;
 #[cfg(test)]
 mod tests_webview;
+
+#[cfg(test)]
+mod tests_reader_streaming;
+
+#[cfg(test)]
+mod tests_reader_compat;

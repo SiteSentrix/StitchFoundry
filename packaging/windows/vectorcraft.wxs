@@ -50,6 +50,7 @@
 
     <Feature Id="Main" Title="VectorCraft" Level="1">
       <ComponentGroupRef Id="VectorcraftFiles" />
+      <ComponentGroupRef Id="PdfDocumentation" />
       <ComponentRef Id="DesktopShortcut" />
     </Feature>
 
@@ -108,6 +109,9 @@
   </Package>
 
   <Fragment>
+    <ComponentGroup Id="PdfDocumentation" Directory="INSTALLFOLDER">
+      <Files Include="$(var.DocsDir)\**" />
+    </ComponentGroup>
     <ComponentGroup Id="VectorcraftFiles" Directory="INSTALLFOLDER">
       <Component Id="VectorcraftApp" Guid="0E8C6C5E-DE4A-4E1D-9DB0-44E8E38C2103">
         <File Id="VectorcraftExe" Source="$(var.BinDir)\vectorcraft.exe" KeyPath="yes">

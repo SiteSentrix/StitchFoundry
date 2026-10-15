@@ -48,7 +48,7 @@ fn uncompressed(d: &Document) -> String {
 }
 
 fn page_count(bytes: &[u8]) -> usize {
-    hayro_syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
+    craft_pdf::syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn one_page_per_artboard_with_sizes() {
         show_cross_hairs: false,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
-    let pdf = hayro_syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
     let sizes: Vec<(f32, f32)> = pdf.pages().iter().map(|p| p.render_dimensions()).collect();
     assert_eq!(sizes, vec![(200.0, 100.0), (100.0, 400.0), (612.0, 792.0)]);
 }
@@ -106,7 +106,7 @@ fn artboard_range_and_bad_index() {
         show_cross_hairs: false,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
-    let pdf = hayro_syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
     assert_eq!(pdf.pages().len(), 1);
     assert_eq!(pdf.pages()[0].render_dimensions(), (100.0, 400.0));
     assert_eq!(export(&d, &PdfOptions { artboards: Some(vec![5]), ..Default::default() }), Err(PdfError::BadArtboard(5)));
@@ -733,6 +733,25 @@ fn opacity_mask_exports_as_luminosity_soft_mask() {
     let text = String::from_utf8_lossy(&bytes);
     assert!(text.contains("/SMask"), "soft mask in an ExtGState");
     assert!(text.contains("/Luminosity"));
+}
+
+#[test]
+fn empty_and_populated_file_info_preserve_key_presence() {
+    let mut d = doc(100.0, 100.0);
+    d.title.clear();
+    let s = uncompressed(&d);
+    for key in ["/Title", "/Author", "/Keywords", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
+        assert!(!s.contains(key), "unexpected empty metadata {key}");
+    }
+    d.title = "Synthetic title".into();
+    d.metadata.author = " Test author ".into();
+    d.metadata.keywords = vec!["test keyword".into()];
+    let bytes = export(&d, &PdfOptions { created: Some(1_700_000_000), ..PdfOptions::uncompressed() }).unwrap();
+    let s = String::from_utf8_lossy(&bytes);
+    for key in ["/Title", "/Author", "/Keywords", "/CreationDate", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
+        assert!(s.contains(key), "missing populated metadata {key}");
+    }
+    assert!(s.contains("Synthetic title") && s.contains("Test author") && s.contains("test keyword"));
 }
 
 /// A function or colour space built on itself is refused before the interpreter builds it (by

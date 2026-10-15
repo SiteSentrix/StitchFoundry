@@ -206,7 +206,7 @@ fn kept_layers(s: &Session, p: &Value, command: &str) -> Result<HashSet<NodeId>>
 /// on a hidden layer's eye shows just that layer (#1158).
 fn others(s: &mut Session, p: &Value, flag: Flag, v: bool, command: &str) -> Result<Value> {
     let keep = kept_layers(s, p, command)?;
-    let changes = s.doc()?.doc.layers.iter().map(|l| (l.id, !keep.contains(&l.id) == v)).collect();
+    let changes = s.doc()?.doc.layers.iter().map(|l| (l.id, keep.contains(&l.id) != v)).collect();
     set_flag(s, changes, flag, flag.label(v))
 }
 

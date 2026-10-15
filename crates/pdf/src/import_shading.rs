@@ -6,8 +6,8 @@
 
 use std::sync::Arc;
 
-use hayro_interpret::pattern::ShadingPattern;
-use hayro_interpret::shading::{ShadingFunction, ShadingType};
+use craft_pdf::interpret::pattern::ShadingPattern;
+use craft_pdf::interpret::shading::{ShadingFunction, ShadingType};
 use kurbo::{BezPath, Circle, Point, Rect, Shape, Vec2};
 use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::live::{GradientMesh, lerp_color};
@@ -34,7 +34,7 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>) -> 
     let space = colors.shading_space(cs, at(0.0)?.len());
     // RGB to decide which samples are stops; the stops keep the shading's model.
     let sample = |t: f32| -> Option<Color> {
-        let [r, g, b, _] = cs.to_rgba(&at(t)?, 1.0).components();
+        let [r, g, b, _] = cs.to_rgba(&at(t)?, 1.0, false).components();
         Some(Color::rgb(round3(r), round3(g), round3(b)))
     };
     // Sample densely, then drop samples that linear interpolation reproduces.
@@ -147,7 +147,7 @@ fn mesh_color(v: &[f32], function: Option<&ShadingFunction>, sp: &ShadingPattern
     };
     let space = colors.shading_space(&sp.shading.color_space, comps.len());
     colors.native(space, &comps).map(|n| n.color).unwrap_or_else(|| {
-        let [r, g, b, _] = sp.shading.color_space.to_rgba(&comps, 1.0).components();
+        let [r, g, b, _] = sp.shading.color_space.to_rgba(&comps, 1.0, false).components();
         Color::rgb(round3(r), round3(g), round3(b))
     })
 }

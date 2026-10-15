@@ -362,6 +362,22 @@ fn new_type_snaps_to_smart_guides() {
 
 #[test]
 fn layout_cache_follows_fonts_added_later() {
+    // Other tests can load system fonts; this assertion needs its own process-wide database.
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "text::tests::layout_cache_follows_fonts_added_later", "--nocapture", "--test-threads=1"])
+            .env("VECTORCRAFT_FONT_CACHE_TEST_CHILD", "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated font cache test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
     // The web build adds fonts after startup: a caret layout cached before one arrived is stale.
     let (d, id, tool) = editing("abc");
     let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("not text") };

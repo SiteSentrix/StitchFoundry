@@ -91,6 +91,23 @@ Copy-Item (Join-Path $Bin 'vectorcraft.exe'), (Join-Path $Bin 'vectorcraft-cli.e
 
 & (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'vectorcraft.exe') (Join-Path $Stage 'vectorcraft-cli.exe')
 
+# Documentation and dependency licences shared by the MSI and portable ZIP.
+$Docs = Join-Path $Stage 'docs'
+New-Item -ItemType Directory -Force -Path $Docs | Out-Null
+foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ASSETS.md') {
+  $p = Join-Path $Root $f
+  if (Test-Path $p) { Copy-Item $p $Docs }
+}
+# Built with craft-fonts (CRAFT_FONTS_DIR, release builds): the embedded fonts' licences.
+if ($env:CRAFT_FONTS_DIR) {
+  foreach ($ofl in Get-ChildItem -Path (Join-Path $env:CRAFT_FONTS_DIR 'fonts\*\OFL.txt') -ErrorAction SilentlyContinue) {
+    Copy-Item $ofl.FullName (Join-Path $Docs "OFL-$($ofl.Directory.Name).txt")
+  }
+}
+if (Test-Path (Join-Path $Root 'licenses')) {
+  Copy-Item -Recurse (Join-Path $Root 'licenses') $Docs
+}
+
 # ---- MSI ---------------------------------------------------------------------------------------
 # The setup wizard's art, drawn here from the app icon so the MSI shows VectorCraft rather than
 # WiX's stock bitmaps: a 493x58 banner across the top of the inner pages (the page title is drawn
@@ -135,7 +152,7 @@ Invoke-Native 'wix build' {
     -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext `
     -culture en-US -loc (Join-Path $PSScriptRoot 'vectorcraft.en-us.wxl') `
     -d "Version=$MsiVersion" -d "DisplayVersion=$Version" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'assets\app-icon\vectorcraft.ico')" `
-    -d "BannerBmp=$Banner" -d "DialogBmp=$Dialog" `
+    -d "DocsDir=$Docs" -d "BannerBmp=$Banner" -d "DialogBmp=$Dialog" `
     -o $Msi
 }
 # wix writes its debug symbols (.wixpdb) next to the MSI; keep them out of the release assets.
@@ -147,16 +164,7 @@ $Portable = Join-Path $TargetDir "windows-package\vectorcraft-$Version-windows-$
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
-foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE') {
-  $p = Join-Path $Root $f
-  if (Test-Path $p) { Copy-Item $p $Portable }
-}
-# Built with craft-fonts (CRAFT_FONTS_DIR, release builds): the embedded fonts' licences.
-if ($env:CRAFT_FONTS_DIR) {
-  foreach ($ofl in Get-ChildItem -Path (Join-Path $env:CRAFT_FONTS_DIR 'fonts\*\OFL.txt') -ErrorAction SilentlyContinue) {
-    Copy-Item $ofl.FullName (Join-Path $Portable "OFL-$($ofl.Directory.Name).txt")
-  }
-}
+Copy-Item -Recurse (Join-Path $Docs '*') $Portable
 $Zip = Join-Path $Dist "vectorcraft-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip

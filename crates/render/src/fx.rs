@@ -1261,7 +1261,7 @@ impl Renderer {
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
         off.render(&mut pm, &mut self.resources);
-        if !self.pixel_fx.get(&old).is_some_and(|e| e.made.pixels.as_slice() == pm.data_as_u8_slice()) {
+        if self.pixel_fx.get(&old).is_none_or(|e| e.made.pixels.as_slice() != pm.data_as_u8_slice()) {
             return;
         }
         let owner = content.owner.cloned().or_else(|| self.fx_owner.clone().filter(|o| std::ptr::eq(&**o, content.node)));
