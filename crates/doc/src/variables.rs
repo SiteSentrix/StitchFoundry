@@ -84,9 +84,10 @@ impl DataSet {
 ///
 /// An object may be driven by several variables — the reference app binds the selected object
 /// to the selected variable, one click at a time, and never says a second binding replaces the
-/// first — so a binding is a set. `dataset.select` applies them in the order the variables are
-/// defined, which is what makes two text variables on one object deterministic: the last one
-/// wins, and `applied` counts both.
+/// first — so a binding is a set. `dataset.select` applies the text values in the order the
+/// variables are defined, which is what makes two text variables on one object deterministic:
+/// the last one wins, and `applied` counts both. Of two visibility variables on one object, the
+/// last one defined wins too.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Variables {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

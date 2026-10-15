@@ -965,6 +965,13 @@ already walks Image Trace. Short agent entry points:
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`.
 
+`dataset.select`, `dataset.next` and `dataset.prev` reply `{name, applied, skipped}`. They skip an object that is
+locked or inside a hidden or locked layer or group. They apply the data set's visibility values that show objects
+first, outermost object first, then its other values in the order the variables are defined, then its visibility
+values that hide objects, innermost object first. A data set that shows a group sets the objects inside it in the
+same call, and one that hides a visible group sets the objects inside it before it hides the group. Of two
+variables of the same kind on one object, the one defined last wins.
+
 ```json
 {"name":"run_command","arguments":{"command":"symbol.list","params":{}}}
 {"name":"run_command","arguments":{"command":"brush.list","params":{}}}
