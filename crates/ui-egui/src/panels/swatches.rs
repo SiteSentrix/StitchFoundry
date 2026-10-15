@@ -654,6 +654,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), tl!("Find")) } else { String::new() };
     let items = entries(app, kind, &query);
     let active_swatch = active_swatch(app);
+    let focus = focus_swatch(app, ui, active_swatch.as_deref());
     let selected = selection(app, ui);
     // Without a selection the swatch of the active paint is highlighted.
     let fallback: Vec<String> = if selected.is_empty() { active_swatch.into_iter().collect() } else { vec![] };
@@ -669,6 +670,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                 for e in &items {
                     let name = e.name();
                     let (r, resp, chip) = list_row(ui, tile_id(salt, e), view, is_sel(name));
+                    if focus.as_deref() == Some(name) {
+                        ui.scroll_to_rect(r, Some(egui::Align::Center));
+                    }
                     match e {
                         Entry::Registration => draw_registration(ui, chip),
                         Entry::Swatch { paint, global, spot, .. } => {
@@ -685,6 +689,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                 for (e, cell) in tile_grid(ui, &items, view, Entry::is_folder) {
                     let resp = ui.interact(cell, tile_id(salt, e), Sense::click_and_drag());
                     let name = e.name();
+                    if focus.as_deref() == Some(name) {
+                        ui.scroll_to_rect(cell, Some(egui::Align::Center));
+                    }
                     match e {
                         Entry::Registration => draw_registration(ui, cell),
                         Entry::Swatch { paint, global, spot, .. } => {
@@ -729,14 +736,48 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     bottom(app, ui, &selected);
 }
 
+/// The document and the objects selected in it.
+type SelectedArt = (u64, Vec<u64>);
+
+/// The swatch the tiles scroll to this frame, once: the active paint's swatch when it changed, or
+/// when other art was selected. Selecting other art also clears the panel's own selection, so its
+/// swatch is the one highlighted.
+fn focus_swatch(app: &VectorcraftApp, ui: &Ui, active: Option<&str>) -> Option<String> {
+    let art: Option<SelectedArt> = app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect()));
+    // (None the first time the panel shows.)
+    let (last_art, last_swatch): (Option<Option<SelectedArt>>, Option<String>) = pstate(ui.ctx(), "swatch-focus");
+    let reselected = last_art.as_ref().is_some_and(|l| *l != art);
+    if reselected {
+        set_pstate(ui.ctx(), "swatch-selected", Vec::<String>::new());
+    }
+    let changed = reselected || last_art.is_none() || last_swatch.as_deref() != active;
+    set_pstate(ui.ctx(), "swatch-focus", (Some(art), active.map(str::to_string)));
+    active.filter(|_| changed).map(str::to_string)
+}
+
 /// The swatch the active paint comes from: a linked colour's global swatch (a tint's tint swatch
-/// when there is one), a gradient's gradient swatch, or None.
+/// when there is one), a process colour's swatch of that colour (a colour no swatch has: none, so
+/// text in a colour of its own highlights nothing), a gradient's gradient swatch, or None; nothing
+/// for selected images.
 fn active_swatch(app: &VectorcraftApp) -> Option<String> {
+    // Images and placed files have no fill or stroke: no swatch (not None).
+    let st = app.session.active()?;
+    let unpainted = |id: &vectorcraft_doc::NodeId| {
+        st.doc.node(*id).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_) | vectorcraft_doc::NodeKind::PlacedDocument(_)))
+    };
+    if !st.selection.objects.is_empty() && st.selection.objects.iter().all(unpainted) {
+        return None;
+    }
     match active_paint(app) {
         Paint::Solid { swatch: Some(n), tint, .. } => {
             let d = &app.session.active()?.doc;
             let tint_swatch = d.swatches_iter().find(|w| w.tint_of() == Some((n.as_str(), tint)));
             Some(tint_swatch.map_or(n.clone(), |w| w.name.clone()))
+        }
+        // A process colour isn't linked: the swatch of that very colour.
+        Paint::Solid { color, swatch: None, .. } => {
+            let d = &app.session.active()?.doc;
+            d.swatches_iter().find(|w| matches!(w.paint, Paint::Solid { color: c, swatch: None, .. } if c == color)).map(|w| w.name.clone())
         }
         Paint::Gradient(g) => g.swatch,
         Paint::None => Some("[None]".to_string()),
@@ -1624,6 +1665,54 @@ mod tests {
         app.run("ui.swatchOptions", json!({"name": "Ink 40%"})).unwrap();
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.kind.as_str(), d.str("__swatch").as_str()), (KIND, "Ink"), "a tint swatch opens its base's options");
+    }
+
+    /// Selecting art scrolls the tiles to its swatch, once, and clears the panel's own selection so
+    /// that swatch is the one highlighted.
+    #[test]
+    fn selecting_art_scrolls_to_its_swatch() {
+        let mut app = app();
+        let colors: Vec<String> = (0..400).map(|i| format!("#{:02x}{:02x}{:02x}", i % 256, (i / 2) % 256, 128)).collect();
+        app.run("swatch.new", json!({ "colors": colors })).unwrap();
+        app.run("swatch.new", json!({"name": "Last Ink", "color": "#123456", "spot": true})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "swatch": "Last Ink"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = context();
+        let tile = |ctx: &egui::Context| ctx.read_response(egui::Id::new(("swatch-tile", "Last Ink"))).unwrap().rect;
+        frame(&mut app, &ctx, vec![], 0.0, show);
+        frame(&mut app, &ctx, vec![], 0.1, show);
+        let far = tile(&ctx).top();
+        set_pstate(&ctx, "swatch-selected", vec!["Red".to_string()]);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        for t in [0.2, 0.3, 0.4] {
+            frame(&mut app, &ctx, vec![], t, show);
+        }
+        let near = tile(&ctx).top();
+        assert!(near < far - 100.0, "scrolled to the swatch: {far} → {near}");
+        assert!(selected(&ctx).is_empty(), "the art's swatch is highlighted");
+        // Once: later frames leave the scroll where the user puts it.
+        assert_eq!(focus_swatch(&app, &egui::Ui::new(ctx.clone(), egui::Id::new("t"), egui::UiBuilder::new()), Some("Last Ink")), None);
+    }
+
+    /// A selected image, or text in a colour no swatch has, highlights no swatch (not None); text in
+    /// a swatch's colour highlights that swatch.
+    #[test]
+    fn images_and_unswatched_text_highlight_no_swatch() {
+        let mut app = app();
+        let mut png = vec![];
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let data = vectorcraft_format::base64_encode(&png);
+        app.run("file.place", json!({"name": "a.png", "dataBase64": data, "link": false})).unwrap();
+        assert_eq!(active_swatch(&app), None, "an image: no swatch");
+        let text = app.run("text.create", json!({"x": 10, "y": 50, "text": "Hi"})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [text]})).unwrap();
+        app.run("paint.setFill", json!({"color": "#3a7b5c"})).unwrap();
+        assert_eq!(active_swatch(&app), None, "a colour of its own: no swatch");
+        app.run("swatch.new", json!({"name": "Moss", "color": "#3a7b5c"})).unwrap();
+        assert_eq!(active_swatch(&app).as_deref(), Some("Moss"), "a swatch's colour");
     }
 
     #[test]
