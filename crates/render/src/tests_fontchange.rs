@@ -87,6 +87,7 @@ fn type_with_raster_effects_redraws_when_its_font_becomes_available() {
 /// available: the glyph geometry kept for it is laid out again.
 #[test]
 fn translucent_blended_and_shadowed_type_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
     const FAMILY: &str = "Blended Serif4";
     let mut d = Document::new(300.0, 150.0);
     let l = d.layers[0].id;

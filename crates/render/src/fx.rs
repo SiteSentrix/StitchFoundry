@@ -1514,6 +1514,7 @@ mod tests {
     use vectorcraft_geom::{Affine, Rect, shapes};
 
     use super::{Drawn, PIXEL_BUDGET, filter_region};
+    use crate::tests_fontchange::fonts_steady;
     use crate::{RenderOptions, Rendered, Renderer};
 
     /// #1706: the raster a shadow or glow is filtered in stays within the pixel budget however
@@ -1886,6 +1887,7 @@ mod tests {
     /// shadow is made from the instance's art, which the renderer measures the group's content by.
     #[test]
     fn a_moved_group_draws_the_shadow_of_the_instance_art_in_it_while_interacting() {
+        let _fonts = fonts_steady();
         let mut base = Document::new(100.0, 100.0);
         let orange = Appearance::basic(Paint::solid(Color::rgb(0.9, 0.4, 0.1)), Paint::None, 0.0);
         let art = Node::path(base.alloc_id(), shapes::rectangle(Rect::new(100.0, 100.0, 130.0, 126.0)), orange);
@@ -1929,6 +1931,7 @@ mod tests {
     /// again. A shadow keeps its raster under a new fill color.
     #[test]
     fn moved_rasters_need_the_same_content_and_effects() {
+        let _fonts = fonts_steady();
         let (view, still) = (Affine::scale(2.0), RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() });
         let live = RenderOptions { interacting: true, ..still.clone() };
         // `before` drawn, then `after` while interacting: the rasters drawn moved, and whether the
