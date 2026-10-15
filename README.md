@@ -116,6 +116,13 @@ Japanese fonts come from the optional craft-fonts build input
 StitchFoundry is written clean-room: behaviour comes from public documentation only, never from
 commercial embroidery software.
 
+## Reporting bugs
+
+In the app, **Help → Report a Bug…** opens StitchHub's report page, filled in with the version and your system.
+Describe what happened and send it: it becomes an issue in this repository (a public one, so leave out anything
+private). You can also [open an issue](https://github.com/Stitchwright/StitchFoundry/issues) yourself. A maintainer can
+have Claude work on an issue by labelling it `claude-fix`; Claude opens a pull request for review, and never merges.
+
 ## License and credits
 
 StitchFoundry is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

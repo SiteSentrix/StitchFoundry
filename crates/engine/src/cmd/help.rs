@@ -9,6 +9,9 @@ use super::*;
 /// This app's source repository.
 pub const GITHUB_URL: &str = "https://github.com/Stitchwright/StitchFoundry";
 
+/// Where bug reports go: StitchHub's report page, which files them as issues on this app's GitHub repository.
+pub const BUG_REPORT_URL: &str = "https://hub.stitchbench.app/report-a-bug";
+
 /// The user guide, compiled in for the Help window.
 const GUIDE: &str = include_str!("../../../../docs/embroidery.md");
 
@@ -18,6 +21,15 @@ const MAX_FOUND: usize = 40;
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(query "help.github", "StitchFoundry on GitHub", ["Help"], None, "{} → {url} source code, issues and releases", always, |_, _| url(GITHUB_URL.into())),
+        cmd!(
+            query "help.reportBug",
+            "Report a Bug…",
+            ["Help"],
+            None,
+            "{} → {url} StitchHub's bug report page, filled in with this app, its version and the system; a report becomes an issue on GitHub",
+            always,
+            |_, _| url(bug_report_url(env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH))
+        ),
         cmd!(query "help.links", "Links", [], None, "{} → {github}", always, |_, _| Ok(json!({ "github": GITHUB_URL }))),
         cmd!(
             query "help.topics",
@@ -133,6 +145,24 @@ fn for_tool(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": t.id, "title": t.title }))
 }
 
+/// The report page's address with the program, version and system in it (the page reads them; nothing else is sent).
+fn bug_report_url(version: &str, os: &str, arch: &str) -> String {
+    format!("{BUG_REPORT_URL}?program=stitchfoundry&version={}&system={}", percent_encode(version), percent_encode(&format!("{os} {arch}")))
+}
+
+/// Percent-encodes everything but letters, digits and `-._~`.
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(char::from(b));
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 fn url(u: String) -> Result<Value> {
     Ok(json!({ "url": u }))
 }
@@ -149,6 +179,21 @@ mod tests {
         // VectorCraft's community links (its Discord and website) are not this app's
         assert!(s.execute("help.discord", &json!({})).is_err());
         assert!(s.execute("help.website", &json!({})).is_err());
+    }
+
+    #[test]
+    fn report_a_bug_opens_the_hub_page_with_the_version_and_system() {
+        let mut s = Session::new();
+        let u = s.execute("help.reportBug", &json!({})).unwrap()["url"].as_str().unwrap().to_string();
+        assert!(u.starts_with("https://hub.stitchbench.app/report-a-bug?program=stitchfoundry&version="), "{u}");
+        assert!(u.contains(&format!("version={}", env!("CARGO_PKG_VERSION"))), "{u}");
+        assert!(u.contains("&system="), "{u}");
+        assert_eq!(
+            bug_report_url("0.3.1 beta", "mac os", "aarch64"),
+            "https://hub.stitchbench.app/report-a-bug?program=stitchfoundry&version=0.3.1%20beta&system=mac%20os%20aarch64"
+        );
+        // Anything odd in the text can't add a parameter or leave the address.
+        assert_eq!(percent_encode("a&b=c#d é"), "a%26b%3Dc%23d%20%C3%A9");
     }
 
     #[test]
