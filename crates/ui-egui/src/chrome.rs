@@ -826,7 +826,7 @@ fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
 
 pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    egui::Panel::bottom("hint_bar")
+    let panel = egui::Panel::bottom("hint_bar")
         .exact_size(28.0)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0, t.border)))
         .show(ui, |ui| {
@@ -850,6 +850,7 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.label(job);
             });
         });
+    widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
 }
 
 #[cfg(test)]
