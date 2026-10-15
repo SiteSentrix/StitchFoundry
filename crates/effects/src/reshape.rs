@@ -222,10 +222,24 @@ pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
 /// images follow, each mapped once more than the last. Without copies the image itself takes the
 /// map, as a path does.
 fn transform_images(n: &mut Node, m: Affine, copies: usize) {
+    transform_images_within(n, m, copies, crate::distort::MAX_COPY_IMAGES)
+}
+
+/// [`transform_images`] whose copies make at most `max` image nodes of the art, the originals
+/// included: each copy adds the image once more, and a Transform after this one copies the lot
+/// again, so copies stop where the result would pass `max` (#2042).
+pub(crate) fn transform_images_within(n: &mut Node, m: Affine, copies: usize, max: usize) {
+    let mut room = max.saturating_sub(image_count(n));
+    copy_images(n, m, copies, &mut room);
+}
+
+/// The walk of [`transform_images`]: the map and its copies go to each image in document order,
+/// each copy taking one from `room` (what the art can still grow by), until the budget is full.
+fn copy_images(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
     let Some(children) = n.children_mut() else { return };
     for c in children.iter_mut() {
         if !matches!(c.kind, NodeKind::Image(_)) {
-            transform_images(Arc::make_mut(c), m, copies);
+            copy_images(Arc::make_mut(c), m, copies, room);
             continue;
         }
         let src = (**c).clone();
@@ -240,12 +254,14 @@ fn transform_images(n: &mut Node, m: Affine, copies: usize) {
             *c = Arc::new(placed(m));
             continue;
         }
+        let made = copies.min(*room);
+        *room -= made;
         // The copies become image nodes of their own, under a group with the image's id, name and
         // place in the art (as the runs an outlined text gets).
-        let mut images: Vec<Arc<Node>> = Vec::with_capacity(copies + 1);
+        let mut images: Vec<Arc<Node>> = Vec::with_capacity(made + 1);
         images.push(Arc::new(placed(Affine::IDENTITY)));
         let mut xf = Affine::IDENTITY;
-        for _ in 0..copies {
+        for _ in 0..made {
             xf *= m;
             images.push(Arc::new(placed(xf)));
         }
@@ -253,6 +269,11 @@ fn transform_images(n: &mut Node, m: Affine, copies: usize) {
         g.name = src.name.clone();
         *c = Arc::new(g);
     }
+}
+
+/// How many image nodes `n` holds below itself.
+fn image_count(n: &Node) -> usize {
+    n.children().into_iter().flatten().map(|c| usize::from(matches!(c.kind, NodeKind::Image(_))) + image_count(c)).sum()
 }
 
 /// `n` with type anywhere inside it outlined and live objects evaluated, so geometry effects on
