@@ -345,6 +345,7 @@
 	Blocks	Khối
 	Blue	Xanh lam
 	Blur	Mờ
+	Blur Mode	Chế độ làm mờ
 	Bold	Đậm
 	Border Thickness	Độ dày viền
 	Both sides	Cả hai mặt
@@ -996,6 +997,7 @@
 	East Asian Type	Chữ Đông Á
 	Edge	Cạnh
 	Edge Brightness	Độ sáng cạnh
+	Edge Only	Chỉ cạnh
 	Edge Width	Độ rộng cạnh
 	Edit	Chỉnh sửa
 	Edit Artboards	Chỉnh sửa các bảng vẽ
@@ -1911,6 +1913,7 @@
 	Miter Limit:	Giới hạn góc nhọn:
 	Mixed Appearances	Diện mạo hỗn hợp
 	Mixed Objects	Đối tượng hỗn hợp
+	Mode	Chế độ
 	Mode:	Chế độ:
 	Model	Mô hình
 	Models	Mô hình AI
@@ -2243,6 +2246,7 @@
 	Overlap:	Chồng lấp:
 	Overlapping	Chồng lấp
 	Overlay	Phủ lên
+	Overlay Edge	Cạnh phủ lên
 	Overprint	In chồng
 	Overprint and Transparency Flattener	In chồng và làm phẳng trong suốt
 	Overprint and Transparency Flattener Options	Tùy chọn in chồng và làm phẳng trong suốt

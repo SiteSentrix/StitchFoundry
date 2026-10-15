@@ -39,7 +39,7 @@ its resolution, PDF export warns once per object with the requested and the lowe
 | Submenu | Items | Ours | Missing |
 |---|---|---:|---|
 | Artistic | Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor | 1/15 (approximate Film Grain) | Colored Pencil, Cutout, Dry Brush, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor |
-| Blur | Gaussian Blur, Radial Blur, Smart Blur | 3/3 | Smart Blur's Edge Only and Overlay Edge modes |
+| Blur | Gaussian Blur, Radial Blur, Smart Blur | 3/3 | — |
 | Brush Strokes | Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes, Sumi-e | 8/8 | — |
 | Distort | Diffuse Glow, Glass, Ocean Ripple | 3/3 | Glass's Load Texture |
 | Pixelate | Color Halftone, Crystallize, Mezzotint, Pointillize | 4/4 | — |

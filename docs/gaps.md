@@ -189,10 +189,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G2 Photoshop-style raster effects and the Effect Gallery
 
 - **Missing:** 28 of 57 filters (the remaining 14 Artistic filters and all of Sketch), the Effect Gallery dialog, Load
-  Texture for Glass and Texturizer, Smart Blur's Edge Only and Overlay Edge. Measured in
+  Texture for Glass and Texturizer. Measured in
   [effects-parity.md](effects-parity.md).
 - **Done:** the pixel-filter pipeline and 29 filters (Artistic: Film Grain, Blur, Brush Strokes, Distort, Pixelate, Sharpen, Stylize,
-  Texture, Video), Brush Strokes on 2026-10-11 and Film Grain on 2026-10-12.
+  Texture, Video), Brush Strokes on 2026-10-11, Film Grain on 2026-10-12, and Smart Blur's Edge Only and Overlay Edge
+  modes.
 - **Estimate:** 23–39 h (measured 0.7–1.2 h per filter); parallelizes well.
 
 ## G13 Illustrator 2026 (30.x) additions

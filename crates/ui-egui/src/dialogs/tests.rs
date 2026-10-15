@@ -179,6 +179,7 @@ fn raster_filter_dialogs_preview_and_apply() {
     for (effect, key, value) in [
         ("blur.radial", "method", "zoom"),
         ("blur.smart", "quality", "high"),
+        ("blur.smart", "blurMode", "overlayEdge"),
         ("sharpen.unsharpMask", "amount", "120"),
         ("pixelate.colorHalftone", "channel1", "30"),
         ("pixelate.crystallize", "cellSize", "20"),
@@ -207,14 +208,15 @@ fn raster_filter_dialogs_preview_and_apply() {
     }
     // Fields follow the effect's documented order (its dialog's), not the alphabet.
     let doc = vectorcraft_effects::effect_info("blur.smart").unwrap().params;
-    let ranks: Vec<usize> = ["radius", "threshold", "quality"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
-    assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
+    let ranks: Vec<usize> = ["radius", "threshold", "quality", "blurMode"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[3] < usize::MAX, "{ranks:?}");
     assert_eq!(super::effect::doc_rank(doc, "nope"), usize::MAX);
     let doc = vectorcraft_effects::effect_info("pixelate.colorHalftone").unwrap().params;
     let ranks: Vec<usize> = ["maxRadius", "channel1", "channel2", "channel3", "channel4"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[4] < usize::MAX, "{ranks:?}");
     // Labels as the dialogs show them.
     assert_eq!(super::form::humanize("maxRadius"), "Max. Radius:");
+    assert_eq!(super::form::humanize("blurMode"), "Mode:");
     assert_eq!(super::form::humanize("channel3"), "Channel 3:");
     assert_eq!(super::form::humanize("cellSize"), "Cell Size:");
     assert_eq!(super::form::humanize("lightDirection"), "Light Direction:");

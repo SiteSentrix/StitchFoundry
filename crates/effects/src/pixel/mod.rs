@@ -27,6 +27,7 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::util::{flag, num, text};
 
+pub use blur::{SMART_BLUR_MODES, SmartBlurMode};
 pub use brushstrokes::{STROKE_DIRECTIONS, StrokeDirection};
 pub use distort::{GLASS_TEXTURES, GlassTexture};
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
@@ -77,7 +78,10 @@ pub enum PixelFx {
     /// Blur › Smart Blur (Normal mode): each pixel averaged with the neighbours within `radius`
     /// whose colour differs from its own by no more than `threshold` levels, over a grid of
     /// `samples` × `samples` neighbours at most.
-    SmartBlur { radius: f64, threshold: f64, samples: u32 },
+    /// The Edge Only `mode` draws the edges where neighboring pixels differ by more than
+    /// `threshold` levels in white on black, and Overlay Edge draws them in white over the Normal
+    /// result.
+    SmartBlur { radius: f64, threshold: f64, samples: u32, mode: SmartBlurMode },
     /// Brush Strokes › Accented Edges: the edges, about `width` (1..14) wide, accented towards
     /// white chalk or black ink as `brightness` (0..50) says; `smoothness` (1..15) softens them.
     AccentedEdges { width: f64, brightness: f64, smoothness: f64 },
@@ -211,6 +215,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             radius: num(p, "radius", 3.0).clamp(0.1, 100.0),
             threshold: num(p, "threshold", 25.0).clamp(0.1, 100.0),
             samples: quality([("low", 5), ("medium", 7), ("high", 9)], 7),
+            mode: SmartBlurMode::parse(text(p, "blurMode", "normal")),
         },
         "brushStrokes.accentedEdges" => PixelFx::AccentedEdges {
             width: num(p, "edgeWidth", 2.0).clamp(1.0, 14.0),
@@ -412,7 +417,12 @@ impl PixelFx {
         match *self {
             PixelFx::FilmGrain { grain, highlight, intensity } => artistic::film_grain(px, w, h, space, grain, highlight, intensity),
             PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
-            PixelFx::SmartBlur { radius, threshold, samples } => blur::smart(px, w, h, to_px(radius), threshold, samples),
+            PixelFx::SmartBlur { radius, threshold, samples, mode: SmartBlurMode::Normal } => {
+                blur::smart(px, w, h, to_px(radius), threshold, samples)
+            }
+            PixelFx::SmartBlur { radius, threshold, samples, mode } => {
+                blur::smart_edges(px, w, h, to_px(radius), threshold, samples, mode == SmartBlurMode::OverlayEdge)
+            }
             PixelFx::AccentedEdges { width, brightness, smoothness } => brushstrokes::accented_edges(px, w, h, space, width, brightness, smoothness),
             PixelFx::AngledStrokes { balance, length, sharpness } => brushstrokes::angled_strokes(px, w, h, space, balance, length, sharpness),
             PixelFx::Crosshatch { length, sharpness, strength } => brushstrokes::crosshatch(px, w, h, space, length, sharpness, strength),

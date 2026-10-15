@@ -57,6 +57,10 @@
 	Draft	Borrador
 	Good	Buena
 	Best	Óptima
+	Mode	Modo
+	Blur Mode	Modo de desenfoque
+	Edge Only	Solo bordes
+	Overlay Edge	Superponer bordes
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the

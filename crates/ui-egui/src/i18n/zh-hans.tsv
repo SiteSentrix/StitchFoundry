@@ -3762,6 +3762,10 @@ axis	Both	两者
 	Method	方法
 	Quality	质量
 	Radius	半径
+	Mode	模式
+	Blur Mode	模糊模式
+	Edge Only	仅边缘
+	Overlay Edge	叠加边缘
 	Spin	旋转
 	Draft	草稿
 	Good	良好
