@@ -806,6 +806,10 @@ fn functions_and_colour_spaces_built_on_themselves_are_refused() {
         ("procedures in procedures", &shaded, vec![calculator(&format!("{}{}", "{".repeat(100), "}".repeat(100)))]),
         ("a colour space on itself", &filled, vec![indexed(&me)]),
         ("two colour spaces on each other", &filled, vec![indexed(&next), indexed(&me)]),
+        // Its leading items are read by the interpreter all the same: an item that can't be read
+        // (a stream of an external file) after them doesn't hide them.
+        ("a function stitching itself, then an item that can't be read", &shaded, vec![stitch(&format!("{me} << /F (x) >> stream"))]),
+        ("a colour space on itself, then an item that can't be read", &filled, vec![format!("[/Indexed {me} 1 <000000ffffff> << /F (x) >> stream]")]),
     ] {
         let objects: Vec<&str> = objects.iter().map(String::as_str).collect();
         let e = import(&pdf_with(std::slice::from_ref(page), &objects, None)).err().map(|e| e.to_string());

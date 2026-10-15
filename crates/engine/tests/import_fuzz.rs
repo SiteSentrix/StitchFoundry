@@ -3448,3 +3448,18 @@ fn a_pattern_painting_its_own_tile_opens_without_the_paint() {
         }
     });
 }
+
+/// A .ai cut short inside an array or dictionary of its PDF part (found by
+/// `ai_mutated_save_never_panics`): a value can't be read whole, and hayro's iterators over the
+/// array's items or the dictionary's entries would panic on it.
+#[test]
+fn ai_cut_inside_an_array_or_dictionary_opens_without_panicking() {
+    for flip in [None, Some((12262, b'/'))] {
+        let mut b = saved_ai();
+        if let Some((at, c)) = flip {
+            b[at] = c;
+        }
+        b.truncate(44902.min(b.len()));
+        survive("ai cut inside an array or dictionary", || vectorcraft_engine::cmd::fileio::load("saved.ai", &b).ok().map(|l| l.doc)).unwrap();
+    }
+}
