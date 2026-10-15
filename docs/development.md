@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-10-14 · **Change:** leaving out the bundled fonts (`bundled-fonts` feature).
 > **Last updated:** 2026-10-14 · **Change:** document-font registration for all explicitly supplied faces.
 
 ## Web build
@@ -147,6 +148,22 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
 - Tests that need Japanese glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
+
+### Leaving out the bundled fonts (embedders)
+
+The Latin fonts in `assets/fonts/` are compiled into `vectorcraft-text` by its `bundled-fonts`
+feature (3.4 MB of the binary). It is on by default, and `vectorcraft-engine`'s default
+`bundled-fonts` feature turns it on, so the apps and anything built on the engine have them. An
+embedder that brings every font itself at run time (`FontDb::add_font`, say a web app serving its
+own font catalogue) depends on the engine with `default-features = false` and doesn't ship them
+twice. Its font database starts without them: on the web and without craft-fonts it starts empty,
+and text has no glyphs until a font is added.
+
+- The workspace declares `vectorcraft-text` without default features, so no library crate turns the
+  fonts back on; a crate whose tests lay type out asks for `bundled-fonts` in its
+  dev-dependencies (or gets it through `vectorcraft-testkit`, which uses the engine).
+- `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
+  configuration without them.
 
 ### Arabic fonts and the web build
 
@@ -346,5 +363,6 @@ do not replace expected hashes automatically in response to a download mismatch.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
 | 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
