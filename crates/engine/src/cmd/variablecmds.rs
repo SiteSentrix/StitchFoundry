@@ -55,7 +55,7 @@ fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: Variabl
     for id in ids {
         match doc.node(*id) {
             None => return Err(EngineError::NoNode(*id)),
-            Some(_) if !doc.variable_target(*id) => return Err(bad(cmd, format!("node {} is locked", id.0))),
+            Some(_) if !doc.variable_target(*id) => return Err(bad(cmd, not_a_target(doc, *id))),
             Some(n) if kind == VariableKind::Text && !matches!(n.kind, NodeKind::Text(_)) => {
                 return Err(bad(cmd, format!("node {} is not type", id.0)));
             }
@@ -63,6 +63,20 @@ fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: Variabl
         }
     }
     Ok(())
+}
+
+/// Why `variable_target` refuses `id`: the object is locked, a group or layer that holds it is
+/// locked, or one that holds it is hidden, checked in that order.
+fn not_a_target(doc: &vectorcraft_doc::Document, id: NodeId) -> String {
+    let holders: Vec<&vectorcraft_doc::Node> =
+        doc.ancestry(id).unwrap_or_default().into_iter().filter(|i| *i != id).filter_map(|i| doc.node(i)).collect();
+    if doc.node(id).is_some_and(|n| n.locked) {
+        format!("node {} is locked", id.0)
+    } else if holders.iter().any(|n| n.locked) {
+        format!("node {} is in a locked group or layer", id.0)
+    } else {
+        format!("node {} is in a hidden group or layer", id.0)
+    }
 }
 
 fn dataset_value(cmd: &str, var: &str, kind: VariableKind, v: &Value) -> Result<DataValue> {
@@ -136,13 +150,14 @@ fn rename(s: &mut Session, p: &Value) -> Result<Value> {
 /// Make Text Dynamic / Make Visibility Dynamic: define a variable of that kind and bind the
 /// selection to it in one step, naming it after what it drives — the panel's buttons.
 fn make_dynamic(s: &mut Session, kind: VariableKind, stem: &str) -> Result<Value> {
-    const C: &str = "variable.makeDynamic";
+    // Errors name the command that ran: `variable.make{stem}Dynamic`.
+    let c = &format!("variable.make{stem}Dynamic");
     let ids = selected_roots(s)?;
     if ids.is_empty() {
-        return Err(bad(C, "select the objects to bind"));
+        return Err(bad(c, "select the objects to bind"));
     }
     let doc = &s.doc()?.doc;
-    check_bindable(doc, &ids, kind, C)?;
+    check_bindable(doc, &ids, kind, c)?;
     // Named after the first object it drives, as the reference panel does; a second variable
     // over the same art takes a number rather than colliding.
     let shown = ids.first().and_then(|id| doc.node(*id)).map(|n| n.display_name()).unwrap_or_default();
