@@ -699,6 +699,22 @@ in.vp3", "Border Swirls 7x1.5 in.vp3", "Corner Swirls 2x2 in.vp3"): the usual si
 matches the size written on the tile. Sizes no hoop of yours takes are left out and said. The
 design's notes say how to mark and hoop. Patterns and wording are our own.
 
+## Embroidery in the web app
+
+The web app (the same program, running in a browser with WebGPU or WebGL2) makes designs the way
+the desktop app does: Make a Design, words, shapes, appliqué, in-the-hoop projects, quilting tiles,
+Watch It Sew and My Machine all work. What changes is where files go, since a browser page can't
+write to folders or a USB stick:
+
+- **Save for My Machine** downloads the design in My Machine's format (VP3 for the Designer
+  Diamond deLuxe), named after the design; copy it to the machine's USB stick;
+- **Save Design** downloads the `.stitchfoundry` design file, to open again later;
+- **Make Every Size** (quilting tiles) downloads one zip holding a file for each size
+  (`embroidery.quiltBlock.set` with no `folder`);
+- printing (the steps, cutting templates) goes through the browser's print dialog;
+- Keep Safe's automatic saving to My Designs is desktop only; the web app keeps recovery copies in
+  the browser's storage instead.
+
 ## Life size on screen
 
 **View › Calibrate Life Size…** shows a 100 mm ruler and the outline of a bank card (85.6 ×
@@ -981,7 +997,8 @@ in millimetres or inches, and which folder or USB stick designs go to. From then
   JEF for Janome, EXP for Bernina, XXX for Singer, DST otherwise);
 - **File › Save for My Machine** writes the design in that format to the chosen folder in one step
   (`embroidery.send`), asking for a folder first when none is chosen or the USB stick isn't
-  plugged in.
+  plugged in. In the web app, which has no folders, it downloads the file instead: copy it to the
+  USB stick.
 
 Commands: `embroidery.myMachine` (the machine, its format, hoops and folder, and the list to choose
 from), `embroidery.myMachine.set {machine: name|null}`, `ui.myMachine`, `ui.saveForMyMachine
