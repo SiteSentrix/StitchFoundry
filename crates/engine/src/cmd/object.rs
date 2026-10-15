@@ -11,7 +11,7 @@ use vectorcraft_doc::{Appearance, Document, Knockout, LiveCorners, LiveShape, No
 use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
 
-use super::edit::{duplicate_in, selected_roots};
+use super::edit::{duplicate_in, outermost, selected_roots};
 use super::opacitymask::percent;
 use super::*;
 use crate::{EngineError, LastTransform};
@@ -492,7 +492,7 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
     let (ids, anchors) = match ids_param(p, "ids") {
-        Some(v) => (v, false),
+        Some(v) => (outermost(&s.doc()?.doc, v), false),
         None => (selected_roots(s)?, bool_or(p, "anchors", false)),
     };
     apply_transform(s, "Transform", ids, m, p, anchors)

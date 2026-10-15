@@ -14,7 +14,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, Symbol, SymbolRegistration};
 use vectorcraft_geom::{Affine, Point, Vec2};
 
-use super::edit::selected_roots;
+use super::edit::{outermost, selected_roots};
 use super::pathops::{remove_each, separate};
 use super::*;
 use crate::EngineError;
@@ -198,11 +198,11 @@ fn ids_json(ids: &[NodeId]) -> Value {
 fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
         Some(mut v) => {
-            // Explicit ids: only existing, non-layer objects.
+            // Explicit ids: only existing, non-layer objects, none inside another of them.
             let d = &s.doc()?.doc;
             v.retain(|id| d.node(*id).is_some_and(|n| !n.is_layer()));
             v.dedup();
-            Ok(v)
+            Ok(outermost(d, v))
         }
         None => selected_roots(s),
     }

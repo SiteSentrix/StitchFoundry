@@ -342,15 +342,29 @@ pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
         })
         .collect();
     sel.dedup_by_key(|(id, _)| *id);
-    let listed: std::collections::HashSet<NodeId> = sel.iter().map(|(id, _)| *id).collect();
-    sel.iter()
-        .filter(|(_, path)| {
-            let anc = path.as_deref().and_then(|p| doc.ancestry_at(p)).unwrap_or_default();
-            !anc[..anc.len().saturating_sub(1)].iter().any(|a| listed.contains(a))
-        })
+    without_inner(doc, sel)
         .filter(|(_, path)| path.as_deref().and_then(|p| doc.node_at(p)).is_some_and(|n| !n.is_layer()))
-        .map(|(id, _)| *id)
+        .map(|(id, _)| id)
         .collect()
+}
+
+/// `ids` in the order given, less those whose ancestor is also listed: an object listed with a
+/// group that holds it is dropped, as [`roots_of`] drops it from a selection. Nothing else is
+/// dropped or replaced: unlike `roots_of`, it keeps layers, ids that aren't in the document and
+/// compound-path members.
+pub(crate) fn outermost(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
+    let paths = doc.index_paths(ids.iter().copied());
+    let placed = ids.into_iter().map(|id| (id, paths.get(&id).cloned())).collect();
+    without_inner(doc, placed).map(|(id, _)| id).collect()
+}
+
+/// The entries of `placed` (ids with their index paths) whose id has no ancestor among its ids.
+fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> impl Iterator<Item = (NodeId, Option<Vec<usize>>)> + '_ {
+    let listed: std::collections::HashSet<NodeId> = placed.iter().map(|(id, _)| *id).collect();
+    placed.into_iter().filter(move |(_, path)| {
+        let anc = path.as_deref().and_then(|p| doc.ancestry_at(p)).unwrap_or_default();
+        !anc[..anc.len().saturating_sub(1)].iter().any(|a| listed.contains(a))
+    })
 }
 
 fn copy(s: &mut Session, _: &Value) -> Result<Value> {
