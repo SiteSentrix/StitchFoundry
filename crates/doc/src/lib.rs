@@ -123,6 +123,9 @@ use serde::{Deserialize, Serialize};
 use vectorcraft_color::{Swatch, SwatchGroup};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
+/// Coordinates beyond this many points exceed the supported document range.
+pub const MAX_COORD: f64 = 4.0e6;
+
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum DocError {
     #[error("no such object {0}")]
@@ -749,6 +752,13 @@ type Places = BTreeMap<Vec<usize>, Vec<(usize, usize)>>;
 pub const FORMAT_VERSION: u32 = 1;
 
 impl Document {
+    /// The ruler zero point, or zero on both axes when either stored coordinate is invalid.
+    /// Rulers, coordinate fields and guide snapping use the same supported range.
+    pub fn ruler_origin_or_zero(&self) -> Point {
+        let origin = self.ruler_origin;
+        if origin.is_finite() && origin.x.abs() <= MAX_COORD && origin.y.abs() <= MAX_COORD { origin } else { Point::ZERO }
+    }
+
     /// A new RGB document with one artboard of `size` and one layer ("Layer 1").
     pub fn new(width: f64, height: f64) -> Self {
         Self::new_with_mode(width, height, ColorMode::Rgb)

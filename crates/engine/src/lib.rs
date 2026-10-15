@@ -546,7 +546,7 @@ impl DocState {
 }
 
 /// Coordinates beyond this (points) are rejected: ~1,400 m, far past Illustrator's large canvas.
-pub const MAX_COORD: f64 = 4.0e6;
+pub use vectorcraft_doc::MAX_COORD;
 
 /// The commands that act on the active artboard (#693), which the app passes as their `artboard`:
 /// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, Distribute

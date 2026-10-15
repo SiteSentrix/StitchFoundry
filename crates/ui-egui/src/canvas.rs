@@ -5018,4 +5018,197 @@ mod tests {
         near(select(&mut app, &a), under_a);
         near(select(&mut app, &b), under_b);
     }
+
+    fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
+        use egui::{Event, Modifiers};
+        for (origin, preview, release) in [
+            (Point::new(17.0, 23.0), Point::new(222.0, 238.0), Point::new(232.0, 243.0)),
+            (Point::new(-17.0, -23.0), Point::new(223.0, 237.0), Point::new(233.0, 242.0)),
+            (Point::ZERO, Point::new(225.0, 235.0), Point::new(230.0, 245.0)),
+        ] {
+            for source_vertical in [false, true] {
+                let mut app = VectorcraftApp::new(Session::new(), Default::default());
+                app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+                app.run("document.setRulerOrigin", json!({"x": origin.x, "y": origin.y})).unwrap();
+                app.run("shape.rectangle", json!({"x": 40, "y": 50, "width": 20, "height": 30})).unwrap();
+                let redo = app.session.active().unwrap().doc.clone();
+                app.run("edit.undo", json!({})).unwrap();
+                app.session.active_mut().unwrap().mark_saved();
+                app.ui.view.rulers = true;
+                app.ui.view.smart_guides = false;
+                app.ui.view.snap_to_point = false;
+                app.ui.view.snap_to_grid = false;
+                app.ui.view.snap_to_pixel = false;
+                app.select_tool("rectangle");
+                let ctx = egui::Context::default();
+                frame(&mut app, &ctx, vec![]);
+                let view = app.view_mut().unwrap();
+                view.zoom = 1.0;
+                view.rotation = 0.0;
+                view.center = Point::new(200.0, 150.0);
+                frame(&mut app, &ctx, vec![]);
+                let rect = app.canvas_rect.unwrap();
+                let xf = Xf::new(rect, app.view().unwrap());
+                let from =
+                    if source_vertical { pos2(rect.left() - RULER / 2.0, rect.center().y) } else { pos2(rect.center().x, rect.top() - RULER / 2.0) };
+                let to = xf.to_screen(Point::new(223.0, 237.0));
+                let end = xf.to_screen(Point::new(231.0, 244.0));
+                assert!(rect.contains(to) && rect.contains(end));
+                let mods = if alt { Modifiers::SHIFT | Modifiers::ALT } else { Modifiers::SHIFT };
+                let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: mods };
+                let before = app.session.active().unwrap().doc.clone();
+                let selection = app.session.active().unwrap().selection.clone();
+                let history = |app: &VectorcraftApp| {
+                    let st = app.session.active().unwrap();
+                    (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+                };
+                let original_history = history(&app);
+                assert_eq!(original_history.1, 1);
+                frame(&mut app, &ctx, vec![Event::ModifiersChanged(mods), Event::PointerMoved(from)]);
+                frame(&mut app, &ctx, vec![button(from, true)]);
+                frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+                let check = |app: &VectorcraftApp, switched: bool, expected: Point| {
+                    let guides = &app.session.active().unwrap().doc.guides;
+                    assert_eq!(guides.len(), 1);
+                    let vertical = source_vertical != switched;
+                    assert_eq!(guides[0].vertical, vertical);
+                    let want = if vertical { expected.x } else { expected.y };
+                    assert!((guides[0].pos - want).abs() < 1e-4, "origin={origin:?} vertical={vertical}: {:?}, want {want}", guides[0]);
+                };
+                assert_eq!(history(&app).0, original_history.0, "preview has no undo entry");
+                if cancel {
+                    // Cancellation is a baseline positive control, independent of snap correctness.
+                    assert_eq!(app.session.active().unwrap().doc.guides.len(), 1);
+                    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, false)]);
+                    assert_eq!(app.session.active().unwrap().doc, before);
+                    assert_eq!(app.session.active().unwrap().selection, selection);
+                    assert_eq!(history(&app), original_history);
+                    app.run("edit.redo", json!({})).unwrap();
+                    assert_eq!(app.session.active().unwrap().doc, redo);
+                    continue;
+                }
+                check(&app, alt, preview);
+                if alt {
+                    // Used only by the private #1782 compatibility regression, not standalone RED.
+                    frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::SHIFT)]);
+                    check(&app, false, preview);
+                    frame(&mut app, &ctx, vec![Event::ModifiersChanged(mods)]);
+                    check(&app, true, preview);
+                }
+                frame(&mut app, &ctx, vec![Event::PointerMoved(end), button(end, false)]);
+                check(&app, alt, release);
+                let st = app.session.active().unwrap();
+                assert_eq!(st.doc.ruler_origin, origin);
+                assert_eq!(st.doc.layers, before.layers, "the rectangle tool draws no artwork");
+                assert_eq!(st.selection, selection);
+                assert_eq!(history(&app), (original_history.0 + 1, 0, true));
+                assert_eq!(st.history.undo.last().unwrap().label, "New Guide");
+                let after = st.doc.clone();
+                app.run("edit.undo", json!({})).unwrap();
+                assert_eq!(app.session.active().unwrap().doc, before);
+                assert_eq!(history(&app), (original_history.0, 1, false));
+                app.run("edit.redo", json!({})).unwrap();
+                assert_eq!(app.session.active().unwrap().doc, after);
+            }
+        }
+    }
+
+    #[test]
+    fn ruler_guide_shift_origin_preview_release_and_history() {
+        ruler_guide_origin_ui(false, false);
+    }
+
+    #[test]
+    fn ruler_guide_shift_origin_cancel_preserves_redo() {
+        ruler_guide_origin_ui(false, true);
+    }
+
+    #[test]
+    fn ruler_guide_origin_display_fallback_accepts_only_bounded_finite_pairs() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        let max = vectorcraft_engine::MAX_COORD;
+        for (origin, expected) in [
+            (Point::ZERO, Point::ZERO),
+            (Point::new(17.0, -23.0), Point::new(17.0, -23.0)),
+            (Point::new(max, -max), Point::new(max, -max)),
+            (Point::new(f64::NAN, 23.0), Point::ZERO),
+            (Point::new(17.0, f64::INFINITY), Point::ZERO),
+            (Point::new(max + 1.0, 23.0), Point::ZERO),
+            (Point::new(17.0, -max - 1.0), Point::ZERO),
+        ] {
+            std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).ruler_origin = origin;
+            assert_eq!(app.ruler_origin(), expected);
+        }
+    }
+
+    #[test]
+    fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
+        use egui::Event;
+        for (vertical, target, shown) in [(true, 222.0, 205.0), (false, 238.0, 215.0)] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("document.setRulerOrigin", json!({"x": 17, "y": 23})).unwrap();
+            app.run("guide.add", json!({"vertical": vertical, "pos": 100})).unwrap();
+            app.ui.view.guides = true;
+            app.ui.view.smart_guides = false;
+            app.ui.view.snap_to_point = false;
+            app.ui.view.snap_to_grid = false;
+            app.ui.view.snap_to_pixel = false;
+            app.select_tool("selection");
+            let ctx = egui::Context::default();
+            frame(&mut app, &ctx, vec![]);
+            let view = app.view_mut().unwrap();
+            view.zoom = 1.0;
+            view.rotation = 0.0;
+            view.center = Point::new(200.0, 150.0);
+            frame(&mut app, &ctx, vec![]);
+            app.session.active_mut().unwrap().mark_saved();
+            let before = app.session.active().unwrap().doc.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let rect = app.canvas_rect.unwrap();
+            let xf = Xf::new(rect, app.view().unwrap());
+            let from = xf.to_screen(if vertical { Point::new(100.0, 50.0) } else { Point::new(50.0, 100.0) });
+            let to = xf.to_screen(if vertical { Point::new(target, 50.0) } else { Point::new(50.0, target) });
+            assert!(rect.contains(from) && rect.contains(to));
+            let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(&mut app, &ctx, vec![Event::PointerMoved(from)]);
+            frame(&mut app, &ctx, vec![button(from, true)]);
+            frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+            assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4);
+            assert_eq!(app.session.active().unwrap().selection.guides, vec![0]);
+            // Observe the real selected-guide field; no expected strings are inserted into UI state.
+            let fields = egui::Context::default();
+            crate::theme::install_fonts(&fields);
+            let mut texts = vec![];
+            for _ in 0..3 {
+                let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))), ..Default::default() };
+                let mut out = fields.run_ui(input, |ui| crate::panels::transform::show(&mut app, ui));
+                out.textures_delta.clear();
+                fn collect(shape: &egui::Shape, texts: &mut Vec<String>) {
+                    match shape {
+                        egui::Shape::Text(t) => texts.push(t.galley.text().to_string()),
+                        egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, texts)),
+                        _ => {}
+                    }
+                }
+                texts.clear();
+                out.shapes.iter().for_each(|s| collect(&s.shape, &mut texts));
+            }
+            assert!(texts.iter().any(|t| t == &Unit::Points.format(shown)), "{texts:?}");
+            let view = app.view_info();
+            let overlays = app.session.overlays(view);
+            let want = format!("{}: {shown:.2} pt", if vertical { "X" } else { "Y" });
+            assert!(
+                overlays.iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Measure { text, .. } if text == &want)),
+                "{overlays:?}, field={shown}"
+            );
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            frame(&mut app, &ctx, vec![button(to, false)]);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+            assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4, "stored coordinate remains absolute");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(app.session.active().unwrap().doc, before);
+        }
+    }
 }
