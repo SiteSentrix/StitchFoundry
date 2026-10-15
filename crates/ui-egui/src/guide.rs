@@ -145,6 +145,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // sliders a beginner sees are sliders: wide, filled up to the handle
             ui.spacing_mut().slider_width = 220.0;
             ui.visuals_mut().slider_trailing_fill = true;
+            // checkboxes and buttons with a visible edge
+            ui.visuals_mut().widgets.inactive.bg_fill = t.input;
+            ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::new(1.0, t.input_border);
             ui.label(RichText::new(format!("{} {} / 6", tl!("Step"), step.index() + 1)).size(12.0).color(t.text_dim));
             match step {
                 Step::What => what(app, ui, &t),

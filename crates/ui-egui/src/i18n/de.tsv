@@ -5230,3 +5230,4 @@ machine	Stop	Stopp
 	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	„Für meine Maschine speichern“ lädt das Design herunter: Kopieren Sie es auf den USB-Stick für Ihre Maschine.
 	Downloaded:	Heruntergeladen:
 	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	„Für meine Maschine speichern“ lädt die Datei herunter, die Ihre Maschine stickt: Kopieren Sie sie auf ihren USB-Stick.
+@msg	{_1} {name}	{_1} {name}
