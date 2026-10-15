@@ -658,6 +658,74 @@ fn a_dialogs_focus_skips_a_greyed_out_first_field() {
     assert_eq!((info["spacing"].clone(), info["steps"].clone()), (json!("steps"), json!(7)), "{info}");
 }
 
+/// #1692: a value typed into the field before the # field of the Color Picker or Swatch Options
+/// stays when Tab passes through the # field. The # field takes the focus in the frame the value is
+/// committed, still showing the color from before it, and commits nothing when Tab moves on. A hex
+/// typed into the # field is still committed by Tab.
+#[test]
+fn tab_through_the_hex_field_keeps_the_value_typed_before_it() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Sky", "color": "#3366cc"})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // One frame of the dialog layer: every text drawn, with its center.
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| collect(&c.shape, &mut texts));
+        texts
+    };
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    let (tab, back) = (key(egui::Key::Tab, egui::Modifiers::NONE), key(egui::Key::Tab, egui::Modifiers::SHIFT));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let color = |app: &VectorcraftApp| app.ui.dialog.as_ref().unwrap().fields["color"].clone();
+    type Open = fn(&mut VectorcraftApp);
+    let opens: [(&str, Open, &str); 2] = [
+        ("Color Picker", |app| drop(app.run("ui.colorPicker", json!({"color": "#ffffff"}))), "FFFFFF"),
+        ("Swatch Options", |app| drop(app.run("ui.swatchOptions", json!({"name": "Sky"}))), "3366CC"),
+    ];
+    for (name, open, hex) in opens {
+        open(&mut app);
+        let before = color(&app);
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        let at = frame(&mut app, vec![]).into_iter().find(|(t, _)| t == hex).unwrap_or_else(|| panic!("{name}: no # field shows {hex}")).1;
+        // Click into the # field, then Shift+Tab to the field before it and type 40 over its value.
+        frame(&mut app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+        frame(&mut app, vec![button(at, false)]);
+        frame(&mut app, vec![back.clone()]);
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![egui::Event::Text("40".into())]);
+        // Tab commits it and gives the # field the focus; the next Tab moves on.
+        frame(&mut app, vec![tab.clone()]);
+        let edited = color(&app);
+        assert_ne!(edited, before, "{name}: the field before # took 40");
+        for events in [vec![], vec![tab.clone()], vec![]] {
+            frame(&mut app, events);
+        }
+        assert_eq!(color(&app), edited, "{name}: passing through # put the color from before the edit back");
+        // Click into the # field, select its text, type a hex over it and press Tab.
+        frame(&mut app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+        frame(&mut app, vec![button(at, false)]);
+        frame(&mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)]);
+        frame(&mut app, vec![egui::Event::Text("00FF00".into())]);
+        frame(&mut app, vec![tab.clone()]);
+        assert!(frame(&mut app, vec![]).iter().any(|(t, _)| t == "00FF00"), "{name}: the # field took 00FF00");
+        cancel(&mut app);
+        frame(&mut app, vec![]);
+    }
+}
+
 /// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
 /// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
 #[test]
