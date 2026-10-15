@@ -270,6 +270,18 @@ fn compound_paths_and_clipping() {
     assert!(*clip && matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
 }
 
+/// A clipping group's clipping path can sit alone in a group of its own, after the art it clips (`q … u <path> W n U
+/// … Q`): it still clips the clipping group.
+#[test]
+fn a_clipping_path_alone_in_a_group_clips_its_clipping_group() {
+    let body = format!("0 Ae\nq\n{RED}{}f\n0 Ae\nu\n{}h\nW\nn\nU\nQ\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0));
+    let doc = read_ok(&layer(&body)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    assert_eq!(children.len(), 2, "{children:?}");
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
 /// #1410: a compound path shows its last path's paint, and paths grouped in it stay its paths.
 #[test]
 fn compound_path_takes_its_last_paths_paint() {
