@@ -97,8 +97,9 @@ fn sync(app: &VectorcraftApp, d: &mut Dialog) {
     let preset = d.str("preset");
     match d.fields.get(APPLIED).and_then(Value::as_object) {
         Some(a) if a.get("preset").and_then(Value::as_str) == Some(preset.as_str()) => {
-            // Unchanged fields keep the preset (falling through would apply it again).
-            let edited = a.iter().any(|(k, v)| k != "preset" && d.fields.get(k) != Some(v));
+            // Unchanged fields keep the preset (falling through would apply it again); the units
+            // only change how the sizes show.
+            let edited = a.iter().any(|(k, v)| k != "preset" && k != "units" && d.fields.get(k) != Some(v));
             if edited {
                 d.fields.insert("preset".into(), json!(""));
                 d.fields.remove(APPLIED);
@@ -238,10 +239,11 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     egui::ScrollArea::vertical().id_salt(("newdoc-presets", cat)).max_height(HEIGHT - 110.0).auto_shrink([false, false]).show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(12.0, 12.0);
-            let (w, h, preset) = (d.f64("width", 0.0), d.f64("height", 0.0), d.str("preset"));
+            let (w, h, preset, units) = (d.f64("width", 0.0), d.f64("height", 0.0), d.str("preset"), unit(d));
             for s in &list {
-                // The cards show the chosen orientation (square sizes have none).
-                let mut s = s.clone();
+                // The cards show the chosen orientation (square sizes have none) and the units chosen
+                // in Preset Details; choosing one keeps both.
+                let mut s = DocSettings { units, ..s.clone() };
                 if (w > h && s.height > s.width) || (h > w && s.width > s.height) {
                     std::mem::swap(&mut s.width, &mut s.height);
                 }
