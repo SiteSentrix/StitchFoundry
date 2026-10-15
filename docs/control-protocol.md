@@ -207,6 +207,13 @@ Edit or Apply Colors runs `ui.recolorDialog {colors, library?}` with the harmony
 recolours as usual; with nothing selected the colours themselves are the rows and `ui.dialog.confirm` saves them as a
 new colour group (`swatch.newGroup`, named by the `groupName` field).
 
+Color panel options: `ui.colorPanel {mode?, options?}` picks the panel's mode as its panel menu does (`grayscale`,
+`rgb`, `hsb`, `cmyk` or `websafe`; the active color converts to the mode's model as one undo step) and shows
+(`options: true`) or hides (`false`) the options. It answers `{mode, options, shown}`: `mode` is null until a mode is
+picked, and `shown` is the mode the panel shows the color in, or `tint` for a tint of a global or spot swatch.
+Another mode, `lab` included, answers an error. The desktop app keeps both settings with its preferences, and
+`ui.inspect` reports them as `ui.color_mode` and `ui.color_hide_options`.
+
 Color Themes panel (`window.panel {panel: "colorThemes"}`): its Create tab makes a theme on a harmony wheel and its
 My Themes tab lists the saved themes; every action runs a command (`colorTheme.save`, `colorTheme.delete`,
 `colorTheme.addToSwatches`, `swatch.newGroup` for the theme being made), and `colorTheme.list` reads the library.
