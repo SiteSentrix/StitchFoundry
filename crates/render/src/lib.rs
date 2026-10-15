@@ -1591,7 +1591,7 @@ impl Renderer {
                     .collect(),
             )
         };
-        let slices = match self.cur.clone() {
+        let slices = match self.cur.clone().filter(|n| owns_stroke(n, st)) {
             Some(node) => {
                 let key = (self.stroke_owner(&node), st as *const StrokeLayer as usize, level);
                 match self.stroke_slices.get_mut(&key) {
@@ -1633,9 +1633,10 @@ impl Renderer {
     /// The line part of a stroke of the fast-path node `self.cur` (see
     /// [`effects::stroke::line_outline`]), cached across frames under [`Self::stroke_owner`] and
     /// the stroke layer. The tolerance (vello's 0.25 device px) is bucketed to powers of two, never
-    /// coarser than needed, so zooming reuses outlines until the level changes.
+    /// coarser than needed, so zooming reuses outlines until the level changes. Only the node's own
+    /// strokes are cached: for the strokes of the brush art drawn for it, this returns `None`.
     fn cached_stroke(&mut self, f: &Frame, line: &BezPath, st: &StrokeLayer, width: f64) -> Option<Arc<BezPath>> {
-        let node = self.cur.clone()?;
+        let node = self.cur.clone().filter(|n| owns_stroke(n, st))?;
         let level = (f.px * 0.25).log2().floor() as i32;
         let key = (self.stroke_owner(&node), st as *const StrokeLayer as usize, width.to_bits(), level);
         if let Some(e) = self.strokes.get_mut(&key)
@@ -2099,6 +2100,11 @@ fn painted_items(n: &Node) -> usize {
         })
         .count()
         .max(if n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !matches!(f.paint, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None)) || matches!(i, AppearanceItem::Stroke(s) if s.visible && !matches!(s.paint, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None))) { 2 } else { 0 })
+}
+
+/// Whether `st` is one of `n`'s own strokes (the strokes of the brush art drawn for `n` are not).
+fn owns_stroke(n: &Node, st: &StrokeLayer) -> bool {
+    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if std::ptr::eq(s, st)))
 }
 
 /// Symbol art `art` stained by instance `inst` ([`instance_art`]) and placed by `xf`, with
