@@ -5397,3 +5397,8 @@ machine	Stop	Zastavení
 	joins needed: Join into One Line makes them	potřebných spojení: Spojit do jedné linie je vytvoří
 	longest	nejdelší
 @msg	nothing to add	není co přidat
+	Download All	Stáhnout vše
+	Every font not downloaded yet, one after another	Každé dosud nestažené písmo, jedno po druhém
+	Fonts downloaded:	Stažená písma:
+	failed:	neúspěšná:
+	fonts downloaded, ready for lettering	písem staženo, připravena pro nápisy

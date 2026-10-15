@@ -5370,3 +5370,8 @@ machine	Stop	Parada
 	joins needed: Join into One Line makes them	uniones necesarias: Unir en una sola línea las crea
 	longest	la más larga
 @msg	nothing to add	nada que añadir
+	Download All	Descargar todas
+	Every font not downloaded yet, one after another	Cada fuente aún no descargada, una tras otra
+	Fonts downloaded:	Fuentes descargadas:
+	failed:	fallidas:
+	fonts downloaded, ready for lettering	fuentes descargadas, listas para rotular

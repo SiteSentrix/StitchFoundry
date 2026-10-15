@@ -39,6 +39,10 @@ pub struct FontLibraryState {
     rx: Option<Receiver<Message>>,
     /// Where fonts go instead of the Embroidery Fonts folder (tests).
     pub(crate) folder: Option<PathBuf>,
+    /// Download All: the fonts still to download, and how the batch is going (fonts done, in
+    /// all, failed).
+    queue: Vec<LibraryFont>,
+    batch: Option<(usize, usize, usize)>,
 }
 
 impl std::fmt::Debug for FontLibraryState {
@@ -178,6 +182,7 @@ fn poll(app: &mut VectorcraftApp, ctx: Option<&egui::Context>) {
             }
             Message::Downloaded(r) => {
                 app.embroidery.font_library.rx = None;
+                let ok = r.is_ok();
                 let name = app.embroidery.font_library.downloading.take().map(|d| d.0).unwrap_or_default();
                 let loaded = r.and_then(|dir| app.run("embroidery.font.load", json!({ "path": dir.to_string_lossy() })));
                 app.embroidery.font_library.message = Some(match loaded {
@@ -189,6 +194,27 @@ fn poll(app: &mut VectorcraftApp, ctx: Option<&egui::Context>) {
                     }
                     Err(e) => e,
                 });
+                // Download All: on to the next font
+                let st = &mut app.embroidery.font_library;
+                if let Some((done, total, failed)) = st.batch.as_mut() {
+                    *done += 1;
+                    if !ok {
+                        *failed += 1;
+                    }
+                    let (done, total, failed) = (*done, *total, *failed);
+                    if st.queue.is_empty() {
+                        st.batch = None;
+                        st.message = Some(if failed == 0 {
+                            format!("{done} {}", tl!("fonts downloaded, ready for lettering"))
+                        } else {
+                            format!("{} {done}, {} {failed}", tl!("Fonts downloaded:"), tl!("failed:"))
+                        });
+                    } else {
+                        let next = st.queue.remove(0);
+                        st.message = Some(format!("{} {} / {total}", tl!("Font"), done + 1));
+                        download(app, next);
+                    }
+                }
             }
         }
     }
@@ -202,6 +228,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     poll(app, Some(ctx));
     let mut open = true;
     let mut start: Option<LibraryFont> = None;
+    let mut all: Vec<LibraryFont> = Vec::new();
     let mut relist = false;
     let root = fonts_folder(app);
     egui::Window::new(tl!("Get Embroidery Fonts")).open(&mut open).collapsible(false).default_size([520.0, 560.0]).show(ctx, |ui| {
@@ -233,6 +260,17 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if let Some((name, done, total)) = &st.downloading {
             ui.label(format!("{} {name}: {done} / {total}", tl!("Downloading")));
         }
+        let mut stop = false;
+        if let Some((done, total, _)) = st.batch {
+            ui.horizontal(|ui| {
+                ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).desired_width(260.0).text(format!("{done} / {total}")));
+                stop = ui.button(tl!("Stop")).clicked();
+            });
+        }
+        if stop {
+            // the font on its way finishes; the rest are left
+            st.queue.clear();
+        }
         ui.separator();
         let busy = st.downloading.is_some();
         match &st.fonts {
@@ -251,7 +289,21 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             Some((_, Ok(fonts))) => {
                 let q = st.search.trim().to_lowercase();
                 let shown: Vec<&LibraryFont> = fonts.iter().filter(|f| q.is_empty() || f.title().to_lowercase().contains(&q)).collect();
-                ui.label(egui::RichText::new(format!("{} {}", shown.len(), tl!("fonts"))).color(t.text_dim));
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("{} {}", shown.len(), tl!("fonts"))).color(t.text_dim));
+                    let missing: Vec<&LibraryFont> =
+                        fonts.iter().filter(|f| !root.as_ref().is_some_and(|r| r.join(&f.folder).join("font.json").exists())).collect();
+                    let mb = missing.iter().map(|f| f.size()).sum::<u64>() as f64 / 1e6;
+                    let label = format!("{} ({}, {mb:.0} MB)", tl!("Download All"), missing.len());
+                    if !missing.is_empty()
+                        && ui
+                            .add_enabled(!busy, egui::Button::new(label))
+                            .on_hover_text(tl!("Every font not downloaded yet, one after another"))
+                            .clicked()
+                    {
+                        all = missing.into_iter().cloned().collect();
+                    }
+                });
                 egui::ScrollArea::vertical().max_height(380.0).show_rows(ui, 26.0, shown.len(), |ui, range| {
                     for f in shown.get(range).unwrap_or_default() {
                         ui.horizontal(|ui| {
@@ -283,6 +335,13 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     if let Some(f) = start {
         download(app, f);
+    }
+    if !all.is_empty() {
+        let st = &mut app.embroidery.font_library;
+        st.batch = Some((0, all.len(), 0));
+        let first = all.remove(0);
+        st.queue = all;
+        download(app, first);
     }
     if !open {
         app.embroidery.font_library.open = false;
@@ -379,6 +438,30 @@ mod tests {
         assert!(
             asked.lock().unwrap().iter().all(|u| u.starts_with("https://api.github.com/") || u.starts_with("https://raw.githubusercontent.com/"))
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Download All fetches every font not downloaded yet, one after another.
+    #[test]
+    fn download_all_fetches_every_font_in_turn() {
+        let dir = std::env::temp_dir().join(format!("sf-font-library-all-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (mut app, _) = app_with_library(dir.clone());
+        app.embroidery.font_library.source = 1;
+        app.run("ui.fontLibrary", json!({})).unwrap();
+        wait(&mut app, |a| a.embroidery.font_library.fonts.is_some());
+        let Some((_, Ok(fonts))) = &app.embroidery.font_library.fonts else { panic!("listed") };
+        let mut all = fonts.clone();
+        let st = &mut app.embroidery.font_library;
+        st.batch = Some((0, all.len(), 0));
+        let first = all.remove(0);
+        st.queue = all;
+        download(&mut app, first);
+        wait(&mut app, |a| a.embroidery.font_library.batch.is_none());
+        // the second font's files aren't all served: one done, one failed
+        let msg = app.embroidery.font_library.message.clone().unwrap_or_default();
+        assert!(msg.contains('1'), "{msg}");
+        assert!(dir.join("library_test").join("font.json").is_file());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

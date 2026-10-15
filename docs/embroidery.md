@@ -1632,7 +1632,9 @@ under its own licence, kept in its folder), and StitchFoundry's own once it is p
 (github.com/Stitchwright/stitchfoundry-fonts; until then the window says it isn't). Search the
 list by name, open a font's *Preview* in the browser, and *Download*: its files go into the
 **Embroidery Fonts** folder next to the settings (a font downloaded again replaces its copy) and
-it is loaded and chosen for lettering, remembered like any font folder. Names and paths the
+it is loaded and chosen for lettering, remembered like any font folder. **Download All** fetches every font not downloaded yet
+(the whole Ink/Stitch library is about 110 MB), one after another, each loaded as it arrives, with
+a progress bar and *Stop*. Names and paths the
 library sends are checked and sizes capped before anything is written. The web demo has no
 server to keep fonts on, so it doesn't offer downloads.
 
