@@ -710,6 +710,75 @@ proptest! {
     }
 }
 
+/// An XMP packet with every property File Info reads: arrays, language alternatives, attributes,
+/// a qualified value, a URI value and dates.
+const RICH_XMP: &str = "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?><x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\
+    <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" \
+    xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" \
+    xmlns:xmpRights=\"http://ns.adobe.com/xap/1.0/rights/\" xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\" \
+    xmlns:q=\"urn:example:qualifiers\" xmpRights:Marked=\"True\" xmp:ModifyDate=\"2026-10-06T09:00:00.5+05:30\">\
+    <dc:creator><rdf:Seq><rdf:li rdf:parseType=\"Resource\"><rdf:value>Ada</rdf:value><q:role>Author</q:role></rdf:li><rdf:li>Grace</rdf:li></rdf:Seq></dc:creator>\
+    <dc:description><rdf:Alt><rdf:li xml:lang=\"x-default\">A poster</rdf:li><rdf:li xml:lang=\"de\">Ein Plakat</rdf:li></rdf:Alt></dc:description>\
+    <dc:subject><rdf:Bag><rdf:li>fair</rdf:li><rdf:li>print</rdf:li></rdf:Bag></dc:subject><pdf:Keywords>a, b; c</pdf:Keywords>\
+    <dc:rights><rdf:Alt><rdf:li xml:lang=\"x-default\">(c) 2026 Ada</rdf:li></rdf:Alt></dc:rights>\
+    <xmpRights:WebStatement rdf:resource=\"https://example.com/rights\"/><xmp:CreateDate>2026-10-05T14:03:00Z</xmp:CreateDate>\
+    </rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end=\"w\"?>";
+
+/// A PDF whose trailer names an information dictionary with the entries `info` and whose catalog's
+/// metadata stream holds `xmp`.
+fn file_info_pdf(info: &str, xmp: &str) -> Vec<u8> {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with_catalog};
+    let x = first_extra(1);
+    let stream = format!("<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n{xmp}\nendstream", xmp.len());
+    let dict = format!("<< {info} >>");
+    let pdf = pdf_with_catalog(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &[&stream, &dict], &format!("/Metadata {x} 0 R "), None);
+    // The trailer follows the cross-reference table, so a longer trailer moves no object.
+    String::from_utf8(pdf).unwrap().replacen("/Root 1 0 R", &format!("/Root 1 0 R /Info {} 0 R", x + 1), 1).into_bytes()
+}
+
+/// The sample `pdf_file_info_never_panics` mutates opens with the File Info of its packet.
+#[test]
+fn the_file_info_sample_reaches_the_reader() {
+    let pdf = file_info_pdf("/Author (Info author) /Subject (Info subject)", RICH_XMP);
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("document.open", &json!({"name": "x.ai", "dataBase64": vectorcraft_format::base64_encode(&pdf)})).unwrap();
+    let info = s.execute("file.info", &json!({})).unwrap();
+    assert_eq!((info["author"].as_str(), info["description"].as_str()), (Some("Ada, Grace"), Some("A poster")));
+    assert_eq!((info["copyrightStatus"].as_str(), info["keywords"].clone()), (Some("copyrighted"), json!(["fair", "print"])));
+    assert_eq!(info["copyrightUrl"].as_str(), Some("https://example.com/rights"));
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// File Info read on open: mutated XMP packets and junk information dictionaries, opened as a
+    /// PDF and as a `.ai`.
+    #[test]
+    fn pdf_file_info_never_panics(
+        cut in 0usize..2_000,
+        edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['<', '>', '"', '/', ':', '-', '+', 'T', 'Z', '9', '0', '.', ' ', '&', ';', '=', '#'])), 0..10),
+        info in prop::sample::select(vec![
+            "",
+            "/Author (Ada) /Subject (A poster) /Keywords (a;b,,c ;) /CreationDate (D:2026) /ModDate (D:20261005140300-08'30')",
+            "/CreationDate (D:99999999999999+99'99') /ModDate (D:20261301) /Author 5 /Keywords [(a)]",
+            "/Subject <FEFF00> /Author <FEFFD800> /Keywords <EFBBBF> /Title (\\377\\376)",
+            "/CreationDate (D:00000101000000Z) /ModDate (D:99991231235959+23'59')",
+        ]),
+    ) {
+        let pdf = file_info_pdf(info, &mutate_text(RICH_XMP, cut, &edits));
+        let b64 = vectorcraft_format::base64_encode(&pdf);
+        let r = catch_quiet(|| {
+            let _ = vectorcraft_pdf::file_info(&pdf, None);
+            let mut s = vectorcraft_engine::Session::new();
+            for name in ["x.pdf", "x.ai"] {
+                let _ = no_panic(s.execute("document.open", &json!({"name": name, "dataBase64": b64})));
+                let _ = no_panic(s.execute("file.info", &json!({})));
+            }
+        });
+        r.map_err(|msg| TestCaseError::fail(format!("{info}: panicked: {msg}")))?;
+    }
+}
+
 /// Hostile content over layers (optional content, one group off), soft masks, tiling patterns,
 /// a patch mesh, an unextended shading and fonts: the import's own readings of the file.
 fn rich_resources_pdf(content: &str, config: &str) -> Vec<u8> {

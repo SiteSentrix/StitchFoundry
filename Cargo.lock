@@ -4787,6 +4787,7 @@ dependencies = [
  "kurbo 0.13.1",
  "log",
  "md-5",
+ "roxmltree 0.21.1",
  "serde",
  "serde_json",
  "sha2",
