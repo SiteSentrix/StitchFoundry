@@ -524,6 +524,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let doc = st.doc.clone();
     let rows = st.highlighted_rows();
+    let current = st.current_layer();
     // Rows highlighted anew (a click, Locate Object, a new layer): open the layers around them.
     let seen: Vec<NodeId> = ui.data(|d| d.get_temp(key("seen"))).unwrap_or_default();
     let mut reveal = None;
@@ -537,6 +538,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         reveal = rows.first().copied();
         ui.data_mut(|d| d.insert_temp(key("seen"), rows.clone()));
+    }
+    // A new active layer (a canvas selection highlights no row): reveal it too, unless a row
+    // highlighted in the panel holds the view.
+    let seen_current: Option<NodeId> = ui.data(|d| d.get_temp(key("seen-current"))).flatten();
+    if current != seen_current {
+        if rows.is_empty()
+            && let Some(layer) = current
+        {
+            let around = doc.ancestry(layer).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default();
+            if let Some(st) = app.session.active_mut() {
+                for a in around {
+                    st.layers_open.set(a, true);
+                }
+            }
+            reveal = Some(layer);
+        }
+        ui.data_mut(|d| d.insert_temp(key("seen-current"), current));
     }
     // Search All, and the Filter button at its right.
     let query = ui
@@ -2583,5 +2601,47 @@ mod tests {
         let found = (0..4).any(|_| frame(&mut app).1);
         assert_eq!(app.session.active().unwrap().highlighted_rows(), [needle]);
         assert!(found, "the highlighted row is scrolled into view");
+    }
+
+    /// Selecting art on the canvas scrolls its layer (now the active one) into view, but not away
+    /// from a row highlighted in the panel.
+    #[test]
+    fn a_canvas_selection_reveals_its_active_layer() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let mut rects = vec![run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}))["id"].as_u64().unwrap()];
+        for _ in 0..59 {
+            run(&mut app, "layer.new", json!({}));
+            rects.push(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}))["id"].as_u64().unwrap());
+        }
+        run(&mut app, "select.none", json!({}));
+        let doc = app.session.active().unwrap().doc.clone();
+        let name = |id: u64| doc.node(doc.layer_of(NodeId(id)).unwrap()).unwrap().display_name();
+        let (bottom, top) = (name(rects[0]), name(rects[59]));
+        let ctx = egui::Context::default();
+        let mut time = 0.0;
+        // Whether a row with this name is drawn after a few frames.
+        let mut shown = |app: &mut VectorcraftApp, s: &str| {
+            let mut found = false;
+            for _ in 0..4 {
+                time += 1.0;
+                let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 400.0));
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), ..Default::default() }, |ui| show(app, ui));
+                out.textures_delta.clear();
+                found = out.shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == s));
+            }
+            found
+        };
+        assert!(shown(&mut app, &top) && !shown(&mut app, &bottom));
+        run(&mut app, "select.set", json!({"ids": [rects[0]]}));
+        assert_eq!(app.session.active().unwrap().current_layer(), doc.layer_of(NodeId(rects[0])));
+        assert!(shown(&mut app, &bottom), "the active layer is scrolled into view");
+        // A row highlighted in the panel stays in view when the active layer changes.
+        let top_layer = doc.layer_of(NodeId(rects[59])).unwrap();
+        run(&mut app, "layer.highlight", json!({"ids": [top_layer.0], "mode": "set"}));
+        assert!(shown(&mut app, &top));
+        app.session.active_mut().unwrap().active_layer = doc.layer_of(NodeId(rects[0]));
+        assert!(shown(&mut app, &top) && !shown(&mut app, &bottom), "the highlighted row keeps the view");
     }
 }
