@@ -5271,3 +5271,21 @@ machine	Stop	Stopp
 	Needle height	Nadelhöhe
 	Start	Start
 @msg	moss sews fills and runs: give the satin a fill or run stitch first	Moos stickt Füllungen und Linien: geben Sie dem Satin zuerst einen Füll- oder Linienstich
+	Get Embroidery Fonts…	Stickschriften holen…
+	About the library	Über die Bibliothek
+	Download Again	Erneut herunterladen
+	Download fonts from an embroidery font library, ready for lettering	Schriften aus einer Stickschrift-Bibliothek herunterladen, bereit zum Beschriften
+	Downloading	Wird heruntergeladen
+	Each font comes with its own licence, in its folder.	Jede Schrift hat ihre eigene Lizenz, in ihrem Ordner.
+	Fonts are kept in	Schriften liegen in
+	Get Embroidery Fonts	Stickschriften holen
+	Listing the fonts…	Schriften werden aufgelistet…
+	Try Again	Erneut versuchen
+	fonts	Schriften
+	is ready for lettering	ist bereit zum Beschriften
+@msg	a file of the font has an unsafe name: {path}	eine Datei der Schrift hat einen unsicheren Namen: {path}
+@msg	can't reach the font library: {e}	die Schriftbibliothek ist nicht erreichbar: {e}
+@msg	downloading embroidery fonts works in the desktop app	Stickschriften herunterladen geht in der Desktop-App
+@msg	the font library answered {status} for {path}	die Schriftbibliothek antwortete {status} für {path}
+@msg	the font library answered {status}: try again later	die Schriftbibliothek antwortete {status}: später erneut versuchen
+@msg	{_1} isn't published yet	{_1} ist noch nicht veröffentlicht

@@ -5317,3 +5317,21 @@ machine	Stop	Arresto
 	Needle height	Altezza dell'ago
 	Start	Inizio
 @msg	moss sews fills and runs: give the satin a fill or run stitch first	il muschio ricama riempimenti e linee: dai prima al satin un punto di riempimento o di linea
+	Get Embroidery Fonts…	Ottieni font da ricamo…
+	About the library	Informazioni sulla libreria
+	Download Again	Scarica di nuovo
+	Download fonts from an embroidery font library, ready for lettering	Scarica font da una libreria di font da ricamo, pronti per le scritte
+	Downloading	Download in corso
+	Each font comes with its own licence, in its folder.	Ogni font ha la sua licenza, nella sua cartella.
+	Fonts are kept in	I font si trovano in
+	Get Embroidery Fonts	Ottieni font da ricamo
+	Listing the fonts…	Elenco dei font…
+	Try Again	Riprova
+	fonts	font
+	is ready for lettering	è pronto per le scritte
+@msg	a file of the font has an unsafe name: {path}	un file del font ha un nome non sicuro: {path}
+@msg	can't reach the font library: {e}	impossibile raggiungere la libreria di font: {e}
+@msg	downloading embroidery fonts works in the desktop app	il download dei font da ricamo funziona nell'app desktop
+@msg	the font library answered {status} for {path}	la libreria di font ha risposto {status} per {path}
+@msg	the font library answered {status}: try again later	la libreria di font ha risposto {status}: riprova più tardi
+@msg	{_1} isn't published yet	{_1} non è ancora pubblicata

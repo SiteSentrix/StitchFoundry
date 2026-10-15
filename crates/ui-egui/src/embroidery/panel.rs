@@ -389,6 +389,13 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
+    if crate::dialogs::font_library::available(app)
+        && button(ui, tl!("Get Embroidery Fonts…"))
+            .on_hover_text(tl!("Download fonts from an embroidery font library, ready for lettering"))
+            .clicked()
+    {
+        app.run("ui.fontLibrary", json!({})).ok();
+    }
     let fonts: Vec<(String, Option<f64>, Option<f64>, f64)> = app
         .session
         .embroidery_fonts

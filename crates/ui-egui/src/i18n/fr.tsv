@@ -5325,3 +5325,21 @@ machine	Stop	Arrêt
 	Needle height	Hauteur d'aiguille
 	Start	Départ
 @msg	moss sews fills and runs: give the satin a fill or run stitch first	la bouclette brode les remplissages et les lignes : donnez d'abord au satin un point de remplissage ou de ligne
+	Get Embroidery Fonts…	Obtenir des polices de broderie…
+	About the library	À propos de la bibliothèque
+	Download Again	Télécharger à nouveau
+	Download fonts from an embroidery font library, ready for lettering	Télécharger des polices d'une bibliothèque de polices de broderie, prêtes pour le lettrage
+	Downloading	Téléchargement
+	Each font comes with its own licence, in its folder.	Chaque police a sa propre licence, dans son dossier.
+	Fonts are kept in	Les polices sont rangées dans
+	Get Embroidery Fonts	Obtenir des polices de broderie
+	Listing the fonts…	Liste des polices…
+	Try Again	Réessayer
+	fonts	polices
+	is ready for lettering	est prête pour le lettrage
+@msg	a file of the font has an unsafe name: {path}	un fichier de la police a un nom dangereux : {path}
+@msg	can't reach the font library: {e}	impossible de joindre la bibliothèque de polices : {e}
+@msg	downloading embroidery fonts works in the desktop app	le téléchargement des polices de broderie se fait dans l'application de bureau
+@msg	the font library answered {status} for {path}	la bibliothèque de polices a répondu {status} pour {path}
+@msg	the font library answered {status}: try again later	la bibliothèque de polices a répondu {status} : réessayez plus tard
+@msg	{_1} isn't published yet	{_1} n'est pas encore publiée

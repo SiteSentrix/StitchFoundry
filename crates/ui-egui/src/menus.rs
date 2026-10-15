@@ -187,6 +187,7 @@ fn embroidery_menu() -> Vec<Item> {
         Sep,
         sub("Export Machine File", machine_file_items()),
         cp("Lettering Kiosk", "embroidery.kiosk", json!({ "on": true })),
+        c("Get Embroidery Fonts…", "ui.fontLibrary"),
         Sep,
         cp("Embroidery", "window.panel", json!({ "panel": "embroidery" })),
         cp("Stitch Sequence", "window.panel", json!({ "panel": "stitchSequence" })),
@@ -583,6 +584,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Make a Design…",
         "",
         "{} opens Make a Design: a step-by-step guide from words, a shape, appliqué, a picture or a sample through the hoop, thread colours and watching it sew to saving it for My Machine (embroidery.makeDesign) → {open}",
+    ),
+    (
+        "ui.fontLibrary",
+        "Get Embroidery Fonts…",
+        "",
+        "{} opens Get Embroidery Fonts (desktop): the fonts of an embroidery font library (Ink/Stitch's, the project's own once published), each downloaded with a click into the Embroidery Fonts folder and loaded for lettering; not in the web demo → {open}",
     ),
     (
         "ui.myMachine",
@@ -1554,6 +1561,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "help.show" => crate::dialogs::help::open(app, p),
         "ui.calibrateLifeSize" => crate::dialogs::life_size::run(app, p),
         "ui.myMachine" => crate::dialogs::my_machine::open(app),
+        "ui.fontLibrary" => crate::dialogs::font_library::open(app),
         "ui.makeDesign" => crate::guide::open(app),
         "ui.saveForMyMachine" => crate::dialogs::my_machine::save(app, p),
         "help.commandPalette" => {
@@ -2274,6 +2282,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.embroideryWidget" | "ui.embroideryCheck" | "ui.saveForMyMachine" => app.session.active().is_some(),
         "ui.designFromPrompt" => app.session.active().is_some() && crate::embroidery::prompt::available(app),
+        "ui.fontLibrary" => crate::dialogs::font_library::available(app),
         "ui.redrawImage" => crate::embroidery::prompt::available(app) && crate::embroidery::prompt::selected_image(app).is_some(),
         "file.export.embroidery" => app.session.embroidery_plan().is_some_and(|p| !p.is_empty()),
         "ui.saveEmbroideryFont" => app.session.active().is_some_and(|st| st.doc.embroidery.as_deref().is_some_and(|e| e.font.is_some())),
