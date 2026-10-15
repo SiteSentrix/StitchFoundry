@@ -14,7 +14,8 @@ pub struct Quantized {
     pub palette: Vec<[u8; 3]>,
 }
 
-fn luma(p: [u8; 4]) -> u8 {
+/// A pixel's gray (Rec. 601 luma): what Grayscale traces it as.
+pub(crate) fn luma(p: [u8; 4]) -> u8 {
     ((p[0] as u32 * 299 + p[1] as u32 * 587 + p[2] as u32 * 114 + 500) / 1000) as u8
 }
 
