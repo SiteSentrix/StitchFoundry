@@ -1019,6 +1019,54 @@ fn type_increments_step_the_type() {
     // The font size shortcut steps the selected text while the tool edits.
     s.execute("type.size.increase", &json!({})).unwrap();
     assert_eq!((style_at(&s, id, 0).size, style_at(&s, id, 6).size), (19.0, 22.0));
+    // The type objects given in `ids` step in full while the tool edits.
+    s.execute("type.step", &json!({"attribute": "size", "ids": [id.0]})).unwrap();
+    assert_eq!((style_at(&s, id, 0).size, style_at(&s, id, 6).size), (22.0, 25.0));
+}
+
+/// Cmd/Ctrl+Alt+Q resets tracking to 0 and kerning to Auto (0 in the Character panel) in every
+/// selected type object and in the Type tool's selected text. At a caret it resets only the
+/// kerning of the character before it. It is one undo step. Type objects given in `ids` are reset
+/// in full while the Type tool edits, and the typing in progress ends first.
+#[test]
+fn reset_tracking_sets_tracking_and_kerning_to_zero() {
+    use vectorcraft_tools::PointerKind::{Down, Up};
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Hello world", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let spaced = |s: &mut Session| s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": 200, "kerning": -40})).unwrap();
+    let spacing = |s: &Session, byte| {
+        let st = style_at(s, id, byte);
+        (st.tracking, st.kerning)
+    };
+    spaced(&mut s);
+    let other = NodeId(s.execute("text.create", &json!({"x": 100, "y": 300, "text": "Other", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": other.0, "tracking": 200})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(find_command("type.resetTracking").unwrap().shortcut, Some("Cmd+Alt+Q"));
+    assert_eq!(s.execute("type.resetTracking", &json!({})).unwrap()["ids"], json!([id.0]));
+    assert_eq!((spacing(&s, 0), spacing(&s, 10)), ((0.0, None), (0.0, None)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spacing(&s, 0), (200.0, Some(-40.0)), "one undo step");
+    // With the Type tool, it resets only the selected text.
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    gesture(&mut s, v, &[(Down, 102.0, 95.0), (Up, 102.0, 95.0)]);
+    assert_eq!(s.tool_options()["editing"], json!(id.0), "editing the text");
+    s.set_tool_option("select", &json!({"start": 0, "end": 5}));
+    s.execute("type.resetTracking", &json!({})).unwrap();
+    assert_eq!((spacing(&s, 4), spacing(&s, 6)), ((0.0, None), (200.0, Some(-40.0))));
+    // At a caret it resets only the kerning of the character before it, and the tracking does not change.
+    s.set_tool_option("select", &json!({"start": 8, "end": 8}));
+    s.execute("type.resetTracking", &json!({})).unwrap();
+    assert_eq!((spacing(&s, 6), spacing(&s, 7), spacing(&s, 8)), ((200.0, Some(-40.0)), (200.0, None), (200.0, Some(-40.0))));
+    // While the Type tool edits, the type objects in `ids` are reset in full.
+    s.execute("type.resetTracking", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!((spacing(&s, 6), spacing(&s, 10)), ((0.0, None), (0.0, None)));
+    // Typing in progress ends first, so the reset of another object stays when typing goes on.
+    s.tool_text("!", v).unwrap();
+    s.execute("type.resetTracking", &json!({"ids": [other.0]})).unwrap();
+    s.tool_text("?", v).unwrap();
+    assert_eq!(style_at(&s, other, 0).tracking, 0.0, "the reset stays");
 }
 
 /// Type › Fill New Type Objects With Placeholder Text (#394, on by default): type the Type tool
