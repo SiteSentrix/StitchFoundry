@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move…",
             ["Object", "Transform"],
             Some("Cmd+Shift+M"),
-            "{dx, dy, copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
+            "{ids?: [id…] (selected first; default: the selection), dx, dy, copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection_or_guides,
             move_cmd
         ),
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rotate…",
             ["Object", "Transform"],
             None,
-            "{angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} → {ids}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
+            "{ids?: [id…] (selected first; default: the selection), angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} → {ids}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             rotate
         ),
@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Scale…",
             ["Object", "Transform"],
             None,
-            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} (strokes/corners default to the preferences). With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
+            "{ids?: [id…] (selected first; default: the selection), sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} (strokes/corners default to the preferences). With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             scale
         ),
@@ -59,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reflect…",
             ["Object", "Transform"],
             None,
-            "{axis: \"vertical\"|\"horizontal\"|deg, origin?, copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
+            "{ids?: [id…] (selected first; default: the selection), axis: \"vertical\"|\"horizontal\"|deg, origin?, copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             reflect
         ),
@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shear…",
             ["Object", "Transform"],
             None,
-            "{angle: deg, axis?: \"horizontal\"|\"vertical\", origin?, copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
+            "{ids?: [id…] (selected first; default: the selection), angle: deg, axis?: \"horizontal\"|\"vertical\", origin?, copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             shear
         ),
@@ -90,36 +90,104 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection_or_guides,
             nudge
         ),
-        cmd!("object.arrange.bringToFront", "Bring to Front", ["Object", "Arrange"], Some("Cmd+Shift+]"), "{}", has_selection, |s, _| arrange(
-            s,
-            Arrange::Front
-        )),
-        cmd!("object.arrange.bringForward", "Bring Forward", ["Object", "Arrange"], Some("Cmd+]"), "{}", has_selection, |s, _| arrange(
-            s,
-            Arrange::Forward
-        )),
-        cmd!("object.arrange.sendBackward", "Send Backward", ["Object", "Arrange"], Some("Cmd+["), "{}", has_selection, |s, _| arrange(
-            s,
-            Arrange::Backward
-        )),
-        cmd!("object.arrange.sendToBack", "Send to Back", ["Object", "Arrange"], Some("Cmd+Shift+["), "{}", has_selection, |s, _| arrange(
-            s,
-            Arrange::Back
-        )),
-        cmd!("object.arrange.sendToCurrentLayer", "Send to Current Layer", ["Object", "Arrange"], None, "{}", has_selection, send_to_current_layer),
-        cmd!("object.group", "Group", ["Object"], Some("Cmd+G"), "{} → {id}", has_selection, group),
-        cmd!("object.ungroup", "Ungroup", ["Object"], Some("Cmd+Shift+G"), "{}", has_selection, ungroup),
-        cmd!("object.lock", "Selection", ["Object", "Lock"], Some("Cmd+2"), "{}", has_selection, lock),
+        cmd!(
+            "object.arrange.bringToFront",
+            "Bring to Front",
+            ["Object", "Arrange"],
+            Some("Cmd+Shift+]"),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            |s, _| arrange(s, Arrange::Front)
+        ),
+        cmd!(
+            "object.arrange.bringForward",
+            "Bring Forward",
+            ["Object", "Arrange"],
+            Some("Cmd+]"),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            |s, _| arrange(s, Arrange::Forward)
+        ),
+        cmd!(
+            "object.arrange.sendBackward",
+            "Send Backward",
+            ["Object", "Arrange"],
+            Some("Cmd+["),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            |s, _| arrange(s, Arrange::Backward)
+        ),
+        cmd!(
+            "object.arrange.sendToBack",
+            "Send to Back",
+            ["Object", "Arrange"],
+            Some("Cmd+Shift+["),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            |s, _| arrange(s, Arrange::Back)
+        ),
+        cmd!(
+            "object.arrange.sendToCurrentLayer",
+            "Send to Current Layer",
+            ["Object", "Arrange"],
+            None,
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            send_to_current_layer
+        ),
+        cmd!(
+            "object.group",
+            "Group",
+            ["Object"],
+            Some("Cmd+G"),
+            "{ids?: [id…] (selected first; default: the selection)} → {id}",
+            has_selection,
+            group
+        ),
+        cmd!(
+            "object.ungroup",
+            "Ungroup",
+            ["Object"],
+            Some("Cmd+Shift+G"),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            ungroup
+        ),
+        cmd!(
+            "object.lock",
+            "Selection",
+            ["Object", "Lock"],
+            Some("Cmd+2"),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            lock
+        ),
         cmd!("object.unlockAll", "Unlock All", ["Object"], Some("Cmd+Alt+2"), "{}", has_doc, unlock_all),
-        cmd!("object.hide", "Selection", ["Object", "Hide"], Some("Cmd+3"), "{}", has_selection, hide),
+        cmd!(
+            "object.hide",
+            "Selection",
+            ["Object", "Hide"],
+            Some("Cmd+3"),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            hide
+        ),
         cmd!("object.showAll", "Show All", ["Object"], Some("Cmd+Alt+3"), "{}", has_doc, show_all),
-        cmd!("object.compoundPath.make", "Make", ["Object", "Compound Path"], Some("Cmd+8"), "{}", has_selection, compound_make),
+        cmd!(
+            "object.compoundPath.make",
+            "Make",
+            ["Object", "Compound Path"],
+            Some("Cmd+8"),
+            "{ids?: [id…] (selected first; default: the selection)}",
+            has_selection,
+            compound_make
+        ),
         cmd!(
             "object.compoundPath.release",
             "Release",
             ["Object", "Compound Path"],
             Some("Cmd+Alt+Shift+8"),
-            "{} release the selected compound paths into their paths, each with the compound path's paint; a path of several subpaths (an SVG `d` with several `M`s) splits into one path per subpath",
+            "{ids?: [id…] (selected first; default: the selection)} release the selected compound paths into their paths, each with the compound path's paint; a path of several subpaths (an SVG `d` with several `M`s) splits into one path per subpath",
             has_selection,
             compound_release
         ),
@@ -128,7 +196,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Clipping Mask"],
             Some("Cmd+7"),
-            "{} the topmost selected object (a path, compound path or text, which loses its paint) clips the others: compound holes, even-odd fills and glyph outlines clip as drawn. Paint given to the clipping path later (paint commands with its id) shows: its fill behind the clipped art, its stroke over it → {id} of the clip group",
+            "{ids?: [id…] (selected first; default: the selection)} the topmost selected object (a path, compound path or text, which loses its paint) clips the others: compound holes, even-odd fills and glyph outlines clip as drawn. Paint given to the clipping path later (paint commands with its id) shows: its fill behind the clipped art, its stroke over it → {id} of the clip group",
             has_multi,
             clip_make
         ),
@@ -137,7 +205,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release",
             ["Object", "Clipping Mask"],
             Some("Cmd+Alt+7"),
-            "{} the selected clip groups become plain groups; their clipping path (path, compound path or text) stays, with the paint it has (none unless painted after Make)",
+            "{ids?: [id…] (selected first; default: the selection)} the selected clip groups become plain groups; their clipping path (path, compound path or text) stays, with the paint it has (none unless painted after Make)",
             has_selection,
             clip_release
         ),

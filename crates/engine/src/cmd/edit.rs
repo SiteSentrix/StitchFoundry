@@ -137,7 +137,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate",
             ["Edit"],
             None,
-            "{dx?, dy?} duplicate the selection in place (offset optional)",
+            "{ids?: [id…] (selected first; default: the selection), dx?, dy?} duplicate the selection in place (offset optional)",
             has_selection,
             duplicate
         ),
