@@ -545,10 +545,8 @@ impl Walker<'_, '_> {
                     self.painted(true);
                 }
                 // Drawn when the interpreter can read the shading: the page's count tells.
-                TypedInstruction::Shading(s) => {
-                    if res.get_shading(s.0).is_some() {
-                        self.painted(false);
-                    }
+                TypedInstruction::Shading(s) if res.get_shading(s.0).is_some() => {
+                    self.painted(false);
                 }
                 TypedInstruction::ShowText(_)
                 | TypedInstruction::ShowTexts(_)
