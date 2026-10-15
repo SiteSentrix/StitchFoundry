@@ -4408,3 +4408,4 @@ lighting	Light	광원
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면이 열린 상태로 유지됩니다.
+	Distance	거리

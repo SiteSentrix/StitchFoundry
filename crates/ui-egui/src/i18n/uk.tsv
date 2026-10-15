@@ -4424,3 +4424,4 @@ lighting	Light	Світло
 @msg	Unknown unit	Невідома одиниця
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закриває круглі торці відкритих профілів. За неповного обертання бічні зрізи залишаються відкритими.
+	Distance	Відстань

@@ -4836,3 +4836,4 @@ imageTrace	Outline	Körvonal
 @msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.
+	Distance	Távolság

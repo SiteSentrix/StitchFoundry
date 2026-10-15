@@ -48,7 +48,7 @@ pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, key: &str, unit: Unit, w
 /// The fields of the form dialogs ([`grid`]) that are distances, by dialog kind.
 fn lengths(kind: &str) -> &'static [&'static str] {
     match kind {
-        "move" => &["dx", "dy"],
+        "move" => &["dx", "dy", "distance"],
         "rectangle" | "ellipse" | "rectangularGrid" | "polarGrid" | "artboardOptions" => &["width", "height"],
         "roundedRectangle" => &["width", "height", "radius"],
         "polygon" => &["radius"],
@@ -64,7 +64,7 @@ fn lengths(kind: &str) -> &'static [&'static str] {
 /// number: fields that ↑/↓ step by one (Shift: ten) and that do math, as the distances do.
 fn suffix(kind: &str, key: &str) -> Option<&'static str> {
     match (kind, key) {
-        ("rotate" | "shear" | "reflect", "angle") => Some("°"),
+        ("rotate" | "shear" | "reflect" | "move", "angle") => Some("°"),
         ("scale", "sx" | "sy") => Some("%"),
         _ => None,
     }
@@ -74,6 +74,7 @@ fn suffix(kind: &str, key: &str) -> Option<&'static str> {
 /// name).
 fn order(kind: &str) -> &'static [&'static str] {
     match kind {
+        "move" => &["dx", "dy", "distance", "angle"],
         "offsetPath" => &["offset", "joins", "miterLimit"],
         "rectangularGrid" => &["width", "height", "rows", "rowSkew", "columns", "columnSkew"],
         "polarGrid" => &["width", "height", "concentric", "concentricSkew", "radial", "radialSkew"],

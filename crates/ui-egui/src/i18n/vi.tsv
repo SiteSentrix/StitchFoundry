@@ -4423,3 +4423,4 @@ theme	Appearance	Giao diện
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên vẫn mở.
+	Distance	Khoảng cách
