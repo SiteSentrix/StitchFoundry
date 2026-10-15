@@ -1344,6 +1344,7 @@ lighting	Light	Světlo
 	Roman Baseline	Latinková účaří
 	Select a text object to edit its character attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho znaků.
 	Show Options	Zobrazit možnosti
+	Color Panel Options	Možnosti panelu Barva
 	Small Caps	Kapitálky
 	Small Caps (on the roadmap)	Kapitálky (v plánu)
 	Standard Vertical Roman Alignment	Standardní svislé zarovnání latinky
@@ -3910,6 +3911,7 @@ imageTrace	Outline	Obrys
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musí být mezi {min} a {max} (zadáno {x})
 @msg	`{key}` must be one of {_1}	`{key}` musí být jedno z {_1}
 @msg	`{key}` must be true or false	`{key}` musí být true nebo false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musí být grayscale, rgb, hsb, cmyk nebo websafe
 @msg	`{k}` must be [x, y]	`{k}` musí být [x, y]
 @msg	`{name}` has no options	`{name}` nemá žádné možnosti
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je vestavěný pracovní prostor; zvolte jiný název

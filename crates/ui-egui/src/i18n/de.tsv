@@ -2694,6 +2694,7 @@
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Color Panel Options	Optionen für das Farbbedienfeld
 	Show Package	Paket anzeigen
 	Show Panel	Bedienfeld einblenden
 	Show Pattern Swatches	Musterfelder einblenden
@@ -3516,6 +3517,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})
 @msg	`{key}` must be one of {_1}	`{key}` muss einer der folgenden Werte sein: {_1}
 @msg	`{key}` must be true or false	`{key}` muss true oder false sein
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` muss grayscale, rgb, hsb, cmyk oder websafe sein
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` ist ein integrierter Arbeitsbereich; wählen Sie einen anderen Namen

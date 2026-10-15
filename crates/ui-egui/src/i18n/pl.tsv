@@ -1256,6 +1256,7 @@ lighting	Light	Światło
 	Roman Baseline	Linia bazowa łacińska
 	Select a text object to edit its character attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty znaków.
 	Show Options	Pokaż opcje
+	Color Panel Options	Opcje panelu Kolor
 	Small Caps	Kapitaliki
 	Small Caps (on the roadmap)	Kapitaliki (w planach)
 	Standard Vertical Roman Alignment	Standardowe pionowe wyrównanie łacińskie
@@ -3724,6 +3725,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})
 @msg	`{key}` must be one of {_1}	`{key}` musi mieć jedną z wartości: {_1}
 @msg	`{key}` must be true or false	`{key}` musi mieć wartość true lub false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musi mieć wartość grayscale, rgb, hsb, cmyk lub websafe
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` to wbudowany obszar roboczy; wybierz inną nazwę

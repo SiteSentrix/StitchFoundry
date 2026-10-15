@@ -2737,6 +2737,7 @@
 	Show Modified	Показати змінені
 	Show Note	Показати примітку
 	Show Options	Показати параметри
+	Color Panel Options	Параметри панелі «Колір»
 	Show Package	Показати пакет
 	Show Panel	Показати панель
 	Show Pattern Swatches	Показати зразки візерунків
@@ -3600,6 +3601,7 @@ axis	Both	Обидві
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})
 @msg	`{key}` must be one of {_1}	`{key}` має бути одним з: {_1}
 @msg	`{key}` must be true or false	`{key}` має бути true або false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я

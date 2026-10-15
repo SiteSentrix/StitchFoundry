@@ -380,6 +380,10 @@ pub struct UiState {
     /// shows the defaults for new art ([`crate::panels::color::deserialize_mode`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_mode")]
     pub color_mode: Option<crate::panels::color::Mode>,
+    /// Color panel: Hide Options, which leaves just the proxy and the spectrum (`ui.colorPanel`,
+    /// [`crate::panels::color::deserialize_hide_options`]).
+    #[serde(default, deserialize_with = "crate::panels::color::deserialize_hide_options")]
+    pub color_hide_options: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
@@ -715,6 +719,7 @@ impl Default for UiState {
             color_guide_limit: String::new(),
             align_to: Default::default(),
             color_mode: None,
+            color_hide_options: false,
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,

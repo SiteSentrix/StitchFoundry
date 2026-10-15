@@ -2558,6 +2558,7 @@
 	Show List View	목록 보기 표시
 	Show Note	메모 표시
 	Show Options	옵션 표시
+	Color Panel Options	색상 패널 옵션
 	Show Package	패키지 표시
 	Show Panel	패널 표시
 	Show Perspective Grid	원근 격자 표시
@@ -3991,6 +3992,7 @@ theme	Appearance	외관
 @msg	Opened {url}	{url}을(를) 열었습니다
 @msg	No saved views (View → New View…)	저장된 보기가 없습니다(보기 → 새 보기…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command`는 메뉴 항목이 대화상자를 여는 명령이어야 합니다(ui.menuDialog 참조)
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`은(는) grayscale, rgb, hsb, cmyk, websafe 중 하나여야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness는 dark|mediumDark|mediumLight|light 중 하나여야 합니다
 @msg	index must be a number or first, previous, next or last	index는 숫자이거나 first, previous, next, last 중 하나여야 합니다

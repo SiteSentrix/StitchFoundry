@@ -3048,6 +3048,7 @@
 	Show Modified	Hiện đã sửa đổi
 	Show Note	Hiện ghi chú
 	Show Options	Hiện tùy chọn
+	Color Panel Options	Tùy chọn bảng màu
 	Show Package	Hiện gói
 	Show Panel	Hiện bảng
 	Show Pattern Swatches	Hiện mẫu họa tiết
@@ -3733,6 +3734,7 @@ theme	Appearance	Giao diện
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` phải nằm trong khoảng {min} đến {max} (nhận được {x})
 @msg	`{key}` must be one of {_1}	`{key}` phải là một trong {_1}
 @msg	`{key}` must be true or false	`{key}` phải là true hoặc false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` phải là grayscale, rgb, hsb, cmyk hoặc websafe
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác

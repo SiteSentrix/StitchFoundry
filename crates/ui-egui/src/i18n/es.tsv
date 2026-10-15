@@ -2743,6 +2743,7 @@
 	Show Modified	Mostrar modificados
 	Show Note	Mostrar nota
 	Show Options	Mostrar opciones
+	Color Panel Options	Opciones del panel Color
 	Show Package	Mostrar paquete
 	Show Panel	Mostrar panel
 	Show Pattern Swatches	Mostrar muestras de motivo
@@ -3614,6 +3615,7 @@ axis	Both	Ambos
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` debe estar entre {min} y {max} (se recibió {x})
 @msg	`{key}` must be one of {_1}	`{key}` debe ser uno de estos: {_1}
 @msg	`{key}` must be true or false	`{key}` debe ser true o false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` debe ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`{k}` must be [x, y]	`{k}` debe ser [x, y]
 @msg	`{name}` has no options	`{name}` no tiene opciones
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` es un espacio de trabajo integrado; elige otro nombre

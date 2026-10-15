@@ -3325,6 +3325,7 @@
 	Show Modified	Módosultak megjelenítése
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
+	Color Panel Options	Szín panel beállításai
 	Show Package	Csomag megjelenítése
 	Show Panel	Panel megjelenítése
 	Show Pattern Swatches	Mintázat-színminták megjelenítése
@@ -4103,6 +4104,7 @@ imageTrace	Outline	Körvonal
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`: {min} és {max} közötti érték kell (kapott érték: {x})
 @msg	`{key}` must be one of {_1}	`{key}`: ezek egyike kell: {_1}
 @msg	`{key}` must be true or false	`{key}`: true vagy false kell
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`: grayscale, rgb, hsb, cmyk vagy websafe kell
 @msg	`{k}` must be [x, y]	`{k}`: [x, y] kell
 @msg	`{name}` has no options	ennek nincsenek beállításai: `{name}`
 @msg	`{name}` is a built-in workspace; choose another name	beépített munkaterület: `{name}`; válassz másik nevet
