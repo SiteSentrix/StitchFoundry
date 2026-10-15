@@ -115,6 +115,34 @@ fn pen_pressure(ui: &Ui, pressed: bool) -> f32 {
     p
 }
 
+/// The positions this frame's pointer moves passed through before its last one, each with the
+/// pen force a touch event gave just before it (if any). The last move is the pointer's position.
+/// Only for pens and fingers (frames with touch events): a mouse's moves are left as they were.
+fn frame_moves(ui: &Ui) -> Vec<(Pos2, Option<f32>)> {
+    ui.input(|i| {
+        if !i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
+            return vec![];
+        }
+        let mut force = None;
+        let mut moves = vec![];
+        for e in &i.events {
+            match e {
+                egui::Event::Touch { force: Some(f), .. } if f.is_finite() && *f > 0.0 => force = Some(f.clamp(0.0, 1.0)),
+                egui::Event::PointerMoved(p) => moves.push((*p, force)),
+                _ => {}
+            }
+        }
+        moves.pop();
+        // A burst of events (a stalled frame) is thinned to a bounded count.
+        const MAX: usize = 64;
+        if moves.len() > MAX {
+            let step = moves.len().div_ceil(MAX);
+            moves = moves.into_iter().step_by(step).collect();
+        }
+        moves
+    })
+}
+
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
@@ -569,6 +597,11 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     app.hover_doc = hover.map(|p| xf.to_doc(p));
     let view = app.view_info();
     touch_gestures(app, ui, rect, view);
+    // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
+    // tool's press is dropped, as a right-click presses nothing.
+    if resp.long_touched() {
+        drop_press(app, ui, view);
+    }
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
     // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
     // without moving the mouse (Alt switches the Shape Builder to erase mode).
@@ -610,7 +643,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
-        let d = if zoom_mode {
+        let d = if crate::touch::finger_navigates_only() {
+            // A finger (or a palm) once a pen has been seen: it navigates, it doesn't draw.
+            Drag::Gesture
+        } else if zoom_mode {
             if animated_zoom(&app.session.prefs) { Drag::ZoomScrub { start: p, held: 0.0, moved: false } } else { Drag::ZoomBox { start: p } }
         } else if pan_mode {
             Drag::Pan { start: p, center: v.center, middle: false }
@@ -683,6 +719,12 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
                 Drag::Tool => {
                     if pointer.delta() != egui::Vec2::ZERO {
+                        // Every position the pen or mouse passed this frame, not just the last: a
+                        // fast stroke keeps its curve (a pen reports far more often than frames come).
+                        for (at, force) in frame_moves(ui) {
+                            let pressure = force.unwrap_or_else(|| pen_pressure(ui, false));
+                            dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), pressure }, view);
+                        }
                         let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
                     }
@@ -890,13 +932,13 @@ fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vec
         if phase == egui::TouchPhase::Start && !taps.is_down() && !rect.contains(pos) {
             continue;
         }
+        // A cancelled contact (a palm the shell drops when a pen lands) keeps nothing it began.
+        if phase == egui::TouchPhase::Cancel {
+            drop_press(app, ui, view);
+        }
         match taps.feed(id, phase, pos, now) {
             Some(crate::touch::Touch::Fingers) => {
-                if ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool) {
-                    // Nothing it began is kept; the tool's mouse-up returns it to rest.
-                    let _ = app.session.cancel_interaction();
-                    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
-                }
+                drop_press(app, ui, view);
                 ui.data_mut(|d| d.insert_temp(drag_id(), Drag::Gesture));
             }
             Some(crate::touch::Touch::Tap(n)) => tap = crate::touch::tap_command(n),
@@ -907,6 +949,21 @@ fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vec
     if let Some(cmd) = tap {
         crate::menus::invoke(app, cmd, serde_json::json!({}));
     }
+}
+
+/// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
+/// does nothing ([`Drag::Gesture`]).
+fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
+    match ui.data(|d| d.get_temp::<Drag>(drag_id())) {
+        Some(Drag::Tool) => {
+            // The tool's mouse-up returns it to rest.
+            let _ = app.session.cancel_interaction();
+            dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+        }
+        Some(_) => {}
+        None => return,
+    }
+    ui.data_mut(|d| d.insert_temp(drag_id(), Drag::Gesture));
 }
 
 /// A Selection tool move dragged off the canvas (to `p`, over a panel) turns into a panel drag of
@@ -4495,6 +4552,55 @@ mod tests {
         assert!(app.session.tool_composing());
         assert!(!app.take_ime_discard());
         assert_eq!(plain(&app, id), "雅がくらくか");
+    }
+
+    #[test]
+    fn frame_moves_keeps_touch_samples_and_pressure_but_leaves_mouse_unchanged() {
+        let ctx = egui::Context::default();
+        let a = pos2(10.0, 20.0);
+        let b = pos2(20.0, 30.0);
+        let c = pos2(30.0, 40.0);
+        let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), egui::Event::PointerMoved(c)];
+        let mut mouse = vec![];
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| mouse = frame_moves(ui));
+        out.textures_delta.clear();
+        assert!(mouse.is_empty());
+        let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
+        let mut samples = vec![];
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui));
+        out.textures_delta.clear();
+        assert_eq!(samples, [(a, Some(0.2)), (b, Some(0.8))], "the last sample follows the normal pointer path");
+        let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui));
+        out.textures_delta.clear();
+        assert!(samples.len() <= 64, "a stalled frame stays bounded");
+    }
+
+    #[test]
+    fn long_touch_drops_a_tool_press_without_committing_art() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width":800,"height":600})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        let tick = |app: &mut VectorcraftApp, time, events| {
+            let raw = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+                time: Some(time),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        tick(&mut app, 0.0, vec![]);
+        let pos = app.canvas_rect.unwrap().center();
+        tick(&mut app, 0.1, pen(egui::TouchPhase::Start, pos, 0.5));
+        assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)));
+        tick(&mut app, 1.5, vec![]);
+        assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Gesture)), "long touch drops the tool drag");
+        assert!(app.session.active().unwrap().interaction.is_none());
+        tick(&mut app, 1.6, pen(egui::TouchPhase::End, pos, 0.5));
+        assert!(app.session.active().unwrap().doc.art_bounds().is_none(), "releasing cannot commit the cancelled press");
     }
 
     /// The events eframe's winit integration sends for a pen (Windows Ink) or a finger: a touch

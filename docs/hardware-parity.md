@@ -1,6 +1,6 @@
 # Hardware parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-14 · **Change:** minor (tool cursors painted into the window on Wayland, #1652, not run on Linux; borderless title-bar window on Windows, #1758, awaiting confirmation; a window surface larger than 8192 px keeps working, #1459 in part; Linux Display Server preference opens the window through XWayland, #1151) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** patch (web pen buttons/modifiers preserved, touch-only input left to eframe, session-only palm rejection; tool cursors painted into the window on Wayland, #1652, not run on Linux; borderless title-bar window on Windows, #1758, awaiting confirmation; a window surface larger than 8192 px keeps working, #1459 in part; Linux Display Server preference opens the window through XWayland, #1151) · **Target:** Adobe Illustrator 2026 (30.x)
 
 What hardware Illustrator uses, per platform, against VectorCraft. Illustrator's side is from its public
 documentation (GPU Performance, touch workspace, pen pressure pages); ours from the code
@@ -19,10 +19,10 @@ on huge documents. Pen input is pressure-only and Windows-first.
 | Multithreaded rendering off the UI thread | partial | yes | yes | yes | single-threaded | beyond Illustrator |
 | Hybrid-graphics GPU choice | automatic | power-saving GPU by default, Preferences › Graphics Processor | same; DX12 then OpenGL; no Vulkan unless asked (#545, #806) | the desktop's GPU | browser | done |
 | Restart on another GPU when the first fails to present | — | yes (#502, #964) | yes | yes | restart on lost device (#369) | done |
-| Pen pressure | yes (Wacom, Windows Ink, macOS tablet events) | **no** (winit reports none, #852) | yes (pointer force via `WM_POINTER`) | X11 only via XWayland (Preferences › Performance › Linux Display Server, #1151); none on Wayland (#491, #764) | browser pointer events | partial: 4–8 h for macOS and Wayland (winit 0.31) |
+| Pen pressure | yes (Wacom, Windows Ink, macOS tablet events) | **no** (winit reports none, #852) | yes (pointer force via `WM_POINTER`) | X11 only via XWayland (Preferences › Performance › Linux Display Server, #1151); none on Wayland (#491, #764) | browser pointer events, with coalesced events; Apple Pencil on iPad (hover, palm rejection: fingers navigate after a pen contact until reload) | partial: 4–8 h for macOS and Wayland (winit 0.31) |
 | Pen tilt, bearing, barrel rotation (6D Art Pen) | yes, drives brushes | no | no | no | no | missing: 4–8 h after the input layer (#372) |
 | Pen eraser end | yes | no | no | no | no | missing |
-| Touch gestures (pinch zoom, two-finger pan, rotate view, Touch workspace) | yes (Windows touch, Surface) | trackpad pinch and scroll | pinch, pan; two-finger tap undo, three-finger redo (#585) | same where winit reports touch | same | partial: touch workspace and rotate gesture missing, 3–5 h |
+| Touch gestures (pinch zoom, two-finger pan, rotate view, Touch workspace) | yes (Windows touch, Surface) | trackpad pinch and scroll | pinch, pan; two-finger tap undo, three-finger redo (#585) | same where winit reports touch | eframe until the first pen contact, then Pointer Events (pen and fingers told apart); long press opens the context menu | partial: touch workspace and rotate gesture missing, 3–5 h |
 | Trackpad (smooth scroll, pinch) | yes | yes | precision touchpads | yes | yes | done |
 | HiDPI / Retina, per-monitor scale | yes | yes | yes | yes | yes | done; a window dragged between monitors of different scale can still grow on Windows (#1459, open); the custom title bar's window on Windows stays truly borderless so the pointer lines up with what is drawn (#1791, #1758; awaiting the reporter's confirmation) |
 | Multiple monitors: panels and document windows on another screen | yes | no (one OS window) | no | no | — | missing: 6–10 h (with multiple windows, gap G7) |
@@ -33,7 +33,9 @@ on huge documents. Pen input is pressure-only and Windows-first.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-15 | patch | Web review: preserve pen buttons and modifiers; leave fingers to eframe before the first pen contact; remove persistent pen policy. Canvas regression tests cover intermediate moves and long-touch cancellation on native and web input. Physical-device QA pending. |
 | 2026-10-14 | minor | Tool cursors are painted into the window on Wayland (#1652; not run on Linux, #1645 stays open until confirmed); On Windows the custom title bar's window stays truly borderless, so the pointer lines up with what is drawn on systems where the hidden caption offset it (#1791, #1758; awaiting the reporter's confirmation); neither is confirmed on the hardware that reported it, so nothing is marked done |
+| 2026-10-13 | minor | Web: the shell reads pen and finger Pointer Events itself (pen pressure with coalesced events, Apple Pencil hover, palm rejection: after a pen contact fingers only navigate until reload; long press opens the context menu); score unchanged (estimated) |
 | 2026-10-13 | minor | A window whose surface is larger than 8192 px (stretched over several monitors, or grown by a drag between monitors of different scale) is configured up to the graphics adapter's limit instead of closing the app (#1495, part of #1459); the window growing during that drag on Windows is still open; not reproduced on a mixed-scale setup |
 | 2026-10-11 | minor | Preferences › Performance › Linux Display Server › X11 (XWayland) opens the window through XWayland on a Wayland session, where pens and dropped files reach the app (#1151); score unchanged (estimated) |
 | 2026-10-10 | major | First checklist from the canvas, touch and graphics code and the open hardware issues |
