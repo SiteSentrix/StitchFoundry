@@ -153,8 +153,8 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let links = crate::panels::links::ID;
     ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
     ui.horizontal(|ui| {
-        if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Relink…"), w).clicked() {
-            crate::panels::links::relink(app, vec![id]);
+        if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
+            crate::panels::links::replace(app, vec![id]);
         }
         if widgets::flat_button(ui, tl!("Links"), w).clicked() {
             app.ui.open_panel = Some(links.into());
