@@ -39,6 +39,10 @@
 	Draft	Entwurf
 	Good	Gut
 	Best	Sehr gut
+	Mode	Modus
+	Blur Mode	Weichzeichnermodus
+	Edge Only	Nur Kanten
+	Overlay Edge	Kanten überlagern
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the

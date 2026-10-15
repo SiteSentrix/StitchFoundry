@@ -1880,6 +1880,10 @@ lighting	Light	Światło
 	Spin	Wirowanie
 	Good	Dobra
 	Best	Najlepsza
+	Mode	Tryb
+	Blur Mode	Tryb rozmycia
+	Edge Only	Tylko krawędzie
+	Overlay Edge	Nakładka krawędzi
 	Amount	Wartość
 	Contrast	Kontrast
 	Edit the applied effect, or add another one?	Edytować zastosowany efekt czy dodać kolejny?

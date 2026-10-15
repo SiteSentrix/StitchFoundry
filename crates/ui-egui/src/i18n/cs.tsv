@@ -1972,6 +1972,10 @@ lighting	Light	Světlo
 	Spin	Otáčení
 	Good	Dobrá
 	Best	Nejlepší
+	Mode	Režim
+	Blur Mode	Režim rozostření
+	Edge Only	Jen okraje
+	Overlay Edge	Překrýt okraje
 	Amount	Míra
 	Contrast	Kontrast
 	Edit the applied effect, or add another one?	Upravit použitý efekt, nebo přidat další?

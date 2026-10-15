@@ -425,6 +425,7 @@ pub(super) fn humanize(k: &str) -> String {
         "Radius1" => "Radius 1".into(),
         "Radius2" => "Radius 2".into(),
         "Max Radius" => "Max. Radius:".into(),
+        "Blur Mode" => "Mode:".into(),
         "Channel1" => "Channel 1:".into(),
         "Channel2" => "Channel 2:".into(),
         "Channel3" => "Channel 3:".into(),

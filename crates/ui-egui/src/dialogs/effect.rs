@@ -193,6 +193,7 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("blur.radial", "method") => Some(&[("Spin", "spin"), ("Zoom", "zoom")]),
         ("blur.radial", "quality") => Some(&[("Draft", "draft"), ("Good", "good"), ("Best", "best")]),
         ("blur.smart", "quality") => Some(&[("Low", "low"), ("Medium", "medium"), ("High", "high")]),
+        ("blur.smart", "blurMode") => Some(&vectorcraft_effects::pixel::SMART_BLUR_MODES),
         ("brushStrokes.sprayedStrokes", "strokeDirection") => Some(&vectorcraft_effects::pixel::STROKE_DIRECTIONS),
         ("distort.glass", "texture") => Some(&vectorcraft_effects::pixel::GLASS_TEXTURES),
         ("pixelate.mezzotint", "type") => Some(&vectorcraft_effects::pixel::MEZZOTINT_TYPES),

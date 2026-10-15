@@ -57,6 +57,10 @@
 	Draft	Bozza
 	Good	Buona
 	Best	Ottima
+	Mode	Modalità
+	Blur Mode	Modalità sfocatura
+	Edge Only	Solo bordi
+	Overlay Edge	Sovrapponi bordi
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the

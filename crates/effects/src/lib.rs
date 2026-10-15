@@ -345,8 +345,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "blur.smart",
             "Smart Blur…",
             BLUR,
-            "{radius: pt 0.1..100 (3), threshold: levels 0.1..100 (25; only colours closer than this blur together, so edges stay sharp), quality: \"low\"|\"medium\"|\"high\" (\"medium\"; 5, 7 or 9 samples across)} (Normal mode)",
-            json!({"radius": 3.0, "threshold": 25.0, "quality": "medium"}),
+            "{radius: pt 0.1..100 (3), threshold: levels 0.1..100 (25; only colours closer than this blur together, so edges stay sharp), quality: \"low\"|\"medium\"|\"high\" (\"medium\"; 5, 7 or 9 samples across), blurMode: \"normal\"|\"edgeOnly\"|\"overlayEdge\" (\"normal\"; edgeOnly: the edges in white on black, overlayEdge: the edges in white over the blur)}. A pixel is on an edge when one of its four nearest pixels differs from it by more than the threshold in a channel and its channels (alpha included) add up to at least that pixel's; the white and the black keep each pixel's coverage, and the radius changes only the blur",
+            json!({"radius": 3.0, "threshold": 25.0, "quality": "medium", "blurMode": "normal"}),
         ),
         r(
             "brushStrokes.accentedEdges",

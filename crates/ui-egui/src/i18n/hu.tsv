@@ -424,6 +424,7 @@
 	Blocks	Kockák
 	Blue	Kék
 	Blur	Elmosás
+	Blur Mode	Elmosási mód
 	Bold	Félkövér
 	Border Thickness	Szegélyvastagság
 	Bottom	Alsó
@@ -1113,6 +1114,7 @@
 	East Asian Type	Kelet-ázsiai szöveg
 	Edge	Él
 	Edge Brightness	Él fényessége
+	Edge Only	Csak élek
 	Edge Width	Élszélesség
 	Edit	Szerkesztés
 	Edit Artboards	Rajztáblák szerkesztése
@@ -2114,6 +2116,7 @@
 	Mixed Appearances	Vegyes megjelenések
 	Mixed Objects	Vegyes objektumok
 	Mobile	Mobil
+	Mode	Mód
 	Mode:	Mód:
 	Model	Modell
 	Models	Modellek
@@ -2449,6 +2452,7 @@
 	Overlap:	Átfedés:
 	Overlapping	Átfedő
 	Overlay	Átfedés
+	Overlay Edge	Élek átfedése
 	Overprint	Felülnyomás
 	Overprint and Transparency Flattener	Felülnyomás és átlátszóság-lapítás
 	Overprint and Transparency Flattener Options	Felülnyomás és átlátszóság-lapítás beállításai

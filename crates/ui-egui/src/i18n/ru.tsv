@@ -55,6 +55,10 @@
 	Draft	Черновое
 	Good	Хорошее
 	Best	Наилучшее
+	Mode	Режим
+	Blur Mode	Режим размытия
+	Edge Only	Только края
+	Overlay Edge	Наложение краёв
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the

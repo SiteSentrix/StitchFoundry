@@ -58,6 +58,10 @@
 	Draft	Brouillon
 	Good	Bonne
 	Best	Optimale
+	Mode	Mode
+	Blur Mode	Mode de flou
+	Edge Only	Bords uniquement
+	Overlay Edge	Bords en incrustation
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the

@@ -3505,6 +3505,10 @@ theme	Appearance	외관
 	Draft	초안
 	Good	좋음
 	Best	최상
+	Mode	모드
+	Blur Mode	흐림 모드
+	Edge Only	가장자리만
+	Overlay Edge	가장자리 오버레이
 @msg	Reset {_1}	{_1}을(를) 재설정했습니다
 @msg	Saving	저장 중
 @msg	Saving {_1}	{_1} 저장 중
