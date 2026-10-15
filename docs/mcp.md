@@ -1703,7 +1703,16 @@ always tagged, whatever `profiles` says). `outputIntent` embeds a profile as the
 `/GTS_PDFX` output intent with `outputCondition`, `outputConditionId` and `registry`, and `trapped` sets `/Trapped`
 (PDF/A files keep their own output intent). Type is written as selectable, searchable text in embedded subset fonts
 with a ToUnicode map (fonts whose licence forbids embedding stay outlines, with a warning); `advanced: {outlineText:
-true}` writes every glyph as an outline instead.
+true}` writes every glyph as an outline instead. Type that Transform effects only move and copy (no scale, rotation,
+reflection or Random) is written as text once in each place when its characters are in solid colors without underline
+or strikethrough, the type object has no fills or strokes of its own, no inline graphics and no perspective, its
+transform does not scale or shear stroked characters, and the copies do not overlap. When the effect is on the type
+itself, the type can also have transparency, an opacity mask and raster effects such as a drop shadow. When the effect
+is on the group or layer holding the type, the type has no transparency or effects of its own and is not in a clipping
+path, the group or layer has no fill, stroke or Pathfinder effect of its own, and no group between them has a fill,
+stroke, Pathfinder or geometry effect. Type is written as outlines when the effect stops its copies early, or when the
+copies would number more than 10,000 or take more than 20,000,000 bytes of document data. Other type under a geometry
+effect is written as outlines.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","output":{"conversion":"preserveNumbers","destination":"VectorCraft Generic CMYK (SWOP-like)","profiles":"destination","outputIntent":"VectorCraft Generic CMYK (SWOP-like)","trapped":true},"advanced":{"outlineText":false}}}}
