@@ -2462,6 +2462,16 @@
 	Scripts	脚本
 	Search	搜索
 	Search All	搜索全部
+	Filter	筛选
+	Clear All	全部清除
+	By Object	按对象
+	By Layer	按图层
+	Images	图像
+	Groups	编组
+	Linked Files	链接文件
+	Locked	已锁定
+	Hidden	已隐藏
+	Filter Layers Panel Rows	筛选图层面板行
 	Search commands and tools	搜索命令和工具
 	Search commands and tools…	搜索命令和工具…
 	Search Commands…	搜索命令…

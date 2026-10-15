@@ -2603,6 +2603,17 @@
 	Scripts	Scripts
 	Search	Rechercher
 	Search All	Rechercher partout
+	Filter	Filtre
+	Clear All	Tout effacer
+	By Object	Par objet
+	By Layer	Par calque
+	Images	Images
+	Groups	Groupes
+	Linked Files	Fichiers liés
+	Locked	Verrouillés
+	Hidden	Masqués
+	Filter Layers Panel Rows	Filtrer les lignes du panneau Calques
+@msg	`{key}` must be an array of these names: {_1}	`{key}` doit être un tableau de noms parmi {_1}
 	Search commands and tools	Chercher commandes et outils
 	Search commands and tools…	Chercher commandes et outils…
 	Search Commands…	Rechercher des commandes…

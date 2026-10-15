@@ -449,6 +449,10 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
+    /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
+    /// Search All text does.
+    #[serde(skip)]
+    pub layers_filter: crate::panels::layers::Filter,
     /// The Image Trace panel's Advanced section is open (as it was last left).
     #[serde(default = "yes")]
     pub image_trace_advanced: bool,
@@ -750,6 +754,7 @@ impl Default for UiState {
             dxf_import: Value::Null,
             home: None,
             layers_panel: Default::default(),
+            layers_filter: Default::default(),
             image_trace_advanced: true,
             window: None,
         }

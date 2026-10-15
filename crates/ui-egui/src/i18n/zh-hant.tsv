@@ -2587,6 +2587,16 @@
 	Scripts	指令碼
 	Search	搜尋
 	Search All	搜尋全部
+	Filter	篩選
+	Clear All	全部清除
+	By Object	依物件
+	By Layer	依圖層
+	Images	影像
+	Groups	群組
+	Linked Files	連結檔案
+	Locked	已鎖定
+	Hidden	已隱藏
+	Filter Layers Panel Rows	篩選圖層面板列
 	Search commands and tools	搜尋指令與工具
 	Search commands and tools…	搜尋指令與工具…
 	Search Commands…	搜尋指令…

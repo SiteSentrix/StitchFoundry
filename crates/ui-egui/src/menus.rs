@@ -528,6 +528,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?: [id…] (default: every row that holds others), open?: bool (default true)} open or close rows of the Layers panel, as clicking their triangles does → {count}",
     ),
     (
+        "ui.layersFilter",
+        "Filter Layers Panel Rows",
+        "",
+        "{objects?: [paths|shapes|text|images|effects|groups|linkedFiles|guides], layers?: [locked|hidden]} set the Layers panel's Filter (By Object, By Layer): a row stays when it is of a kind in `objects` and in a state in `layers` (its own lock or eye; an empty list takes every row), or when a row inside it stays; Search All narrows the rows further. A key left out keeps its list. The filter lasts the session and does not change the document, its open rows or the selection → {objects, layers}",
+    ),
+    (
         "ui.tileEdgeColor",
         "Tile Edge Color…",
         "",
@@ -1417,6 +1423,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
+        "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
         "ui.flattenTransparencyDialog" => {
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)

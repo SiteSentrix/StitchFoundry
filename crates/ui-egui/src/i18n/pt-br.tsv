@@ -2139,6 +2139,17 @@
 	Scribble…	Rabisco…
 	Scripts	Scripts
 	Search All	Pesquisar em Tudo
+	Filter	Filtro
+	Clear All	Limpar Tudo
+	By Object	Por Objeto
+	By Layer	Por Camada
+	Images	Imagens
+	Groups	Grupos
+	Linked Files	Arquivos Vinculados
+	Locked	Bloqueados
+	Hidden	Ocultos
+	Filter Layers Panel Rows	Filtrar linhas do painel Camadas
+@msg	`{key}` must be an array of these names: {_1}	`{key}` deve ser uma matriz destes nomes: {_1}
 	Search Commands…	Pesquisar Comandos…
 	Search commands and tools	Pesquisar comandos e ferramentas
 	Search commands and tools…	Pesquisar comandos e ferramentas…

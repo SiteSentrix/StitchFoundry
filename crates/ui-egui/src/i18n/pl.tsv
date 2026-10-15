@@ -1414,6 +1414,17 @@ lighting	Light	Światło
 	Create New Layer	Utwórz nową warstwę
 	Create New Sublayer	Utwórz nową podwarstwę
 	Search All	Szukaj wszędzie
+	Filter	Filtr
+	Clear All	Wyczyść wszystko
+	By Object	Według obiektu
+	By Layer	Według warstwy
+	Images	Obrazy
+	Groups	Grupy
+	Linked Files	Połączone pliki
+	Locked	Zablokowane
+	Hidden	Ukryte
+	Filter Layers Panel Rows	Filtruj wiersze panelu Warstwy
+@msg	`{key}` must be an array of these names: {_1}	`{key}` musi być tablicą tych nazw: {_1}
 	Graphics	Grafiki
 	Local Libraries	Biblioteki lokalne
 	Add Content	Dodaj zawartość

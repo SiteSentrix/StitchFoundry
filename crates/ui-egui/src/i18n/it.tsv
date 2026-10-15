@@ -2609,6 +2609,17 @@
 	Scripts	Script
 	Search	Cerca
 	Search All	Cerca ovunque
+	Filter	Filtro
+	Clear All	Cancella tutto
+	By Object	Per oggetto
+	By Layer	Per livello
+	Images	Immagini
+	Groups	Gruppi
+	Linked Files	File collegati
+	Locked	Bloccati
+	Hidden	Nascosti
+	Filter Layers Panel Rows	Filtra righe del pannello Livelli
+@msg	`{key}` must be an array of these names: {_1}	`{key}` deve essere un array di questi nomi: {_1}
 	Search commands and tools	Cerca comandi e strumenti
 	Search commands and tools…	Cerca comandi e strumenti…
 	Search Commands…	Cerca comandi…

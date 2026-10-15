@@ -2606,6 +2606,17 @@
 	Scripts	Scripts
 	Search	Buscar
 	Search All	Buscar en todo
+	Filter	Filtro
+	Clear All	Borrar todo
+	By Object	Por objeto
+	By Layer	Por capa
+	Images	Imágenes
+	Groups	Grupos
+	Linked Files	Archivos vinculados
+	Locked	Bloqueados
+	Hidden	Ocultos
+	Filter Layers Panel Rows	Filtrar filas del panel Capas
+@msg	`{key}` must be an array of these names: {_1}	`{key}` debe ser una lista de estos nombres: {_1}
 	Search commands and tools	Buscar comandos y herramientas
 	Search commands and tools…	Buscar comandos y herramientas…
 	Search Commands…	Buscar comandos…

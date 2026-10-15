@@ -2892,6 +2892,17 @@
 	Scrub Numeric Fields by Dragging	Cuộn nhanh trường số bằng cách kéo
 	Search	Tìm kiếm
 	Search All	Tìm kiếm tất cả
+	Filter	Bộ lọc
+	Clear All	Xóa tất cả
+	By Object	Theo đối tượng
+	By Layer	Theo lớp
+	Images	Hình ảnh
+	Groups	Nhóm
+	Linked Files	Tệp được liên kết
+	Locked	Đã khóa
+	Hidden	Đã ẩn
+	Filter Layers Panel Rows	Lọc hàng bảng Lớp
+@msg	`{key}` must be an array of these names: {_1}	`{key}` phải là một mảng gồm các tên sau: {_1}
 	Search commands and tools	Tìm kiếm lệnh và công cụ
 	Search commands and tools…	Tìm kiếm lệnh và công cụ…
 	Search Commands…	Tìm kiếm lệnh…

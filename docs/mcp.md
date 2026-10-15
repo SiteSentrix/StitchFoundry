@@ -1367,6 +1367,15 @@ and `layerRows`, the rows highlighted in the panel.
   layersOnly, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
   `ui.layersExpand {ids?, open?}` opens or closes rows as their triangles do (Alt-click: everything inside).
   A document opens with only its top-level layers open; the open rows are saved in the native file and reopen that way.
+- **Search and filter** (control channel and the app's MCP): the Search All field keeps the rows whose names hold the
+  text typed, and `ui.layersFilter {objects?, layers?}` sets the choices of the Filter button beside it. `objects` (By
+  Object) takes `paths` (paths and compound paths), `shapes` (live rectangles, ellipses, polygons and lines), `text`,
+  `images`, `effects` (rows with an effect on themselves or on a fill or stroke, shown or hidden), `groups`,
+  `linkedFiles` (linked images and placed documents) and `guides` (paths made into guides, and ruler guides); `layers`
+  (By Layer) takes `locked` and `hidden` (the row's own lock and eye). A row stays when it is one of those kinds and in
+  one of those states (an empty list takes every row) and its name holds the search text, or when a row inside it
+  stays. A key left out keeps its list. The filter lasts the session and does not change the document, its open rows
+  or the selection. `ui.layersFilter` answers `{objects, layers}`.
 
 ```json
 {"name":"run_command","arguments":{"command":"layer.newSublayer","params":{"name":"Shadows"}}}
