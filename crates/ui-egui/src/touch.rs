@@ -7,7 +7,7 @@
 //! ([`Taps::feed`] says [`Touch::Fingers`]), and the tap undoes what came before it.
 //!
 //! Where the platform tells a pen from a finger (the web shell reads Pointer Events: an iPad with
-//! an Apple Pencil), it says which drives the pointer ([`set_source`]). Once a pen has been seen,
+//! an Apple Pencil), it says which drives the pointer ([`set_source`]). Once a pen has been seen in this session,
 //! fingers only navigate: pinch, two-finger pan and the taps; a finger or a resting palm never
 //! presses a tool on the canvas.
 
@@ -40,7 +40,7 @@ pub fn set_source(source: Source) {
     }
 }
 
-/// Whether a pen has been seen (the shell restores it across visits), so fingers navigate only.
+/// Set the session-only pen policy (reload starts with finger drawing enabled).
 pub fn set_pen_seen(seen: bool) {
     PEN_SEEN.with(|p| p.set(seen));
 }

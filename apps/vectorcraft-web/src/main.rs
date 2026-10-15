@@ -20,7 +20,7 @@
 mod fonts;
 #[cfg(target_arch = "wasm32")]
 mod locks;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 mod pencil;
 #[cfg(target_arch = "wasm32")]
 mod web;

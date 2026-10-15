@@ -4554,6 +4554,55 @@ mod tests {
         assert_eq!(plain(&app, id), "雅がくらくか");
     }
 
+    #[test]
+    fn frame_moves_keeps_touch_samples_and_pressure_but_leaves_mouse_unchanged() {
+        let ctx = egui::Context::default();
+        let a = pos2(10.0, 20.0);
+        let b = pos2(20.0, 30.0);
+        let c = pos2(30.0, 40.0);
+        let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), egui::Event::PointerMoved(c)];
+        let mut mouse = vec![];
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| mouse = frame_moves(ui));
+        out.textures_delta.clear();
+        assert!(mouse.is_empty());
+        let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
+        let mut samples = vec![];
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui));
+        out.textures_delta.clear();
+        assert_eq!(samples, [(a, Some(0.2)), (b, Some(0.8))], "the last sample follows the normal pointer path");
+        let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui));
+        out.textures_delta.clear();
+        assert!(samples.len() <= 64, "a stalled frame stays bounded");
+    }
+
+    #[test]
+    fn long_touch_drops_a_tool_press_without_committing_art() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width":800,"height":600})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        let tick = |app: &mut VectorcraftApp, time, events| {
+            let raw = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+                time: Some(time),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        tick(&mut app, 0.0, vec![]);
+        let pos = app.canvas_rect.unwrap().center();
+        tick(&mut app, 0.1, pen(egui::TouchPhase::Start, pos, 0.5));
+        assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)));
+        tick(&mut app, 1.5, vec![]);
+        assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Gesture)), "long touch drops the tool drag");
+        assert!(app.session.active().unwrap().interaction.is_none());
+        tick(&mut app, 1.6, pen(egui::TouchPhase::End, pos, 0.5));
+        assert!(app.session.active().unwrap().doc.art_bounds().is_none(), "releasing cannot commit the cancelled press");
+    }
+
     /// The events eframe's winit integration sends for a pen (Windows Ink) or a finger: a touch
     /// with its pressure, and the mouse it stands in for (#491).
     fn pen(phase: egui::TouchPhase, pos: Pos2, force: f32) -> Vec<egui::Event> {

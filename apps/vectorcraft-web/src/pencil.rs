@@ -7,21 +7,23 @@
 //!   where the pen can (Apple Pencil hover).
 //! - Fingers are touch contacts: two pinch and pan the canvas, and tap to undo or redo. The first
 //!   finger also drives the pointer, so it taps the panels and menus; on the canvas it navigates
-//!   only once a pen has been seen ([`touch::set_source`]), which the page remembers.
+//!   only once a pen has been seen ([`touch::set_source`]), for this page session only.
 //! - Palm rejection: while a pen is down, fingers are ignored; a pen landing cancels the fingers
 //!   already down (a palm resting first).
 //!
-//! Mouse and trackpad events (a Magic Keyboard) are left to eframe.
+//! Mouse and trackpad events (a Magic Keyboard) are left to eframe. Until the first pen
+//! contact, fingers and their DOM touch events also stay with eframe (including its text agent).
 
+#[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
+#[cfg(target_arch = "wasm32")]
 use std::rc::Rc;
 
 use egui::{Event, PointerButton, Pos2, TouchDeviceId, TouchId, TouchPhase};
 use vectorcraft_ui_egui::touch::{self, Source};
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast as _;
 
-/// Where the page remembers that a pen has been seen (`localStorage`).
-const PEN_SEEN_KEY: &str = "vectorcraft-pen-seen";
 /// The pen's touch device (fingers use another, so egui doesn't pinch a pen with a finger).
 const PEN_DEVICE: TouchDeviceId = TouchDeviceId(1);
 const FINGER_DEVICE: TouchDeviceId = TouchDeviceId(2);
@@ -36,9 +38,32 @@ pub struct Pointers {
     fingers: Vec<i32>,
     /// The contact driving egui's pointer.
     primary: Option<i32>,
+    button: Option<PointerButton>,
 }
 
+#[cfg(target_arch = "wasm32")]
 pub type SharedPointers = Rc<RefCell<Pointers>>;
+
+/// Browser-independent snapshot, also used by the routing regression tests.
+struct Input<'a> {
+    pointer_type: &'a str,
+    id: i32,
+    button: i16,
+    pressure: f32,
+    modifiers: egui::Modifiers,
+}
+
+// Match eframe's button_from_mouse_event, including barrel/right and auxiliary buttons.
+fn button(number: i16) -> Option<PointerButton> {
+    match number {
+        0 => Some(PointerButton::Primary),
+        1 => Some(PointerButton::Middle),
+        2 => Some(PointerButton::Secondary),
+        3 => Some(PointerButton::Extra1),
+        4 => Some(PointerButton::Extra2),
+        _ => None,
+    }
+}
 
 impl Pointers {
     /// The events since the last frame, for the frame's raw input.
@@ -50,45 +75,55 @@ impl Pointers {
         self.events.push(Event::Touch { device_id: device, id: TouchId::from(id as u64), phase, pos, force });
     }
 
-    fn press(&mut self, id: i32, pos: Pos2) {
+    fn press(&mut self, id: i32, pos: Pos2, button: PointerButton, modifiers: egui::Modifiers) {
         self.primary = Some(id);
+        self.button = Some(button);
+        self.events.push(Event::ModifiersChanged(modifiers));
         self.events.push(Event::PointerMoved(pos));
-        self.events.push(Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::default() });
+        self.events.push(Event::PointerButton { pos, button, pressed: true, modifiers });
     }
 
-    fn release(&mut self, pos: Pos2) {
+    fn release(&mut self, pos: Pos2, modifiers: egui::Modifiers) {
         self.primary = None;
-        self.events.push(Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::default() });
+        if let Some(button) = self.button.take() {
+            self.events.push(Event::ModifiersChanged(modifiers));
+            self.events.push(Event::PointerButton { pos, button, pressed: false, modifiers });
+        }
     }
 
     /// Cancel every finger down (a palm under a pen landing).
-    fn cancel_fingers(&mut self, pos: Pos2) {
+    fn cancel_fingers(&mut self, pos: Pos2, modifiers: egui::Modifiers) {
         for id in std::mem::take(&mut self.fingers) {
             self.touch(FINGER_DEVICE, id, TouchPhase::Cancel, pos, None);
             if self.primary == Some(id) {
-                self.release(pos);
+                self.release(pos, modifiers);
                 self.events.push(Event::PointerGone);
             }
         }
     }
 
+    /// The paired DOM touch events must follow the same routing as pointer events.
+    fn captures_touch(&self, on_canvas: bool) -> bool {
+        touch::pen_seen() && (on_canvas || self.pen.is_some() || !self.fingers.is_empty())
+    }
+
     /// Follow one pointer event; `true` if it was the pen's or a finger's (taken from eframe).
-    fn feed(&mut self, kind: &str, e: &web_sys::PointerEvent, pos: Pos2, coalesced: &[(Pos2, f32)], on_canvas: bool) -> bool {
-        let id = e.pointer_id();
-        match e.pointer_type().as_str() {
+    fn feed(&mut self, kind: &str, e: &Input<'_>, pos: Pos2, coalesced: &[(Pos2, f32)], on_canvas: bool) -> bool {
+        let id = e.id;
+        match e.pointer_type {
             "pen" => {
-                let force = Some(e.pressure().clamp(0.0, 1.0));
+                let force = Some(e.pressure.clamp(0.0, 1.0));
                 match kind {
                     "pointerdown" => {
                         if !on_canvas && self.pen.is_none() {
                             return false;
                         }
-                        set_pen_seen();
+                        let Some(button) = button(e.button) else { return false };
                         touch::set_source(Source::Pen);
-                        self.cancel_fingers(pos);
+                        self.cancel_fingers(pos, e.modifiers);
                         self.pen = Some(id);
                         self.touch(PEN_DEVICE, id, TouchPhase::Start, pos, force);
-                        self.press(id, pos);
+                        self.press(id, pos, button, e.modifiers);
                     }
                     "pointermove" if self.pen == Some(id) => {
                         // The positions the pen reported between two events (up to 240 a second
@@ -114,7 +149,7 @@ impl Pointers {
                         let phase = if kind == "pointerup" { TouchPhase::End } else { TouchPhase::Cancel };
                         self.pen = None;
                         self.touch(PEN_DEVICE, id, phase, pos, None);
-                        self.release(pos);
+                        self.release(pos, e.modifiers);
                     }
                     // A pen leaving the hover range, or an event of a press we didn't take.
                     _ => {
@@ -126,6 +161,9 @@ impl Pointers {
                 }
                 true
             }
+            // Keep eframe's touch/IME path unchanged on touch-only devices. Reloading the
+            // page resets this policy; an old localStorage marker is deliberately ignored.
+            "touch" if !touch::pen_seen() => false,
             "touch" => {
                 match kind {
                     "pointerdown" => {
@@ -140,7 +178,7 @@ impl Pointers {
                         self.touch(FINGER_DEVICE, id, TouchPhase::Start, pos, None);
                         if self.primary.is_none() && self.fingers.len() == 1 {
                             touch::set_source(Source::Finger);
-                            self.press(id, pos);
+                            self.press(id, pos, PointerButton::Primary, e.modifiers);
                         }
                     }
                     "pointermove" if self.fingers.contains(&id) => {
@@ -154,7 +192,7 @@ impl Pointers {
                         self.fingers.retain(|f| *f != id);
                         self.touch(FINGER_DEVICE, id, phase, pos, None);
                         if self.primary == Some(id) {
-                            self.release(pos);
+                            self.release(pos, e.modifiers);
                             self.events.push(Event::PointerGone);
                         }
                     }
@@ -163,32 +201,20 @@ impl Pointers {
                 }
                 true
             }
+            "mouse" => {
+                if kind == "pointerdown" {
+                    touch::set_source(Source::Mouse);
+                }
+                false
+            }
             _ => false,
         }
     }
 }
 
-/// Whether the page remembers a pen, for [`touch::set_pen_seen`] before the first frame.
-pub fn restore_pen_seen() {
-    let seen = local_storage().and_then(|s| s.get_item(PEN_SEEN_KEY).ok().flatten()).is_some_and(|v| v == "1");
-    touch::set_pen_seen(seen);
-}
-
-fn set_pen_seen() {
-    if !touch::pen_seen()
-        && let Some(s) = local_storage()
-    {
-        // Private browsing can refuse it: fingers then draw again on the next visit, no more.
-        let _ = s.set_item(PEN_SEEN_KEY, "1");
-    }
-}
-
-fn local_storage() -> Option<web_sys::Storage> {
-    web_sys::window()?.local_storage().ok().flatten()
-}
-
 /// Take pen and finger Pointer Events on the page from eframe into `pointers` (and the touch
 /// events that follow them), for the runner's frames. Mouse events stay eframe's.
+#[cfg(target_arch = "wasm32")]
 pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, pointers: &SharedPointers) -> Result<(), wasm_bindgen::JsValue> {
     let window: web_sys::EventTarget = web_sys::window().ok_or("no window")?.into();
     let options = web_sys::AddEventListenerOptions::new();
@@ -215,7 +241,22 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
             } else {
                 vec![]
             };
-            if !pointers.borrow_mut().feed(kind, &e, pos, &coalesced, on_canvas) {
+            let pointer_type = e.pointer_type();
+            let input = Input {
+                pointer_type: &pointer_type,
+                id: e.pointer_id(),
+                button: e.button(),
+                pressure: e.pressure(),
+                // Same semantics as eframe's modifiers_from_mouse_event.
+                modifiers: egui::Modifiers {
+                    alt: e.alt_key(),
+                    ctrl: e.ctrl_key(),
+                    shift: e.shift_key(),
+                    mac_cmd: e.meta_key(),
+                    command: e.ctrl_key() || e.meta_key(),
+                },
+            };
+            if !pointers.borrow_mut().feed(kind, &input, pos, &coalesced, on_canvas) {
                 return;
             }
             e.stop_immediate_propagation();
@@ -238,7 +279,7 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
         runner.add_event_listener_ex(&window, kind, &options, move |e: web_sys::TouchEvent, _runner, _| {
             let on_canvas = e.target().is_some_and(|t| &t == canvas.unchecked_ref::<web_sys::EventTarget>());
             let p = pointers.borrow();
-            if on_canvas || p.pen.is_some() || !p.fingers.is_empty() {
+            if p.captures_touch(on_canvas) {
                 e.stop_immediate_propagation();
                 if e.cancelable() {
                     e.prevent_default();
@@ -247,4 +288,108 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
         })?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input(pointer_type: &str, button: i16) -> Input<'_> {
+        Input { pointer_type, id: 7, button, pressure: 0.6, modifiers: egui::Modifiers::default() }
+    }
+
+    fn reset() {
+        touch::set_pen_seen(false);
+        touch::set_source(Source::Mouse);
+    }
+
+    #[test]
+    fn pen_buttons_and_modifiers_survive_press_release_and_cancel() {
+        for (number, expected) in [
+            (0, PointerButton::Primary),
+            (1, PointerButton::Middle),
+            (2, PointerButton::Secondary),
+            (3, PointerButton::Extra1),
+            (4, PointerButton::Extra2),
+        ] {
+            for end in ["pointerup", "pointercancel"] {
+                reset();
+                let mut p = Pointers::default();
+                let mut e = input("pen", number);
+                e.modifiers = egui::Modifiers { shift: true, ctrl: true, alt: true, mac_cmd: true, command: true };
+                let pos = Pos2::new(30.0, 40.0);
+                assert!(p.feed("pointerdown", &e, pos, &[], true));
+                assert!(p.feed(end, &e, pos, &[], false));
+                let buttons: Vec<_> = p
+                    .take()
+                    .into_iter()
+                    .filter_map(|e| match e {
+                        Event::PointerButton { button, pressed, modifiers, .. } => Some((button, pressed, modifiers)),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(buttons, [(expected, true, e.modifiers), (expected, false, e.modifiers)]);
+                assert!(p.pen.is_none() && p.primary.is_none());
+            }
+        }
+        reset();
+    }
+
+    #[test]
+    fn touch_only_and_mouse_input_stay_with_eframe_and_session_can_reset() {
+        reset();
+        let mut p = Pointers::default();
+        let pos = Pos2::new(10.0, 20.0);
+        for pointer_type in ["touch", "mouse"] {
+            for kind in ["pointerdown", "pointermove", "pointerup", "pointercancel"] {
+                assert!(!p.feed(kind, &input(pointer_type, 0), pos, &[], true));
+            }
+        }
+        assert!(p.take().is_empty());
+        assert!(!p.captures_touch(true), "eframe must also receive DOM touch events before a pen");
+        assert!(p.feed("pointerdown", &input("pen", 0), pos, &[], true));
+        assert!(p.feed("pointerup", &input("pen", 0), pos, &[], true));
+        assert!(p.captures_touch(true));
+        assert!(p.feed("pointerdown", &input("touch", 0), pos, &[], true));
+        assert!(p.feed("pointerup", &input("touch", 0), pos, &[], true));
+        // A new page starts from false, without reading any old persistent marker.
+        reset();
+        let mut next_page = Pointers::default();
+        assert!(!next_page.feed("pointerdown", &input("touch", 0), pos, &[], true));
+        assert!(next_page.take().is_empty());
+        assert!(!next_page.captures_touch(true));
+    }
+
+    #[test]
+    fn finger_modifiers_and_palm_cancellation_are_preserved() {
+        reset();
+        touch::set_source(Source::Pen);
+        let mut p = Pointers::default();
+        let pos = Pos2::new(10.0, 20.0);
+        let mut finger = input("touch", 0);
+        finger.id = 10;
+        finger.modifiers.shift = true;
+        assert!(p.feed("pointerdown", &finger, pos, &[], true));
+        assert!(p.take().iter().any(|e| matches!(e, Event::PointerButton { pressed: true, modifiers, .. } if modifiers.shift)));
+        let pen = input("pen", 0);
+        assert!(p.feed("pointerdown", &pen, pos, &[], true));
+        assert!(p.take().iter().any(|e| matches!(e, Event::Touch { phase: TouchPhase::Cancel, .. })));
+        assert!(p.fingers.is_empty());
+        assert!(p.feed("pointermove", &finger, pos, &[], true));
+        assert!(p.take().is_empty(), "a resting palm cannot move the pen");
+        assert!(p.feed("pointerup", &pen, pos, &[], true));
+        assert!(p.feed("pointerdown", &finger, pos, &[], true));
+        assert!(p.feed("pointerup", &finger, pos, &[], true));
+        assert!(p.take().iter().any(|e| matches!(e, Event::PointerButton { pressed: false, modifiers, .. } if modifiers.shift)));
+        reset();
+    }
+
+    #[test]
+    fn unknown_pen_buttons_are_not_reinterpreted_as_primary() {
+        reset();
+        let mut p = Pointers::default();
+        assert!(!p.feed("pointerdown", &input("pen", 5), Pos2::ZERO, &[], true));
+        assert!(p.take().is_empty());
+        assert!(!touch::pen_seen());
+    }
 }

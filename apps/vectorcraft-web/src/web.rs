@@ -64,7 +64,6 @@ pub fn start() {
         return;
     };
     detect_language();
-    crate::pencil::restore_pen_seen();
     wasm_bindgen_futures::spawn_local(async move {
         // Before the first frame, which looks for copies a crash left behind.
         let locks = WebLocks::start(RECOVERY_PREFIX).await;
