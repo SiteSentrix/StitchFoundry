@@ -77,6 +77,9 @@ pub fn file_flavour(name: &str, head: &[u8], mimes: &[&str]) -> Option<&'static 
     let f = fileio::detect(name, head)?;
     let (asked, mime) = match f.id {
         "svg" => (SVG, SVG),
+        // `detect` names gzip data SVGZ (a compressed native file aside); `clipboard.importSvg`
+        // reads SVGZ data.
+        "svgz" if unpacks_to_svg(head) => (SVG, SVG),
         "pdf" => (PDF, PDF),
         "eps" => (EPS, EPS),
         "ai" | "ait" if head.starts_with(b"%PDF") => (PDF, PDF),
@@ -86,6 +89,25 @@ pub fn file_flavour(name: &str, head: &[u8], mimes: &[&str]) -> Option<&'static 
         _ => return None,
     };
     mimes.contains(&asked).then_some(mime)
+}
+
+/// Does gzip data `head` (a file's first bytes, often a stream cut short) unpack to SVG markup?
+/// The first [`FILE_HEAD`] bytes it unpacks to are read as UTF-16 after a UTF-16 byte order mark,
+/// else as UTF-8, and checked with [`looks_like_svg`].
+fn unpacks_to_svg(head: &[u8]) -> bool {
+    use std::io::Read as _;
+    let mut raw = Vec::with_capacity(FILE_HEAD);
+    // A stream cut short ends in an error after the bytes that unpacked: judge those.
+    let _ = flate2::read::GzDecoder::new(head).take(FILE_HEAD as u64).read_to_end(&mut raw);
+    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| -> String {
+        char::decode_utf16(rest.as_chunks::<2>().0.iter().map(|u| unit(*u))).map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER)).collect()
+    };
+    let text = match raw.as_slice() {
+        [0xfe, 0xff, rest @ ..] => utf16(rest, u16::from_be_bytes),
+        [0xff, 0xfe, rest @ ..] => utf16(rest, u16::from_le_bytes),
+        _ => String::from_utf8_lossy(&raw).into_owned(),
+    };
+    looks_like_svg(&text)
 }
 
 /// One representation of the clipboard's contents.
