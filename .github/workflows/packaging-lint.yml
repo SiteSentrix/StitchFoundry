@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   lint:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     env:
       ACTIONLINT_VERSION: 1.7.12
