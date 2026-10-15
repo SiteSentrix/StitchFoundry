@@ -45,6 +45,23 @@ impl View {
     }
 }
 
+/// The status bar's angle menu and View › Rotate View list these preset view angles, each as
+/// (label, degrees clockwise on screen).
+pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
+    ("0°", 0.0),
+    ("15°", 15.0),
+    ("30°", 30.0),
+    ("45°", 45.0),
+    ("60°", 60.0),
+    ("90°", 90.0),
+    ("180°", 180.0),
+    ("-15°", -15.0),
+    ("-30°", -30.0),
+    ("-45°", -45.0),
+    ("-60°", -60.0),
+    ("-90°", -90.0),
+];
+
 /// Illustrator's preset zoom stops, in percent.
 pub const ZOOM_STOPS: [f64; 26] = [
     3.13, 4.17, 6.25, 8.33, 12.5, 16.67, 25.0, 33.33, 50.0, 66.67, 100.0, 150.0, 200.0, 300.0, 400.0, 600.0, 800.0, 1200.0, 1600.0, 2400.0, 3200.0,

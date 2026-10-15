@@ -123,6 +123,8 @@ mod tests_recovery;
 #[cfg(test)]
 mod tests_removeanchors;
 #[cfg(test)]
+mod tests_rotateview;
+#[cfg(test)]
 mod tests_ruler_origin;
 #[cfg(test)]
 mod tests_save;

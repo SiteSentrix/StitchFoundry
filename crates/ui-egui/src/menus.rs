@@ -252,6 +252,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.snapToPoint", "Snap to Point", "Cmd+Alt+'", "{}"),
     ("view.presentation", "Presentation Mode", "Shift+F", "{}"),
     ("view.screenMode", "Screen Mode", "F", "{mode?: 0..2} (no param cycles)"),
+    (
+        "view.rotate",
+        "Rotate View",
+        "",
+        "{angle: degrees, clockwise on screen as the status bar shows it} turn the view to that angle about the center of the canvas; returns {angle}, normalized to (-180, 180]",
+    ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
     ("window.toolbar", "Tools", "", "{}"),
@@ -1192,6 +1198,21 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             };
             Ok(json!(app.ui.screen_mode))
         }
+        // View › Rotate View and the status bar's angle menu: the view turns about the center of the
+        // canvas to the angle, normalized as a Rotate View drag normalizes it.
+        "view.rotate" => {
+            let key = "angle";
+            let Some(angle) = p.get(key).and_then(Value::as_f64).filter(|a| a.is_finite()) else {
+                return Some(Err(format!("`{key}` must be a number")));
+            };
+            match app.view_mut() {
+                Some(v) => {
+                    v.rotation = vectorcraft_geom::normalize_deg(angle);
+                    Ok(json!({ "angle": v.rotation }))
+                }
+                None => Err("no document".into()),
+            }
+        }
         "view.rotateReset" => {
             if let Some(v) = app.view_mut() {
                 v.rotation = 0.0;
@@ -1583,6 +1604,9 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.snapToGrid" => v.snap_to_grid,
         "view.snapToPoint" => v.snap_to_point,
         "view.rulers" => v.rulers,
+        // A View › Rotate View item is checked when the active view is turned to its angle; without
+        // a document no item is checked.
+        "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
@@ -2033,7 +2057,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.zoomOut"
         | "view.fitArtboard"
         | "view.fitAll"
-        | "view.actualSize" => app.session.active().is_some(),
+        | "view.actualSize"
+        | "view.rotate" => app.session.active().is_some(),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
         id if id.starts_with("type.recentFont") => {
@@ -2610,6 +2635,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Fit All in Window", "view.fitAll"),
                 c("Actual Size", "view.actualSize"),
                 Sep,
+                sub("Rotate View", crate::state::ROTATE_VIEW_ANGLES.iter().map(|(l, a)| cp(l, "view.rotate", json!({ "angle": a }))).collect()),
                 c("Reset Rotate View", "view.rotateReset"),
                 Sep,
                 c("Hide Edges", "view.edges"),
@@ -3247,6 +3273,17 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
+    // Rotate View with no angle, as the command palette runs it, opens a dialog for the angle, with
+    // the view's angle filled in.
+    if id == "view.rotate" && p.as_object().is_none_or(|o| o.is_empty()) {
+        match app.view_mut().map(|v| v.rotation) {
+            Some(angle) => {
+                app.ui.dialog = Some(crate::state::Dialog::new("command", json!({"__command": id, "__label": "Rotate View", "angle": angle})));
+            }
+            None => app.status("no document"),
+        }
+        return;
+    }
     // Save Selection…: a name dialog, starting from the first free "Selection N".
     if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
         let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedSelection::default_name(&d.doc.saved_selections)).unwrap_or_default();
@@ -3681,7 +3718,8 @@ pub const DYNAMIC_LABELS: &[&str] = &[
 
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
 /// Preferences dialog can show: what a complete language catalog has to cover. Names that are user
-/// data (fonts, recent files, saved views, libraries) and the point sizes are left out.
+/// data (fonts, recent files, saved views, libraries), the point sizes and the view angles are
+/// left out.
 pub fn menu_strings() -> std::collections::BTreeSet<String> {
     use std::collections::BTreeSet;
     fn user_data(id: &str) -> bool {
@@ -3692,9 +3730,14 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
             match it {
                 Item::Cmd(l, id, _) => {
                     let size = l.strip_suffix(" pt").is_some_and(|n| n.chars().all(|c| c.is_ascii_digit()));
+                    // View › Rotate View lists angles: an optional minus sign, digits and a degree sign.
+                    let angle = l
+                        .strip_suffix('°')
+                        .map(|n| n.strip_prefix('-').unwrap_or(n))
+                        .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
                     // VectorCraft › Language lists each language by its own name.
                     let language_name = *id == "app.language" && crate::i18n::Lang::all().any(|lang| lang.name() == *l);
-                    if !user_data(id) && !size && !language_name && *l != "—" {
+                    if !user_data(id) && !size && !angle && !language_name && *l != "—" {
                         out.insert(l.to_string());
                     }
                 }

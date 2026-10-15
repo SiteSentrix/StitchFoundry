@@ -7,7 +7,7 @@ use serde_json::json;
 use vectorcraft_doc::NodeKind;
 
 use crate::panels::stroke as stroke_panel;
-use crate::state::{ZOOM_STOPS, zoom_label};
+use crate::state::{ROTATE_VIEW_ANGLES, ZOOM_STOPS, zoom_label};
 use crate::theme::{self, Tokens};
 use crate::widgets;
 use crate::{VectorcraftApp, icons, menus, titlebar};
@@ -558,11 +558,10 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 egui::ComboBox::from_id_salt("rot-combo").selected_text(egui::RichText::new(format!("{rot:.0}°")).size(11.5)).width(52.0).show_ui(
                     ui,
                     |ui| {
-                        for a in [0.0, 15.0, 30.0, 45.0, 60.0, 90.0, 180.0, -15.0, -30.0, -45.0, -60.0, -90.0] {
-                            if ui.selectable_label(rot == a, format!("{a:.0}°")).clicked()
-                                && let Some(v) = app.view_mut()
-                            {
-                                v.rotation = a;
+                        for (label, a) in ROTATE_VIEW_ANGLES {
+                            if ui.selectable_label((rot - a).abs() < 1e-9, label).clicked() {
+                                // It fails only without a document, when there is no view to turn.
+                                app.run("view.rotate", json!({"angle": a})).ok();
                             }
                         }
                     },
