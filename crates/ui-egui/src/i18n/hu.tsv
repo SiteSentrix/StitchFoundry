@@ -3159,6 +3159,17 @@
 	Scrub Numeric Fields by Dragging	Számmezők állítása húzással
 	Search	Keresés
 	Search All	Keresés mindenben
+	Filter	Szűrő
+	Clear All	Összes törlése
+	By Object	Objektum szerint
+	By Layer	Réteg szerint
+	Images	Képek
+	Groups	Csoportok
+	Linked Files	Csatolt fájlok
+	Locked	Zárolt
+	Hidden	Rejtett
+	Filter Layers Panel Rows	Rétegek panel sorainak szűrése
+@msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
 	Search commands and tools	Parancsok és eszközök keresése
 	Search commands and tools…	Parancsok és eszközök keresése…
 	Search Commands…	Parancsok keresése…

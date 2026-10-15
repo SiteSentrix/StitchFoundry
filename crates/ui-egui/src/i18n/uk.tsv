@@ -2601,6 +2601,17 @@
 	Scripts	Сценарії
 	Search	Пошук
 	Search All	Шукати скрізь
+	Filter	Фільтр
+	Clear All	Очистити все
+	By Object	За об’єктами
+	By Layer	За шарами
+	Images	Зображення
+	Groups	Групи
+	Linked Files	Пов’язані файли
+	Locked	Заблоковані
+	Hidden	Приховані
+	Filter Layers Panel Rows	Фільтрувати рядки панелі «Шари»
+@msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
 	Search commands and tools	Пошук команд та інструментів
 	Search commands and tools…	Пошук команд та інструментів…
 	Search Commands…	Пошук команд…

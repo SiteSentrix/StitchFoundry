@@ -1501,6 +1501,17 @@ lighting	Light	Světlo
 	Create New Layer	Vytvořit novou vrstvu
 	Create New Sublayer	Vytvořit novou podvrstvu
 	Search All	Hledat ve všem
+	Filter	Filtr
+	Clear All	Smazat vše
+	By Object	Podle objektu
+	By Layer	Podle vrstvy
+	Images	Obrazy
+	Groups	Skupiny
+	Linked Files	Propojené soubory
+	Locked	Zamčené
+	Hidden	Skryté
+	Filter Layers Panel Rows	Filtrovat řádky panelu Vrstvy
+@msg	`{key}` must be an array of these names: {_1}	`{key}` musí být pole těchto názvů: {_1}
 	Graphics	Grafika
 	Local Libraries	Místní knihovny
 	Add Content	Přidat obsah

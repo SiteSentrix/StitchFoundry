@@ -2476,6 +2476,17 @@
 	Screen	스크린
 	Screens	화면
 	Search All	모두 검색
+	Filter	필터
+	Clear All	모두 지우기
+	By Object	개체별
+	By Layer	레이어별
+	Images	이미지
+	Groups	그룹
+	Linked Files	연결된 파일
+	Locked	잠김
+	Hidden	숨김
+	Filter Layers Panel Rows	레이어 패널 행 필터링
+@msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
 	Search commands and tools	명령 및 도구 검색
 	Search commands and tools…	명령 및 도구 검색…
 	Secondary	보조

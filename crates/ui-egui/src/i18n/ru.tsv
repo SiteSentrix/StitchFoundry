@@ -2605,6 +2605,17 @@
 	Scripts	Сценарии
 	Search	Поиск
 	Search All	Искать везде
+	Filter	Фильтр
+	Clear All	Очистить всё
+	By Object	По объектам
+	By Layer	По слоям
+	Images	Изображения
+	Groups	Группы
+	Linked Files	Связанные файлы
+	Locked	Заблокированные
+	Hidden	Скрытые
+	Filter Layers Panel Rows	Фильтровать строки панели «Слои»
+@msg	`{key}` must be an array of these names: {_1}	`{key}` должно быть массивом из этих имён: {_1}
 	Search commands and tools	Поиск команд и инструментов
 	Search commands and tools…	Поиск команд и инструментов…
 	Search Commands…	Поиск команд…
