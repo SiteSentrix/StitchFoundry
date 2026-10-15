@@ -273,7 +273,10 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     for op in ['+', '-', '*', '/'] {
         // Past the first character, so a leading sign isn't an operator.
         let skip = s.chars().next().map_or(0, char::len_utf8);
-        if let Some(i) = s[skip..].rfind(op).map(|i| i + skip) {
+        // A `+` or `-` right after another operator is the sign of its operand (`10*-2`, `5--3`).
+        let is_sign = |i: usize| matches!(op, '+' | '-') && s.get(..i).and_then(|l| l.trim_end().chars().last()).is_some_and(|c| "+-*/".contains(c));
+        let found = s.char_indices().rev().find(|&(i, c)| i >= skip && c == op && !is_sign(i));
+        if let Some(i) = found.map(|(i, _)| i) {
             let (l, r) = (&s[..i], &s[i + 1..]);
             if l.trim().is_empty() {
                 continue;
