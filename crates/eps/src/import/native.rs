@@ -872,7 +872,9 @@ struct Frame<'a> {
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects.
 fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, trust: bool) -> Result<(Document, Vec<String>), String> {
-    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data)?;
+    // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
+    // space, as its PDF part may (#2031).
+    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data, matches!(page, Page::Art))?;
     let (mut shown, mut hidden) = (vec![], vec![]);
     let mut frame = None;
     if let Some(visible) = visible {
@@ -881,11 +883,13 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, tr
             Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
         };
         let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
-        if (art_box.width() - page_rect.width()).abs() > 0.5 || (art_box.height() - page_rect.height()).abs() > 0.5 {
+        // The layers' art in the document's terms: a Large Canvas editing copy is written at 1/N
+        // scale, which `to_doc` carries, so its art and the page reach the same size (#2031).
+        let rect = to_doc.transform_rect_bbox(art_box);
+        if (rect.width() - page_rect.width()).abs() > 0.5 || (rect.height() - page_rect.height()).abs() > 0.5 {
             return Err("its editing data is for a different page".into());
         }
         // The page's area in the layers' document, and the page's type moved there.
-        let rect = to_doc.transform_rect_bbox(art_box);
         let shift = Affine::translate(Vec2::new(rect.x0 - page_rect.x0, rect.y0 - page_rect.y0));
         for l in &visible.layers {
             if let Some(c) = l.children() {

@@ -9,6 +9,11 @@ use vectorcraft_doc::{AppearanceItem, ColorMode, Document, Knockout, LayerColor,
 
 use super::*;
 
+/// [`super::read`] as an EPS reads it.
+fn read(data: &[u8]) -> Result<Structure, String> {
+    super::read(data, true)
+}
+
 /// Editing data: header comments (crop marks 0 0 200 100), then `body`.
 fn stream(body: &str) -> String {
     format!(

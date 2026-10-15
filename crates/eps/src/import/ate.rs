@@ -583,7 +583,7 @@ impl Story {
     /// Roughly where the story's type lies on the document: its frame's box, or round its lines
     /// for point type (what the page draws of it lies there).
     pub(super) fn region(&self, template: (f64, f64), to_doc: Affine) -> Option<Rect> {
-        let size = self.runs.iter().map(|(_, s)| s.size).fold(0.0, f64::max);
+        let size = self.runs.iter().map(|(_, s)| s.size).fold(0.0, f64::max) * art_scale(to_doc);
         let bounds = |segments: &[[f64; 8]]| path_of(segments, template, to_doc).bounds();
         let r = match self.frames.first()? {
             FrameKind::Area(s) => bounds(s)?,
@@ -634,6 +634,9 @@ impl Story {
         if text.trim().is_empty() && !threaded {
             return None;
         }
+        // The text document measures in the art's units too: the document's scale carries its
+        // sizes and spacings onto the page (a Large Canvas copy is written at 1:10; #2031).
+        let scale = scale * art_scale(to_doc);
         let leading = self.line_leading(scale);
         let chars: Vec<char> = text.chars().collect();
         let mut runs = vec![];
@@ -776,6 +779,13 @@ fn char_style(s: &Style, scale: f64, leading: Option<f64>) -> CharStyle {
     }
 }
 
+/// How many document points one unit of the art is: `to_doc`'s scale, which carries the art's
+/// lengths onto the document (10 for a Large Canvas copy written at 1:10; see `ai::read`).
+fn art_scale(to_doc: Affine) -> f64 {
+    let [a, b, ..] = to_doc.as_coeffs();
+    (a * a + b * b).sqrt().max(1e-9)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -850,6 +860,22 @@ mod tests {
         let s = story("one\rtwo\r", &[0.0, 20.0], &para);
         assert!((s.line_leading(1.0).unwrap() - 14.0).abs() < 1e-9);
         assert!((s.line_leading(0.5).unwrap() - 7.0).abs() < 1e-9);
+    }
+
+    /// #2031: a Large Canvas editing copy measures its text document in its art's units, a tenth
+    /// of the page's: the story's size and leading reach the page through `to_doc`'s scale.
+    #[test]
+    fn a_story_in_a_scaled_art_space_keeps_its_size_and_leading() {
+        let s = story("one\rtwo\r", &[0.0, 20.0], &Para::default());
+        // A copy written at 1:10 (see `ai::read::ensure_space`): its art's units reach the
+        // document, 100 points to the page, through `to_doc`'s scale.
+        let to_doc = Affine::scale(10.0) * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 100.0]);
+        let t = match s.node(NodeId(1), 0, (0.0, 0.0), to_doc).unwrap().kind {
+            NodeKind::Text(t) => t,
+            _ => panic!("not text"),
+        };
+        assert_eq!(t.runs[0].style.size, 130.0, "13 pt at the page's scale");
+        assert_eq!(t.runs[0].style.leading, Some(200.0), "a 20-unit line pitch at the page's scale");
     }
 
     #[test]
