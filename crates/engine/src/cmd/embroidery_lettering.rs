@@ -26,6 +26,7 @@ const LETTER: &str = "embroidery.lettering.letter";
 /// loaded at once.
 const MAX_JSON: usize = 16 << 20;
 const MAX_SVG: usize = 40 << 20;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))] // fonts are read from folders on the desktop only
 const MAX_FILES: usize = 64;
 const MAX_FONTS: usize = 64;
 
@@ -198,6 +199,7 @@ fn glyph_art(svg: &str) -> Result<(Document, f64, f64)> {
     Ok((doc, baseline, unit))
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))] // fonts are read from folders on the desktop only
 fn read_text(path: &str, max: usize, what: &str) -> Result<String> {
     let bytes = crate::cmd::fileio::read_file(path)?;
     if bytes.len() > max {
@@ -210,6 +212,7 @@ fn read_text(path: &str, max: usize, what: &str) -> Result<String> {
 /// on their baselines at 0, in points).
 pub(super) enum Art {
     Svg(String),
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // fonts are read from folders on the desktop only
     Native(Vec<u8>),
 }
 
