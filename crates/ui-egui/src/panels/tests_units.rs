@@ -126,3 +126,20 @@ fn ruler_labels_have_the_steps_decimals() {
     assert_eq!(ruler_label(-0.0000001, 0.5), "0");
     assert_eq!(ruler_label(-2.5, 0.5), "-2.5");
 }
+
+#[test]
+fn new_document_cards_follow_the_chosen_units() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    general_mm(&mut app);
+    app.run("file.newDialog", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("category".into(), json!("Art & Illustration"));
+    d.fields.insert("preset".into(), json!("Postcard"));
+    let t = dialog_texts(&mut app);
+    assert!(shows(&t, "101.6 × 152.4 mm"), "Postcard in mm: {t:?}");
+    // Choosing Pixels: the cards show pixels and Postcard stays chosen.
+    app.ui.dialog.as_mut().unwrap().fields.insert("units".into(), json!("Pixels"));
+    let t = dialog_texts(&mut app);
+    assert!(shows(&t, "288 × 432 px") && !shows(&t, "101.6 × 152.4 mm"), "Postcard in px: {t:?}");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["preset"], json!("Postcard"));
+}
