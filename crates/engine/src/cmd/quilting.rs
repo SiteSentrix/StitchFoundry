@@ -102,9 +102,30 @@ fn lines_of(d: &Document, id: NodeId) -> Vec<Vec<Mm>> {
     vectorcraft_embroidery::outlines_mm(n).into_iter().filter(|l| l.len() >= 2).collect()
 }
 
+/// The objects (inside groups and layers) under `id` that have lines, each with its lines.
+fn leaves_with_lines(d: &Document, id: NodeId, out: &mut Vec<(NodeId, Vec<Vec<Mm>>)>) {
+    let Some(n) = d.node(id) else { return };
+    if let Some(children) = n.children() {
+        for c in children {
+            leaves_with_lines(d, c.id, out);
+        }
+        return;
+    }
+    let lines: Vec<Vec<Mm>> = vectorcraft_embroidery::outlines_mm(n).into_iter().filter(|l| l.len() >= 2).collect();
+    if !lines.is_empty() {
+        out.push((id, lines));
+    }
+}
+
+/// The selected (or `ids`) objects' lines, object by object: a group or layer gives its
+/// objects', so what replaces them is never a container.
 fn targets_lines(s: &Session, p: &Value) -> Result<Vec<(NodeId, Vec<Vec<Mm>>)>> {
     let d = &s.doc()?.doc;
-    Ok(targets(s, p)?.into_iter().map(|id| (id, lines_of(d, id))).filter(|(_, l)| !l.is_empty()).collect())
+    let mut out = Vec::new();
+    for id in targets(s, p)? {
+        leaves_with_lines(d, id, &mut out);
+    }
+    Ok(out)
 }
 
 /// A line drawn as quilting: a 0.75 pt black stroke, no fill.
