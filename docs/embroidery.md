@@ -776,6 +776,16 @@ in.vp3", "Border Swirls 7x1.5 in.vp3", "Corner Swirls 2x2 in.vp3"): the usual si
 matches the size written on the tile. Sizes no hoop of yours takes are left out and said. The
 design's notes say how to mark and hoop. Patterns and wording are our own.
 
+## Large designs
+
+Designs of 100,000 stitches and more stay quick to work with: a change to one object restitches
+only that object, the canvas redraws only the objects whose stitches changed, and panning and
+zooming move what is already drawn. Zoomed out, where a thread is thinner than two screen pixels,
+TrueView draws each stitch as a flat strip in its thread's colour (its shading would not show).
+On the desktop, shapes are converted to stitches on several processor cores at once.
+`stitchfoundry-cli perf --embroidery 120` times a 155,000-stitch design (planning, a change, a
+move, statistics, DST and VP3 files) against its budgets.
+
 ## Embroidery in the web app
 
 The web app (the same program, running in a browser with WebGPU or WebGL2) makes designs the way

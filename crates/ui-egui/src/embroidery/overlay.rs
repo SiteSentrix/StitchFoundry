@@ -9,7 +9,7 @@ use vectorcraft_embroidery::sf_core::decor::{DecorKind, DecorShape};
 use vectorcraft_embroidery::sf_core::density::LayerGrid;
 use vectorcraft_embroidery::sf_core::geom::FLATTEN_TOLERANCE;
 use vectorcraft_embroidery::sf_core::model::ObjectKind;
-use vectorcraft_embroidery::sf_core::pattern::{Cmd, Pattern};
+use vectorcraft_embroidery::sf_core::pattern::{Cmd, Pattern, Stitch};
 use vectorcraft_embroidery::sf_core::threads::Rgb;
 use vectorcraft_embroidery::{PT_PER_MM, StitchPlan, pt};
 
@@ -54,6 +54,8 @@ pub struct MeshCache {
     view: Option<[i64; 8]>,
     mesh: Arc<Mesh>,
     jumps: Vec<[Pos2; 2]>,
+    /// The base mesh's pieces as last built, kept to reuse.
+    pieces: Vec<Piece>,
 }
 
 fn c32(c: Rgb, f: f32) -> Color32 {
@@ -115,26 +117,48 @@ fn thread(mesh: &mut Mesh, a: Pos2, b: Pos2, half_w: f32, color: Rgb) {
     }
 }
 
-fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool, visible: egui::Rect) -> (Mesh, Vec<[Pos2; 2]>) {
+/// Where the drawing stands between records: the last needle position, whether the thread is
+/// sewing (not after a jump or trim) and which thread is in.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Pen {
+    prev: Option<Pos2>,
+    sewing: bool,
+    thread: usize,
+}
+
+/// Below this half width (screen px) TrueView draws a stitch as one flat strip in the thread's
+/// lit colour: its shading lanes would be thinner than a pixel and can't be seen.
+const SHADE_MIN_HALF_W: f32 = 1.0;
+
+/// The mesh of `records` (a stretch of `pattern`'s records, starting with the pen at `pen`), and
+/// its jumps; returns where the pen is after them.
+fn build_range(
+    pattern: &Pattern,
+    records: &[Stitch],
+    xf: &Xf,
+    mode: StitchView,
+    points: bool,
+    visible: egui::Rect,
+    mut pen: Pen,
+) -> (Mesh, Vec<[Pos2; 2]>, Pen) {
     let mut mesh = Mesh::default();
     let mut jumps = Vec::new();
     let true_view = mode == StitchView::TrueView;
     let half_w = if true_view { ((THREAD_WIDTH_MM * PT_PER_MM * xf.zoom) as f32 * 0.5).max(0.45) } else { 0.6 };
-    let n = upto.min(pattern.stitches.len());
-    let mut thread_ix = 0usize;
-    let mut color = pattern.thread(0).color;
-    let mut prev: Option<Pos2> = None;
-    let mut sewing = false;
-    for s in pattern.stitches.iter().take(n) {
+    let shaded = true_view && half_w >= SHADE_MIN_HALF_W;
+    let mut color = pattern.thread(pen.thread).color;
+    for s in records {
         let p = xf.to_screen(pt(s.pos()));
         match s.cmd {
             Cmd::Stitch => {
-                if let Some(a) = prev
-                    && sewing
+                if let Some(a) = pen.prev
+                    && pen.sewing
                     && egui::Rect::from_two_pos(a, p).intersects(visible)
                 {
-                    if true_view {
+                    if shaded {
                         thread(&mut mesh, a, p, half_w, color);
+                    } else if true_view {
+                        quad(&mut mesh, a, p, half_w, c32(color, 0.9));
                     } else {
                         quad(&mut mesh, a, p, half_w, c32(color, 1.0));
                     }
@@ -142,26 +166,130 @@ fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool
                 if points && visible.contains(p) {
                     quad(&mut mesh, p - egui::vec2(1.2, 0.0), p + egui::vec2(1.2, 0.0), 1.2, Color32::from_black_alpha(190));
                 }
-                prev = Some(p);
-                sewing = true;
+                pen.prev = Some(p);
+                pen.sewing = true;
             }
             Cmd::Jump => {
-                if let Some(a) = prev {
+                if let Some(a) = pen.prev {
                     jumps.push([a, p]);
                 }
-                prev = Some(p);
-                sewing = false;
+                pen.prev = Some(p);
+                pen.sewing = false;
             }
-            Cmd::Trim => sewing = false,
+            Cmd::Trim => pen.sewing = false,
             Cmd::ColorChange => {
-                thread_ix += 1;
-                color = pattern.thread(thread_ix).color;
-                sewing = false;
+                pen.thread += 1;
+                color = pattern.thread(pen.thread).color;
+                pen.sewing = false;
             }
             Cmd::Stop | Cmd::End => {}
         }
     }
+    (mesh, jumps, pen)
+}
+
+fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool, visible: egui::Rect) -> (Mesh, Vec<[Pos2; 2]>) {
+    let n = upto.min(pattern.stitches.len());
+    let records = pattern.stitches.get(..n).unwrap_or_default();
+    let (mesh, jumps, _) = build_range(pattern, records, xf, mode, points, visible, Pen { prev: None, sewing: false, thread: 0 });
     (mesh, jumps)
+}
+
+/// Most records one cached piece of the mesh holds (a big object is cut into several).
+const PIECE_RECORDS: usize = 8_000;
+
+/// One piece of the base mesh: a stretch of records, the hash it was built for, its mesh and
+/// jumps and where the pen ends.
+struct Piece {
+    hash: u64,
+    mesh: Mesh,
+    jumps: Vec<[Pos2; 2]>,
+    end: Pen,
+}
+
+/// A hash of what a piece's mesh depends on: its records, how they are drawn and where the pen
+/// starts. A fast multiply-rotate mix: it only tells pieces apart, nothing depends on it being
+/// hard to forge.
+fn piece_hash(records: &[Stitch], pattern: &Pattern, how: (StitchView, bool, &Xf), pen: Pen) -> u64 {
+    struct Mix(u64);
+    impl Mix {
+        fn add(&mut self, v: u64) {
+            self.0 = (self.0.rotate_left(5) ^ v).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+        }
+    }
+    let mut h = Mix(0x9e37_79b9_7f4a_7c15);
+    let (mode, points, xf) = how;
+    h.add(mode as u64);
+    h.add(u64::from(points));
+    h.add(xf.zoom.to_bits());
+    let c = xf.rect.center();
+    h.add(u64::from(c.x.to_bits()) << 32 | u64::from(c.y.to_bits()));
+    match pen.prev {
+        Some(p) => h.add(u64::from(p.x.to_bits()) << 32 | u64::from(p.y.to_bits())),
+        None => h.add(u64::MAX),
+    }
+    h.add(u64::from(pen.sewing));
+    h.add(pen.thread as u64);
+    // the threads the piece may be drawn in
+    let changes = records.iter().filter(|r| r.cmd == Cmd::ColorChange).count();
+    for k in pen.thread..=pen.thread + changes {
+        let c = pattern.thread(k).color;
+        h.add(u64::from(c.r) << 16 | u64::from(c.g) << 8 | u64::from(c.b));
+    }
+    h.add(records.len() as u64);
+    for r in records {
+        h.add(r.x.to_bits());
+        h.add(r.y.to_bits() ^ r.cmd as u64);
+    }
+    h.0
+}
+
+/// Where the base mesh is cut into pieces: at every object's first and last record, and every
+/// [`PIECE_RECORDS`] within, up to `n`.
+fn piece_bounds(plan: &StitchPlan, n: usize) -> Vec<usize> {
+    let mut cuts: Vec<usize> = vec![0, n];
+    for span in &plan.built.spans {
+        cuts.push(span.range.start.min(n));
+        cuts.push(span.range.end.min(n));
+    }
+    cuts.sort_unstable();
+    cuts.dedup();
+    let mut out = Vec::with_capacity(cuts.len());
+    for w in cuts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let mut at = a;
+        while at < b {
+            out.push(at);
+            at = (at + PIECE_RECORDS).min(b);
+        }
+    }
+    out.push(n);
+    out
+}
+
+/// Moves the base mesh's vertices to where `place` puts them, into `out` (as long as `base`), on
+/// several threads for a big design on the desktop.
+fn place_all(base: &[Vertex], out: &mut [Vertex], place: &Placement) {
+    let one = |src: &[Vertex], dst: &mut [Vertex]| {
+        for (d, v) in dst.iter_mut().zip(src) {
+            *d = Vertex { pos: place.at(v.pos), ..*v };
+        }
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        const PER_THREAD: usize = 100_000;
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 8);
+        if base.len() > PER_THREAD * 2 && threads > 1 {
+            let chunk = base.len().div_ceil(threads).max(1);
+            std::thread::scope(|sc| {
+                for (src, dst) in base.chunks(chunk).zip(out.chunks_mut(chunk)) {
+                    sc.spawn(move || one(src, dst));
+                }
+            });
+            return;
+        }
+    }
+    one(base, out);
 }
 
 impl MeshCache {
@@ -186,20 +314,42 @@ impl MeshCache {
         if rebuild {
             // the whole design, at this zoom, unrotated, centred on the document's origin
             let bx = Xf { rect: xf.rect, zoom: xf.zoom, center: vectorcraft_geom::Point::new(0.0, 0.0), rot: 0.0 };
-            let step = repeat_step(plan.pattern(), &bx, gap);
-            let (mesh, jumps) = build(plan.pattern(), &bx, mode, upto, points, egui::Rect::EVERYTHING);
+            let pattern = plan.pattern();
+            let step = repeat_step(pattern, &bx, gap);
+            // piece by piece, reusing the pieces whose records and pen are as they were (an edit
+            // to one object, or the player sewing on, builds little again)
+            let mut old: std::collections::HashMap<u64, Piece> = std::mem::take(&mut self.pieces).into_iter().map(|p| (p.hash, p)).collect();
+            let n = upto.min(pattern.stitches.len());
+            let bounds = piece_bounds(plan, n);
+            let mut pen = Pen { prev: None, sewing: false, thread: 0 };
+            let mut mesh = Mesh::default();
+            let mut jumps = Vec::new();
+            for w in bounds.windows(2) {
+                let records = pattern.stitches.get(w[0]..w[1]).unwrap_or_default();
+                let hash = piece_hash(records, pattern, (mode, points, &bx), pen);
+                let piece = old.remove(&hash).unwrap_or_else(|| {
+                    let (mesh, jumps, end) = build_range(pattern, records, &bx, mode, points, egui::Rect::EVERYTHING, pen);
+                    Piece { hash, mesh, jumps, end }
+                });
+                mesh.append_ref(&piece.mesh);
+                jumps.extend_from_slice(&piece.jumps);
+                pen = piece.end;
+                self.pieces.push(piece);
+            }
             self.base = tiled(mesh, repeats, step);
             self.base_jumps = jumps;
             self.base_zoom = xf.zoom;
             self.base_c = xf.rect.center();
             self.key = Some(key);
+            // the placed mesh takes the base's triangles; its vertices are placed below
+            let placed = Arc::make_mut(&mut self.mesh);
+            placed.indices.clone_from(&self.base.indices);
+            placed.texture_id = self.base.texture_id;
         }
         let place = Placement::new(self.base_c, self.base_zoom, xf);
-        let mut mesh = self.base.clone();
-        for v in &mut mesh.vertices {
-            v.pos = place.at(v.pos);
-        }
-        self.mesh = Arc::new(mesh);
+        let placed = Arc::make_mut(&mut self.mesh);
+        placed.vertices.resize(self.base.vertices.len(), Vertex::default());
+        place_all(&self.base.vertices, &mut placed.vertices, &place);
         self.jumps = self.base_jumps.iter().map(|[a, b]| [place.at(*a), place.at(*b)]).collect();
         self.view = Some(view);
     }
@@ -725,6 +875,92 @@ mod tests {
         // a big zoom builds it again
         cache.update(&plan, &view(10.0, 5.0, 0.0), opts, ([1, 1], 0.0));
         assert_eq!(cache.base_zoom, 5.0);
+    }
+
+    /// Timings of the overlay on a design of over 100,000 stitches (run by hand:
+    /// `cargo test -p vectorcraft-ui-egui --lib big_design_overlay_timings -- --ignored --nocapture`).
+    #[test]
+    #[ignore]
+    fn big_design_overlay_timings() {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &serde_json::json!({"width": 1400, "height": 1400})).unwrap();
+        for i in 0..120 {
+            let (x, y) = (20.0 + (i % 11) as f64 * 110.0, 20.0 + (i / 11) as f64 * 110.0);
+            s.execute("shape.rectangle", &serde_json::json!({"x": x, "y": y, "width": 100, "height": 100})).unwrap();
+            s.execute("embroidery.set", &serde_json::json!({"type": "fill"})).unwrap();
+        }
+        let plan = s.embroidery_plan().unwrap();
+        let n = plan.pattern().stitch_count();
+        let rect = egui::Rect::from_min_size(Pos2::new(0.0, 0.0), egui::vec2(1600.0, 1000.0));
+        let view = |cx: f64| Xf { rect, zoom: 0.8, center: vectorcraft_geom::Point::new(cx, 700.0), rot: 0.0 };
+        for mode in [StitchView::Lines, StitchView::TrueView] {
+            let mut cache = MeshCache::default();
+            let t = std::time::Instant::now();
+            cache.update(&plan, &view(700.0), (mode, usize::MAX, false), ([1, 1], 0.0));
+            let built = t.elapsed();
+            let t = std::time::Instant::now();
+            for k in 0..10 {
+                cache.update(&plan, &view(700.0 + f64::from(k)), (mode, usize::MAX, false), ([1, 1], 0.0));
+            }
+            let pan = t.elapsed() / 10;
+            // one object's density changed: its pieces built again, the rest reused
+            let mid = s.doc().unwrap().doc.layers[0].children().unwrap()[60].id.0;
+            s.execute("select.set", &serde_json::json!({"ids": [mid]})).unwrap();
+            s.execute("embroidery.setParams", &serde_json::json!({"params": {"spacing": 0.45}})).unwrap();
+            let edited = s.embroidery_plan().unwrap();
+            let t = std::time::Instant::now();
+            cache.update(&edited, &view(700.0), (mode, usize::MAX, false), ([1, 1], 0.0));
+            let edit = t.elapsed();
+            s.execute("edit.undo", &serde_json::json!({})).unwrap();
+            eprintln!("{n} stitches, {mode:?}: build {built:?}, pan {pan:?}, after an edit {edit:?}, {} vertices", cache.mesh.vertices.len());
+        }
+    }
+
+    /// The mesh built from reused pieces is the mesh a fresh build gives: after an edit to one
+    /// object, and while the player sews on.
+    #[test]
+    fn reused_pieces_draw_what_a_fresh_build_draws() {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &serde_json::json!({"width": 400, "height": 400})).unwrap();
+        let mut ids = Vec::new();
+        for i in 0..4 {
+            let r = s.execute("shape.rectangle", &serde_json::json!({"x": 20 + i * 90, "y": 40, "width": 80, "height": 60})).unwrap();
+            s.execute("embroidery.set", &serde_json::json!({"type": "fill"})).unwrap();
+            s.execute("embroidery.setThread", &serde_json::json!({"color": if i % 2 == 0 { "#aa2222" } else { "#2222aa" }})).unwrap();
+            ids.push(r["id"].clone());
+        }
+        let rect = egui::Rect::from_min_size(Pos2::new(0.0, 0.0), egui::vec2(800.0, 600.0));
+        let xf = Xf { rect, zoom: 3.0, center: vectorcraft_geom::Point::new(200.0, 70.0), rot: 0.0 };
+        let same = |cache: &MeshCache, plan: &Arc<StitchPlan>, mode, upto| {
+            let (fresh, _) = build(plan.pattern(), &xf, mode, upto, false, egui::Rect::EVERYTHING);
+            assert_eq!(cache.mesh.vertices.len(), fresh.vertices.len());
+            assert_eq!(cache.mesh.indices, fresh.indices);
+            for (a, b) in cache.mesh.vertices.iter().zip(&fresh.vertices) {
+                assert!((a.pos - b.pos).length() < 0.01 && a.color == b.color);
+            }
+        };
+        for mode in [StitchView::Lines, StitchView::TrueView] {
+            let mut cache = MeshCache::default();
+            let plan = s.embroidery_plan().unwrap();
+            cache.update(&plan, &xf, (mode, usize::MAX, false), ([1, 1], 0.0));
+            same(&cache, &plan, mode, usize::MAX);
+            // the third square made denser
+            s.execute("select.set", &serde_json::json!({"ids": [ids[2]]})).unwrap();
+            s.execute("embroidery.setParams", &serde_json::json!({"params": {"spacing": 0.6}})).unwrap();
+            let plan = s.embroidery_plan().unwrap();
+            let before: Vec<u64> = cache.pieces.iter().map(|p| p.hash).collect();
+            cache.update(&plan, &xf, (mode, usize::MAX, false), ([1, 1], 0.0));
+            same(&cache, &plan, mode, usize::MAX);
+            let kept = cache.pieces.iter().filter(|p| before.contains(&p.hash)).count();
+            assert!(kept >= 2, "the first squares' pieces are reused ({kept} of {})", cache.pieces.len());
+            // the player sewing on
+            let total = plan.pattern().stitches.len();
+            for upto in [total / 3, total / 2, total - 1] {
+                cache.update(&plan, &xf, (mode, upto, false), ([1, 1], 0.0));
+                same(&cache, &plan, mode, upto);
+            }
+            s.execute("edit.undo", &serde_json::json!({})).unwrap();
+        }
     }
 
     #[test]
