@@ -755,13 +755,19 @@ pub(crate) fn combo<R>(
             if searchable {
                 return searchable_combo(ui, ui.id().with(id), current, width - 4.0, list);
             }
-            egui::ComboBox::from_id_salt(ui.id().with(id))
+            let id = ui.id().with(id);
+            let button_id = ui.make_persistent_id(egui::IdSalt::new(id));
+            let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || egui::ComboBox::is_open(ui.ctx(), button_id);
+            let response = egui::ComboBox::from_id_salt(id)
                 .selected_text(egui::RichText::new(current).size(12.0))
                 .width(width - 4.0)
                 .height(ui.spacing().combo_height)
-                .show_ui(ui, list)
-                .inner
-                .flatten()
+                .show_ui(ui, list);
+            // The button or open list handles Enter before the modal can accept it.
+            if enter_for_combo {
+                ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+            }
+            response.inner.flatten()
         })
         .inner
 }

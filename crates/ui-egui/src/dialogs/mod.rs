@@ -98,6 +98,7 @@ mod tools;
 mod transform;
 pub mod transform_each;
 pub mod variables;
+mod warp_effect;
 pub mod width_point;
 
 use serde_json::{Value, json};
@@ -576,3 +577,6 @@ mod tests_rectangular_grid;
 
 #[cfg(test)]
 mod tests_shortcut_import;
+
+#[cfg(test)]
+mod tests_warp;
