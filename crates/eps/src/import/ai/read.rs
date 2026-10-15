@@ -14,7 +14,9 @@
 //!   the art size around the template box's centre, else (a file in the legacy format another
 //!   app wrote) the bounding box.
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
-//!   and the samples after `XI`.
+//!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
+//!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
+//!   become an RGBA PNG.
 //! - Placed (linked) files, as written in files users sent: `%AI5_BeginPlace`, `[matrix] llx lly urx
 //!   ury … (path)` and the operator `` ` ``, the file's preview between `%AI26_BeginPlacedObjectPreview`
 //!   and its end (`w h rowBytes 32 n `, then rows of premultiplied ARGB, the top one first), `~`. The
@@ -46,9 +48,10 @@ use kurbo::{Affine, BezPath, PathEl, Point, Rect};
 use vectorcraft_color::gradient::Gradient;
 use vectorcraft_color::swatch::Swatch;
 use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    LinkInfo, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
+    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PatternDef, StrokeLayer,
 };
 use vectorcraft_geom::{FillRule, PathData};
 
@@ -1826,6 +1829,14 @@ impl<'a> Reader<'a> {
             return Ok(());
         };
         let opacity = opacity.filter(|_| alpha_len > 0);
+        // CMYK samples keep their ink amounts as a CMYK TIFF, as the PDF importer keeps a CMYK
+        // image's, and an alpha channel that hides part of the image becomes its opacity mask.
+        if channels == 4
+            && *bits == 8.0
+            && let Some(blob) = Inks::new(w as u32, h as u32, samples.to_vec()).and_then(|i| ImageBlob::cmyk_tiff(&i))
+        {
+            return self.add_raster(blob, opacity, &m, (w as u32, h as u32));
+        }
         let mut rgba = Vec::with_capacity((w * h * 4) as usize);
         for y in 0..h as usize {
             let line = samples.get(y * row..(y + 1) * row).unwrap_or_default();
@@ -1858,25 +1869,56 @@ impl<'a> Reader<'a> {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         }
+        self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32))
+    }
+
+    /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
+    /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
+    /// image.
+    fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
         // The matrix maps pixels (y down) into art space with its y flipped.
-        let [a, b, c, d, tx, ty] = m.as_slice() else { return Ok(()) };
+        let [a, b, c, d, tx, ty] = m else { return Ok(()) };
         let to_doc = self.space();
         let xf = to_doc * FLIP * Affine::new([*a, *b, *c, *d, *tx, -*ty]);
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
             return Ok(());
         }
+        let mask = alpha.and_then(|a| self.alpha_mask(a, w, h, xf));
+        let key = blob.content_key();
+        self.doc.images.entry(key.clone()).or_insert(blob);
+        self.add_image_masked(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() }, mask, false)
+    }
+
+    /// An image's alpha channel (`w` × `h` bytes) as a grayscale image over the image (`xf`): its
+    /// opacity mask, as in PDF import. `None` when it hides nothing.
+    fn alpha_mask(&mut self, alpha: &[u8], w: u32, h: u32, xf: Affine) -> Option<OpacityMask> {
+        if alpha.iter().all(|v| *v == 255) {
+            return None;
+        }
+        let mut png = Vec::new();
+        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
-        self.add_image(ImageObject { key, width: w as u32, height: h as u32, xf, link: None, placement: Default::default() }, false)
+        let art = Node::new(
+            self.doc.alloc_id(),
+            NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() })),
+        );
+        Some(OpacityMask::new(art, true))
     }
 
     /// Add an image object with the state's transparency.
     fn add_image(&mut self, im: ImageObject, hidden: bool) -> Result<(), String> {
+        self.add_image_masked(im, None, hidden)
+    }
+
+    /// Add an image object with the state's transparency and `mask` as its opacity mask.
+    fn add_image_masked(&mut self, im: ImageObject, mask: Option<OpacityMask>, hidden: bool) -> Result<(), String> {
         let gs = self.gs.clone();
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.extras_mut().mask = mask.map(Box::new);
         self.add(node, hidden)
     }
 
