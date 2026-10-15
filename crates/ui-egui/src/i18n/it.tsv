@@ -4479,3 +4479,8 @@ lighting	Light	Luce
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Chiude le estremità circolari dei profili aperti. Le rotazioni parziali mantengono aperti i lati di taglio.
 	Distance	Distanza
+@msg	span must be "object" or "selection", got {v}	span deve essere "object" o "selection", non {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiziona un `gradient`, non un campione
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiziona una sfumatura: indica `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" posiziona una sfumatura lineare o radiale, non una sfumatura a forma libera
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiziona la sfumatura stessa: ometti `start` e `end` (la posizionano già in coordinate del documento)

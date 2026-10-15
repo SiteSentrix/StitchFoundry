@@ -3803,3 +3803,8 @@ axis	Both	Ambos
 	Update Dimensions	Atualizar Cotas
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Fecha as extremidades circulares dos perfis abertos. Giros parciais mantêm as faces de corte abertas.
+@msg	span must be "object" or "selection", got {v}	span deve ser "object" ou "selection", não {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiciona um `gradient`, não uma amostra
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiciona um degradê: informe `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" posiciona um degradê linear ou radial, não um de forma livre
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" posiciona o próprio degradê: omita `start` e `end` (eles já o posicionam em coordenadas do documento)
