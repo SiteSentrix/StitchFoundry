@@ -253,6 +253,40 @@ fn locked_art_is_neither_bound_nor_rewritten() {
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible, "the unlocked rectangle still applied");
 }
 
+/// Binding fails for locked art and for art in a hidden or locked group or layer, and the
+/// error names which of the three applies.
+#[test]
+fn binding_errors_say_whether_a_layer_or_group_is_hidden_or_locked() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let t = text(&mut s, "x");
+    let r = rect(&mut s);
+    let bind = |s: &mut Session| s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap_err().to_string();
+
+    s.execute("layer.setProps", &json!({"id": layer.0, "visible": false})).unwrap();
+    let e = bind(&mut s);
+    assert!(e.contains(&format!("node {} is in a hidden group or layer", t.0)), "{e}");
+    s.execute("layer.setProps", &json!({"id": layer.0, "visible": true})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [t.0, r.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    let e = bind(&mut s);
+    assert!(e.contains(&format!("node {} is in a hidden group or layer", t.0)), "{e}");
+    s.execute("object.showAll", &json!({})).unwrap();
+
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    let e = bind(&mut s);
+    assert!(e.contains(&format!("node {} is in a locked group or layer", t.0)), "{e}");
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": false})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let e = bind(&mut s);
+    assert!(e.contains(&format!("node {} is locked", t.0)), "{e}");
+}
+
 /// Make Text Dynamic / Make Visibility Dynamic: what the panel's buttons run. One step from a
 /// selection to a bound variable, named after what it drives.
 #[test]
@@ -282,6 +316,18 @@ fn making_a_selection_dynamic_names_and_binds_it() {
     assert!(s.execute("variable.makeTextDynamic", &json!({})).is_err());
     s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
     assert!(s.execute("variable.makeTextDynamic", &json!({})).is_err(), "a rectangle is not type");
+}
+
+/// Make Text Dynamic reports its errors under its own command id.
+#[test]
+fn make_dynamic_errors_name_the_command() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let r = rect(&mut s);
+    s.execute("select.set", &json!({"ids": [t.0, r.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let e = s.execute("variable.makeTextDynamic", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("`variable.makeTextDynamic`") && e.contains("is not type"), "{e}");
 }
 
 /// Capture Data Set records what the art holds now, which is how rows are made — the art is
