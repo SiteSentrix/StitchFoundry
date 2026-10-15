@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{DataSet, DataValue, NodeId, NodeKind, Variable, VariableKind, Variables};
 
 use super::edit::selected_roots;
-use super::fileio::{absolute_path, read_file, write_file};
+use super::fileio::{absolute_path, read_file_head, write_file};
 use super::textedit::set_plain_text;
 use super::*;
 
@@ -502,7 +502,8 @@ fn dataset_select(s: &mut Session, p: &Value) -> Result<Value> {
 /// Bytes of a datasets CSV from `path`, `data`, `dataBase64` or `csv`.
 fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
     let bytes = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64"), str_param(p, "csv")) {
-        (Some(path), ..) => read_file(&absolute_path(path))?,
+        // One byte past the cap is enough to refuse the file below.
+        (Some(path), ..) => read_file_head(&absolute_path(path), MAX_CSV_BYTES + 1)?,
         (None, Some(text), ..) => text.as_bytes().to_vec(),
         (None, None, Some(b64), _) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
         (None, None, None, Some(csv)) => csv.as_bytes().to_vec(),
@@ -514,55 +515,53 @@ fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// Split one CSV line into cells (commas; `"` quotes, doubled inside).
-fn split_csv_line(line: &str) -> std::result::Result<Vec<String>, String> {
-    let mut cells = Vec::new();
-    let mut cur = String::new();
-    let mut chars = line.chars().peekable();
-    let mut in_quotes = false;
-    while let Some(c) = chars.next() {
-        match c {
-            '"' if in_quotes => match chars.peek() {
-                Some('"') => {
-                    cur.push('"');
-                    chars.next();
-                }
-                _ => in_quotes = false,
-            },
-            '"' if !in_quotes && cur.is_empty() => in_quotes = true,
-            ',' if !in_quotes => {
-                cells.push(std::mem::take(&mut cur));
-            }
-            _ => cur.push(c),
-        }
-    }
-    if in_quotes {
-        return Err("unclosed quote".into());
-    }
-    cells.push(cur);
-    if cells.len() > MAX_CSV_COLS {
-        return Err(format!("more than {MAX_CSV_COLS} columns"));
-    }
-    Ok(cells)
-}
-
-/// Parse a datasets CSV into rows of cells (no header interpretation yet).
+/// Parse a datasets CSV into rows of cells (no header interpretation yet): commas between cells,
+/// `"` quotes a cell (doubled inside), which may then hold commas and line breaks, as
+/// [`csv_escape`] writes them. Blank lines are skipped.
 fn parse_datasets_csv(text: &str, cmd: &str) -> Result<Vec<Vec<String>>> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let mut rows = Vec::new();
-    for (i, raw) in text.lines().enumerate() {
-        let line = raw.trim_end_matches('\r');
-        if line.trim().is_empty() {
-            continue;
+    let (mut rows, mut row, mut cur) = (Vec::new(), Vec::<String>::new(), String::new());
+    let (mut in_quotes, mut line) = (false, 1usize);
+    let mut chars = text.chars().peekable();
+    loop {
+        let c = chars.next();
+        match c {
+            Some('"') if in_quotes => {
+                if chars.peek() == Some(&'"') {
+                    cur.push('"');
+                    chars.next();
+                } else {
+                    in_quotes = false;
+                }
+            }
+            Some('"') if cur.is_empty() => in_quotes = true,
+            Some(',') if !in_quotes => row.push(std::mem::take(&mut cur)),
+            Some('\r') if !in_quotes => {}
+            Some('\n') | None if !in_quotes => {
+                row.push(std::mem::take(&mut cur));
+                if row.iter().any(|c| !c.trim().is_empty()) {
+                    rows.push(std::mem::take(&mut row));
+                    // +1 for the header.
+                    if rows.len() > MAX_CSV_ROWS + 1 {
+                        return Err(bad(cmd, format!("more than {MAX_CSV_ROWS} data rows")));
+                    }
+                }
+                row.clear();
+                if c.is_none() {
+                    return Ok(rows);
+                }
+                line += 1;
+            }
+            None => return Err(bad(cmd, format!("line {line}: unclosed quote"))),
+            Some(c) => {
+                line += usize::from(c == '\n');
+                cur.push(c);
+            }
         }
-        let cells = split_csv_line(line).map_err(|e| bad(cmd, format!("line {}: {e}", i + 1)))?;
-        rows.push(cells);
-        if rows.len() > MAX_CSV_ROWS + 1 {
-            // +1 for the header.
-            return Err(bad(cmd, format!("more than {MAX_CSV_ROWS} data rows")));
+        if row.len() > MAX_CSV_COLS {
+            return Err(bad(cmd, format!("line {line}: more than {MAX_CSV_COLS} columns")));
         }
     }
-    Ok(rows)
 }
 
 fn csv_escape(s: &str) -> String {

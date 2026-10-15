@@ -878,6 +878,24 @@ fn image_datasets_swap_pixels_and_keep_bounds() {
     assert!(s.execute("variable.makeImageDynamic", &json!({})).is_err(), "type is not an image");
 }
 
+/// A text value with commas, quotes and line breaks comes back from the exported CSV as it went out.
+#[test]
+fn datasets_csv_keeps_line_breaks_in_quoted_cells() {
+    let mut s = session();
+    let t = text(&mut s, "One");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    let value = "Line one, \"quoted\"\nLine two";
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": value}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    let sets = &s.doc().unwrap().doc.variables.datasets;
+    assert_eq!(sets.len(), 1);
+    assert_eq!(sets[0].values.get("Name"), Some(&vectorcraft_doc::DataValue::Text(value.into())));
+    assert!(s.execute("dataset.import", &json!({"csv": "name,Name\nX,\"open"})).is_err(), "unclosed quote");
+}
+
 /// Import / export datasets as CSV: header `name` then variables; round-trip keeps values.
 #[test]
 fn datasets_csv_round_trips_and_rejects_bad_input() {
