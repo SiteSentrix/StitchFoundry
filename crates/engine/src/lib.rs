@@ -223,6 +223,16 @@ pub struct Interaction {
     pub(crate) copies: Option<Arc<PreviewCopies>>,
 }
 
+/// What Object → Transform → Transform Again (⌘D) repeats ([`SessionState::last_transform`]).
+#[derive(Clone, Debug, PartialEq)]
+pub enum LastTransform {
+    /// The last transform command's matrix, and the options Transform Again passes with it.
+    Matrix(Affine, Value),
+    /// The last Transform Each's parameters: each object transforms about its own bounds, so the
+    /// repeat runs the command on the selection of the moment rather than one matrix.
+    Each(Value),
+}
+
 /// This holds the copies that a transform with `copy` made of an interaction's snapshot
 /// ([`cmd::object::apply_transform`]). A later transform with `copy` of the same objects, while
 /// the document is still that snapshot, starts from `doc` and transforms only the copies.
@@ -280,11 +290,11 @@ pub struct DocState {
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
-    /// For Object → Transform → Transform Again (⌘D): the last transform's matrix and the options
-    /// Transform Again passes with it. A transform command keeps the `copy`, `typeAreas` and
-    /// `patterns` it used, and `strokes` and `corners` when it scales; a drag keeps the params of its
-    /// last preview with the values that preview noted ([`Session::note_journal`]).
-    pub last_transform: Option<(Affine, Value)>,
+    /// For Object → Transform → Transform Again (⌘D): what the last transformation was. A
+    /// transform command keeps the `copy`, `typeAreas` and `patterns` it used, and `strokes` and
+    /// `corners` when it scales; a drag keeps the params of its last preview with the values that
+    /// preview noted ([`Session::note_journal`]).
+    pub last_transform: Option<LastTransform>,
     /// What Select → Reselect repeats: the last selection command, its params and the objects
     /// selected when it ran (a Same command's reference objects).
     pub last_selection_cmd: Option<(String, Value, Vec<NodeId>)>,
@@ -1622,6 +1632,9 @@ impl Session {
             ("Copy", false) if preview.0 == "object.transform" => it.label = "Move".into(),
             _ => {}
         }
+        // A preview that left the document as it was records no Transform Again either (as
+        // `keep_interaction` records no undo step): the last real transformation stands.
+        let changed = !Arc::ptr_eq(&it.doc, &st.doc);
         st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
@@ -1633,9 +1646,13 @@ impl Session {
                     o.remove("matrix");
                     o.remove("ids");
                 }
-                st.last_transform = Some((m, options));
+                st.last_transform = Some(LastTransform::Matrix(m, options));
                 st.last_perspective = None;
             }
+        } else if preview.0 == "object.transformEach" && changed {
+            // Transform Again repeats it as it stood when OK was pressed.
+            st.last_transform = Some(LastTransform::Each(preview.1.clone()));
+            st.last_perspective = None;
         }
         if perspective_again.is_some() {
             st.last_perspective = perspective_again;

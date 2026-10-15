@@ -14,7 +14,7 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
 use super::edit::{duplicate_in, selected_roots};
 use super::opacitymask::percent;
 use super::*;
-use crate::EngineError;
+use crate::{EngineError, LastTransform};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -342,7 +342,7 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
             options["strokes"] = json!(sc.strokes);
             options["corners"] = json!(!sc.keep_corners);
         }
-        st.last_transform = Some((xf, options));
+        st.last_transform = Some(LastTransform::Matrix(xf, options));
         st.last_perspective = None;
     }
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
@@ -478,18 +478,27 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     apply_transform(s, "Shear", ids, about(o, m), p, true)
 }
 
-/// The last transform's matrix on the selection, with the options `last_transform` keeps for it; an
-/// option that `p` sets to true or false (a recorded Transform Again's) takes precedence.
+/// The last transform on the selection, with the options `last_transform` keeps for it; an option
+/// that `p` sets to true or false (a recorded Transform Again's) takes precedence. A Transform
+/// Each is repeated by running it again (its transform is per object, about each one's bounds).
 fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(again) = s.doc()?.last_perspective.clone() {
         return super::distortcmds::transform_again(s, &again);
     }
-    let (m, mut options) = s.doc()?.last_transform.clone().ok_or_else(|| EngineError::Other("no previous transform".into()))?;
-    if let (Some(o), Some(given)) = (options.as_object_mut(), p.as_object()) {
-        o.extend(given.iter().filter(|(_, v)| v.is_boolean()).map(|(k, v)| (k.clone(), v.clone())));
+    let last = s.doc()?.last_transform.clone().ok_or_else(|| EngineError::Other("no previous transform".into()))?;
+    let merge = |mut options: Value| {
+        if let (Some(o), Some(given)) = (options.as_object_mut(), p.as_object()) {
+            o.extend(given.iter().filter(|(_, v)| v.is_boolean()).map(|(k, v)| (k.clone(), v.clone())));
+        }
+        options
+    };
+    match last {
+        LastTransform::Matrix(m, options) => {
+            let ids = selected_roots(s)?;
+            apply_transform(s, "Transform Again", ids, m, &merge(options), true)
+        }
+        LastTransform::Each(params) => super::menucmds::transform_each_again(s, &merge(params)),
     }
-    let ids = selected_roots(s)?;
-    apply_transform(s, "Transform Again", ids, m, &options, true)
 }
 
 enum Arrange {
