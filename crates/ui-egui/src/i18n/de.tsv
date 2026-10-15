@@ -4447,3 +4447,4 @@ theme	Appearance	Erscheinungsbild
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
 @msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" platziert einen linearen oder radialen Verlauf, keinen Freiform-Verlauf
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
+	Make Image Dynamic	Bild dynamisch machen

@@ -72,13 +72,16 @@ struct Picked {
     selection_bound: bool,
     /// Make Text Dynamic needs exactly one type object: a text variable only drives type.
     single_type: bool,
+    /// Make Image Dynamic needs exactly one image object.
+    single_image: bool,
 }
 
 fn picked(st: &vectorcraft_engine::DocState) -> Picked {
     let selected: Vec<u64> = st.selection.objects.iter().map(|i| i.0).collect();
     let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
     let single_type = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))));
-    Picked { has_selection: !selected.is_empty(), selected, selection_bound, single_type }
+    let single_image = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Image(_))));
+    Picked { has_selection: !selected.is_empty(), selected, selection_bound, single_type, single_image }
 }
 
 /// Delete Variable: the highlighted variable only (the command's default); the rest stay.
@@ -128,7 +131,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         })
         .collect();
     let active = sets.iter().find(|s| s.active);
-    let Picked { selected, has_selection, selection_bound, single_type } = picked(st);
+    let Picked { selected, has_selection, selection_bound, single_type, single_image } = picked(st);
     let highlighted = highlighted_row(st);
 
     // The current data set across the top: its name, and the arrows that step through them.
@@ -163,6 +166,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let icon = match row.kind {
                 VariableKind::Text => "type",
                 VariableKind::Visibility => "eye",
+                VariableKind::Image => "image",
             };
             ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
             // The object a variable drives is named beside it, as the reference panel does.
@@ -205,6 +209,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button_enabled(ui, "eye", tl!("Make Visibility Dynamic"), false, has_selection, 24.0).clicked() {
             app.run("variable.makeVisibilityDynamic", json!({})).ok();
         }
+        if widgets::icon_button_enabled(ui, "image", tl!("Make Image Dynamic"), false, single_image, 24.0).clicked() {
+            app.run("variable.makeImageDynamic", json!({})).ok();
+        }
         if widgets::icon_button(ui, "plus", tl!("New Variable…"), false, 24.0).clicked() {
             crate::menus::invoke(app, "variable.define", json!({}));
         }
@@ -239,7 +246,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let bound: Vec<u64> = st.doc.variables.bindings.keys().map(|i| i.0).collect();
     let highlighted = highlighted_row(st);
     let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
-    let Picked { selected, has_selection, selection_bound, single_type } = picked(st);
+    let Picked { selected, has_selection, selection_bound, single_type, single_image } = picked(st);
 
     if widgets::menu_item(ui, tl!("New Variable…"), true, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
@@ -254,6 +261,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::menu_item(ui, tl!("Make Visibility Dynamic"), has_selection, false) {
         app.run("variable.makeVisibilityDynamic", json!({})).ok();
+    }
+    if widgets::menu_item(ui, tl!("Make Image Dynamic"), single_image, false) {
+        app.run("variable.makeImageDynamic", json!({})).ok();
     }
     if widgets::menu_item(ui, tl!("Unbind Variable"), selection_bound, false) {
         app.run("variable.unbind", json!({"ids": selected})).ok();

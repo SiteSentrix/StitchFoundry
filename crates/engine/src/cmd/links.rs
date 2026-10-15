@@ -479,6 +479,16 @@ fn clip_image(d: &mut Document, id: NodeId, (frame, room): Clip) -> Result<()> {
     Ok(())
 }
 
+/// Replace image `id` with the raster at `path`, keeping the object's bounds (what an image
+/// variable does on `dataset.select`). The file is linked; a missing or unreadable path is an
+/// error so the dataset application can skip that binding.
+pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str) -> Result<()> {
+    let path = absolute_path(path);
+    let bytes = read_file(&path)?;
+    let read = (link_info(&path, &bytes), fileio::raster_image(&bytes)?);
+    install(d, &[id], read, Some(Preserve::Bounds))
+}
+
 /// Image objects `ids` show the file read for `link` (`img`), each placed as its Placement
 /// Options say (`force`: as that Preserve choice says, whatever they say).
 fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>) -> Result<()> {
