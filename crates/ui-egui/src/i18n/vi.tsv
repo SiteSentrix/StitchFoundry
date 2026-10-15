@@ -1608,6 +1608,8 @@
 	Internet Standard RGB (sRGB)	RGB chuẩn Internet (sRGB)
 	Interpolation	Nội suy
 	Intersect	Giao nhau
+	Intertwine	Đan xen
+	Arrange Intertwine Area	Sắp xếp vùng đan xen
 	Inverse	Đảo ngược
 	Invert	Đảo ngược
 	Invert Colors	Đảo màu
@@ -4182,6 +4184,7 @@ theme	Appearance	Giao diện
 @msg	select a linked image: an embedded one has no file	hãy chọn ảnh liên kết: ảnh nhúng không có tệp
 @msg	select a Live Paint group	hãy chọn nhóm tô trực tiếp
 @msg	select a repeat	hãy chọn một đối tượng lặp
+@msg	select an Intertwine group	hãy chọn một nhóm đan xen
 @msg	select a stroke with a variable width	hãy chọn nét có chiều rộng biến đổi
 @msg	select a symbol instance	hãy chọn đối tượng ký hiệu
 @msg	select an envelope	hãy chọn một Envelope

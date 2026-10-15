@@ -2378,6 +2378,10 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 sub(
+                    "Intertwine",
+                    vec![c("Make", "object.intertwine.make"), c("Edit", "object.intertwine.edit"), c("Release", "object.intertwine.release")],
+                ),
+                sub(
                     "Blend",
                     vec![
                         c("Make", "object.blend.make"),

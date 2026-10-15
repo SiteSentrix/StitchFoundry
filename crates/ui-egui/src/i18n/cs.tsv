@@ -425,6 +425,8 @@
 	Add	Přidat
 @id	pathfinder.add	Sjednotit
 	Intersect	Protnout
+	Intertwine	Proplést
+	Arrange Intertwine Area	Uspořádat oblast propletení
 	Exclude	Vyloučit
 	Subtract	Odečíst
 	Minus Back	Odečíst zadní
@@ -4197,6 +4199,7 @@ imageTrace	Outline	Obrys
 @msg	select a gradient mesh	vyberte přechodovou síť
 @msg	select a linked image: an embedded one has no file	vyberte propojený obrázek: vložený nemá soubor
 @msg	select a repeat	vyberte opakování
+@msg	select an Intertwine group	vyberte skupinu propletení
 @msg	select a stroke with a variable width	vyberte tah s proměnnou šířkou
 @msg	select a symbol instance	vyberte instanci symbolu
 @msg	select an Image Trace object	vyberte objekt vektorizace obrazu

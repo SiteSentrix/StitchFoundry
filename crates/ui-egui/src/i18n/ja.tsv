@@ -426,6 +426,8 @@
 	Pathfinder	パスファインダー
 	Add	追加
 	Intersect	交差
+	Intertwine	織り交ぜ
+	Arrange Intertwine Area	織り交ぜ領域の重ね順
 	Exclude	中マド
 	Subtract	前面オブジェクトで型抜き
 	Minus Back	背面オブジェクトで型抜き
@@ -3750,6 +3752,7 @@ theme	Appearance	外観
 @msg	not in pattern editing mode	パターン編集モードではありません
 @msg	pattern missing	パターンが見つかりません
 @msg	select a repeat	リピートを選択してください
+@msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select the art to repeat	リピートするアートを選択してください
 @msg	the document has no patterns	ドキュメントにパターンがありません
 @msg	no artboard	アートボードがありません

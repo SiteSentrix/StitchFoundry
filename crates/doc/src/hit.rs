@@ -145,7 +145,7 @@ fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
         let skip = |id| seen.contains(&id);
         let mut chain = Vec::new();
         let hit = match &c.kind {
-            NodeKind::Group { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some(),
+            NodeKind::Group { .. } | NodeKind::Intertwine { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some(),
             NodeKind::Blend { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some() || hit_leaf(c, p, opt, symbols).is_some(),
             _ => hit_leaf(c, p, opt, symbols).is_some(),
         };
@@ -262,7 +262,8 @@ fn hit_children(
     {
         return None;
     }
-    for (i, c) in children.iter().enumerate().rev() {
+    for i in hit_order(parent, children, p) {
+        let Some(c) = children.get(i) else { continue };
         if !may_hit(parent, i, c, p, opt, symbols, editable_only) || skip(c.id) {
             continue;
         }
@@ -270,7 +271,9 @@ fn hit_children(
         let hit = match &c.kind {
             // A sublayer whose Preview is off is clicked in outline, like an outline view.
             NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, editable_only),
-            NodeKind::Layer { .. } | NodeKind::Group { .. } => hit_children(c, p, opt, symbols, skip, chain, editable_only),
+            NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
+                hit_children(c, p, opt, symbols, skip, chain, editable_only)
+            }
             // Edit Contents: the envelope's content hits, undistorted.
             NodeKind::Envelope { editing: true, .. } => hit_children(c, p, opt, symbols, skip, chain, editable_only),
             // A blend's key objects first (Direct and Group Selection pick them); its steps hit
@@ -285,6 +288,23 @@ fn hit_children(
         chain.pop();
     }
     None
+}
+
+/// The order a click at `p` tries the children of `parent` in, front first: their stacking order
+/// from the top, except that in an Intertwine group the members drawn over the others at `p`
+/// come first (from the top among them too).
+fn hit_order<'a>(parent: &Node, children: &'a [std::sync::Arc<Node>], p: Point) -> impl Iterator<Item = usize> + 'a {
+    let over: Vec<usize> = if matches!(parent.kind, NodeKind::Intertwine { .. }) {
+        let contains = |a: &vectorcraft_geom::PathData| fill_contains(&a.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p);
+        (0..children.len()).rev().filter(|i| children.get(*i).and_then(|c| crate::intertwine::over_area(c)).is_some_and(contains)).collect()
+    } else {
+        vec![]
+    };
+    let rest = (0..children.len()).rev().filter({
+        let over = over.clone();
+        move |i| !over.contains(i)
+    });
+    over.into_iter().chain(rest)
 }
 
 /// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke

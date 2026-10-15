@@ -385,6 +385,8 @@
 	Add	Dodaj
 @id	pathfinder.add	Połącz
 	Intersect	Przetnij
+	Intertwine	Przeplatanie
+	Arrange Intertwine Area	Ułóż obszar przeplotu
 	Exclude	Wyklucz
 	Subtract	Odejmij
 	Minus Back	Odejmij tył
@@ -4014,6 +4016,7 @@ imageTrace	Outline	Kontur
 @msg	select a gradient mesh	zaznacz siatkę gradientową
 @msg	select a linked image: an embedded one has no file	zaznacz obraz połączony: osadzony nie ma pliku
 @msg	select a repeat	zaznacz powtórzenie
+@msg	select an Intertwine group	zaznacz grupę przeplotu
 @msg	select a stroke with a variable width	zaznacz obrys o zmiennej szerokości
 @msg	select a symbol instance	zaznacz wystąpienie symbolu
 @msg	select an Image Trace object	zaznacz obiekt obrysu obrazu

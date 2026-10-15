@@ -1375,6 +1375,8 @@
 	Internal CSS	CSS interno
 	Internet Standard RGB (sRGB)	RGB standard Internet (sRGB)
 	Intersect	Intersezione
+	Intertwine	Intreccia
+	Arrange Intertwine Area	Disponi area intrecciata
 	Inverse	Inversa
 	Invert	Inverti
 	Invert Colors	Inverti colori
@@ -3905,6 +3907,7 @@ axis	Both	Entrambi
 @msg	select a gradient mesh	seleziona una trama sfumatura
 @msg	select a linked image: an embedded one has no file	seleziona un'immagine collegata: un'immagine incorporata non ha un file
 @msg	select a repeat	seleziona una ripetizione
+@msg	select an Intertwine group	seleziona un gruppo intrecciato
 @msg	select a stroke with a variable width	seleziona una traccia con larghezza variabile
 @msg	select a symbol instance	seleziona un'istanza di simbolo
 @msg	select an Image Trace object	seleziona un oggetto di ricalco immagine
