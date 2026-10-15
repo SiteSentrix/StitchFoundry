@@ -42,6 +42,26 @@ fn paint_schema(what: &str) -> Value {
         "anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "number"}}, {"type": "object"}]
     })
 }
+/// The options `draw_path` and `draw_shape` apply to the object they draw (#2112).
+fn with_draw_options(mut props: Value) -> Value {
+    let more = json!({
+        "dash": {"description": "Dash and gap lengths in pt ([d, g, …]), or null for a solid stroke (stroke.set `dash`)", "anyOf": [{"type": "array", "items": {"type": "number"}}, {"type": "null"}]},
+        "cap": {"type": "string", "enum": ["butt", "round", "square", "projecting"], "description": "Stroke cap"},
+        "join": {"type": "string", "enum": ["miter", "round", "bevel"], "description": "Stroke corner join"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 100, "description": "Opacity in % (object.setProps `opacity`)"},
+        "name": string("Name in the Layers panel"),
+        "effects": {
+            "type": "array",
+            "description": "Live effects applied in order, as apply_effect: [{effect: id (effect.list), params?: {…}}]",
+            "items": obj(json!({"effect": string("Effect id, e.g. \"blur.gaussian\""), "params": {"type": "object"}}), &["effect"]),
+        },
+    });
+    if let (Some(p), Value::Object(more)) = (props.as_object_mut(), more) {
+        p.extend(more);
+    }
+    props
+}
+
 fn mods_schema() -> Value {
     json!({
         "type": "object",
@@ -203,16 +223,16 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "draw_path",
             "Draw path",
-            "Create a path from points ([[x,y],…] or [{x,y,in?:[x,y],out?:[x,y]},…] with Bézier handles) or SVG path data `d`, then apply optional paint. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke). For a filled path without an outline, pass an explicit fill and stroke:\"none\". Returns the new object id.",
+            "Create a path from points ([[x,y],…] or [{x,y,in?:[x,y],out?:[x,y]},…] with Bézier handles) or SVG path data `d`, then apply optional paint, stroke dash/cap/join, opacity, name and live effects. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke). For a filled path without an outline, pass an explicit fill and stroke:\"none\". Returns the new object id.",
             obj(
-                json!({
+                with_draw_options(json!({
                     "points": {"type": "array", "description": "Anchors: [x,y] pairs or {x, y, in?, out?, smooth?} objects", "items": {"anyOf": [{"type": "array", "items": {"type": "number"}, "minItems": 2}, {"type": "object"}]}},
                     "d": string("SVG path data (alternative to points), e.g. \"M0 0 L100 0 L50 80 Z\""),
                     "closed": {"type": "boolean", "description": "Close the path (points only)"},
                     "fill": paint_schema("Fill"),
                     "stroke": paint_schema("Stroke"),
                     "strokeWidth": num("Stroke weight in pt"),
-                }),
+                })),
                 &[],
             ),
             false,
@@ -220,9 +240,9 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "draw_shape",
             "Draw shape",
-            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Returns the new object id.",
+            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Stroke dash/cap/join, opacity, name and live effects apply to the new shape as in draw_path. Returns the new object id.",
             obj(
-                json!({
+                with_draw_options(json!({
                     "shape": {"type": "string", "enum": ["rectangle", "ellipse", "polygon", "star", "line"]},
                     "x": num("Left (rectangle/ellipse)"),
                     "y": num("Top (rectangle/ellipse)"),
@@ -243,7 +263,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "fill": paint_schema("Fill"),
                     "stroke": paint_schema("Stroke"),
                     "strokeWidth": num("Stroke weight in pt"),
-                }),
+                })),
                 &["shape"],
             ),
             false,
@@ -513,12 +533,101 @@ fn apply_paint(b: &mut dyn Backend, a: &Args, ids: Option<Value>) -> Result<Valu
         exec(b, "paint.setStroke", with_ids(paint_params(s)?))?;
         applied.insert("stroke".into(), s.clone());
     }
+    // Weight, dash, cap and join go to one stroke.set.
+    let mut stroke = Map::new();
     if let Some(w) = a.get("strokeWidth") {
         let w = w.as_f64().ok_or("`strokeWidth` must be a number")?;
-        exec(b, "stroke.set", with_ids(json!({"weight": w})))?;
+        stroke.insert("weight".into(), json!(w));
         applied.insert("strokeWidth".into(), json!(w));
     }
+    for k in ["dash", "cap", "join"] {
+        if let Some(v) = a.get(k) {
+            stroke.insert(k.into(), v.clone());
+            applied.insert(k.into(), v.clone());
+        }
+    }
+    if !stroke.is_empty() {
+        exec(b, "stroke.set", with_ids(Value::Object(stroke)))?;
+    }
     Ok(Value::Object(applied))
+}
+
+/// Checks `draw_path` / `draw_shape`'s `dash`, `cap`, `join`, `opacity`, `name` and `effects`
+/// before anything is drawn, so a bad one leaves no half-styled object behind (#2112).
+fn check_draw_options(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
+    match a.get("dash") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(d)) if d.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)) => {}
+        Some(_) => return Err("`dash` must be a list of lengths (numbers) or null".into()),
+    }
+    let one_of = |k: &str, names: &[&str]| match a.get(k) {
+        None => Ok(()),
+        Some(v) if v.as_str().is_some_and(|s| names.contains(&s)) => Ok(()),
+        Some(_) => Err(format!("`{k}` must be one of {}", names.join(", "))),
+    };
+    one_of("cap", &["butt", "round", "square", "projecting"])?;
+    one_of("join", &["miter", "round", "bevel"])?;
+    if let Some(o) = a.get("opacity")
+        && !o.as_f64().is_some_and(|o| (0.0..=100.0).contains(&o))
+    {
+        return Err("`opacity` must be a number from 0 to 100 (%)".into());
+    }
+    if a.get("name").is_some_and(|n| !n.is_string()) {
+        return Err("`name` must be a string".into());
+    }
+    let Some(effects) = a.get("effects") else { return Ok(()) };
+    let effects = effects.as_array().ok_or("`effects` must be a list of {effect, params?}")?;
+    if effects.is_empty() {
+        return Ok(());
+    }
+    let catalog = exec(b, "effect.list", json!({}))?;
+    let known: Vec<&str> = catalog.get("catalog").and_then(Value::as_array).into_iter().flatten().filter_map(|e| e.get("id")?.as_str()).collect();
+    for (i, e) in effects.iter().enumerate() {
+        let e = e.as_object().ok_or_else(|| format!("effect {i} must be {{effect, params?}}"))?;
+        if let Some(k) = e.keys().find(|k| *k != "effect" && *k != "params") {
+            return Err(format!("effect {i}: unknown key `{k}` (expected effect, params)"));
+        }
+        let id = e.get("effect").and_then(Value::as_str).ok_or_else(|| format!("effect {i}: missing string `effect`"))?;
+        if !known.contains(&id) {
+            return Err(format!("effect {i}: unknown effect `{id}` (see apply_effect without arguments)"));
+        }
+        if e.get("params").is_some_and(|p| !p.is_object()) {
+            return Err(format!("effect {i}: `params` must be an object"));
+        }
+    }
+    Ok(())
+}
+
+/// Applies the checked options of [`check_draw_options`] to the new object `ids`, adding what was
+/// applied to `made`. Paint and stroke options are [`apply_paint`]'s.
+fn apply_draw_options(b: &mut dyn Backend, a: &Args, ids: Option<Value>, made: &mut Value) -> Result<(), String> {
+    let mut props = json!({});
+    for k in ["name", "opacity"] {
+        if let Some(v) = a.get(k) {
+            props[k] = v.clone();
+            made[k] = v.clone();
+        }
+    }
+    if let Some(ids) = &ids {
+        props["ids"] = ids.clone();
+    }
+    if a.contains_key("name") || a.contains_key("opacity") {
+        exec(b, "object.setProps", props)?;
+    }
+    let effects = a.get("effects").and_then(Value::as_array).filter(|e| !e.is_empty());
+    if let Some(effects) = effects {
+        let mut applied = vec![];
+        for e in effects {
+            // The whole object (item: null), as the Effect menu applies it.
+            let mut p = json!({"effect": e.get("effect"), "params": e.get("params").cloned().unwrap_or(json!({})), "item": null});
+            if let Some(ids) = &ids {
+                p["ids"] = ids.clone();
+            }
+            applied.push(exec(b, "effect.apply", p)?);
+        }
+        made["effects"] = Value::Array(applied);
+    }
+    Ok(())
 }
 
 fn created_id(r: &Value) -> Option<Value> {
@@ -526,6 +635,7 @@ fn created_id(r: &Value) -> Option<Value> {
 }
 
 fn draw_path(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
+    check_draw_options(b, a)?;
     let mut p = json!({});
     if let Some(d) = a.get("d").and_then(Value::as_str) {
         p["d"] = json!(d);
@@ -548,7 +658,9 @@ fn draw_path(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     }
     let r = exec(b, "path.create", p)?;
     let paint = apply_paint(b, a, created_id(&r))?;
-    Ok(json!({"id": r.get("id"), "paint": paint}))
+    let mut made = json!({"id": r.get("id"), "paint": paint});
+    apply_draw_options(b, a, created_id(&r), &mut made)?;
+    Ok(made)
 }
 
 fn draw_shape(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
@@ -561,13 +673,16 @@ fn draw_shape(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         "line" => "shape.line",
         other => return Err(format!("unknown shape `{other}` (rectangle, ellipse, polygon, star, line)")),
     };
+    check_draw_options(b, a)?;
     let mut p = a.clone();
-    for k in ["shape", "fill", "stroke", "strokeWidth"] {
+    for k in ["shape", "fill", "stroke", "strokeWidth", "dash", "cap", "join", "opacity", "name", "effects"] {
         p.remove(k);
     }
     let r = exec(b, cmd, Value::Object(p))?;
     let paint = apply_paint(b, a, created_id(&r))?;
-    Ok(json!({"id": r.get("id"), "shape": shape, "paint": paint}))
+    let mut made = json!({"id": r.get("id"), "shape": shape, "paint": paint});
+    apply_draw_options(b, a, created_id(&r), &mut made)?;
+    Ok(made)
 }
 
 /// Select `ids` when given (tools that act on the selection).
