@@ -486,7 +486,7 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str) -> R
     let path = absolute_path(path);
     let bytes = read_file(&path)?;
     let read = (link_info(&path, &bytes), fileio::raster_image(&bytes)?);
-    install(d, &[id], read, true)
+    install(d, &[id], read, Some(Preserve::Bounds))
 }
 
 /// Image objects `ids` show the file read for `link` (`img`), each placed as its Placement
