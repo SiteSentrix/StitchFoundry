@@ -4487,3 +4487,14 @@ lighting	Light	Свет
 	Import Data Sets…	Импортировать наборы данных…
 	Export Data Sets…	Экспортировать наборы данных…
 	Make Graph Dynamic	Сделать диаграмму динамической
+	Batch…	Пакетная обработка…
+	Source Folder:	Исходная папка:
+	Destination Folder:	Папка назначения:
+	Overrides	Переопределения
+	Uses every data set of the open document.	Использует каждый набор данных открытого документа.
+@msg	Batch: {count} processed	Пакетная обработка: обработано {count}
+@msg	Batch: {count} processed, {failed} failed	Пакетная обработка: обработано {count}, с ошибкой {failed}
+@msg	choose a destination folder	выберите папку назначения
+@msg	choose a source folder	выберите исходную папку
+@msg	open a document with data sets	откройте документ с наборами данных
+@msg	the action has no steps	в действии нет шагов

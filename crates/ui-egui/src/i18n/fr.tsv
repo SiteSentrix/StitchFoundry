@@ -4914,3 +4914,14 @@ theme	Appearance	Apparence
 	Import Data Sets…	Importer des jeux de données…
 	Export Data Sets…	Exporter des jeux de données…
 	Make Graph Dynamic	Rendre le graphe dynamique
+	Batch…	Traitement par lots…
+	Source Folder:	Dossier source :
+	Destination Folder:	Dossier de destination :
+	Overrides	Remplacements
+	Uses every data set of the open document.	Utilise chaque jeu de données du document ouvert.
+@msg	Batch: {count} processed	Traitement par lots : {count} traités
+@msg	Batch: {count} processed, {failed} failed	Traitement par lots : {count} traités, {failed} en échec
+@msg	choose a destination folder	choisissez un dossier de destination
+@msg	choose a source folder	choisissez un dossier source
+@msg	open a document with data sets	ouvrez un document avec des jeux de données
+@msg	the action has no steps	l'action n'a aucune étape

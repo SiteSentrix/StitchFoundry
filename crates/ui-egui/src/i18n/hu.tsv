@@ -4882,3 +4882,14 @@ imageTrace	Outline	Körvonal
 	Import Data Sets…	Adatkészletek importálása…
 	Export Data Sets…	Adatkészletek exportálása…
 	Make Graph Dynamic	Diagram dinamikussá tétele
+	Batch…	Kötegelt feldolgozás…
+	Source Folder:	Forrásmappa:
+	Destination Folder:	Célmappa:
+	Overrides	Felülbírálások
+	Uses every data set of the open document.	A megnyitott dokumentum minden adatkészletét használja.
+@msg	Batch: {count} processed	Kötegelt feldolgozás: {count} feldolgozva
+@msg	Batch: {count} processed, {failed} failed	Kötegelt feldolgozás: {count} feldolgozva, {failed} sikertelen
+@msg	choose a destination folder	válasszon célmappát
+@msg	choose a source folder	válasszon forrásmappát
+@msg	open a document with data sets	nyisson meg egy adatkészleteket tartalmazó dokumentumot
+@msg	the action has no steps	a műveletnek nincsenek lépései

@@ -4486,3 +4486,14 @@ lighting	Light	ライト
 	Import Data Sets…	データセットを読み込み…
 	Export Data Sets…	データセットを書き出し…
 	Make Graph Dynamic	グラフを動的にする
+	Batch…	バッチ…
+	Source Folder:	ソースフォルダー:
+	Destination Folder:	出力先フォルダー:
+	Overrides	上書き
+	Uses every data set of the open document.	開いているドキュメントのすべてのデータセットを使用します。
+@msg	Batch: {count} processed	バッチ: {count} 件を処理しました
+@msg	Batch: {count} processed, {failed} failed	バッチ: {count} 件を処理、{failed} 件が失敗しました
+@msg	choose a destination folder	出力先フォルダーを選択してください
+@msg	choose a source folder	ソースフォルダーを選択してください
+@msg	open a document with data sets	データセットのあるドキュメントを開いてください
+@msg	the action has no steps	アクションにステップがありません
