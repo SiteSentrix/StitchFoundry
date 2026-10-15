@@ -291,6 +291,7 @@ pub struct TraceParams {
     pub auto_grouping: bool,
     /// Gradients (Grayscale and Color): an area whose colour changes evenly along one direction
     /// is one path filled with a linear gradient ([`TracedPath::gradient`]), not bands of colour.
+    /// Grayscale finds them in the image's grays, and their stops are gray.
     pub gradients: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
@@ -527,7 +528,17 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
     let img = smoothed.as_ref().unwrap_or(img);
     // Gradients are found first and kept out of the palette: no colour is spent on bands of them.
-    let found = (params.gradients && params.mode != Mode::BlackAndWhite).then(|| gradient::detect(img)).filter(|f| !f.1.is_empty());
+    // Grayscale finds them in the image's grays (as its flat colours are), so their stops are gray.
+    let grays = (params.gradients && params.mode == Mode::Grayscale).then(|| {
+        let mut grays = img.clone();
+        for p in grays.rgba.as_chunks_mut::<4>().0 {
+            let g = quantize::luma(*p);
+            p[..3].fill(g);
+        }
+        grays
+    });
+    let traced_as = grays.as_ref().unwrap_or(img);
+    let found = (params.gradients && params.mode != Mode::BlackAndWhite).then(|| gradient::detect(traced_as)).filter(|f| !f.1.is_empty());
     let without = found.as_ref().map(|(of, _)| {
         let mut rest = img.clone();
         for (p, &g) in rest.rgba.as_chunks_mut::<4>().0.iter_mut().zip(of) {
@@ -542,7 +553,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // Each gradient is a palette entry of its own (its colour: the gradient's middle).
     let mut gradients: Vec<Option<TracedGradient>> = vec![None; q.palette.len()];
     if let Some((mut of, found)) = found {
-        gradient::settle_edges(img, &mut of, &found, &mut q.labels);
+        gradient::settle_edges(traced_as, &mut of, &found, &mut q.labels);
         let first = q.palette.len();
         for (l, &g) in q.labels.iter_mut().zip(&of) {
             if g != u32::MAX {
@@ -552,6 +563,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
         q.palette.extend(found.iter().map(|g| g.color_at(g.start.midpoint(g.end)).map(|v| v.round().clamp(0.0, 255.0) as u8)));
         gradients.extend(found.into_iter().map(Some));
     }
+    drop(grays);
     denoise(&mut q.labels, w, h, params.noise as usize);
     // Pixel count per palette entry, and the box its pixels lie in.
     let mut counts = vec![0usize; q.palette.len()];

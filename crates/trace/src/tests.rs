@@ -1295,3 +1295,36 @@ fn stroke_caps_are_square_or_round_as_the_ink_is() {
     assert!(line(true));
     assert!(!line(false));
 }
+
+/// A blue-to-orange sky over flat colours, and a green-to-magenta ramp in a rectangle on them.
+fn sky_and_ramp() -> Raster {
+    Raster::from_fn(240, 160, |x, y| {
+        let (fx, fy) = (f64::from(x), f64::from(y));
+        let mix = |a: [f64; 3], b: [f64; 3], t: f64| [0, 1, 2].map(|k| (a[k] + (b[k] - a[k]) * t).round() as u8);
+        if (20..100).contains(&x) && (100..150).contains(&y) {
+            let [r, g, b] = mix([40.0, 200.0, 60.0], [220.0, 40.0, 200.0], (fx - 20.0) / 80.0);
+            [r, g, b, 255]
+        } else if y >= 90 {
+            if x >= 140 { [200, 30, 40, 255] } else { [30, 120, 50, 255] }
+        } else {
+            let [r, g, b] = mix([30.0, 60.0, 200.0], [250.0, 140.0, 30.0], fy / 90.0);
+            [r, g, b, 255]
+        }
+    })
+}
+
+#[test]
+fn grayscale_gradients_are_grey() {
+    let img = sky_and_ramp();
+    let params = TraceParams { mode: Mode::Grayscale, colors: 4, gradients: true, ..TraceParams::default() };
+    let res = trace(&img, &params);
+    let grey = |c: [u8; 3]| c[0] == c[1] && c[1] == c[2];
+    assert!(res.paths.iter().any(|p| p.gradient.is_some()), "a gradient is still found");
+    for p in &res.paths {
+        assert!(grey(p.color), "{:?}", p.color);
+        for stop in p.gradient.iter().flat_map(|g| &g.stops) {
+            assert!(grey(stop.1), "{:?}", p.gradient);
+        }
+    }
+    assert!(res.palette.iter().all(|&c| grey(c)), "{:?}", res.palette);
+}
