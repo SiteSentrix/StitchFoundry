@@ -397,24 +397,41 @@ fn a_new_numeric_click_selects_all_on_release_without_moving_its_press_caret() {
     assert_eq!(f.num(vec![enter()]), Some(7.0));
 }
 
+/// #1326: a short drag that the toolkit still counts as a click must keep its caret on
+/// release instead of selecting the whole value.
 #[test]
-/// Focus that arrives while the button is still down, without a press event on that frame,
-/// keeps the caret until release.
-#[test]
-fn focus_a_frame_after_the_press_does_not_select_all_until_release() {
+fn a_short_drag_released_as_a_click_keeps_its_caret() {
     let mut f = Field::new();
     let draw = |ui: &mut egui::Ui| numeric_fixture(ui, 0);
     f.frame(vec![], &draw);
     let at = f.text_point(field_text(0), 2, 7.0);
     f.frame(vec![Event::PointerMoved(at), pointer_button(at, true)], &draw);
     let pressed = f.selection();
-    f.frame(vec![Event::PointerMoved(at)], &draw);
-    assert_eq!(f.selection(), pressed, "holding the button does not select the whole field");
-    assert!(pressed.is_some_and(|(a, b)| a == b));
-    f.frame(vec![pointer_button(at, false)], &draw);
-    assert_eq!(f.selection(), Some((0, field_text(0).len())));
+    assert!(pressed.is_some_and(|(a, b)| a == b), "the press places a caret");
+    // Moved a few points: inside one character, so egui reports a click, not a text selection.
+    let nudge = egui::vec2(3.4, 0.0);
+    f.frame(vec![Event::PointerMoved(at + nudge)], &draw);
+    f.frame(vec![pointer_button(at + nudge, false)], &draw);
+    assert_eq!(f.selection(), pressed, "the short drag keeps its caret instead of selecting all");
+    assert_ne!(f.selection(), Some((0, field_text(0).chars().count())), "a clicked short drag must not select all (#1326)");
+    f.frame(vec![Event::Text("7".into())], &draw);
+    assert_eq!(f.frame(vec![enter()], &draw), Some(1273456.0), "typing lands where the drag left the caret");
 }
 
+/// A tap (no movement) on a fresh numeric field still selects all on release.
+#[test]
+fn a_tap_without_movement_still_selects_all_on_release() {
+    let mut f = Field::new();
+    let draw = |ui: &mut egui::Ui| numeric_fixture(ui, 0);
+    f.frame(vec![], &draw);
+    let at = f.text_point(field_text(0), 2, 7.0);
+    f.frame(vec![Event::PointerMoved(at), pointer_button(at, true)], &draw);
+    f.frame(vec![], &draw);
+    f.frame(vec![pointer_button(at, false)], &draw);
+    assert_eq!(f.selection(), Some((0, field_text(0).chars().count())), "a plain tap selects all");
+}
+
+#[test]
 fn keyboard_focus_keeps_selecting_the_entire_numeric_field() {
     for mode in 0..4 {
         let mut f = Field::new();
