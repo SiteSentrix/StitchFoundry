@@ -4467,3 +4467,4 @@ lighting	Light	Світло
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
 @msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" розміщує лінійний або радіальний градієнт, а не довільний
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
+	Make Image Dynamic	Зробити зображення динамічним
