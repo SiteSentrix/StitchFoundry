@@ -4846,10 +4846,12 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-geom",
+ "vectorcraft-plugins",
  "vectorcraft-testkit",
  "vectorcraft-text",
  "vello_common 0.2.0",
  "vello_cpu 0.2.0",
+ "wat",
  "weezl",
 ]
 

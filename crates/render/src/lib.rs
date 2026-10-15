@@ -421,6 +421,9 @@ pub struct Renderer {
     /// keeps the art's allocation, so no other art can get its address, and does not keep the
     /// art's content.
     symbols: Vec<(String, std::sync::Weak<Node>)>,
+    /// The plug-in revision ([`effects::plugin_revision`]) that `geom`, `fx_geom` and `fx_arts` were
+    /// last checked against (see [`Self::check_plugins`]).
+    plugin_revision: u64,
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<(usize, usize, u64, i32), StrokeEntry>,
@@ -577,6 +580,7 @@ impl Renderer {
             threads: default_threads(),
             geom: PtrMap::default(),
             symbols: vec![],
+            plugin_revision: 0,
             strokes: PtrMap::default(),
             cur: None,
             made_again: false,
@@ -633,6 +637,7 @@ impl Renderer {
                 return Rendered { width: w, height: h, pixels };
             }
         }
+        self.check_plugins();
         // The document's own symbols: proofing rewrites the colors and blend modes of their art.
         self.check_symbols(doc);
         let prepared = proof::prepare(doc, opts, &mut self.proof_art);
@@ -823,6 +828,7 @@ impl Renderer {
 
     /// Render node `n` of `doc` (its resources) into `w`×`h` transparent pixels through `view`.
     pub fn render_node(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<Rendered> {
+        self.check_plugins();
         self.check_symbols(doc);
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
@@ -861,6 +867,7 @@ impl Renderer {
         background: Option<[u8; 4]>,
         opts: &RenderOptions,
     ) -> Option<Rendered> {
+        self.check_plugins();
         self.check_symbols(doc);
         let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
         let s = (size as f64 - 2.0) / b.width().max(b.height()).max(1e-6);
@@ -920,6 +927,24 @@ impl Renderer {
             self.geom.retain(|_, e| !holds_instance(&e.node));
             self.symbols = doc.symbols.iter().map(|s| (s.name.clone(), Arc::downgrade(&s.art))).collect();
         }
+    }
+
+    /// When a plug-in has been installed or removed since the last check
+    /// ([`effects::plugin_revision`]), drop what the caches keep from plug-in effects: the effect
+    /// geometry of paths with a plug-in effect, the cull bounds of objects that have one or hold one,
+    /// of symbol instances and of the objects that hold them, and the art drawn for the effects of
+    /// objects with a plug-in effect. Rasters of raster effects and evaluations of live objects hold
+    /// the revision in their keys when what they draw has a plug-in effect (`fx::Inputs`,
+    /// `live::resources_key`).
+    fn check_plugins(&mut self) {
+        let revision = effects::plugin_revision();
+        if revision == self.plugin_revision {
+            return;
+        }
+        self.plugin_revision = revision;
+        self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
+        self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
+        self.fx_arts.retain(|(node, ..)| !effects::has_plugin_effect(node));
     }
 
     /// Cached region a clip group's clipping path `a` clips to ([`effects::clip_outline`]):
@@ -1086,7 +1111,8 @@ impl Renderer {
         if vectorcraft_doc::live::is_live(a) || effects::has_pathfinder(a) {
             return self.draw_live(ctx, f, a);
         }
-        // Its live-effect geometry depends on the node alone, so it can be kept across frames.
+        // Its live-effect geometry depends on the node alone, and for plug-in effects on the
+        // plug-ins installed (`check_plugins`), so it can be kept across frames.
         let outer = self.fx_owner.replace(a.clone());
         self.draw_node(ctx, f, a, true);
         self.fx_owner = outer;
@@ -2114,6 +2140,14 @@ fn holds_type(n: &Node) -> bool {
 fn holds_instance(n: &Node) -> bool {
     let mut holds = false;
     n.walk(&mut |c| holds |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
+    holds
+}
+
+/// Does `n` hold an object with a visible plug-in effect ([`effects::has_plugin_effect`]), in it or
+/// in the opacity masks of the objects in it?
+fn holds_plugin_effect(n: &Node) -> bool {
+    let mut holds = false;
+    n.walk(&mut |c| holds |= effects::has_plugin_effect(c) || c.extras().mask.as_ref().is_some_and(|m| holds_plugin_effect(&m.art)));
     holds
 }
 
