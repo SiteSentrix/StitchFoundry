@@ -884,6 +884,28 @@ fn artboard_options_position_moves_art_only_with_the_tool_option_on() {
     }
 }
 
+/// Opened while another tool is in use, as the Artboards panel opens it (#1876), Artboard Options
+/// moves the art with a new X only when the Artboard tool's Move Artwork with Artboard option is
+/// on.
+#[test]
+fn artboard_options_position_follows_the_tool_option_with_another_tool() {
+    for move_art in [false, true] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run("tool.setOption", json!({"tool": "artboard", "key": "moveArt", "value": move_art})).unwrap();
+        app.run("tool.options", json!({"tool": "artboard"})).unwrap();
+        assert_ne!(app.session.tool_id(), "artboard");
+        app.ui.dialog.as_mut().unwrap().fields.insert("x".into(), json!(50));
+        frame(&mut app, Default::default());
+        super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect.x0, 50.0);
+        assert_eq!(
+            app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0,
+            if move_art { 60.0 } else { 10.0 }
+        );
+    }
+}
+
 /// Zig Zag's dialog has Size and Ridges per segment sliders, and Relative / Absolute and Smooth /
 /// Corner as radio buttons, not dropdowns (#1133).
 #[test]
