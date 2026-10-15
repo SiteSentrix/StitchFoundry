@@ -618,13 +618,7 @@ impl VectorcraftApp {
 
     /// The zero point shown by rulers and position fields; command coordinates stay absolute.
     pub(crate) fn ruler_origin(&self) -> vectorcraft_geom::Point {
-        let origin = self.session.active().map_or(vectorcraft_geom::Point::ZERO, |d| d.doc.ruler_origin);
-        // An untrusted file cannot make the ruler's tick loop or position fields overflow.
-        if origin.is_finite() && origin.x.abs() <= vectorcraft_engine::MAX_COORD && origin.y.abs() <= vectorcraft_engine::MAX_COORD {
-            origin
-        } else {
-            vectorcraft_geom::Point::ZERO
-        }
+        self.session.active().map_or(vectorcraft_geom::Point::ZERO, |d| d.doc.ruler_origin_or_zero())
     }
     pub fn view_mut(&mut self) -> Option<&mut View> {
         self.sync_views();
