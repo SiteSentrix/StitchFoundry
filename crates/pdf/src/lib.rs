@@ -215,7 +215,7 @@ pub enum PdfError {
     #[error("page {0} does not exist (the PDF has {1})")]
     BadPage(usize, usize),
     #[error(
-        "this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG"
+        "this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS"
     )]
     PostScript,
     #[error(

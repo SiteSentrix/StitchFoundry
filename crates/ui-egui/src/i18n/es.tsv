@@ -3973,7 +3973,7 @@ axis	Both	Ambos
 @msg	this file's PostScript couldn't be read ({why}): {what}	no se pudo leer el PostScript de este archivo ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	este formato admite una sola mesa de trabajo: exporta varias como PDF o con document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	este es un dibujo DWG, que no se puede leer: guárdalo desde la aplicación de CAD como DXF ASCII y abre ese archivo
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	este es un archivo PostScript (un .ai guardado en un formato antiguo o sin compatibilidad con PDF, o un archivo EPS), que todavía no se puede abrir: guárdalo como PDF, .ai compatible con PDF o SVG
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	este es un archivo PostScript (un .ai guardado en un formato antiguo o sin compatibilidad con PDF, o un archivo EPS), no un PDF: Archivo › Abrir y Archivo › Colocar lo leen como EPS
 @msg	this is not a PostScript file	este no es un archivo PostScript
 @msg	tool shortcuts must be a single key (optionally with Shift)	los atajos de herramientas deben ser una sola tecla (opcionalmente con Shift)
 @msg	truncated	truncado
