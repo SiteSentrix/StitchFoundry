@@ -3,7 +3,7 @@
 use serde_json::Value;
 use vectorcraft_geom::kurbo;
 use vectorcraft_geom::shapes::{self, KAPPA};
-use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, SubPath};
+use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, SubPath, corners};
 
 use crate::util::*;
 
@@ -24,15 +24,21 @@ pub fn convert_to_shape(id: &str, b: Rect, p: &Value) -> PathData {
     }
 }
 
-/// Round Corners: every sharp, handle-less corner becomes a circular-ish arc of `radius`.
+/// Round Corners: every sharp, handle-less corner becomes a circular-ish arc of `radius`. A corner
+/// whose anchor carries a handle (where a curve meets a line, or two curves meet) gets Live
+/// Corners' round cut instead ([`corners::cut_corners`], #1144): it meets each side `radius` from
+/// the corner, measured along the side, and trims a curved side to what is left of it.
 pub fn round_corners(path: &PathData, radius: f64) -> PathData {
     if radius <= 0.0 {
         return path.clone();
     }
     let mut subs = vec![];
+    // Per anchor of the result: an anchor with a handle, kept as it was, for the cut below.
+    let mut with_handle = vec![];
     for sp in &path.subpaths {
         let n = sp.anchors.len();
         if n < 3 && (n != 2 || sp.closed) {
+            with_handle.extend(sp.anchors.iter().map(|a| a.has_in() || a.has_out()));
             subs.push(sp.clone());
             continue;
         }
@@ -41,6 +47,7 @@ pub fn round_corners(path: &PathData, radius: f64) -> PathData {
             let a = sp.anchors[i];
             let interior = sp.closed || (i > 0 && i + 1 < n);
             if !interior || a.has_in() || a.has_out() {
+                with_handle.push(a.has_in() || a.has_out());
                 out.push(a);
                 continue;
             }
@@ -52,12 +59,14 @@ pub fn round_corners(path: &PathData, radius: f64) -> PathData {
             let (vp, vn) = (tp - a.p, tn - a.p);
             let (lp, ln) = (vp.hypot(), vn.hypot());
             if lp < 1e-9 || ln < 1e-9 {
+                with_handle.push(false);
                 out.push(a);
                 continue;
             }
             let (up, un) = (vp / lp, vn / ln);
             // Nearly straight: nothing to round.
             if up.dot(un) < -0.9999 {
+                with_handle.push(false);
                 out.push(a);
                 continue;
             }
@@ -65,12 +74,36 @@ pub fn round_corners(path: &PathData, radius: f64) -> PathData {
             let pa = a.p + up * d;
             let pb = a.p + un * d;
             let k = d * KAPPA;
+            with_handle.extend([false, false]);
             out.push(Anchor::with_handles(pa, pa, pa - up * k));
             out.push(Anchor::with_handles(pb, pb - un * k, pb));
         }
         subs.push(SubPath::new(out, sp.closed));
     }
-    PathData::new(subs)
+    let rounded = PathData::new(subs);
+    // The corners left: those whose anchor has a handle. Their cut reaches `radius` along each
+    // side, as above; setback = r · (1 + cos) / sin, solved for the arc's radius r.
+    let mut radii = vec![0.0; with_handle.len()];
+    for c in corners::path_corners(&rounded) {
+        if with_handle.get(c.index) == Some(&true)
+            && let Some(r) = radii.get_mut(c.index)
+        {
+            *r = radius * c.sin() / (1.0 + c.cos());
+        }
+    }
+    if radii.iter().all(|r| *r == 0.0) {
+        return rounded;
+    }
+    let (mut out, sources) = corners::cut_corners(&rounded, &radii, &[]);
+    // `cut_corners` starts a closed subpath whose first corner it cuts at the end of that cut;
+    // start at its start instead, as the rounding above does, so what depends on where a path
+    // starts (dashes, arrowheads after the effect) doesn't move.
+    for (sp, from) in out.subpaths.iter_mut().zip(&sources) {
+        if sp.closed && sp.anchors.len() > 1 && from.first() == from.last() {
+            sp.anchors.rotate_right(1);
+        }
+    }
+    out
 }
 
 fn flatten(path: &PathData) -> Vec<Vec<Point>> {

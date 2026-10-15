@@ -594,6 +594,66 @@ fn round_corners_replaces_corners() {
     assert_eq!(run("stylize.roundCorners", json!({}), &el), el);
 }
 
+/// A D: a straight back, a curved bowl, and two corners where the bowl meets the straight
+/// sides (the anchors there carry the bowl's handles).
+fn d_shape() -> PathData {
+    use vectorcraft_geom::Anchor;
+    let p = Point::new;
+    PathData::new(vec![SubPath::new(
+        vec![
+            Anchor::corner(p(0.0, 0.0)),
+            Anchor::with_handles(p(50.0, 0.0), p(50.0, 0.0), p(80.0, 20.0)),
+            Anchor::with_handles(p(50.0, 100.0), p(80.0, 80.0), p(50.0, 100.0)),
+            Anchor::corner(p(0.0, 100.0)),
+        ],
+        true,
+    )])
+}
+
+#[test]
+fn round_corners_also_rounds_where_a_curve_meets_a_line() {
+    let d = d_shape();
+    let out = run("stylize.roundCorners", json!({"radius": 8}), &d);
+    // All four corners are cut, the two curve-line ones too: two anchors each.
+    assert_eq!(out.anchor_count(), 8);
+    assert!(all_finite(&out));
+    // Every cut leaves both sides smoothly: no corner is left anywhere.
+    assert!(vectorcraft_geom::corners::path_corners(&out).is_empty(), "{out:?}");
+    let (before, after) = (d.to_bezpath().area().abs(), out.to_bezpath().area().abs());
+    assert!(after < before && after > before - 4.0 * 8.0 * 8.0, "{before} -> {after}");
+    // The cut at a curve-line corner meets the straight side 8 from the corner.
+    let p = Point::new;
+    assert!(out.subpaths[0].anchors.iter().any(|a| a.p.distance(p(42.0, 0.0)) < 1e-9), "{out:?}");
+}
+
+#[test]
+fn round_corners_keeps_straight_corners_as_they_were() {
+    // The D's straight corners are rounded as before, next to the new cuts: same anchors, same
+    // quarter-circle handles, and the path still starts at its first corner's rounding.
+    use vectorcraft_geom::Anchor;
+    let p = Point::new;
+    let k = 8.0 * shapes::KAPPA;
+    let out = stylize::round_corners(&d_shape(), 8.0);
+    let a = &out.subpaths[0].anchors;
+    assert_eq!(a[0], Anchor::with_handles(p(0.0, 8.0), p(0.0, 8.0), p(0.0, 8.0 - k)));
+    assert_eq!(a[1], Anchor::with_handles(p(8.0, 0.0), p(8.0 - k, 0.0), p(8.0, 0.0)));
+    // A path of straight corners only is rounded exactly as before.
+    assert_eq!(stylize::round_corners(&square(), 10.0).subpaths[0].anchors.len(), 8);
+}
+
+#[test]
+fn round_corners_keeps_where_a_closed_path_starts() {
+    // The D starting at a curve-line corner: the result starts where that corner's cut begins,
+    // on the side coming from the previous corner, as a straight corner's rounding does.
+    let mut d = d_shape();
+    d.subpaths[0].anchors.rotate_left(1);
+    let out = stylize::round_corners(&d, 8.0);
+    let start = out.subpaths[0].anchors[0].p;
+    assert!(start.distance(Point::new(42.0, 0.0)) < 1e-9, "{start:?}");
+    // An infinite radius rounds as much as fits, curve-line corners too.
+    assert_eq!(stylize::round_corners(&d, f64::INFINITY), stylize::round_corners(&d, 1e9));
+}
+
 #[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
