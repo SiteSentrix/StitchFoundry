@@ -36,7 +36,7 @@ pub(crate) fn signed(b: u8) -> i64 {
 
 pub(crate) fn plan(pattern: &Pattern, opts: &WriteOptions) -> Result<(Plan, PlanCfg), FormatError> {
     let cfg = PlanCfg::tenth_mm(true, MAX_STEP, MAX_STEP, opts.center);
-    let mut plan = build_plan(pattern, &cfg)?;
+    let mut plan = build_plan(pattern, &cfg.with(opts))?;
     plan.use_generic_threads();
     Ok((plan, cfg))
 }

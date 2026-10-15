@@ -5298,3 +5298,16 @@ machine	Stop	停止
 	Square corners	角形
 	Type the hoop's width and height as numbers	枠の幅と高さを数字で入力してください
 	in	インチ
+	Chenille	シェニール
+	Chenille Stitch	シェニールステッチ
+	Chenille Stops	シェニールの停止
+	Compound Chenille…	複合シェニール…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	チェーンの縁取りを前後に縫うモスフィル。図形の位置にグループで配置
+	Chain	チェーン
+	Chenille stops	シェニールの停止
+	Lockstitch	本縫い
+	Moss	モス
+	Moss pattern	モスのパターン
+	Needle height	針の高さ
+	Start	開始
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	モスで縫えるのはフィルとランです。先にサテンをフィルまたはランに変えてください

@@ -80,7 +80,12 @@ pub fn sample(format: Format) -> Pattern {
 
 /// Options with a fixed date so files are reproducible.
 pub fn options(center: bool) -> WriteOptions {
-    WriteOptions { name: "Sample 1".into(), center, timestamp: Some(Timestamp { year: 2026, month: 10, day: 10, hour: 12, minute: 0, second: 0 }) }
+    WriteOptions {
+        name: "Sample 1".into(),
+        center,
+        timestamp: Some(Timestamp { year: 2026, month: 10, day: 10, hour: 12, minute: 0, second: 0 }),
+        every_stop: false,
+    }
 }
 
 /// The non-move commands in order.

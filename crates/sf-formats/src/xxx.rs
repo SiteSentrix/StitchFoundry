@@ -40,7 +40,7 @@ const MAX_COLORS: usize = 10_000;
 
 pub(crate) fn plan(pattern: &Pattern, opts: &WriteOptions) -> Result<(Plan, PlanCfg), FormatError> {
     let cfg = PlanCfg::tenth_mm(true, MAX_STEP, MAX_STEP, opts.center);
-    let mut plan = build_plan(pattern, &cfg)?;
+    let mut plan = build_plan(pattern, &cfg.with(opts))?;
     // Only the colour is stored.
     for t in &mut plan.threads {
         *t = Thread { color: t.color, ..Thread::default() };

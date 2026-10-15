@@ -1797,6 +1797,74 @@ pub(crate) fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Chenille (CH-01): how the selected object sews on a chenille machine (lockstitch, chain or
+/// moss), its needle height and moss pattern, Compound Chenille for a fill, and the design's
+/// stops as the operator sets them.
+fn chenille_rows(app: &mut VectorcraftApp, ui: &mut Ui, id: u64, e: &Embroidery) {
+    use vectorcraft_embroidery::sf_core::model::{ChenilleStitch, Motif};
+    let kinds = ["none", "chain", "moss"];
+    let names = [tl!("Lockstitch"), tl!("Chain"), tl!("Moss")];
+    let cur = match e.chenille.map(|c| c.stitch) {
+        None => 0,
+        Some(ChenilleStitch::Chain) => 1,
+        Some(ChenilleStitch::Moss) => 2,
+    };
+    let mut change: Option<Value> = None;
+    if let Some(i) = pick(ui, tl!("Chenille"), "chenille", cur, &names)
+        && let Some(k) = kinds.get(i)
+    {
+        change = Some(json!({ "stitch": k }));
+    }
+    if let Some(c) = e.chenille {
+        if let Some(v) = num(ui, tl!("Needle height"), "chen-height", f64::from(c.height), "", 0) {
+            change = Some(json!({ "stitch": c.stitch.id(), "height": v.clamp(1.0, 9.0).round() as u64 }));
+        }
+        if c.stitch == ChenilleStitch::Moss {
+            let motif = match &e.stitch {
+                StitchType::Fill(f) => f.motif,
+                StitchType::Run(r) => r.motif,
+                _ => Motif::Coil,
+            };
+            let pats = [tl!("Coil"), tl!("Square loop")];
+            let cur = usize::from(motif == Motif::SquareLoop);
+            if let Some(i) = pick(ui, tl!("Moss pattern"), "chen-pat", cur, &pats) {
+                change = Some(json!({ "stitch": "moss", "height": c.height, "pattern": if i == 1 { "square" } else { "coil" } }));
+            }
+        }
+    }
+    if let Some(mut p) = change {
+        p["ids"] = json!([id]);
+        if let Err(err) = app.run("embroidery.chenille.set", p) {
+            app.status(err);
+        }
+    }
+    if matches!(e.stitch, StitchType::Fill(_))
+        && button(ui, tl!("Compound Chenille…"))
+            .on_hover_text(tl!("A moss fill with chain borders sewn before and after it, in a group in the shape's place"))
+            .clicked()
+        && let Err(err) = app.run("embroidery.chenille.compound", json!({ "ids": [id] }))
+    {
+        app.status(err);
+    }
+    // the stops the operator sets on the machine
+    let stops = app.run("embroidery.chenille.stops", json!({})).unwrap_or_default();
+    if let Some(start) = stops["start"].as_object() {
+        let list = stops["stops"].as_array().cloned().unwrap_or_default();
+        egui::CollapsingHeader::new(format!("{} ({})", tl!("Chenille stops"), list.len())).id_salt("chen-stops").show(ui, |ui| {
+            ui.label(format!("{}: {} {}", tl!("Start"), tl!("Chain"), start.get("height").and_then(Value::as_u64).unwrap_or(0)));
+            for st in list.iter().take(200) {
+                let n = st["stop"].as_u64().unwrap_or(0);
+                let what = match st["change"].as_str() {
+                    Some("color") => format!("{} {}", tl!("Thread"), st["name"].as_str().or(st["color"].as_str()).unwrap_or_default()),
+                    Some("stitch") => (if st["stitch"] == "moss" { tl!("Moss") } else { tl!("Chain") }).to_string(),
+                    _ => format!("{} {}", tl!("Needle height"), st["height"].as_u64().unwrap_or(0)),
+                };
+                ui.label(format!("{} {n}: {what}", tl!("Stop")));
+            }
+        });
+    }
+}
+
 /// The Motif tool's id.
 const MOTIF_TOOL: &str = "embroideryMotif";
 /// The Click-to-Stitch tool's id.
@@ -2496,6 +2564,9 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
     }
     if let Some(i) = pick(ui, tl!("Tie off"), "tieoff", index(e.tie_off), &ties) {
         set(app, target, json!({ "tie_off": value(i) }));
+    }
+    if let Target::Selection(id) = target {
+        chenille_rows(app, ui, id, e);
     }
     // Remove underlying stitching: the fills below leave out what this object covers.
     if let Some(v) = check(ui, tl!("Remove underlying stitching"), e.remove_underlying) {

@@ -65,7 +65,7 @@ const MAX_BLOCKS: usize = 10_000;
 
 pub(crate) fn plan(pattern: &Pattern, opts: &WriteOptions) -> Result<(Plan, PlanCfg), FormatError> {
     let cfg = PlanCfg::tenth_mm(false, MAX_STITCH, MAX_JUMP, opts.center);
-    let mut plan = build_plan(pattern, &cfg)?;
+    let mut plan = build_plan(pattern, &cfg.with(opts))?;
     if plan.threads.len() > usize::from(u16::MAX) {
         return Err(FormatError::TooLarge);
     }
@@ -368,7 +368,7 @@ mod tests {
         }
         p.trim();
         p.ensure_end();
-        let opts = WriteOptions { name: "Name".into(), center: false, timestamp: None };
+        let opts = WriteOptions { name: "Name".into(), center: false, timestamp: None, every_stop: false };
         let bytes = write(&p, &opts).unwrap();
         let mut c = Cursor::new(&bytes);
         c.skip(6).unwrap();

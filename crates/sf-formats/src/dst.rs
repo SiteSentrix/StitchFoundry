@@ -51,7 +51,7 @@ const COLOR_CHANGE: u8 = 0xC3;
 pub(crate) fn plan(pattern: &Pattern, opts: &WriteOptions) -> Result<(Plan, PlanCfg), FormatError> {
     // The header holds 5-digit extents; keep a margin for the trim marker.
     let cfg = PlanCfg { max_coord: 99_000, ..PlanCfg::tenth_mm(true, MAX_STEP, MAX_STEP, opts.center) };
-    let mut plan = build_plan(pattern, &cfg)?;
+    let mut plan = build_plan(pattern, &cfg.with(opts))?;
     plan.recs = place_trims(&plan.recs);
     plan.use_generic_threads();
     Ok((plan, cfg))

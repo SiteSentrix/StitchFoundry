@@ -44,6 +44,9 @@ pub(crate) struct PlanCfg {
     pub native_stop: bool,
     /// The needle starts at the origin: a jump leads to the first stitch.
     pub from_origin: bool,
+    /// Keep every stop, also stops with nothing sewn between them (a chenille machine's stops
+    /// each set something: the colour, the stitch, the needle height).
+    pub every_stop: bool,
 }
 
 impl PlanCfg {
@@ -59,7 +62,13 @@ impl PlanCfg {
             center,
             native_stop: false,
             from_origin: true,
+            every_stop: false,
         }
+    }
+
+    /// This configuration as the write options ask (keeping every stop).
+    pub fn with(self, opts: &crate::WriteOptions) -> Self {
+        PlanCfg { every_stop: opts.every_stop, ..self }
     }
 
     /// Pattern millimetres → file units.
@@ -251,7 +260,7 @@ pub(crate) fn build_plan(pattern: &Pattern, cfg: &PlanCfg) -> Result<Plan, Forma
                     }
                 }
                 Cmd::Stop => {
-                    if sewn_since_stop {
+                    if sewn_since_stop || cfg.every_stop {
                         recs.push(Rec { cmd: Cmd::Stop, x: cur.0, y: cur.1 });
                         sewn_since_stop = false;
                     }
@@ -319,6 +328,7 @@ pub fn normalize(pattern: &Pattern, max_step_mm: f64) -> Pattern {
         center: false,
         native_stop: true,
         from_origin: false,
+        every_stop: false,
     };
     let reach = MAX_COORD as f64 / UNITS;
     let mut clean = pattern.clone();

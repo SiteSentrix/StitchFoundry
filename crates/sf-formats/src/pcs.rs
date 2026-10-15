@@ -37,7 +37,7 @@ const MOVE: u8 = 0x04;
 pub(crate) fn plan(pattern: &Pattern, opts: &WriteOptions) -> Result<(Plan, PlanCfg), FormatError> {
     // 10 m at most, as the other formats.
     let cfg = PlanCfg { units_per_mm: UNITS, max_coord: 60_000, ..PlanCfg::tenth_mm(true, MAX_STEP, MAX_STEP, opts.center) };
-    let mut plan = build_plan(pattern, &cfg)?;
+    let mut plan = build_plan(pattern, &cfg.with(opts))?;
     // Only the colour is stored.
     for t in &mut plan.threads {
         *t = Thread { color: t.color, ..Thread::default() };

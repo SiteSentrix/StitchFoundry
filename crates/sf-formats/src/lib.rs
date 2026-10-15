@@ -255,11 +255,13 @@ pub struct WriteOptions {
     pub center: bool,
     /// Creation time stored by JEF files; `None` stores the current time.
     pub timestamp: Option<Timestamp>,
+    /// Keep every stop, also stops in a row (a chenille design's), instead of one.
+    pub every_stop: bool,
 }
 
 impl Default for WriteOptions {
     fn default() -> Self {
-        WriteOptions { name: String::new(), center: true, timestamp: None }
+        WriteOptions { name: String::new(), center: true, timestamp: None, every_stop: false }
     }
 }
 
