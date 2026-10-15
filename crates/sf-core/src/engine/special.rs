@@ -167,17 +167,28 @@ pub(crate) fn radial(polygon: &Polygon, center: Option<Point>, spacing: f64, spl
 /// cells along a row is sewn there and back: an X's "/" diagonals going and its "\" diagonals
 /// coming back, an upright cross's bars going and its middle line again coming back, a double
 /// cross both; a half cross's "/" diagonals are sewn once, rows in turn right to left.
-pub(crate) fn cross(polygon: &Polygon, cell: f64, style: CrossStyle, angle: f64, out: &mut Out, trim: f64) {
+///
+/// The grid is centred on the shape, or, given `anchor`, has a cell corner there (a
+/// cross-stitch pattern's grid, so every X lands in its cell).
+pub(crate) fn cross(polygon: &Polygon, cell: f64, style: CrossStyle, angle: f64, anchor: Option<Point>, out: &mut Out, trim: f64) {
     let cell = cell.clamp(1.0, 10.0);
     let fwd = Affine::rotate(angle.to_radians());
     let inv = Affine::rotate(-angle.to_radians());
     let mut p = polygon.clone();
     p.transform(&fwd);
     let bb = p.bbox();
-    let cols = ((bb.width() / cell).ceil() as i64).max(1);
-    let rows = ((bb.height() / cell).ceil() as i64).max(1);
-    let x0 = bb.min.x - (cols as f64 * cell - bb.width()) * 0.5;
-    let y0 = bb.min.y - (rows as f64 * cell - bb.height()) * 0.5;
+    let (x0, y0, cols, rows) = match anchor.map(|a| fwd.apply(a)).filter(|a| a.x.is_finite() && a.y.is_finite()) {
+        Some(a) => {
+            let x0 = a.x + ((bb.min.x - a.x) / cell).floor() * cell;
+            let y0 = a.y + ((bb.min.y - a.y) / cell).floor() * cell;
+            (x0, y0, (((bb.max.x - x0) / cell).ceil() as i64).max(1), (((bb.max.y - y0) / cell).ceil() as i64).max(1))
+        }
+        None => {
+            let cols = ((bb.width() / cell).ceil() as i64).max(1);
+            let rows = ((bb.height() / cell).ceil() as i64).max(1);
+            (bb.min.x - (cols as f64 * cell - bb.width()) * 0.5, bb.min.y - (rows as f64 * cell - bb.height()) * 0.5, cols, rows)
+        }
+    };
     let corner = |c: i64, r: i64| inv.apply(Point::new(x0 + c as f64 * cell, y0 + r as f64 * cell));
     for r in 0..rows {
         // contiguous runs of cells whose centres are inside
@@ -828,6 +839,28 @@ mod tests {
     }
 
     #[test]
+    fn a_cross_grid_with_an_anchor_puts_its_corners_there() {
+        // a 6 mm square from (1, 1): with the grid's corner at (0, 0) the cells are whole mm
+        // multiples of 3, so the square's three middle cells (centres 1.5, 4.5) sew
+        let poly = Polygon::from_ring(vec![Point::new(1.0, 1.0), Point::new(7.0, 1.0), Point::new(7.0, 7.0), Point::new(1.0, 7.0)]);
+        let mut out = Out::new();
+        cross(&poly, 3.0, CrossStyle::Full, 0.0, Some(Point::new(0.0, 0.0)), &mut out, 1e9);
+        let on_grid = |v: f64, o: f64| ((v - o) / 3.0 - ((v - o) / 3.0).round()).abs() < 1e-9;
+        let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+        assert!(!pts.is_empty());
+        for p in &pts {
+            // corners, or travel along a grid line between rows
+            assert!(on_grid(p.x, 0.0) || on_grid(p.y, 0.0), "{p:?} off the grid");
+        }
+        // without the anchor the grid is centred on the shape: corners at 1, 4 and 7
+        let mut free = Out::new();
+        cross(&poly, 3.0, CrossStyle::Full, 0.0, None, &mut free, 1e9);
+        assert!(free.finish().iter().filter(|s| s.cmd == Cmd::Stitch).all(|s| on_grid(s.pos().x, 1.0) || on_grid(s.pos().y, 1.0)));
+        // the anchored grid has its corners at (0, 0), (3, 3) and (6, 6)
+        assert!(pts.iter().any(|p| p.distance(Point::new(3.0, 3.0)) < 1e-9) && pts.iter().any(|p| p.distance(Point::new(6.0, 6.0)) < 1e-9));
+    }
+
+    #[test]
     fn radial_and_cross() {
         let mut out = Out::new();
         radial(&square(20.0), None, 0.8, 7.0, &mut out, 2.0);
@@ -837,7 +870,7 @@ mod tests {
             assert!(w[0].pos().distance(w[1].pos()) <= 7.0 + 1e-6);
         }
         let mut out = Out::new();
-        cross(&square(12.0), 3.0, CrossStyle::Full, 0.0, &mut out, 2.0);
+        cross(&square(12.0), 3.0, CrossStyle::Full, 0.0, None, &mut out, 2.0);
         let st = out.finish();
         // 4×4 cells, each 4 diagonal stitches → 64 + connections
         assert!(st.len() >= 64, "{}", st.len());
@@ -849,7 +882,7 @@ mod tests {
         let poly = Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(9.0, 0.0), Point::new(9.0, 3.0), Point::new(0.0, 3.0)]);
         let stitches = |style| -> Vec<(Point, Point)> {
             let mut out = Out::new();
-            cross(&poly, 3.0, style, 0.0, &mut out, 1e9);
+            cross(&poly, 3.0, style, 0.0, None, &mut out, 1e9);
             let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
             pts.windows(2).map(|w| (w[0], w[1])).collect()
         };
@@ -876,7 +909,7 @@ mod tests {
         }
         // Half crosses on three rows: each row starts where the last one ended, one cell down.
         let mut out = Out::new();
-        cross(&square(9.0), 3.0, CrossStyle::Half, 0.0, &mut out, 1e9);
+        cross(&square(9.0), 3.0, CrossStyle::Half, 0.0, None, &mut out, 1e9);
         let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
         let sewn: f64 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
         let rows = 3.0 * (3.0 * 3.0 * std::f64::consts::SQRT_2 + 3.0 * 3.0);

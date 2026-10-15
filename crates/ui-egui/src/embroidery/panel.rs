@@ -1516,7 +1516,7 @@ fn draw_thumbnail(painter: &egui::Painter, r: egui::Rect, d: &Value) {
     let k = r.width().min(r.height()) / w.max(h).max(1.0);
     let o = egui::pos2(r.center().x - w * k / 2.0, r.center().y - h * k / 2.0);
     for block in d["preview"].as_array().into_iter().flatten() {
-        let Some(c) = block["color"].as_str().and_then(vectorcraft_embroidery::sf_core::Rgb::from_hex) else { continue };
+        let Some(c) = block["color"].as_str().and_then(Rgb::from_hex) else { continue };
         let stroke = egui::Stroke::new(0.8, egui::Color32::from_rgb(c.r, c.g, c.b));
         for run in block["runs"].as_array().into_iter().flatten().filter_map(Value::as_array) {
             let pts: Vec<egui::Pos2> =
@@ -1801,6 +1801,64 @@ pub(crate) fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
 const MOTIF_TOOL: &str = "embroideryMotif";
 /// The Click-to-Stitch tool's id.
 const CLICK_TOOL: &str = "embroideryClick";
+/// The Cross Stitch tool's id.
+const CROSS_TOOL: &str = "embroideryCrossStitch";
+
+/// The Cross Stitch tool's settings: the colour it paints (the selected pattern's colours one
+/// click away), Erase and the brush size.
+fn cross_stitch_tool_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let opts = app.session.tool_options_of(CROSS_TOOL);
+    let color = opts["color"].as_str().unwrap_or("#c0392b").to_string();
+    let set_opt = |app: &mut VectorcraftApp, key: &str, v: Value| {
+        app.run("tool.setOption", json!({ "tool": CROSS_TOOL, "values": { key: v } })).ok();
+    };
+    let hex = |c: [u8; 3]| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]);
+    ui.horizontal(|ui| {
+        ui.label(tl!("Thread colour"));
+        let mut c = Rgb::from_hex(&color).map_or([192, 57, 43], |c| [c.r, c.g, c.b]);
+        if ui.color_edit_button_srgb(&mut c).changed() {
+            set_opt(app, "color", json!(hex(c)));
+        }
+    });
+    // the selected pattern's colours, to paint with again
+    let info = app.run("embroidery.crossStitch.info", json!({})).ok();
+    let used: Vec<String> = info
+        .as_ref()
+        .and_then(|i| i["colors"].as_array())
+        .map(|list| list.iter().filter_map(|c| c["color"].as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    if !used.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tl!("Pattern colours"));
+            for c in used.iter().take(32) {
+                let Some(rgb) = Rgb::from_hex(c) else { continue };
+                let fill = egui::Color32::from_rgb(rgb.r, rgb.g, rgb.b);
+                let chosen = c.eq_ignore_ascii_case(&color);
+                let size = egui::vec2(18.0, 18.0);
+                let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+                ui.painter().rect_filled(rect, 3.0, fill);
+                if chosen {
+                    let t = Tokens::get(ui.ctx());
+                    ui.painter().rect_stroke(rect.expand(1.5), 3.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Outside);
+                }
+                if resp.on_hover_text(c.as_str()).clicked() {
+                    set_opt(app, "color", json!(c));
+                }
+            }
+        });
+    }
+    if let Some(v) = check(ui, tl!("Erase"), opts["erase"].as_bool().unwrap_or(false)) {
+        set_opt(app, "erase", json!(v));
+    }
+    let size = opts["size"].as_f64().unwrap_or(1.0);
+    if let Some(v) = num(ui, tl!("Brush (squares)"), "cross-size", size, "", 0) {
+        set_opt(app, "size", json!(v.clamp(1.0, 9.0).round() as u64));
+    }
+    ui.label(tl!("Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase"));
+    if info.is_none() && button(ui, tl!("New Cross-Stitch Pattern…")).clicked() {
+        app.run("embroidery.crossStitch.new", json!({})).ok();
+    }
+}
 
 /// Freehand digitizing: the radial widget and the embroidery brush.
 fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -1854,6 +1912,9 @@ fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("tool.setOption", json!({ "tool": CLICK_TOOL, "values": { "tolerance": v.clamp(0.0, 255.0).round() as u64 } })).ok();
         }
         ui.label(tl!("Click a region of an image to stitch it"));
+    }
+    if app.session.tool_id() == CROSS_TOOL {
+        cross_stitch_tool_rows(app, ui);
     }
     if !open {
         return;
@@ -3183,7 +3244,7 @@ fn colorway_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(cw) = active.checked_sub(1).and_then(|i| colorways.get(i)) else { return };
     for (slot, own) in slots.iter().enumerate() {
         let hex = cw["threads"][slot]["color"].as_str().or_else(|| own["color"].as_str()).unwrap_or("#000000");
-        let Some(c) = vectorcraft_embroidery::sf_core::Rgb::from_hex(hex) else { continue };
+        let Some(c) = Rgb::from_hex(hex) else { continue };
         let mut rgb = [c.r, c.g, c.b];
         ui.horizontal(|ui| {
             ui.label(own["name"].as_str().unwrap_or_default());
