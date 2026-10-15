@@ -4328,6 +4328,9 @@ axis	Both	Ambos
 	Blocks	Blocos
 	Frosted	Fosco
 	Tiny Lens	Lente Minúscula
+	Loaded Texture	Textura carregada
+	Load Texture…	Carregar textura…
+	Texture Image	Imagem da textura
 	Variable Options	Opções de Variável
 	Edit Data Set	Editar Conjunto de Dados
 	Accented Edges	Bordas Acentuadas
@@ -4845,3 +4848,4 @@ mark-style	Japanese	Japonesas
 	 out from a highlighted edge to place its dimension  |  	 para fora a partir de uma borda destacada para posicionar a cota  |  
 	Color Panel Options	Opções do Painel Cor
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve ser grayscale, rgb, hsb, cmyk ou websafe
+@msg	the image can't be read as a texture	a imagem não pode ser lida como textura
