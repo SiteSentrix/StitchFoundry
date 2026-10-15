@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Proof Setup",
             ["View", "Proof Setup"],
             None,
-            "{target?: \"workingCmyk\"|\"cmyk:<profile>\"|\"legacyMacRgb\"|\"srgb\"|\"monitorRgb\"|\"protanopia\"|\"deuteranopia\", intent?, simulatePaper?, proof?: bool (also turn Proof Colors on)} → proof state",
+            "{target?: \"workingCmyk\"|\"cmyk:<profile>\"|\"legacyMacRgb\"|\"srgb\"|\"monitorRgb\"|\"protanopia\"|\"deuteranopia\"|\"tritanopia\", intent?, simulatePaper?, proof?: bool (also turn Proof Colors on)} → proof state",
             always,
             proof_setup
         ),
