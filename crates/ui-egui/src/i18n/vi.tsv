@@ -2305,6 +2305,7 @@
 	Pathfinder Options…	Tùy chọn Pathfinder…
 	Pathfinders:	Pathfinder:
 	Paths	Đường dẫn
+	Path Length	Độ dài đường dẫn
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Đường dẫn: {paths}    Điểm neo: {anchors}    Màu: {colors}
 	Pattern	Họa tiết
 	Pattern Brush Options	Tùy chọn cọ họa tiết

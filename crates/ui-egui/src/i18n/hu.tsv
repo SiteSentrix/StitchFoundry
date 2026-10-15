@@ -2512,6 +2512,7 @@
 	Pathfinder Options…	Útvonalkezelő beállításai…
 	Pathfinders:	Útvonalkezelők:
 	Paths	Útvonalak
+	Path Length	Útvonalak hossza
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Útvonalak: {paths}    Horgonypontok: {anchors}    Színek: {colors}
 	Pattern	Mintázat
 	Pattern Brush Options	Mintázatecset beállításai

@@ -2048,6 +2048,7 @@
 	Pathfinder Options…	Options Pathfinder…
 	Pathfinders:	Pathfinders :
 	Paths	Tracés
+	Path Length	Longueur des tracés
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Tracés : {paths}    Points d’ancrage : {anchors}    Couleurs : {colors}
 	Pattern	Motif
 	Pattern Editing	Modification du motif
