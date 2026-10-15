@@ -753,6 +753,41 @@ fn uk() -> Lang {
     Lang::from_code("uk").expect("uk registered")
 }
 
+fn pt_br() -> Lang {
+    Lang::from_code("pt-br").expect("pt-br registered")
+}
+
+/// Brazilian Portuguese covers the complete interface and messages, with two plural forms like
+/// English (zero takes the plural).
+#[test]
+fn brazilian_portuguese_reads_as_portuguese() {
+    assert_eq!(pt_br().name(), "Português (Brasil)");
+    assert!(pt_br().complete_menus());
+    assert_eq!(Lang::from_pref("pt-br"), pt_br());
+    assert_eq!(Lang::from_pref("pt-BR"), pt_br());
+    for tag in ["pt-br", "pt_BR.UTF-8", "pt-BR", "pt_BR"] {
+        assert_eq!(lang_from_tag(tag), Some(pt_br()), "{tag}");
+    }
+    for (en, want) in [
+        ("Artboard Tool", "Ferramenta Mesa de Trabalho"),
+        ("Swatches", "Amostras"),
+        ("Pathfinder", "Localizador de Caminhos"),
+        ("Stroke", "Traçado"),
+        ("Fill", "Preenchimento"),
+        ("Direct Selection Tool", "Ferramenta Seleção Direta"),
+        ("Save As…", "Salvar Como…"),
+        ("Undo", "Desfazer"),
+        ("Close", "Fechar"),
+    ] {
+        assert_eq!(tr(pt_br(), en), want, "{en}");
+    }
+    assert_eq!(trn(pt_br(), 1, "{n} Layer", "{n} Layers"), "1 Camada");
+    assert_eq!(trn(pt_br(), 0, "{n} Layer", "{n} Layers"), "0 Camadas");
+    assert_eq!(trn(pt_br(), 3, "{n} Layer", "{n} Layers"), "3 Camadas");
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(pt_br(), nested), "o comando `object.group` não está disponível agora: nada selecionado");
+}
+
 /// Spanish uses the vector-illustration vocabulary its users know, has two plural forms like
 /// English, and reads the same in the menus and in the panels.
 #[test]
@@ -1161,7 +1196,7 @@ fn unknown_parameter_errors_are_translated() {
     for (cmd, p) in [("file.new", json!({"widht": 300})), ("select.all", json!({"zzz": 1})), ("shape.line", json!({"colour": "red"}))] {
         let e = vectorcraft_engine::check_params(cmd, &p).unwrap_err();
         let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{cmd} {p}: {e}") };
-        for code in COMPLETE_MESSAGES.iter().chain(&["pt-br"]) {
+        for code in COMPLETE_MESSAGES {
             let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
             assert!(!shown.contains("unknown parameter") && shown.contains(cmd), "{code}: {shown} ({msg})");
         }
@@ -1207,7 +1242,7 @@ fn select_key_param_error_is_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pl", "ru", "uk", "vi"];
+const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "uk", "vi"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
