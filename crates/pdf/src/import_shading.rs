@@ -44,11 +44,16 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, ink
         let t = i as f32 / N as f32;
         pts.push((t, sample(t)?.to_rgb()));
     }
+    // Every sample dropped since the last stop is checked against the line to the next one, not
+    // just its neighbours: a gentle curve (an exponential's N) looks straight between neighbours.
     let mut keep = vec![0usize];
     for w in 1..N {
-        let (Some(a), Some(p), Some(b)) = (keep.last().and_then(|&k| pts.get(k)), pts.get(w), pts.get(w + 1)) else { continue };
-        let u = (p.0 - a.0) / (b.0 - a.0).max(1e-6);
-        let off = (0..3).map(|k| (a.1[k] + (b.1[k] - a.1[k]) * u - p.1[k]).abs()).fold(0.0f32, f32::max);
+        let (Some(&k), Some(b)) = (keep.last(), pts.get(w + 1)) else { continue };
+        let Some(a) = pts.get(k) else { continue };
+        let off = pts.get(k + 1..=w).unwrap_or_default().iter().fold(0.0f32, |worst, p| {
+            let u = (p.0 - a.0) / (b.0 - a.0).max(1e-6);
+            (0..3).map(|c| (a.1[c] + (b.1[c] - a.1[c]) * u - p.1[c]).abs()).fold(worst, f32::max)
+        });
         if off > 1.5 / 255.0 {
             keep.push(w);
         }
