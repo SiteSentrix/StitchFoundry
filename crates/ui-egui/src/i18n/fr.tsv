@@ -5285,3 +5285,5 @@ machine	Stop	Arrêt
 	Downloaded:	Téléchargé :
 	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	Enregistrer pour ma machine télécharge le fichier que votre machine brode : copiez-le sur sa clé USB.
 @msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Fondu depuis le dégradé
+	Sew the gradient's colours blended the way it runs	Broder les couleurs du dégradé fondues dans son sens

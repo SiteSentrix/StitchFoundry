@@ -5257,3 +5257,5 @@ machine	Stop	Зупинка
 	Downloaded:	Завантажено:
 	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	«Зберегти для моєї машини» завантажує файл, який вишиває машина: скопіюйте його на її флешку.
 @msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Перехід із градієнта
+	Sew the gradient's colours blended the way it runs	Вишити кольори градієнта з переходом у його напрямку
