@@ -5380,3 +5380,8 @@ machine	Stop	Arrêt
 	joins needed: Join into One Line makes them	jonctions nécessaires : Joindre en une seule ligne les crée
 	longest	la plus longue
 @msg	nothing to add	rien à ajouter
+	Download All	Tout télécharger
+	Every font not downloaded yet, one after another	Chaque police pas encore téléchargée, l'une après l'autre
+	Fonts downloaded:	Polices téléchargées :
+	failed:	échecs :
+	fonts downloaded, ready for lettering	polices téléchargées, prêtes pour le lettrage

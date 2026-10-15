@@ -5368,3 +5368,8 @@ machine	Stop	Остановка
 	joins needed: Join into One Line makes them	нужно соединений: «Соединить в одну линию» их сделает
 	longest	самое длинное
 @msg	nothing to add	нечего добавить
+	Download All	Скачать все
+	Every font not downloaded yet, one after another	Каждый ещё не скачанный шрифт, один за другим
+	Fonts downloaded:	Скачано шрифтов:
+	failed:	не удалось:
+	fonts downloaded, ready for lettering	шрифтов скачано, готовы для надписей

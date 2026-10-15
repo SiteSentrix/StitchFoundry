@@ -4725,3 +4725,8 @@ machine	Stop	停止
 	Row spacing (0: the line's height)	列距 (0: 線條高度)
 	joins needed: Join into One Line makes them	處需要連接：「連接成一條線」會產生
 	longest	最長
+	Download All	全部下載
+	Every font not downloaded yet, one after another	逐一下載尚未下載的字型
+	Fonts downloaded:	已下載字型：
+	failed:	失敗：
+	fonts downloaded, ready for lettering	種字型已下載，可用於文字

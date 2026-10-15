@@ -5352,3 +5352,8 @@ machine	Stop	Зупинка
 	joins needed: Join into One Line makes them	потрібно з'єднань: «Об'єднати в одну лінію» їх зробить
 	longest	найдовше
 @msg	nothing to add	нічого додати
+	Download All	Завантажити всі
+	Every font not downloaded yet, one after another	Кожен ще не завантажений шрифт, один за одним
+	Fonts downloaded:	Завантажено шрифтів:
+	failed:	не вдалося:
+	fonts downloaded, ready for lettering	шрифтів завантажено, готові для написів

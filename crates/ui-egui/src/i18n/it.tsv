@@ -5372,3 +5372,8 @@ machine	Stop	Arresto
 	joins needed: Join into One Line makes them	giunzioni necessarie: Unisci in una linea le crea
 	longest	la più lunga
 @msg	nothing to add	niente da aggiungere
+	Download All	Scarica tutti
+	Every font not downloaded yet, one after another	Ogni font non ancora scaricato, uno dopo l'altro
+	Fonts downloaded:	Font scaricati:
+	failed:	non riusciti:
+	fonts downloaded, ready for lettering	font scaricati, pronti per le scritte

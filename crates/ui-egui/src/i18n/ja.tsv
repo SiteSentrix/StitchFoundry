@@ -5366,3 +5366,8 @@ machine	Stop	停止
 	joins needed: Join into One Line makes them	か所のつなぎが必要です。「1 本の線につなぐ」で作れます
 	longest	最長
 @msg	nothing to add	追加するものがありません
+	Download All	すべてダウンロード
+	Every font not downloaded yet, one after another	まだダウンロードしていないフォントを 1 つずつ
+	Fonts downloaded:	ダウンロードしたフォント:
+	failed:	失敗:
+	fonts downloaded, ready for lettering	個のフォントをダウンロードしました。文字入れに使えます

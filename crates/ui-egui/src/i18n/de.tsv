@@ -5326,3 +5326,8 @@ machine	Stop	Stopp
 	joins needed: Join into One Line makes them	Verbindungen nötig: Zu einer Linie verbinden erstellt sie
 	longest	längste
 @msg	nothing to add	nichts hinzuzufügen
+	Download All	Alle herunterladen
+	Every font not downloaded yet, one after another	Jede noch nicht heruntergeladene Schrift, eine nach der anderen
+	Fonts downloaded:	Heruntergeladene Schriften:
+	failed:	fehlgeschlagen:
+	fonts downloaded, ready for lettering	Schriften heruntergeladen, bereit zum Beschriften
