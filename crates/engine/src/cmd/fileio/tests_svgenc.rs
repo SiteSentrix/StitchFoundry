@@ -74,3 +74,20 @@ fn a_chosen_artboard_s_svg_holds_only_its_own_art() {
     let whole = text(&s.execute("document.serialize", &json!({"format": "svg"})).unwrap());
     assert_eq!(shapes(&whole).0, 2, "nothing named: the whole document's art");
 }
+
+/// Art grouped across artboards (one variant per artboard in one group) splits by artboard too.
+#[test]
+fn a_chosen_artboard_s_svg_leaves_out_its_neighbours_art_in_a_shared_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    let x = |s: &Session, b: usize| s.doc().unwrap().doc.artboards[b].rect.x0;
+    let (first, third) = (x(&s, 0), x(&s, 2));
+    s.execute("shape.rectangle", &json!({"x": first + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": third + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
+    let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
+    assert_eq!(third_only.matches("<path").count() + third_only.matches("<rect").count(), 1, "{third_only}");
+    assert!(third_only.contains(" C") || third_only.contains("<ellipse"), "{third_only}");
+}
