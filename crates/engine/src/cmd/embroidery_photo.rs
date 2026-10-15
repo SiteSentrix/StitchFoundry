@@ -64,15 +64,15 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// An image, its pixels and the map from pixel space to the document.
-struct Picture {
-    id: NodeId,
-    raster: Raster,
-    to_doc: kurbo::Affine,
+pub(super) struct Picture {
+    pub(super) id: NodeId,
+    pub(super) raster: Raster,
+    pub(super) to_doc: kurbo::Affine,
 }
 
 impl Picture {
     /// The image `id` (else the selected one) decoded.
-    fn get(s: &Session, p: &Value, cmd: &str) -> Result<Self> {
+    pub(super) fn get(s: &Session, p: &Value, cmd: &str) -> Result<Self> {
         let d = &s.doc()?.doc;
         let node = match p.get("id").and_then(Value::as_u64) {
             Some(id) => d.node(NodeId(id)).cloned(),
@@ -94,7 +94,7 @@ impl Picture {
     }
 
     /// The image's box in the document (points).
-    fn bounds(&self) -> kurbo::Rect {
+    pub(super) fn bounds(&self) -> kurbo::Rect {
         self.to_doc.transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, f64::from(self.raster.width), f64::from(self.raster.height)))
     }
 
@@ -113,7 +113,7 @@ impl Picture {
 
 /// `n` main colours of `px` (k-means in Lab from spread-out starting colours), most used first,
 /// each with how many of the pixels it stands for.
-fn main_colors(px: &[Rgb], n: usize) -> Vec<(Rgb, usize)> {
+pub(super) fn main_colors(px: &[Rgb], n: usize) -> Vec<(Rgb, usize)> {
     if px.is_empty() || n == 0 {
         return Vec::new();
     }
@@ -179,7 +179,7 @@ fn main_colors(px: &[Rgb], n: usize) -> Vec<(Rgb, usize)> {
 }
 
 /// The opaque pixels of `r`, sampled down to about `max` of them.
-fn sample(r: &Raster, max: usize) -> Vec<Rgb> {
+pub(super) fn sample(r: &Raster, max: usize) -> Vec<Rgb> {
     let total = r.width as usize * r.height as usize;
     let step = ((total as f64 / max.max(1) as f64).sqrt().ceil() as u32).max(1);
     let mut out = Vec::new();
@@ -195,7 +195,7 @@ fn sample(r: &Raster, max: usize) -> Vec<Rgb> {
 }
 
 /// The design's thread chart, or the one named.
-fn chart(s: &Session, p: &Value, cmd: &str) -> Result<ThreadChart> {
+pub(super) fn chart(s: &Session, p: &Value, cmd: &str) -> Result<ThreadChart> {
     let name = match str_param(p, "chart") {
         Some(n) => n.to_string(),
         None => s.doc()?.doc.embroidery.as_deref().map(|c| c.chart.clone()).filter(|c| !c.is_empty()).unwrap_or_else(|| "Generic".into()),
@@ -350,7 +350,7 @@ fn median(r: &Raster, radius: u32) -> Raster {
 }
 
 /// Each pixel the palette colour it is nearest (index; `None` transparent).
-fn quantise(r: &Raster, palette: &[Rgb]) -> Vec<Option<usize>> {
+pub(super) fn quantise(r: &Raster, palette: &[Rgb]) -> Vec<Option<usize>> {
     let labs: Vec<[f64; 3]> = palette.iter().map(|c| c.to_lab()).collect();
     let mut cache: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
     r.rgba
@@ -382,7 +382,7 @@ fn quantise(r: &Raster, palette: &[Rgb]) -> Vec<Option<usize>> {
 
 /// Specks and ragged edges given their neighbours' colour: each cell the most common of its 3 × 3
 /// neighbourhood when that is most of it, `passes` times.
-fn majority(cells: &mut [Option<usize>], w: usize, h: usize, passes: u32) {
+pub(super) fn majority(cells: &mut [Option<usize>], w: usize, h: usize, passes: u32) {
     for _ in 0..passes {
         let before = cells.to_vec();
         for y in 0..h {

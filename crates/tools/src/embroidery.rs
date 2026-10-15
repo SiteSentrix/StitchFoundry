@@ -12,6 +12,7 @@
 //!   stitch length, shape, thread colour).
 //! * **Column A/B** (`embroideryColumn`): click a satin column's two sides in turn;
 //!   picked with a column selected, it continues that column.
+//! * **Cross Stitch** (`embroideryCrossStitch`): paint a cross-stitch pattern's cells.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -30,6 +31,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "embroideryColumn" => Some(Box::new(ColumnTool::default())),
         "embroideryMotif" => Some(Box::new(MotifTool::default())),
         "embroideryClick" => Some(Box::new(ClickStitchTool::default())),
+        "embroideryCrossStitch" => Some(Box::new(CrossStitchTool::default())),
         _ => None,
     }
 }
@@ -841,6 +843,122 @@ impl Tool for ClickStitchTool {
             }
             _ => {}
         }
+    }
+}
+
+/// Cross Stitch tool: paint a cross-stitch pattern's cells by clicking or dragging over its grid
+/// (`embroidery.crossStitch.paint`), in the tool's colour; with `erase` on, or Alt held, the
+/// cells are cleared instead. A whole stroke is one step (Undo takes it back). Options: `color`
+/// (`#rrggbb`), `erase` and `size` (a square brush, 1 to 9 cells).
+pub struct CrossStitchTool {
+    pub color: String,
+    pub erase: bool,
+    pub size: u8,
+    stroke: Vec<Point>,
+    erasing: bool,
+}
+
+impl Default for CrossStitchTool {
+    fn default() -> Self {
+        CrossStitchTool { color: "#c0392b".into(), erase: false, size: 1, stroke: Vec::new(), erasing: false }
+    }
+}
+
+/// Most points one stroke keeps (the command's own limit).
+const MAX_STROKE: usize = 20_000;
+
+impl CrossStitchTool {
+    fn params(&self) -> Value {
+        let at: Vec<[f64; 2]> = self.stroke.iter().map(|p| [p.x, p.y]).collect();
+        let mut v = json!({ "at": at, "size": self.size, "erase": self.erasing });
+        if !self.erasing {
+            v["color"] = json!(self.color);
+        }
+        v
+    }
+}
+
+impl Tool for CrossStitchTool {
+    fn id(&self) -> &'static str {
+        "embroideryCrossStitch"
+    }
+
+    fn pointer(&mut self, _cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        const CMD: &str = "embroidery.crossStitch.paint";
+        match ev.kind {
+            PointerKind::Down => {
+                self.erasing = self.erase || ev.mods.alt;
+                self.stroke = vec![ev.pos];
+                let label = if self.erasing { "Erase Cross Stitches" } else { "Paint Cross Stitches" };
+                vec![Action::Begin(label.into()), Action::Preview(CMD.into(), self.params())]
+            }
+            PointerKind::Drag if !self.stroke.is_empty() => {
+                if self.stroke.len() < MAX_STROKE {
+                    self.stroke.push(ev.pos);
+                }
+                vec![Action::Preview(CMD.into(), self.params())]
+            }
+            PointerKind::Up if !self.stroke.is_empty() => {
+                if self.stroke.len() < MAX_STROKE {
+                    self.stroke.push(ev.pos);
+                }
+                let actions = vec![Action::Preview(CMD.into(), self.params()), Action::Commit];
+                self.stroke.clear();
+                actions
+            }
+            _ => vec![],
+        }
+    }
+
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && !self.stroke.is_empty() {
+            self.stroke.clear();
+            return vec![Action::Cancel];
+        }
+        vec![]
+    }
+
+    fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
+        Cursor::Crosshair
+    }
+
+    fn options(&self) -> Value {
+        json!({ "color": self.color, "erase": self.erase, "size": self.size })
+    }
+
+    fn set_option(&mut self, key: &str, value: &Value) {
+        match key {
+            "color" => {
+                if let Some(v) =
+                    value.as_str().filter(|v| v.len() == 7 && v.strip_prefix('#').is_some_and(|h| h.chars().all(|c| c.is_ascii_hexdigit())))
+                {
+                    self.color = v.to_ascii_lowercase();
+                }
+            }
+            "erase" => {
+                if let Some(v) = value.as_bool() {
+                    self.erase = v;
+                }
+            }
+            "size" => {
+                if let Some(v) = value.as_u64().filter(|v| (1..=9).contains(v)) {
+                    self.size = v as u8;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn busy(&self) -> bool {
+        !self.stroke.is_empty()
+    }
+
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if self.stroke.is_empty() {
+            return vec![];
+        }
+        self.stroke.clear();
+        vec![Action::Cancel]
     }
 }
 

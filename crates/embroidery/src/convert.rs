@@ -378,6 +378,10 @@ fn fill_objects(region: Polygon, params: FillParams, e: &Embroidery, out: &mut V
 
 /// A fill object for one region (see [`fill_objects`]).
 fn fill_object(region: Polygon, mut params: FillParams, e: &Embroidery) -> ObjectKind {
+    // a cross fill's centre is its grid's corner, kept in document points with the shape
+    if params.kind == FillKind::Cross {
+        params.center = params.center.map(|c| c * MM_PER_PT);
+    }
     let mut guides = guides_mm(e);
     let splits = splits_mm(e);
     let flow = if params.kind == FillKind::Tatami { flow_mm(e) } else { Vec::new() };

@@ -522,6 +522,34 @@ triangular grid (`even`), up to `count` (20), each turned at random with `turn`.
 motif's stitching and land in a group above the shape, which stays (delete it, or give it a
 fill to sew behind them).
 
+## Cross-stitch patterns
+
+A cross-stitch pattern is drawn square by square on a grid, the way counted cross stitch is
+charted, and sews as X stitches that sit exactly in their squares.
+
+- **Embroidery › Cross Stitch › New Cross-Stitch Pattern…** (`embroidery.crossStitch.new {cols?,
+  rows?, cell?, style?, at?}`) puts an empty grid on the page: 40 × 40 squares of 2.5 mm unless
+  you ask for others (1 to 300 squares a side, 1 to 10 mm a square). Its thin grey lines show
+  where the squares are and are never sewn.
+- **The Cross Stitch tool** (in the Embroidery tools) paints squares: click one, or drag across
+  several, in the tool's colour. *Erase* (or holding Alt) clears them instead, and *Brush* paints
+  a block of 1 to 9 squares across. A square has one colour: painting it again changes it. A
+  whole stroke is one step, so Undo takes it back. The Embroidery panel shows the tool's colour
+  (the pattern's colours are one click away), Erase and Brush.
+- **Embroidery › Cross Stitch › Cross Stitch from Image…** (`embroidery.crossStitch.fromImage
+  {cols?, colors?, cell?, style?, background?}`) turns the selected picture into a pattern over it:
+  60 squares across and 8 colours unless you choose, each colour matched to a thread of the
+  design's chart, stray single squares tidied, and the colour round the edges (the background)
+  left unsewn unless `background` is on. Then paint over it to fix anything.
+- Each colour is one object in the pattern's group, sewn row by row: going along a row it sews
+  the "/" half of each X, coming back the "\\" half, so the top stitches all lie the same way,
+  as hand cross stitch should. Lightest colours sew first.
+- `embroidery.crossStitch.set {cell?, style?}` changes a pattern's square size (it grows or shrinks
+  from its top left corner) or how squares sew: full X, half (one diagonal), upright (+) or
+  double (X and +). `embroidery.crossStitch.info` lists its size and each colour's squares.
+- Move the pattern as a whole (select the group); its squares and stitches move with it. Resize
+  it with the square size rather than by scaling.
+
 ## Clipart
 
 The Embroidery panel's **Clipart** section places simple motifs drawn for StitchFoundry (heart,
@@ -1670,6 +1698,7 @@ tool list for all parameters):
 | `embroidery.placeArt {svg, size?, at?, frame?, name?, minArea?}` | place flat-colour SVG art and digitize it, as Design from Prompt does with Claude's drawing (its linked files are never read); `frame` fits the SVG's page into a rectangle, as Redraw Image does over the image |
 | `embroidery.settings {hoop, fabric, chart, machine, …}`, `embroidery.applyFabric {name}` | design settings |
 | `embroidery.machine.list`, `embroidery.machine.save {name, newName?, format?, fromDesign?, …}`, `embroidery.machine.delete {name}` | machine profiles: change the standard ones, make, rename and delete your own |
+| `embroidery.crossStitch.new {cols?, rows?, cell?, style?, at?}`, `.paint {at? \| cells?, color?, erase?, size?}`, `.fromImage {cols?, colors?, background?}`, `.set {cell?, style?}`, `.info` | cross-stitch patterns: an empty grid, squares painted or erased, a picture as a pattern, square size and style, the colours and their squares |
 | `embroidery.sortByColor` | sew each colour in one go |
 | `embroidery.autoSequence {ids?}` | reorder for the fewest colour changes and the shortest travel, overlaps kept; with `ids`, only inside those groups |
 | `embroidery.matchThreads {chart?, all?}` | the chart's closest thread for each stitched object |

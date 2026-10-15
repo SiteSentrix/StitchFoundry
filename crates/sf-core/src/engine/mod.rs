@@ -219,7 +219,7 @@ fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<P
         FillKind::Contour => special::contour(piece, (params.spacing.max(0.2), params.rings), params.stitch_length.max(0.5), out, here, trim),
         FillKind::Spiral => special::spiral(piece, params.spacing.max(0.2), params.stitch_length.max(0.5), out, here, trim),
         FillKind::Radial => special::radial(piece, params.center, params.spacing.max(0.1), params.split_length, out, trim),
-        FillKind::Cross => special::cross(piece, params.stitch_length, params.cross, angle, out, trim),
+        FillKind::Cross => special::cross(piece, params.stitch_length, params.cross, angle, params.center, out, trim),
         FillKind::Meander => special::meander(piece, params.spacing.max(0.8), params.stitch_length.max(0.5), params.random, out, here, trim),
         FillKind::Motif => special::motif_fill(piece, params, angle, out, trim),
     }
