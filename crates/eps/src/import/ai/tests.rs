@@ -1062,6 +1062,21 @@ fn a_styled_object_inside_a_drawn_look_survives_it() {
     assert_eq!((shadow.id.as_str(), shadow.params["x"].as_f64(), shadow.params["y"].as_f64()), ("stylize.dropShadow", Some(3.0), Some(4.0)));
 }
 
+/// A styled object read in place of its drawn look keeps the transparency written on the look (the
+/// object's own, after the look's group ends): here 60 % in Multiply.
+#[test]
+fn a_styled_object_keeps_the_transparency_written_on_its_look() {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    // The object on `%_` lines sets its own paths' transparency back to normal, as files do.
+    let art_ =
+        format!("0 Ae\nu\n{RED}{}f\nU\n1 0.6 0 2 0 Xy\n6 () XW\n%_0 1 0 0 0 Xy\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{ART_STYLES}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!((a[0].opacity, a[0].blend), (0.6, BlendMode::Multiply));
+}
+
 #[test]
 fn a_gradient_mesh_reads_as_a_patch() {
     let corner = |rgb: &str, x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| {
