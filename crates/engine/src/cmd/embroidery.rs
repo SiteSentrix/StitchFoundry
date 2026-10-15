@@ -2362,8 +2362,8 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
     let to_pt = |q: &sf_core::Point| kurbo::Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM);
     // grown further and back again, so pieces close together (letters) share one outline
     let close = gap.max(1.0);
-    let wide = sf_core::geom::poly::offset(&sf_core::geom::poly::union(&polys), reach + close);
-    let grown = sf_core::geom::poly::offset(&wide, -close);
+    let wide = sf_core::geom::poly::offset_round(&sf_core::geom::poly::union(&polys), reach + close);
+    let grown = sf_core::geom::poly::offset_round(&wide, -close);
     let mut subpaths: Vec<vectorcraft_geom::path::SubPath> = grown
         .iter()
         .filter(|g| g.outer.len() >= 3)
@@ -2378,7 +2378,7 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
         let union = sf_core::geom::poly::union(&polys);
         for k in 1..count {
             let out = reach + spacing * k as f64;
-            let ring = sf_core::geom::poly::offset(&sf_core::geom::poly::offset(&union, out + close), -close);
+            let ring = sf_core::geom::poly::offset_round(&sf_core::geom::poly::offset_round(&union, out + close), -close);
             subpaths.extend(
                 ring.iter()
                     .filter(|g| g.outer.len() >= 3)
@@ -2429,6 +2429,11 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
         });
         let mut e = Embroidery::new(stitch);
         e.thread = Some(Thread::new(color, ""));
+        // a knockdown, emboss or background fill keeps its own angle: picked automatically, its
+        // rows would swirl round the art's outline
+        if filled {
+            e.auto_direction = false;
+        }
         if kind == "satin" {
             e.width = Some(width);
         }

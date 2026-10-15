@@ -203,6 +203,20 @@ pub fn offset(polys: &[Polygon], delta: f64) -> Vec<Polygon> {
     from_shapes(shapes.outline(&style))
 }
 
+/// [`offset`] with round corners: growing never makes a spike from a sharp tip (a sliver
+/// between pieces of a letter), so outlines round art stay smooth.
+pub fn offset_round(polys: &[Polygon], delta: f64) -> Vec<Polygon> {
+    if delta.abs() < 1e-9 {
+        return polys.to_vec();
+    }
+    let shapes = to_shapes(polys);
+    if shapes.is_empty() {
+        return Vec::new();
+    }
+    let style = OutlineStyle::new(delta).line_join(LineJoin::Round(0.25));
+    from_shapes(shapes.outline(&style))
+}
+
 /// The area lines `width` wide cover, with round ends and joins (closed lines go round), as
 /// polygons.
 pub fn stroke(lines: &[(Vec<Point>, bool)], width: f64) -> Vec<Polygon> {
