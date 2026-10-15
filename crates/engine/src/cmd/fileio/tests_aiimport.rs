@@ -282,6 +282,30 @@ fn type_asked_for_as_outlines_opens_a_file_whose_type_shows_from_its_pdf_part() 
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
 }
 
+/// A `.ai` saved in units of 10 points: its PDF part's page is 200 × 100 with `/UserUnit 10`, and
+/// its editing data has the artboard and a red rectangle in the same units. It opens at 2000 × 1000
+/// pt, from its editing data and from its PDF part alone, with the rectangle ten times as large,
+/// and `document.pdfInfo` gives the page in points (#1482).
+#[test]
+fn an_ai_file_with_a_user_unit_opens_at_its_size_in_points() {
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(20.0, 20.0, 60.0, 50.0))));
+    let file = ai::ai_with(&compressed(data.as_bytes()), "1 0 0 rg 20 20 40 30 re f", "/UserUnit 10");
+    let near = |r: vectorcraft_geom::Rect, want: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(want).all(|(a, b)| (a - b).abs() < 0.01);
+    let mut s = Session::new();
+    for (params, layers) in [(json!({}), ["Art"]), (json!({"editingData": false}), ["Page 1"])] {
+        let r = open(&mut s, "large.ai", &file, params.clone()).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(names(&doc.layers), layers, "{params}: {r}");
+        assert!(near(doc.artboards[0].rect, [0.0, 0.0, 2000.0, 1000.0]), "{params}: {:?}", doc.artboards[0].rect);
+        let art = doc.art_bounds().unwrap();
+        assert!(near(art, [200.0, 500.0, 600.0, 800.0]), "{params}: {art:?}");
+    }
+    let v = s.execute("document.pdfInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
+    let page = &v["pageInfo"][0];
+    assert_eq!((page["width"].as_f64(), page["height"].as_f64()), (Some(2000.0), Some(1000.0)), "{v}");
+    assert_eq!(page["boxes"]["media"], json!([0.0, 0.0, 2000.0, 1000.0]), "{v}");
+}
+
 /// A `.ai` of a 200 × 100 pt artboard with a 10 mm bleed: its PDF part's page is the artboard
 /// (its trim box) grown by the bleed, and a red square reaches 20 pt into the bleed, on the page
 /// as in the editing data. `key`: `AIPrivateData`, or `AIPDFPrivateData` for a PDF saved with its

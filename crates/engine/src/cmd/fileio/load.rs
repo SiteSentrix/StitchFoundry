@@ -153,14 +153,15 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// A PDF-compatible `.ai`, or a PDF saved with the editing data, read through the editor's own copy
 /// of its art, which it carries: its layers and hidden objects as they were, and the art outside
 /// its artboard (its PDF part has only what is on the artboards), as an EPS of the editor is read.
-/// Anything else as it was.
-fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>) -> (Document, Vec<String>) {
+/// Anything else as it was. `unit`: the size in points of a unit of the PDF part's user space (its
+/// first page's `UserUnit`).
+fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>, unit: f64) -> (Document, Vec<String>) {
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return (doc, warnings);
     }
     let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data);
+    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data, unit);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings);
@@ -228,7 +229,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                     // Pages of text alone: the editing copy alone where it reads, as for a file
                     // saved without its PDF part (#1387: else the page, which is the art).
                     let alone = r.only_text.then(|| from_editing_data_alone(bytes, opts)).flatten().and_then(|read| read.ok());
-                    Ok(alone.unwrap_or_else(|| through_editing_data(bytes, opts, r.document, r.warnings)))
+                    Ok(alone.unwrap_or_else(|| through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit)))
                 }
                 // Saved without its PDF part: the editing copy is all the file has.
                 Err(e) if e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string() => {

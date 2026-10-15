@@ -453,7 +453,8 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
         }
     }
     doc.limit_depth_noting(&mut warnings);
-    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text })
+    let user_unit = picked.first().and_then(|&n| pages.get(n)).map_or(1.0, |page| f64::from(page.user_unit()));
+    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text, user_unit })
 }
 
 /// The characters of a CID-keyed CFF font embedded without a ToUnicode map (as macOS writes
