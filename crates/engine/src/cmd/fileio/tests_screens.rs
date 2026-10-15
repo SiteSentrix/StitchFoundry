@@ -225,6 +225,43 @@ fn format_settings_apply_to_their_rows_and_rows_win() {
     assert!(f[2].1.len() < f[3].1.len(), "quality 5 is smaller than quality 100");
 }
 
+/// The format ids `text` lists as `a|b|c` after `start`, up to `end`, sorted.
+fn listed(text: &str, start: &str, end: char) -> Vec<String> {
+    let (_, rest) = text.split_once(start).unwrap_or_else(|| panic!("no `{start}` in {text}"));
+    let mut ids: Vec<String> = rest.split(end).next().unwrap_or_default().split('|').map(|f| f.trim().to_string()).collect();
+    ids.sort();
+    ids
+}
+
+/// The params text (a row's `format` and the keys of `settings`) and the refusal of a format a row
+/// can't have list exactly the formats a row writes.
+#[test]
+fn the_params_and_the_refusal_list_every_format_a_row_writes() {
+    let mut s = session(1);
+    let (mut written, mut refusals) = (vec![], vec![]);
+    for f in FORMATS.iter().filter(|f| f.write) {
+        match s.execute("document.exportForScreens", &json!({"formats": [{"format": f.id}]})) {
+            Ok(r) => {
+                assert_eq!(files(&r).len(), 1, "{}", f.id);
+                written.push(f.id.to_string());
+            }
+            Err(crate::EngineError::BadParams { msg, .. }) => refusals.push(msg),
+            Err(e) => panic!("{}: {e}", f.id),
+        }
+    }
+    written.sort();
+    let params = crate::cmd::find_command("document.exportForScreens").unwrap().params;
+    assert_eq!(listed(params, "[{format: ", ','), written, "a row's format");
+    assert_eq!(listed(params, "settings?: {", ':'), written, "the keys of settings");
+    assert!(!refusals.is_empty());
+    for msg in refusals {
+        let list = msg.strip_prefix("Export for Screens writes ").unwrap_or_else(|| panic!("{msg}"));
+        let mut ids: Vec<String> = list.replace(" or ", ", ").split(", ").map(str::to_string).collect();
+        ids.sort();
+        assert_eq!(ids, written, "{msg}");
+    }
+}
+
 #[test]
 fn zip_downloads_round_trip() {
     let mut s = session(2);
