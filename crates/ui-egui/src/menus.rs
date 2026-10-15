@@ -3504,13 +3504,16 @@ fn font_items(english_names: bool) -> Vec<Item> {
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the
 /// vector effects): (submenu, the catalogue's menu path of its effects).
-const RASTER_MENUS: [(&str, &[&str]); 8] = [
+/// The raster Stylize submenu shares its path with the vector one and lists only the effects at
+/// that path that [`vectorcraft_effects::PIXEL_EFFECTS`] names.
+const RASTER_MENUS: [(&str, &[&str]); 9] = [
     ("Artistic", &["Effect", "Artistic"]),
     ("Blur", &["Effect", "Blur"]),
     ("Brush Strokes", &["Effect", "Brush Strokes"]),
     ("Distort", &["Effect", "Distort"]),
     ("Pixelate", &["Effect", "Pixelate"]),
     ("Sharpen", &["Effect", "Sharpen"]),
+    ("Stylize", &["Effect", "Stylize"]),
     ("Texture", &["Effect", "Texture"]),
     ("Video", &["Effect", "Video"]),
 ];
@@ -3540,10 +3543,16 @@ fn effect_menu() -> Vec<Item> {
         "Warp",
     ];
     let top_level = |e: &vectorcraft_effects::EffectInfo| e.menu == ["Effect"] && order.contains(&e.label);
+    // An effect goes in the vector submenu its path names unless it is a Photoshop-style effect,
+    // which goes in the raster submenu of the same name when `RASTER_MENUS` has one (Stylize ›
+    // Glowing Edges).
+    let in_vector_menu =
+        |e: &vectorcraft_effects::EffectInfo| order.iter().any(|s| e.menu == ["Effect", *s]) && !vectorcraft_effects::PIXEL_EFFECTS.contains(&e.id);
     // The effects whose catalogue menu path is `path`.
-    let items_at = |path: &[&str]| -> Vec<Item> {
+    // `vector` picks the ones for the vector submenu or the ones for the raster submenu.
+    let items_at = |path: &[&str], vector: bool| -> Vec<Item> {
         cat.iter()
-            .filter(|e| e.menu == path)
+            .filter(|e| e.menu == path && in_vector_menu(e) == vector)
             .map(|e| match e.defaults.as_object().is_some_and(|o| o.is_empty()) {
                 // No options (Effect → Pathfinder): apply directly, like Illustrator.
                 true => Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })),
@@ -3556,7 +3565,7 @@ fn effect_menu() -> Vec<Item> {
             out.push(Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })));
             continue;
         }
-        let items = items_at(&["Effect", sub_name]);
+        let items = items_at(&["Effect", sub_name], true);
         if items.is_empty() {
             let placeholder = match sub_name {
                 "3D and Materials" => vec![todo("Extrude & Bevel…"), todo("Revolve…"), todo("Inflate…"), todo("Rotate…"), todo("Materials…")],
@@ -3583,7 +3592,7 @@ fn effect_menu() -> Vec<Item> {
     let raster: Vec<Item> = RASTER_MENUS
         .iter()
         .filter_map(|(name, path)| {
-            let items = items_at(path);
+            let items = items_at(path, false);
             (!items.is_empty()).then(|| sub(name, items))
         })
         .collect();
@@ -3593,9 +3602,7 @@ fn effect_menu() -> Vec<Item> {
         out.extend(raster);
     }
     // Anything not placed above (future effects) still shows up.
-    let placed = |e: &vectorcraft_effects::EffectInfo| {
-        top_level(e) || order.iter().any(|s| e.menu == ["Effect", *s]) || RASTER_MENUS.iter().any(|(_, path)| e.menu == *path)
-    };
+    let placed = |e: &vectorcraft_effects::EffectInfo| top_level(e) || in_vector_menu(e) || RASTER_MENUS.iter().any(|(_, path)| e.menu == *path);
     for e in cat.iter().filter(|e| !placed(e)) {
         out.push(Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })));
     }
