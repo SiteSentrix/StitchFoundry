@@ -1374,6 +1374,8 @@
 	Internal CSS	CSS interne
 	Internet Standard RGB (sRGB)	RVB standard Internet (sRGB)
 	Intersect	Intersection
+	Intertwine	Entrelacer
+	Arrange Intertwine Area	Disposer la zone entrelacée
 	Inverse	Inverser la sélection
 	Invert	Inverser
 	Invert Colors	Inverser les couleurs
@@ -3899,6 +3901,7 @@ axis	Both	Les deux
 @msg	select a gradient mesh	sélectionnez un filet de dégradé
 @msg	select a linked image: an embedded one has no file	sélectionnez une image liée : une image incorporée n’a pas de fichier
 @msg	select a repeat	sélectionnez une répétition
+@msg	select an Intertwine group	sélectionnez un groupe entrelacé
 @msg	select a stroke with a variable width	sélectionnez un contour de largeur variable
 @msg	select a symbol instance	sélectionnez une instance de symbole
 @msg	select an Image Trace object	sélectionnez un objet de vectorisation de l’image

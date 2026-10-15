@@ -18,11 +18,10 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::intertwine::over_area;
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind};
-use vectorcraft_geom::{FillRule, PathData, Point, SubPath, shapes};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_geom::{FillRule, PathData, Point, SubPath};
 use vectorcraft_pathops as po;
-use vectorcraft_render::effects;
+use vectorcraft_tools::intertwine::{Face, drawn_order, face_at, faces, faces_in, is_intertwine, nonempty};
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
@@ -35,9 +34,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Intertwine"],
             None,
-            "{ids?: two or more objects (default: the selection)} put the objects in an Intertwine group, where overlap areas can be arranged with object.intertwine.arrange → {id}",
+            "{ids?: two or more objects (default: the selection)} put the objects in an Intertwine group and choose the Intertwine tool, which arranges its overlap areas (object.intertwine.arrange) → {id}",
             has_selection,
             make
+        ),
+        cmd!(
+            "object.intertwine.edit",
+            "Edit",
+            ["Object", "Intertwine"],
+            None,
+            "{} choose the Intertwine tool for the selected Intertwine group (Esc or Enter goes back to the tool before)",
+            has_intertwine,
+            edit
         ),
         cmd!(
             "object.intertwine.release",
@@ -53,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Arrange Intertwine Area",
             [],
             None,
-            "{id?: Intertwine group (default: the selected one), at?: [x,y] (the overlap area under this point, as a click picks it) | area?: [[x,y]…] (a closed polygon drawn around overlap areas: every area whose inside it encloses), order?: toggle|front|back (toggle: the object drawn right below the top comes to the front, so two objects swap), member?: id (front and back: the object to move; default: back moves the top one)} → {count: areas changed, top: [id of the object now on top in each area]}",
+            "{id?: Intertwine group (default: the selected one), at?: [x,y] (the overlap area under this point, as a click picks it) | area?: [[x,y]…] (a closed polygon drawn around overlap areas: every area whose inside it encloses), order?: toggle|front|back (toggle: the object drawn right below the top comes to the front, so two objects swap), member?: id (front and back: the object to move; default: front brings the object right below the top, back sends the top one)} → {count: areas changed, top: [id of the object now on top in each area]}",
             has_intertwine,
             arrange
         ),
@@ -77,10 +85,6 @@ fn selected_groups(s: &Session) -> Vec<NodeId> {
     out
 }
 
-fn is_intertwine(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Intertwine { .. })
-}
-
 fn has_intertwine(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     if selected_groups(s).is_empty() { Err("select an Intertwine group".into()) } else { Ok(()) }
@@ -91,7 +95,8 @@ fn has_intertwine(s: &Session) -> std::result::Result<(), String> {
 /// Why `n` can't go into an Intertwine group, if it can't (the help page's limits: no nested
 /// Intertwine groups, Live Paint, Repeat or graphs).
 fn refused(d: &Document, n: &Node) -> Option<&'static str> {
-    if d.ancestry(n.id).unwrap_or_default().iter().filter_map(|a| d.node(*a)).any(is_intertwine) {
+    let around = d.ancestry(n.id).unwrap_or_default();
+    if around.iter().filter(|a| **a != n.id).filter_map(|a| d.node(*a)).any(is_intertwine) {
         return Some("an object already in an Intertwine group");
     }
     let mut why = None;
@@ -134,7 +139,24 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([id]);
         Ok(id)
     })?;
+    choose_tool(s)?;
     Ok(json!({ "id": id.0 }))
+}
+
+/// Choose the Intertwine tool, which goes back to the tool chosen now.
+fn choose_tool(s: &mut Session) -> Result<()> {
+    let prev = Some(s.tool_id()).filter(|t| *t != "intertwine");
+    let view = s.last_view;
+    s.select_tool("intertwine", view)?;
+    s.set_tool_option("prev", &json!(prev));
+    Ok(())
+}
+
+fn edit(s: &mut Session, _: &Value) -> Result<Value> {
+    let [g] = selected_groups(s)[..] else { return Err(bad("object.intertwine.edit", "select one Intertwine group")) };
+    s.select(|_, sel| sel.set([g]))?;
+    choose_tool(s)?;
+    Ok(json!({ "id": g.0 }))
 }
 
 fn release(s: &mut Session, _: &Value) -> Result<Value> {
@@ -173,116 +195,17 @@ enum Order {
     Back,
 }
 
-/// The area `n` paints, in document coordinates, filled non-zero: its visible fills and stroke
-/// outlines; type by its outlines; groups by their visible members; other objects by their
-/// bounds. Effects are left out. `None` when it paints nothing.
-pub(crate) fn painted_area(n: &Node) -> Option<PathData> {
-    if !n.visible {
-        return None;
-    }
-    let mut parts: Vec<PathData> = vec![];
-    let shape = match &n.kind {
-        NodeKind::Path { path, rule, guide: false, clipping: false, .. } => Some((path.clone(), *rule)),
-        NodeKind::Compound { children, rule } => {
-            let subs: Vec<SubPath> = children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect();
-            Some((PathData::new(subs), *rule))
-        }
-        NodeKind::Path { .. } => return None,
-        NodeKind::Group { children, clip: true } => {
-            // What the members paint inside the clipping path.
-            let clip = children.first().and_then(|c| match &c.kind {
-                NodeKind::Path { path, rule, .. } => Some(po::normalize(path, *rule)),
-                _ => c.geometric_bounds().map(shapes::rectangle),
-            })?;
-            let inside = unite(children.iter().skip(1).filter_map(|c| painted_area(c)).collect())?;
-            return nonempty(po::boolean(&inside, FillRule::NonZero, &clip, FillRule::NonZero, po::BoolOp::Intersect));
-        }
-        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Intertwine { children } => {
-            return unite(children.iter().filter_map(|c| painted_area(c)).collect());
-        }
-        NodeKind::Text(_) => return effects::outline_text(n).as_ref().and_then(painted_area),
-        _ => None,
-    };
-    match shape {
-        Some((path, rule)) => {
-            let filled = n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none()));
-            if filled {
-                parts.push(po::normalize(&path, rule));
-            }
-            for st in n.appearance.painted_strokes().filter(|st| st.width > 0.0 && st.width.is_finite()) {
-                parts.push(effects::stroke::outline_region(&path, rule, st));
-            }
-        }
-        None => parts.push(shapes::rectangle(n.visual_bounds()?)),
-    }
-    unite(parts)
-}
+/// The most points a drawn `area` may have (a long freehand loop has a few thousand).
+const MAX_AREA_POINTS: usize = 100_000;
 
-fn unite(parts: Vec<PathData>) -> Option<PathData> {
-    let parts: Vec<PathData> = parts.into_iter().filter(|p| !p.is_empty()).collect();
-    match parts.len() {
-        0 => None,
-        1 => parts.into_iter().next(),
-        _ => nonempty(po::unite_all(&parts.iter().map(|p| (p, FillRule::NonZero)).collect::<Vec<_>>())),
-    }
-}
-
-/// Areas smaller than this (pt²) are what a boolean leaves of an area taken from itself.
-const SLIVER: f64 = 1e-3;
-
-fn nonempty(p: PathData) -> Option<PathData> {
-    (!p.is_empty() && po::area(&p, FillRule::NonZero).abs() > SLIVER).then_some(p)
-}
-
-/// A closed polygon from `[[x,y]…]` (three points or more, finite).
+/// A closed polygon from `[[x,y]…]` (three to [`MAX_AREA_POINTS`] points, finite).
 fn polygon(v: &Value) -> Option<PathData> {
-    let pts: Vec<Point> = v.as_array()?.iter().map(|q| Some(Point::new(q.get(0)?.as_f64()?, q.get(1)?.as_f64()?))).collect::<Option<_>>()?;
+    let pts = v.as_array().filter(|a| a.len() <= MAX_AREA_POINTS)?;
+    let pts: Vec<Point> = pts.iter().map(|q| Some(Point::new(q.get(0)?.as_f64()?, q.get(1)?.as_f64()?))).collect::<Option<_>>()?;
     if pts.len() < 3 || pts.iter().any(|q| !(q.x.is_finite() && q.y.is_finite())) {
         return None;
     }
     Some(PathData::single(SubPath::polyline(&pts, true)))
-}
-
-fn contains(area: &PathData, p: Point) -> bool {
-    vectorcraft_geom::hit::fill_contains(&area.to_bezpath(), FillRule::NonZero, p)
-}
-
-/// One overlap area to arrange: its outline, a point inside it, and the members (child indices,
-/// bottom first) that paint there.
-struct Face {
-    path: PathData,
-    inside: Point,
-    members: Vec<usize>,
-}
-
-/// The overlap areas of `children` that `at` lies in, or that `lasso` encloses.
-fn faces(children: &[Arc<Node>], at: Option<Point>, lasso: Option<&PathData>) -> Vec<Face> {
-    let shapes: Vec<po::Shape> =
-        children.iter().enumerate().filter_map(|(i, c)| Some(po::Shape::new(painted_area(c)?, FillRule::NonZero, i as u64))).collect();
-    let key = |k: usize| shapes.get(k).map(|s| s.key as usize);
-    po::regions(&shapes)
-        .into_iter()
-        .filter(|r| r.sources.len() >= 2)
-        .filter_map(|r| {
-            let inside = match at {
-                Some(p) => r.contains(p).then_some(p)?,
-                None => po::interior_point(&r.path)?,
-            };
-            if lasso.is_some_and(|l| !contains(l, inside)) {
-                return None;
-            }
-            Some(Face { members: r.sources.iter().filter_map(|k| key(*k)).collect(), path: r.path, inside })
-        })
-        .collect()
-}
-
-/// The members of `face` in the order they are drawn there, bottom first: those drawn in their
-/// own order, then those drawn over the others there, each run in the group's order.
-fn drawn_order(children: &[Arc<Node>], face: &Face) -> Vec<usize> {
-    let over = |i: &usize| children.get(*i).and_then(|c| over_area(c)).is_some_and(|a| contains(a, face.inside));
-    let mut order = face.members.clone();
-    order.sort_by_key(|i| (over(i), *i));
-    order
 }
 
 /// `n`'s area with `face` added (`add`) or taken out.
@@ -341,7 +264,7 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
     };
     let lasso = match p.get("area") {
-        Some(v) => Some(polygon(v).ok_or_else(|| bad(C, "area must be a closed polygon of three or more [x, y] points"))?),
+        Some(v) => Some(polygon(v).ok_or_else(|| bad(C, "area must be a closed polygon of 3 to 100000 [x, y] points"))?),
         None => None,
     };
     if at.is_some() == lasso.is_some() {
@@ -365,7 +288,12 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
         Some(m) => Some(children.iter().position(|c| c.id == m).ok_or_else(|| bad(C, format!("object {} is not in this Intertwine group", m.0)))?),
         None => None,
     };
-    let found = faces(&children, at, lasso.as_ref());
+    let all = faces(&children);
+    let found = match (at, &lasso) {
+        (Some(p), _) => face_at(&all, p).into_iter().collect(),
+        (None, Some(l)) => faces_in(&all, l),
+        (None, None) => vec![],
+    };
     if found.is_empty() {
         return Err(bad(
             C,
@@ -389,7 +317,7 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
             let drawn = drawn_order(children, face);
             let (x, front) = match (order, member) {
                 (Order::Toggle, _) => (drawn.iter().rev().nth(1).copied(), true),
-                (Order::Front, m) => (m.or(drawn.last().copied()), true),
+                (Order::Front, m) => (m.or(drawn.iter().rev().nth(1).copied()), true),
                 (Order::Back, m) => (m.or(drawn.last().copied()), false),
             };
             let Some(x) = x else { continue };

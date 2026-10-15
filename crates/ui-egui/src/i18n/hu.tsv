@@ -1746,6 +1746,8 @@
 	Internet Standard RGB (sRGB)	Internetes szabványos RGB (sRGB)
 	Interpolation	Interpoláció
 	Intersect	Metszet
+	Intertwine	Összefonás
+	Arrange Intertwine Area	Összefonási terület elrendezése
 	Inverse	Kijelölés megfordítása
 	Invert	Invertálás
 	Invert Colors	Színek invertálása
@@ -4549,6 +4551,7 @@ imageTrace	Outline	Körvonal
 @msg	select a linked image: an embedded one has no file	jelölj ki egy csatolt képet: a beágyazottnak nincs fájlja
 @msg	select a Live Paint group	jelölj ki egy élőfestés-csoportot
 @msg	select a repeat	jelölj ki egy ismétlést
+@msg	select an Intertwine group	jelölj ki egy összefonási csoportot
 @msg	select a stroke with a variable width	jelölj ki egy változó szélességű körvonalat
 @msg	select a symbol instance	jelölj ki egy szimbólumpéldányt
 @msg	select an envelope	jelölj ki egy burkolót

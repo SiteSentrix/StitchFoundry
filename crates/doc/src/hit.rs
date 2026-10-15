@@ -292,20 +292,19 @@ fn hit_children(
 
 /// The order a click at `p` tries the children of `parent` in, front first: their stacking order
 /// from the top, except that in an Intertwine group the members drawn over the others at `p`
-/// come first.
-fn hit_order(parent: &Node, children: &[std::sync::Arc<Node>], p: Point) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..children.len()).rev().collect();
-    if matches!(parent.kind, NodeKind::Intertwine { .. }) {
-        let over = |i: &usize| {
-            children
-                .get(*i)
-                .and_then(|c| crate::intertwine::over_area(c))
-                .is_some_and(|a| fill_contains(&a.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p))
-        };
-        // A stable sort: the members drawn over the others keep their own order among them.
-        order.sort_by_key(|i| !over(i));
-    }
-    order
+/// come first (from the top among them too).
+fn hit_order<'a>(parent: &Node, children: &'a [std::sync::Arc<Node>], p: Point) -> impl Iterator<Item = usize> + 'a {
+    let over: Vec<usize> = if matches!(parent.kind, NodeKind::Intertwine { .. }) {
+        let contains = |a: &vectorcraft_geom::PathData| fill_contains(&a.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p);
+        (0..children.len()).rev().filter(|i| children.get(*i).and_then(|c| crate::intertwine::over_area(c)).is_some_and(contains)).collect()
+    } else {
+        vec![]
+    };
+    let rest = (0..children.len()).rev().filter({
+        let over = over.clone();
+        move |i| !over.contains(i)
+    });
+    over.into_iter().chain(rest)
 }
 
 /// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke

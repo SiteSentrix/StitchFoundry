@@ -59,7 +59,7 @@ fn make_puts_the_objects_in_an_intertwine_group_drawn_as_before() {
     assert!(matches!(n.kind, NodeKind::Intertwine { .. }));
     assert_eq!(n.kind_label(), "Intertwine");
     assert_eq!(n.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), [a, b], "the stacking order is kept");
-    assert_eq!(s.doc().unwrap().selection.objects.iter().copied().collect::<Vec<_>>(), [g]);
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [g]);
     let r = render(&s);
     assert!(blue(&r, 50, 30) && blue(&r, 50, 70), "B is in front at both crossings until an area is arranged");
 }
@@ -187,7 +187,7 @@ fn what_cannot_be_intertwined_is_refused_with_a_reason() {
     let g = id_of(&s.execute("object.intertwine.make", &json!({})).unwrap());
     let c = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap());
     let e = s.execute("object.intertwine.make", &json!({"ids": [g.0, c.0]})).unwrap_err();
-    assert!(e.to_string().contains("Intertwine group can't"), "{e}");
+    assert!(e.to_string().contains("an Intertwine group can't") && !e.to_string().contains("already"), "{e}");
     let e = s.execute("object.intertwine.make", &json!({"ids": [a.0, c.0]})).unwrap_err();
     assert!(e.to_string().contains("already in an Intertwine group"), "{e}");
     select(&mut s, &[g]);
@@ -201,4 +201,70 @@ fn what_cannot_be_intertwined_is_refused_with_a_reason() {
     assert!(e.to_string().contains("polygon"), "{e}");
     let e = s.execute("object.intertwine.arrange", &json!({"id": c.0, "at": [1, 1]})).unwrap_err();
     assert!(e.to_string().contains("not an Intertwine group"), "{e}");
+}
+
+// ---------- on the canvas ----------
+
+fn press(s: &mut Session, pts: &[(f64, f64)], shift: bool) -> Vec<UiRequest> {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let view = ViewInfo::default();
+    let ev = |kind, (x, y): (f64, f64)| {
+        let mut e = PointerEvent::new(kind, x, y);
+        e.mods = Mods { shift, ..Mods::default() };
+        e
+    };
+    let (first, last) = (pts[0], pts[pts.len() - 1]);
+    s.pointer(&ev(PointerKind::Move, first), view).unwrap();
+    s.pointer(&ev(PointerKind::Down, first), view).unwrap();
+    for p in &pts[1..] {
+        s.pointer(&ev(PointerKind::Drag, *p), view).unwrap();
+    }
+    s.pointer(&ev(PointerKind::Up, last), view).unwrap()
+}
+
+#[test]
+fn make_chooses_the_intertwine_tool_and_a_click_on_an_overlap_arranges_it() {
+    let mut s = session();
+    let view = ViewInfo::default();
+    s.select_tool("ellipse", view).unwrap();
+    intertwined(&mut s);
+    assert_eq!(s.tool_id(), "intertwine");
+    // Hovering the overlap highlights it.
+    s.pointer(&vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Move, 50.0, 30.0), view).unwrap();
+    assert_eq!(s.overlays(view).len(), 1);
+    press(&mut s, &[(50.0, 30.0)], false);
+    let r = render(&s);
+    assert!(red(&r, 50, 30) && blue(&r, 50, 70));
+    // A click off any overlap changes nothing (and reports no error).
+    press(&mut s, &[(5.0, 5.0)], false);
+    assert!(red(&render(&s), 50, 30));
+    // Esc goes back to the tool chosen before Make.
+    let back = s.tool_key(vectorcraft_tools::ToolKey::Escape, Default::default(), view).unwrap();
+    assert_eq!(back, [UiRequest::SwitchTool("ellipse".into())]);
+}
+
+#[test]
+fn a_drag_around_overlaps_arranges_them_and_shift_drags_a_rectangle() {
+    let mut s = session();
+    intertwined(&mut s);
+    // A loop around the bottom crossing.
+    press(&mut s, &[(40.0, 60.0), (60.0, 60.0), (60.0, 80.0), (40.0, 80.0), (40.0, 61.0)], false);
+    let r = render(&s);
+    assert!(blue(&r, 50, 30) && red(&r, 50, 70));
+    // A rectangle around both.
+    press(&mut s, &[(40.0, 20.0), (50.0, 50.0), (60.0, 80.0)], true);
+    let r = render(&s);
+    assert!(red(&r, 50, 30) && blue(&r, 50, 70));
+}
+
+#[test]
+fn edit_chooses_the_tool_for_the_group_of_a_selected_member() {
+    let mut s = session();
+    let (g, a, _) = intertwined(&mut s);
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    select(&mut s, &[a]);
+    let v = s.execute("object.intertwine.edit", &json!({})).unwrap();
+    assert_eq!(v["id"], g.0);
+    assert_eq!(s.tool_id(), "intertwine");
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [g]);
 }

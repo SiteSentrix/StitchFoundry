@@ -1175,6 +1175,8 @@
 	Interlaced	Entrelaçado
 	Internet Standard RGB (sRGB)	RGB Padrão da Internet (sRGB)
 	Intersect	Interseção
+	Intertwine	Entrelaçar
+	Arrange Intertwine Area	Organizar área entrelaçada
 	Inverse	Inverso
 	Invert	Inverter
 	Invert Colors	Inverter Cores
@@ -3496,6 +3498,7 @@ axis	Both	Ambos
 @msg	select a gradient mesh	selecione uma malha de gradiente
 @msg	select a linked image: an embedded one has no file	selecione uma imagem vinculada: uma incorporada não tem arquivo
 @msg	select a repeat	selecione uma repetição
+@msg	select an Intertwine group	selecione um grupo entrelaçado
 @msg	select a stroke with a variable width	selecione um traço com largura variável
 @msg	select a symbol instance	selecione uma instância de símbolo
 @msg	select an Image Trace object	selecione um objeto de Vetorização de imagem

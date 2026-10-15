@@ -422,6 +422,8 @@
 	Pathfinder	패스파인더
 	Add	더하기
 	Intersect	교차
+	Intertwine	교차
+	Arrange Intertwine Area	교차 영역 정렬
 	Exclude	제외
 	Subtract	빼기
 	Minus Back	뒤 개체 빼기
@@ -3728,6 +3730,7 @@ theme	Appearance	외관
 @msg	not in pattern editing mode	패턴 편집 모드가 아닙니다
 @msg	pattern missing	패턴이 없습니다
 @msg	select a repeat	반복을 선택하세요
+@msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select the art to repeat	반복할 아트웍을 선택하세요
 @msg	the document has no patterns	문서에 패턴이 없습니다
 @msg	no artboard	아트보드가 없습니다
