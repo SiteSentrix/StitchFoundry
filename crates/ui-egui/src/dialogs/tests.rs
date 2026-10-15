@@ -899,6 +899,128 @@ fn zig_zag_has_sliders_and_radio_buttons() {
     assert!(!lines.contains(&"Ridges:"), "{lines:?}");
 }
 
+/// Frames of the dialog layer on one context (so a drag and the keyboard focus last from frame to
+/// frame), with the screen-reader tree turned on.
+struct Frames {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl Frames {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        Self { ctx, time: 0.0 }
+    }
+
+    fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        self.time += 0.1;
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
+        let mut out = self.ctx.run_ui(input, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The center of the button that screen readers name `label`.
+    fn button(&mut self, app: &mut VectorcraftApp, label: &str) -> egui::Pos2 {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let node = nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == egui::accesskit::Role::Button);
+        let b = node.unwrap_or_else(|| panic!("no button named {label:?}")).1.bounds().expect("bounds");
+        egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
+    }
+
+    fn press(&mut self, app: &mut VectorcraftApp, at: egui::Pos2, pressed: bool) {
+        let button = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        self.run(app, vec![egui::Event::PointerMoved(at), button]);
+    }
+
+    fn drag(&mut self, app: &mut VectorcraftApp, from: egui::Pos2, by: egui::Vec2) {
+        self.press(app, from, true);
+        for k in 1..=4 {
+            self.run(app, vec![egui::Event::PointerMoved(from + by * k as f32 / 4.0)]);
+        }
+        self.press(app, from + by, false);
+    }
+
+    fn key(&mut self, app: &mut VectorcraftApp, key: egui::Key, modifiers: egui::Modifiers) {
+        let event = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        self.run(app, vec![egui::Event::ModifiersChanged(modifiers), event]);
+        self.run(app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    }
+}
+
+/// The corners in the open dialog, and those of the first object's first effect.
+fn free_distort_corners(app: &VectorcraftApp) -> (serde_json::Value, serde_json::Value) {
+    let s = app.session.active().unwrap();
+    let node = s.doc.node(s.selection.objects[0]).unwrap();
+    (app.ui.dialog.as_ref().unwrap().fields["corners"].clone(), node.appearance.effects[0].params["corners"].clone())
+}
+
+/// Free Distort's dialog moves the corner whose handle is dragged and leaves the other three; the
+/// preview and OK apply them, and the arrow keys move the handle that a click focused.
+#[test]
+fn free_distort_drags_one_corner_and_previews_it() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    app.run("effect.dialog", json!({"effect": "distort.freeDistort"})).unwrap();
+    let mut f = Frames::new();
+    // The box keeps the object's 2:1 proportions: 180 by 90 screen points.
+    let top_right = f.button(&mut app, "Top Right");
+    f.drag(&mut app, top_right, egui::vec2(27.0, 9.0));
+    let want = json!([[0.0, 0.0], [1.15, 0.1], [1.0, 1.0], [0.0, 1.0]]);
+    assert_eq!(free_distort_corners(&app), (want.clone(), want.clone()), "the dragged corner alone moves, and the preview follows");
+    let bottom_left = f.button(&mut app, "Bottom Left");
+    f.press(&mut app, bottom_left, true);
+    f.press(&mut app, bottom_left, false);
+    f.key(&mut app, egui::Key::ArrowLeft, egui::Modifiers::NONE);
+    f.key(&mut app, egui::Key::ArrowDown, egui::Modifiers::SHIFT);
+    let want = json!([[0.0, 0.0], [1.15, 0.1], [1.0, 1.0], [-0.01, 1.1]]);
+    assert_eq!(free_distort_corners(&app), (want.clone(), want.clone()));
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    let s = app.session.active().unwrap();
+    assert_eq!(s.doc.node(s.selection.objects[0]).unwrap().appearance.effects[0].params["corners"], want);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before, "one undo step");
+}
+
+/// An arrow key moves a corner that lies outside the dialog's area by one step, and Reset puts the
+/// corners of an applied Free Distort back on the box; OK keeps that.
+#[test]
+fn free_distort_reset_puts_the_corners_back() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let moved = json!([[0.2, 0.1], [0.9, 0.0], [1.0, 3.0], [0.0, 1.0]]);
+    app.run("effect.apply", json!({"effect": "distort.freeDistort", "params": {"corners": moved}})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.freeDistort", "index": 0})).unwrap();
+    let mut f = Frames::new();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["corners"], moved);
+    let bottom_right = f.button(&mut app, "Bottom Right");
+    f.press(&mut app, bottom_right, true);
+    f.press(&mut app, bottom_right, false);
+    f.key(&mut app, egui::Key::ArrowUp, egui::Modifiers::NONE);
+    let stepped = json!([[0.2, 0.1], [0.9, 0.0], [1.0, 2.99], [0.0, 1.0]]);
+    assert_eq!(free_distort_corners(&app), (stepped.clone(), stepped));
+    let reset = f.button(&mut app, "Reset");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    f.run(&mut app, vec![]);
+    let rest = json!(super::free_distort::IDENTITY);
+    assert_eq!(free_distort_corners(&app), (rest.clone(), rest.clone()));
+    confirm(&mut app).unwrap();
+    let s = app.session.active().unwrap();
+    let effects = &s.doc.node(s.selection.objects[0]).unwrap().appearance.effects;
+    assert_eq!((effects.len(), effects[0].params["corners"].clone()), (1, rest));
+}
+
 #[test]
 fn polar_grid_shared_canvas_click_defaults_units_counts_and_history() {
     use vectorcraft_doc::NodeId;

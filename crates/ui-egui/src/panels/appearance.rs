@@ -736,6 +736,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
         }
     }
     let mut change: Option<(String, Value)> = None;
+    let mut edit = false;
     let built_in = built_in_effect(&e.id);
     let (unit, relative) = (app.session.general_unit(), params.get("relative").and_then(Value::as_bool).unwrap_or(false));
     egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin { left: (EYE_W + 12.0) as i8, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
@@ -788,6 +789,10 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                             change = Some((key.clone(), json!(buf)));
                         }
                     }
+                    // Free Distort's corners are dragged in its dialog.
+                    _ if e.id == crate::dialogs::free_distort::FREE_DISTORT => {
+                        edit |= widgets::flat_button(ui, tl!("Edit…"), 48.0).clicked();
+                    }
                     other => {
                         widgets::dim_label(ui, &other.to_string());
                     }
@@ -797,6 +802,9 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     });
     if let Some((key, v)) = change {
         app.run("effect.setParams", json!({"item": item, "index": k, "params": {key: v}})).ok();
+    }
+    if edit {
+        app.run("effect.dialog", json!({"effect": e.id, "index": k, "item": item})).ok();
     }
 }
 

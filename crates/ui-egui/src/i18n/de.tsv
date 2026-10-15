@@ -4356,6 +4356,11 @@ theme	Appearance	Erscheinungsbild
 @msg	give the path `id`	geben Sie die `id` des Pfads an
 @msg	invalid stroke widths	ungültige Konturbreiten
 @msg	object has no weighted stroke	das Objekt hat keine Kontur mit einer gültigen positiven Stärke
+# Free Distort: the names of the handles on the four corners of its box.
+	Top Left	Oben links
+	Top Right	Oben rechts
+	Bottom Right	Unten rechts
+	Bottom Left	Unten links
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Einheitlicher Eckenradius
 	Top Left:	Oben links:
