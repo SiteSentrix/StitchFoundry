@@ -153,8 +153,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done:** the Shape Builder offers the empty areas closed shapes enclose as regions, such as the middle of four
   circles that touch, and merges them with the regions around them (#1691). Gap Detection is still missing.
 - **Done (#1910):** Transform Each's Reflect X flips left-right and Reflect Y flips top-bottom (aligned with
-  Effect › Distort › Transform). Properties flip buttons use the same Flip Horizontal / Flip Vertical labels as
-  the Transform panel.
+  Effect › Distort › Transform). Properties flip buttons keep the reference app's Properties names (Flip Along Horizontal / Vertical
+  Axis).
 - **Missing (noted for reporters, 2026-10-14):** deleting an interior anchor of an open path joins across the gap,
   where the documented behaviour removes the point and its connecting segments. Inside the estimate below.
 - **Missing:** Shape Builder misses planar regions and targets whole shapes (#937); Transform effect dialog's invisible checkboxes and missing options (#885);
@@ -296,7 +296,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-15 | minor | G11: Transform Each Reflect X/Y and Properties flip labels match left-right / top-bottom (#1910). Estimates unchanged. |
+| 2026-10-15 | minor | G11: Transform Each Reflect X flips left-right and Reflect Y top-bottom (#1910). Estimates unchanged. |
 | 2026-10-14 | minor | Quick Image Trace presets reveal the adjustment panel with Advanced open; Properties reopens it. Sliders keep their preset row until release so the re-trace is committed. UI regressions added; scores and remaining estimates unchanged. |
 | 2026-10-14 | minor | Revolve: automatic smooth vector shading, default-on Cap with continuous curved rims, and bounded seam joins; angular cut sides remain open. Scores and hour estimates unchanged at this rounding |
 | 2026-10-14 | minor | No entry closed. G8 and G11 record the later merges of 2026-10-14 (#1852, #1862–#1865, #1871–#1873, #1839, #1840, #1856); #1683 (Dim Images) and #1685 (failed-save dialog) are done by #1864 and #1865. Gaps noted for reporters: G1 Effect › Warp through Warp Options (#1760), Color Picker Tab order (#1692), aligning to a key anchor (#1636; the public Align page does not say how the key anchor is chosen); G7 custom toolbars (#1759), workspace panel widths (#1753); G11 Shape Builder regions between closed shapes (#1691), deleting an interior anchor of an open path; G13 Intertwine (#1763), gradient mesh from an embedded image (#1676), Image Trace radial gradients (draft #1849). Average and Join with a corner or smooth choice was already listed (G1). G12: a line two merges had left twice is there once, without Appearance of Black for output, which acts since #1750. Estimates unchanged |
