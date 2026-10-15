@@ -1351,6 +1351,8 @@
 	Internal CSS	Вътрешен CSS
 	Internet Standard RGB (sRGB)	Интернет стандартен RGB (sRGB)
 	Intersect	Пресечение
+	Intertwine	Преплитане
+	Arrange Intertwine Area	Подреждане на зоната на преплитане
 	Inverse	Инвертиране
 	Invert	Инвертиране
 	Invert Colors	Инвертиране на цветовете
@@ -3829,6 +3831,7 @@ axis	Both	И двете
 @msg	select a gradient mesh	изберете мрежа на градиент (gradient mesh)
 @msg	select a linked image: an embedded one has no file	изберете свързано изображение: вграденото няма файл
 @msg	select a repeat	изберете повторение (repeat)
+@msg	select an Intertwine group	изберете група за преплитане (Intertwine)
 @msg	select a stroke with a variable width	изберете щрих с променлива дебелина
 @msg	select a symbol instance	изберете екземпляр на символ
 @msg	select an Image Trace object	изберете обект за трасиране на изображение (Image Trace)
