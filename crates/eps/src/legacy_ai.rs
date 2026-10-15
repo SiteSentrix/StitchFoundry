@@ -91,7 +91,7 @@ const FREEFORM: &str = "freeform gradients are written as their average colour";
 const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
-const LIVE: &str = "symbols, blends, envelopes, meshes, repeats and placed documents are written as their art";
+const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art";
 const UNREADABLE_IMAGE: &str = "an image that can't be decoded or is too large was left out";
 const ELLIPTICAL: &str = "elliptical radial gradients are written circular";
 
@@ -605,7 +605,12 @@ impl<'a> Writer<'a> {
                     self.nest -= 1;
                 }
             }
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => {
                 self.warn(LIVE);
                 if self.nest < MAX_NEST {
                     let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
