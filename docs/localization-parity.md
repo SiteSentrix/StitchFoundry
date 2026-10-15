@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** minor (Swedish (`sv`) catalog added, complete under the tests; scores and estimates unchanged; Brazilian Portuguese (`pt-br`) catalog completed under the tests: menus, `tl!` literals and messages; 12-language score 71% → 74%; #1914) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (Finnish (`fi`) catalog added, complete under the tests; Swedish (`sv`) catalog added, complete under the tests; scores and estimates unchanged; Brazilian Portuguese (`pt-br`) catalog completed under the tests: menus, `tl!` literals and messages; 12-language score 71% → 74%; #1914) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -51,6 +51,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
 | Hungarian | `hu` | 4,524 rows: menus, `tl!` literals and messages complete (tests); one plural form | full |
 | Polish | `pl` | 4,510 rows (counted 2026-10-13): menus, `tl!` literals and messages complete (tests); one/few/many plurals | full; native review pending |
+| Finnish | `fi` | 4,770 rows: menus, `tl!` literals and messages complete (tests); one/other plurals, 668 `@msg` rows | full; AI-assisted, native proofreading pending |
 | Czech | `cs` | 4,411 catalog entries, including 636 `@msg` rows (measured locally 2026-10-11); menu, literal and message coverage enforced by tests | catalog complete; render-site gaps reduced; native review pending |
 | Swedish | `sv` | 4,770 rows, 668 of them `@msg` (counted 2026-10-15): menus, `tl!` literals and messages complete (tests); one/other plurals | full; native review welcome |
 
@@ -81,6 +82,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | Finnish (`fi`) catalog added, complete under the tests (menus, literals, messages; one/other plurals); AI-assisted, native proofreading pending |
 | 2026-10-15 | minor | Swedish (`sv`) catalog added, complete under the tests (menus, literals, messages; one/other plurals); every `sv-*` locale resolves to it; AI-drafted, native review welcome; scores and estimates unchanged |
 | 2026-10-14 | minor | Brazilian Portuguese (`pt-br`, #1914): catalog completed under the tests (menus, literals, messages); 12-language score 71% → 74%, hours 55–90 → 50–85 |
 | 2026-10-13 | minor | The Polish translator confirmed the Polish rows the maintainers had added after the catalog was written (#1614); Tool flyouts are as wide as their longest translated name and shortcut need, so names no longer run into shortcuts in Spanish and other languages (#1650, fixes #1616); scores and estimates unchanged |
