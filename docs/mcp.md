@@ -2275,6 +2275,22 @@ fills or strokes carry effects is written as one piece per fill and stroke, so o
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
 ```
 
+## Glass textures
+
+Glass (`distort.glass`) takes an image file as its surface in `params.textureImage`, as `{path}` or
+`{name?, dataBase64}`: a PNG, JPEG, GIF, WebP, TIFF, BMP, PSD or PSB file, decoded within the pixel allowance the
+renderer draws images in, counted as RGBA. `effect.apply` and `effect.setParams` store the image's gray levels in the effect as a grayscale PNG
+in base64 and set `texture: "loaded"` unless the params give a `texture`. `effect.list` reports the stored string,
+and a command given that string stores it unchanged. Any other string, a file that is not an image, or an image past
+the allowance is an error. A save keeps the texture with the effect. Glass lays the texture one image pixel per point
+at Scaling 100%, centered on the object's center and repeated in both directions. Each pixel's luma is the surface's
+height, from 0 for black to 1 pt for white. A transparent pixel counts as middle gray, and a partly transparent pixel
+is mixed with middle gray by its alpha.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"distort.glass","params":{"distortion":10,"textureImage":{"path":"/tmp/texture.png"}}}}}
+```
+
 ## Linked images
 
 A placed image linked to its file (`file.place {path}`, Link on) records the file's absolute path, its size,

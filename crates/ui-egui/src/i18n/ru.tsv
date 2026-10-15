@@ -4253,6 +4253,9 @@ axis	Both	Оба
 	Blocks	Блоки
 	Frosted	Матовое
 	Tiny Lens	Мелкие линзы
+	Loaded Texture	Загруженная текстура
+	Load Texture…	Загрузить текстуру…
+	Texture Image	Изображение текстуры
 	Rename Data Set	Переименовать набор данных
 	Rename Variable	Переименовать переменную
 	Variable Options	Параметры переменной
@@ -4407,6 +4410,7 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
+@msg	the image can't be read as a texture	изображение не удаётся прочитать как текстуру
 	Basic	Базовый
 	Fill and Stroke Controls	Элементы управления заливкой и обводкой
 	Coloring Controls	Элементы управления цветом

@@ -1801,6 +1801,8 @@
 	Load Profile…	Tải hồ sơ…
 	Load SVG into Clipboard	Tải SVG vào bảng tạm
 	Load Text into Clipboard	Tải văn bản vào bảng tạm
+	Load Texture…	Tải kết cấu…
+	Loaded Texture	Kết cấu đã tải
 	Local Libraries	Thư viện cục bộ
 	Locate Object	Xác định vị trí đối tượng
 	Location	Vị trí
@@ -3337,6 +3339,7 @@
 	Text Wrap Options	Tùy chọn bao văn bản
 	Text Wrap Options…	Tùy chọn bao văn bản…
 	Texture	Kết cấu
+	Texture Image	Ảnh kết cấu
 	Texturizer	Texturizer
 	Texturizer…	Texturizer…
 	Thai	Tiếng Thái
@@ -4260,6 +4263,7 @@ theme	Appearance	Giao diện
 @msg	The graphics were lost and couldn't be restarted.	Đồ họa đã mất và không thể khởi động lại.
 @msg	The graphics were lost and have been restarted	Đồ họa đã mất và đã được khởi động lại
 @msg	the guide is on a hidden or locked layer	đường căn nằm trên lớp ẩn hoặc bị khóa
+@msg	the image can't be read as a texture	không thể đọc ảnh làm kết cấu
 @msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	ảnh có kích thước {width} × {height} pixel, vượt quá giới hạn vector hóa ảnh ({max} megapixel)
 @msg	the image's pixels don't match its size	pixel ảnh không khớp với kích thước
 @msg	the layer has no objects to clip by	lớp không có đối tượng để cắt

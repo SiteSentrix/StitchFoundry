@@ -17,6 +17,7 @@ mod blur;
 mod brushstrokes;
 mod distort;
 mod edges;
+mod loaded;
 mod pixelate;
 mod sharpen;
 mod texture;
@@ -29,7 +30,8 @@ use crate::util::{flag, num, text};
 
 pub use blur::{SMART_BLUR_MODES, SmartBlurMode};
 pub use brushstrokes::{STROKE_DIRECTIONS, StrokeDirection};
-pub use distort::{GLASS_TEXTURES, GlassTexture};
+pub use distort::{GLASS_TEXTURES, GLASS_TEXTURES_LOADED, GlassTexture};
+pub use loaded::{LOADED, LoadedTexture, TEXTURE_IMAGE, texture};
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
@@ -67,7 +69,7 @@ pub const PIXEL_EFFECTS: [&str; 28] = [
 
 /// A Photoshop-style raster effect with its parameters read and clamped to their ranges. Lengths
 /// are in document units.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PixelFx {
     /// Artistic › Film Grain: monochrome grain in shadows and midtones, a wider bright
     /// highlight area (0..20), and tonal intensity (0..10), preserving coverage.
@@ -111,9 +113,9 @@ pub enum PixelFx {
     /// Distort › Diffuse Glow: the highlights glow white as strongly as `glow` (0..20), from the
     /// brightness `clear` (0..20) leaves clear, under white grain as dense as `graininess` (0..10).
     DiffuseGlow { graininess: f64, glow: f64, clear: f64 },
-    /// Distort › Glass: the object seen through a `texture` surface scaled by `scaling` (0.5..2),
-    /// bent by `distortion` (0..20), smoothed by `smoothness` (1..15), its heights turned over when
-    /// `invert`.
+    /// Distort › Glass: the object seen through a `texture` surface (a built-in one, or an image
+    /// the user loaded) scaled by `scaling` (0.5..2), bent by `distortion` (0..20), smoothed by
+    /// `smoothness` (1..15), its heights turned over when `invert`.
     Glass { distortion: f64, smoothness: f64, texture: GlassTexture, scaling: f64, invert: bool },
     /// Distort › Ocean Ripple: the object under ripples of `size` (1..15) shifting it as much as
     /// `magnitude` (0..20) says.
@@ -263,7 +265,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         "distort.glass" => PixelFx::Glass {
             distortion: num(p, "distortion", 5.0).clamp(0.0, 20.0),
             smoothness: num(p, "smoothness", 3.0).clamp(1.0, 15.0),
-            texture: GlassTexture::parse(text(p, "texture", "frosted")),
+            texture: GlassTexture::parse_with(text(p, "texture", "frosted"), p.get(TEXTURE_IMAGE).and_then(Value::as_str)),
             scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
             invert: flag(p, "invert", false),
         },
@@ -432,7 +434,7 @@ impl PixelFx {
             PixelFx::SprayedStrokes { length, radius, direction } => brushstrokes::sprayed_strokes(px, w, h, space, length, radius, direction),
             PixelFx::SumiE { width, pressure, contrast } => brushstrokes::sumi_e(px, w, h, space, width, pressure, contrast),
             PixelFx::DiffuseGlow { graininess, glow, clear } => distort::diffuse_glow(px, w, h, space, graininess, glow, clear),
-            PixelFx::Glass { distortion, smoothness, texture, scaling, invert } => {
+            PixelFx::Glass { distortion, smoothness, ref texture, scaling, invert } => {
                 distort::glass(px, w, h, space, distortion, smoothness, texture, scaling, invert)
             }
             PixelFx::OceanRipple { size, magnitude } => distort::ocean_ripple(px, w, h, space, size, magnitude),
@@ -458,8 +460,8 @@ impl PixelFx {
 
 /// The entry of `all` whose value in `table` (the same order) is `value`, any case; `default`
 /// otherwise.
-fn pick<T: Copy>(table: &[(&str, &str)], all: &[T], value: &str, default: T) -> T {
-    table.iter().zip(all).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(default, |(_, t)| *t)
+fn pick<T: Clone>(table: &[(&str, &str)], all: &[T], value: &str, default: T) -> T {
+    table.iter().zip(all).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(default, |(_, t)| t.clone())
 }
 
 /// `data` as `w` × `h` RGBA pixels, `None` when it isn't that size (or is empty).

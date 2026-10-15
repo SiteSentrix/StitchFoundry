@@ -4192,6 +4192,9 @@ effect	Soft	Меко
 	Blocks	Блокове
 	Frosted	Матирано
 	Tiny Lens	Малка леща
+	Loaded Texture	Заредена текстура
+	Load Texture…	Зареждане на текстура…
+	Texture Image	Изображение на текстурата
 	Rename Data Set	Преименуване на набор от данни
 	Rename Variable	Преименуване на променлива
 	Variable Options	Опции за променливи
@@ -4762,6 +4765,7 @@ mark-style	Japanese	Японски
 theme	Appearance	Външен вид
 	Load EPS into Clipboard	Зареждане на EPS в клипборда
 @msg	an image of {w} × {h} pixels is too large to draw	изображение с размери {w} × {h} пиксела е твърде голямо за рисуване
+@msg	the image can't be read as a texture	изображението не може да бъде прочетено като текстура
 	Fill and Stroke Controls	Управление на запълването и щриха
 	Coloring Controls	Управление на оцветяването
 	Draw Mode Controls	Управление на режима на рисуване

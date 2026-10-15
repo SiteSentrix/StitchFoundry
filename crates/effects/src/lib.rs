@@ -415,7 +415,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.glass",
             "Glass…",
             DISTORT,
-            "{distortion: 0..20 (5), smoothness: 1..15 (3), texture: \"blocks\"|\"canvas\"|\"frosted\"|\"tinyLens\" (\"frosted\"; surfaces made in code), scaling: % 50..200 (100), invert: bool (false; turns the surface's heights over)} makes the object look as if seen through glass",
+            "{distortion: 0..20 (5), smoothness: 1..15 (3), texture: \"blocks\"|\"canvas\"|\"frosted\"|\"tinyLens\"|\"loaded\" (\"frosted\"; \"loaded\" draws the image in textureImage and draws Frosted when there is none; the others are surfaces made in code), textureImage?: {path} | {name?, dataBase64} | string (Load Texture…: an image file that File › Place reads, within the renderer's pixel allowance, stored as its gray levels in a grayscale PNG in base64; a file sets texture to \"loaded\" unless texture is given, and the stored string, as effect.list gives it, is kept as it is), scaling: % 50..200 (100), invert: bool (false; turns the surface's heights over)} makes the object look as if seen through glass. A loaded texture lies one image pixel per point at 100 %, centered on the object's center and repeated; each pixel's luma is the surface's height, from 0 for black to 1 pt for white, and a transparent pixel counts as middle gray",
             json!({"distortion": 5.0, "smoothness": 3.0, "texture": "frosted", "scaling": 100.0, "invert": false}),
         ),
         r(

@@ -1991,6 +1991,8 @@
 	Load Profile…	Profil betöltése…
 	Load SVG into Clipboard	SVG betöltése a vágólapra
 	Load Text into Clipboard	Szöveg betöltése a vágólapra
+	Load Texture…	Textúra betöltése…
+	Loaded Texture	Betöltött textúra
 	Local Libraries	Helyi könyvtárak
 	Locate Object	Objektum megkeresése
 	Location	Hely
@@ -3650,6 +3652,7 @@
 	Text Wrap Options	Körbefuttatás beállításai
 	Text Wrap Options…	Körbefuttatás beállításai…
 	Texture	Textúra
+	Texture Image	Textúrakép
 	Texturizer	Textúrázó
 	Texturizer…	Textúrázó…
 	Thai	Thai
@@ -4806,6 +4809,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
+@msg	the image can't be read as a texture	a kép nem olvasható be textúraként
 	Fill and Stroke Controls	Kitöltés és körvonal vezérlői
 	Coloring Controls	Színezés vezérlői
 	Draw Mode Controls	Rajzolási mód vezérlői
