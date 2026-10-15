@@ -359,6 +359,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "y": num("First baseline y (area type: top)"),
                     "width": num("Area type frame width"),
                     "height": num("Area type frame height"),
+                    "vertical": {"type": "boolean", "description": "Vertical writing for point, area or path type (default false, horizontal), as text.create / text.createInPath"},
                     "fit": {"type": "string", "enum": ["none", "autoHeight", "shrinkText"], "description": "Area type: keep the frame (none), fit its height to the text (autoHeight) or scale overflowing text down (shrinkText)"},
                     "fitMinPercent": num("shrinkText: the smallest scale in percent, 10 to 100 (default 50)"),
                     "path": {"type": "integer", "description": "Existing path id to flow the text in (area) or along (onPath)"},
@@ -580,7 +581,7 @@ fn select_ids(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
 fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let text = a.get("text").and_then(Value::as_str).ok_or("missing string argument `text`")?;
     let mut style = json!({});
-    for k in ["size", "font", "color", "justify"] {
+    for k in ["size", "font", "color", "justify", "vertical"] {
         if let Some(v) = a.get(k) {
             style[k] = v.clone();
         }
