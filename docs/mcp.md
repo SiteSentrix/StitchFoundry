@@ -1862,6 +1862,10 @@ draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets
 every document they read except a native file and the native document that an SVG, PDF, `.ai` or EPS file carries
 (`restored: true`), which keep the grid they were saved with.
 
+`view.rotate {angle}` (desktop app) turns the view to `angle` degrees about the center of the canvas; a positive angle
+turns the art clockwise on screen. View › Rotate View and the status bar's angle menu run it. It returns `{angle}`, the
+angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0.
+
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
 default view) and to the mouse; they change what the tools show and how far a target pulls, and only Construction
 Guides change where a snapped point lands:
