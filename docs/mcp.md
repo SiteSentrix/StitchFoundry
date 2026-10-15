@@ -2477,8 +2477,10 @@ Screens doesn't write EPS.
 
 ## Print
 
-File → Print writes the job as a print-ready PDF (there is no printer driver): each page is a sheet of the chosen
-paper. `file.print {settings?, path?}` → `{pages, path | dataBase64, bytes, warnings}`; `print.preview {settings?}`
+File → Print lays the job out as a print-ready PDF, in which each page is a sheet of the chosen paper. The desktop app
+sends the PDF to the system's print service, and the web build opens the browser's print dialog on it. With PDF File
+picked as the printer, File → Print saves the PDF instead (see Printing). Headless, `file.print {settings?, path?}` →
+`{pages, path | dataBase64, bytes, warnings}`; `print.preview {settings?}`
 answers what it would print without writing it: `{pages (copies included), sheets: [{artboard, tile?, ink?, width,
 height, orientation, scale}] (one copy, in order), tiles: [{artboard, columns, rows, printed, tiles}] (document
 space), inks: [{name, spot, print, frequency, angle}], warnings, settings}`. `print.setup {settings?}` saves the
