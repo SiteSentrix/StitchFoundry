@@ -274,6 +274,28 @@ pub struct ObjectSpan {
 pub struct Built {
     pub pattern: Pattern,
     pub spans: Vec<ObjectSpan>,
+    /// A chenille design's stops, each with what the operator sets at it (a chenille machine's
+    /// single stop codes can't tell a colour from a stitch or a needle height). Empty for a
+    /// design with no chenille.
+    pub chenille_stops: Vec<ChenilleStop>,
+}
+
+/// One stop of a chenille design: its record in the pattern and what changes there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChenilleStop {
+    pub record: usize,
+    pub change: ChenilleChange,
+}
+
+/// What a chenille design's stop changes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ChenilleChange {
+    /// The next thread (its index in the pattern's threads).
+    Color(usize),
+    /// Chain or moss from here.
+    Stitch(crate::model::ChenilleStitch),
+    /// The needle height from here.
+    Height(u8),
 }
 
 impl Built {
@@ -585,6 +607,14 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
     let covers = branch_covers(design);
     // a basting run, sewn first in the first thread
     let mut basting = settings.basting.and_then(|b| b.stitches(design.bbox(), design.hoop.as_ref()));
+    // a chenille design: a stop wherever the stitch (chain or moss) or the needle height changes,
+    // the machine starting in chain at the first chenille object's height
+    let mut chenille_stops: Vec<ChenilleStop> = Vec::new();
+    let mut chenille: Option<crate::model::Chenille> = design
+        .objects
+        .iter()
+        .find_map(|o| o.chenille.filter(|_| o.visible))
+        .map(|c| crate::model::Chenille { stitch: crate::model::ChenilleStitch::Chain, ..c });
     for (index, obj) in design.objects.iter().enumerate() {
         if !obj.visible {
             continue;
@@ -601,6 +631,10 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
             if current_color.is_some() {
                 em.cut();
                 em.p.color_change();
+                if chenille.is_some() {
+                    let record = em.p.stitches.len().saturating_sub(1);
+                    chenille_stops.push(ChenilleStop { record, change: ChenilleChange::Color(em.p.threads.len()) });
+                }
             }
             em.p.threads.push(design.thread(obj.color));
             current_color = Some(obj.color);
@@ -624,6 +658,19 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
         // Cuts above tie off the previous object; from here on ties are this object's.
         em.tie_in = obj.tie_in.unwrap_or(settings.tie_in);
         em.tie_off = obj.tie_off.unwrap_or(settings.tie_off);
+        // chenille: a stop for each of the stitch and the needle height that changes here
+        if let (Some(now), Some(cur)) = (obj.chenille, chenille.as_mut()) {
+            let at = em.p.current();
+            if now.stitch != cur.stitch {
+                em.p.add(at, Cmd::Stop);
+                chenille_stops.push(ChenilleStop { record: em.p.stitches.len().saturating_sub(1), change: ChenilleChange::Stitch(now.stitch) });
+            }
+            if now.height != cur.height {
+                em.p.add(at, Cmd::Stop);
+                chenille_stops.push(ChenilleStop { record: em.p.stitches.len().saturating_sub(1), change: ChenilleChange::Height(now.height) });
+            }
+            *cur = now;
+        }
         let start = em.p.stitches.len();
         em.object(&st);
         if obj.stop_after {
@@ -644,7 +691,7 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
     if !em.p.stitches.is_empty() {
         em.p.ensure_end();
     }
-    Built { pattern: em.p, spans }
+    Built { pattern: em.p, spans, chenille_stops }
 }
 
 /// Convenience: outline polygon of an object for hit-testing and previews.

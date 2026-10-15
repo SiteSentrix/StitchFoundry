@@ -64,7 +64,7 @@ pub(crate) fn plan(pattern: &Pattern, opts: &WriteOptions) -> Result<(Plan, Plan
 /// The plan with its threads mapped to the Brother palette, and their palette indices.
 fn plan_with_indices(pattern: &Pattern, opts: &WriteOptions) -> Result<(Plan, PlanCfg, Vec<usize>), FormatError> {
     let cfg = PlanCfg::tenth_mm(false, MAX_STEP, MAX_STEP, opts.center);
-    let mut plan = build_plan(pattern, &cfg)?;
+    let mut plan = build_plan(pattern, &cfg.with(opts))?;
     let indices = plan.map_to_chart(&pec_chart());
     // The count is stored as one byte (count − 1).
     if indices.len() > 256 {

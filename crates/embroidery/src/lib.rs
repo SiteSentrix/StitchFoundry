@@ -494,6 +494,7 @@ impl Planner {
                             o.stop_after = e.stop_after && k + 1 == count;
                             o.own_block = e.own_block && k == 0;
                             o.omit_last = e.omit_last && k + 1 == count;
+                            o.chenille = e.chenille;
                             // the palette index is resolved below; keep the thread colour
                             o.color = usize::from(color.r) << 16 | usize::from(color.g) << 8 | usize::from(color.b);
                             o

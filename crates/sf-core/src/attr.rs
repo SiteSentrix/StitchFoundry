@@ -571,6 +571,10 @@ pub struct Embroidery {
     /// the style changes the object too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<String>,
+    /// Sewn on a chenille machine as chain or moss, at a needle height (CH-01); `None`: a
+    /// lockstitch object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chenille: Option<crate::model::Chenille>,
 }
 
 /// How far (mm) fills cut by an object above still run in under its edge, so no
@@ -600,6 +604,7 @@ impl Embroidery {
             omit_last: false,
             frozen: None,
             style: None,
+            chenille: None,
         }
     }
 

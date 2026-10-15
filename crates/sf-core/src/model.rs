@@ -532,6 +532,48 @@ mod b64 {
 // Objects
 // ---------------------------------------------------------------------------
 
+/// A chenille machine's two stitches (CH-01): chain, link-like loops on top for outlines,
+/// borders and light fills, and moss, a dense looped pile for fills (coil and square-loop
+/// patterns). Public description:
+/// https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Chenille/chenille_basics/chenille_basics-3.htm
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChenilleStitch {
+    Chain,
+    Moss,
+}
+
+impl ChenilleStitch {
+    pub fn id(self) -> &'static str {
+        match self {
+            ChenilleStitch::Chain => "chain",
+            ChenilleStitch::Moss => "moss",
+        }
+    }
+}
+
+/// How an object sews on a chenille machine: chain or moss, at a needle height (the machine's
+/// own levels, 1 to 9: lower for outlines, higher for fills).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Chenille {
+    pub stitch: ChenilleStitch,
+    #[serde(default = "chenille_height")]
+    pub height: u8,
+}
+
+/// Needle heights a chenille object can take.
+pub const CHENILLE_HEIGHTS: std::ops::RangeInclusive<u8> = 1..=9;
+
+fn chenille_height() -> u8 {
+    5
+}
+
+impl Chenille {
+    pub fn new(stitch: ChenilleStitch, height: u8) -> Self {
+        Chenille { stitch, height: height.clamp(*CHENILLE_HEIGHTS.start(), *CHENILLE_HEIGHTS.end()) }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EmbObject {
     pub id: ObjectId,
@@ -576,6 +618,9 @@ pub struct EmbObject {
     /// to the next as running stitches where later ones of the branch cover it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch: Option<u64>,
+    /// Sewn on a chenille machine as chain or moss (`None`: a lockstitch object).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chenille: Option<Chenille>,
 }
 
 impl EmbObject {
@@ -598,6 +643,7 @@ impl EmbObject {
             own_block: false,
             omit_last: false,
             branch: None,
+            chenille: None,
         }
     }
 

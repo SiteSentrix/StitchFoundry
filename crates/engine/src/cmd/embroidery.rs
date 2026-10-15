@@ -970,7 +970,9 @@ pub(super) fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let title = &s.doc()?.doc.title;
     let name = str_param(p, "name").map_or_else(|| super::fileio::file_stem(title), str::to_string);
-    let mut opts = sf_formats::WriteOptions { name, center: bool_or(p, "center", true), ..sf_formats::WriteOptions::default() };
+    // a chenille design keeps all its stops: each sets the colour, the stitch or the needle height
+    let every_stop = !plan.built.chenille_stops.is_empty();
+    let mut opts = sf_formats::WriteOptions { name, center: bool_or(p, "center", true), every_stop, ..sf_formats::WriteOptions::default() };
     // a fixed place in the hoop: the design's middle there, not on the hoop's centre
     let offset = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.settings.hoop_offset).filter(|_| opts.center);
     let moved;

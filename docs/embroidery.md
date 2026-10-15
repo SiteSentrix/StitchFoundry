@@ -776,6 +776,35 @@ in.vp3", "Border Swirls 7x1.5 in.vp3", "Corner Swirls 2x2 in.vp3"): the usual si
 matches the size written on the tile. Sizes no hoop of yours takes are left out and said. The
 design's notes say how to mark and hoop. Patterns and wording are our own.
 
+## Chenille
+
+For chenille machines, which sew thick yarn without a bobbin thread, any stitched object can be
+chain or moss (Embroidery panel › **Chenille**, `embroidery.chenille.set {stitch: chain|moss|none,
+height?, pattern?}`):
+
+- **Chain** sews link-like loops on top: outlines, borders, monograms and light fills. The
+  object keeps its stitch type (a run is usual).
+- **Moss** sews a dense looped pile for fills. Its loops follow the **coil** or **square loop**
+  pattern: a fill becomes a motif fill and a run a motif run in that pattern. Satin can't be moss.
+- **Needle height** (1 to 9, the machine's own levels): lower for chain and outlines (3 unless
+  set), higher for moss fills (6).
+- **Compound Chenille…** (Embroidery › Chenille, or the panel with a fill selected;
+  `embroidery.chenille.compound {before?, after?, offset?, pattern?, height?, borderHeight?}`)
+  makes the shape a moss fill with chain borders sewn before it and after it (1 each unless set, up
+  to 3), following its outline inward `offset` apart (1.5 mm). The borders tie the moss in, as
+  chenille has no bobbin thread to hold it.
+- Machine files stop wherever the colour, the stitch (chain or moss) or the needle height
+  changes, one stop each, as chenille machines that work with single stop codes take them; the
+  machine starts in chain. The machine can't tell those stops apart, so **Chenille stops** in the
+  panel (Embroidery › Chenille › Chenille Stops, `embroidery.chenille.stops`) lists what to set at
+  each one. Tajima's own multi-stop chenille code tables aren't publicly described, so they aren't
+  written.
+- The canvas shows chenille objects with their ordinary stitches: chain and moss loops are formed
+  by the machine.
+
+Public descriptions: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Chenille/chenille_basics/chenille_basics-3.htm,
+https://docs.wilcom.com/embroiderystudio/e4/en/MainHelp/Chenille/chenille_output/Output_to_Tajima_chenille_machines.htm.
+
 ## Large designs
 
 Designs of 100,000 stitches and more stay quick to work with: a change to one object restitches
