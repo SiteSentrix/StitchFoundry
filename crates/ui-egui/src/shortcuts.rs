@@ -297,6 +297,28 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if ctx.input(|i| i.key_pressed(Key::Tab)) {
         ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
     }
+    // In Presentation Mode, ← and → go to the previous and the next artboard. Every arrow key press
+    // is removed from the input here, so no arrow key moves the selection or is sent to the tool.
+    if app.ui.screen_mode == 3 {
+        let mut steps = vec![];
+        ctx.input_mut(|i| {
+            i.events.retain(|e| match e {
+                egui::Event::Key { key: Key::ArrowLeft, pressed: true, .. } => {
+                    steps.push(false);
+                    false
+                }
+                egui::Event::Key { key: Key::ArrowRight, pressed: true, .. } => {
+                    steps.push(true);
+                    false
+                }
+                egui::Event::Key { key: Key::ArrowUp | Key::ArrowDown, pressed: true, .. } => false,
+                _ => true,
+            })
+        });
+        for next in steps {
+            presentation_step(app, next);
+        }
+    }
     // Type tool editing: text, IME composition and editing keys go to the tool.
     if app.session.tool_wants_text() {
         type_text(app, ctx);
@@ -513,6 +535,21 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if let Some(t) = lookup(crate::shortcut_editor::tool_for_key) {
             app.select_tool(t);
         }
+    }
+}
+
+/// Go to the next artboard (`next`) or the previous one with `view.goToArtboard`, as the status bar
+/// navigator's Next and Previous buttons do, for the arrow keys and a click in Presentation Mode.
+/// On the last artboard a step forward leaves the view as it is, and so does a step back on the
+/// first.
+pub(crate) fn presentation_step(app: &mut VectorcraftApp, next: bool) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    let at = crate::panels::artboards::selected(app, n);
+    let to = if next { (at + 1 < n).then_some("next") } else { (at > 0).then_some("previous") };
+    if let Some(to) = to
+        && let Err(e) = app.run("view.goToArtboard", json!({ "index": to }))
+    {
+        app.status(e);
     }
 }
 
