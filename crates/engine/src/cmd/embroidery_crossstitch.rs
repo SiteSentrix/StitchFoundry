@@ -599,10 +599,7 @@ fn paint(s: &mut Session, p: &Value) -> Result<Value> {
         .or_else(|| stroke.first().and_then(|q| all_patterns(d).into_iter().find(|g| Pattern::read(d, *g).is_some_and(|pat| pat.contains(*q)))))
         .ok_or_else(|| bad(CMD, "paint on a cross-stitch pattern (Embroidery › Cross Stitch › New Cross-Stitch Pattern)"))?;
     let mut pattern = Pattern::read(d, group).ok_or_else(|| bad(CMD, "that cross-stitch pattern can't be read"))?;
-    let thread = match color {
-        Some(c) => Some(nearest_thread(s, c)),
-        None => None,
-    };
+    let thread = color.map(|c| nearest_thread(s, c));
     let value = match color {
         Some(c) => Some(pattern.color_index(c, thread)?),
         None => None,
