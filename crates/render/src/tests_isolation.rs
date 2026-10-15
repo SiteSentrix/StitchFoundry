@@ -187,6 +187,34 @@ fn a_non_isolated_knockout_group_composites_its_children_against_the_backdrop() 
 }
 
 #[test]
+fn a_knockout_group_weights_a_partly_covered_pixel_by_the_coverage_once() {
+    // The upper Multiply square's left edge covers half of pixel column 40. There the upper square
+    // takes half of the pixel with its color composited against the backdrop, and the lower one
+    // keeps the other half (ISO 32000-1 §11.4.6). Right of x = 70 the backdrop is a stripe of
+    // another color, which the upper square multiplies with.
+    const T: [f32; 3] = [1.0, 0.4, 0.6];
+    const STRIPE: [f32; 3] = [0.3, 0.7, 0.9];
+    for isolate in [false, true] {
+        let mut d = doc(|d| {
+            let mut lower = rect(d, Rect::new(10.0, 10.0, 60.0, 90.0), S);
+            let mut upper = rect(d, Rect::new(40.5, 10.0, 90.0, 90.0), T);
+            (lower.blend, upper.blend) = (Blend::Multiply, Blend::Multiply);
+            let mut g = group(d, vec![lower, upper], 1.0, Blend::Normal, isolate);
+            g.knockout = Knockout::On;
+            g
+        });
+        let stripe = rect(&mut d, Rect::new(70.0, 0.0, 100.0, 100.0), STRIPE);
+        let l = d.layers[0].id;
+        d.insert(Some(l), 1, stripe).unwrap();
+        let r = render(&d);
+        // Isolated, each square multiplies with nothing and shows its own color.
+        let multiplied = |b: [f32; 3], c: [f32; 3]| if isolate { c } else { blend_rgb(Blend::Multiply, b, c) };
+        assert_near(r.pixel(40, 50), lerp(multiplied(B, S), multiplied(B, T), 0.5), &format!("half-covered edge, isolate {isolate}"));
+        assert_near(r.pixel(80, 50), multiplied(STRIPE, T), &format!("over the stripe, isolate {isolate}"));
+    }
+}
+
+#[test]
 fn trim_view_page_group_and_threads_keep_the_non_isolated_look() {
     let d = doc(|d| {
         let m = multiply(d);

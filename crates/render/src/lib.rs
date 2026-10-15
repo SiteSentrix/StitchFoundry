@@ -1359,15 +1359,18 @@ impl Renderer {
     /// object opacity without its opacity mask, or as drawn when its opacity and mask define the
     /// knockout shape), then adds itself: it composites against the group's backdrop instead of
     /// over the elements below it (the art below the group when the group is non-isolated and
-    /// drawn over a copy of it, see [`Self::group`]).
+    /// drawn over a copy of it, see [`Self::group`] and [`Self::knockout_over`]).
     fn draw_knockout(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>]) {
         let backdrop = self.backdrop.take();
         for c in Node::knockout_elements(children) {
             if self.skipped(f, c) {
                 continue;
             }
-            self.knockout_pass(ctx, f, c, Compose::DestOut, None);
-            self.knockout_pass(ctx, f, c, Compose::Plus, backdrop.as_ref());
+            self.knockout_pass(ctx, f, c, Compose::DestOut);
+            match &backdrop {
+                Some(b) => self.knockout_over(ctx, f, c, b),
+                None => self.knockout_pass(ctx, f, c, Compose::Plus),
+            }
         }
         self.backdrop = backdrop;
     }
