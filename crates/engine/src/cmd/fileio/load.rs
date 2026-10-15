@@ -254,6 +254,14 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // A PDF, `.ai` or `.ait` read from its pages or its editing copy, not restored from the document
+    // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
+    if matches!(format.id, "pdf" | "ai" | "ait")
+        && !restored
+        && let Some(info) = vectorcraft_pdf::file_info(bytes, opts.password.as_deref())
+    {
+        super::super::fileinfo::read_pdf(&mut doc.metadata, info);
+    }
     // Threaded type read from a file flows through its frames.
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);

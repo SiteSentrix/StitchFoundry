@@ -31,7 +31,8 @@
 //!   inks (Separation, DeviceN) as spot swatches at a tint; a file painted mostly in CMYK opens as a
 //!   CMYK document. [`ImportOptions`] pick the pages, the box each
 //!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
-//!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]).
+//!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]),
+//!   and [`file_info()`] reads its File Info (the information dictionary and the XMP packet).
 //! - Presets: named settings, the built-in ones generated in code ([`builtin_presets`]).
 //! - [`print()`] lays a document out on paper as File → Print does ([`PrintSettings`]) and writes
 //!   the job as a print-ready PDF: composite or one page per ink.
@@ -43,6 +44,7 @@
 mod editing;
 mod encrypt;
 mod export;
+mod file_info;
 mod forms;
 mod images;
 mod import;
@@ -70,6 +72,7 @@ mod syntax;
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
 pub use export::{export, export_with_report, page_areas};
+pub use file_info::{FileInfo, file_info};
 pub use import::{OFF_ARTBOARD_NOTE, PAST_PAGE_NOTE, import, import_with_report};
 pub use pages::{PageInfo, PdfInfo, has_illustrator_data, illustrator_data, info, is_postscript};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
@@ -248,6 +251,8 @@ mod tests_dashalign;
 mod tests_editing;
 #[cfg(test)]
 mod tests_encrypt;
+#[cfg(test)]
+mod tests_file_info;
 #[cfg(test)]
 mod tests_focal;
 #[cfg(test)]
