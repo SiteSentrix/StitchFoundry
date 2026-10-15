@@ -543,6 +543,9 @@ pub struct NodeExtras {
     /// Index of the graph series this generated group belongs to. Axes, the legend and other
     /// children leave it unset, so a series named "Legend" or "Axes" is not mistaken for them.
     pub series_index: Option<u32>,
+    /// The group holds the glyph outlines of type. Geometry effects that reshape it move and scale
+    /// the placed gradients in it with the outlines.
+    pub type_outlines: bool,
     /// Editable Shaper composition; the original art is retained in its source child.
     pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
     /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
@@ -567,6 +570,7 @@ static NO_EXTRAS: NodeExtras = NodeExtras {
     wrap: None,
     graph: None,
     series_index: None,
+    type_outlines: false,
     shaper: None,
     graphic_style: None,
     attrs: None,
@@ -696,6 +700,7 @@ impl Serialize for Node {
             e.wrap.is_none(),
             e.graph.is_none(),
             e.series_index.is_none(),
+            is_default(&e.type_outlines),
             e.shaper.is_none(),
             false,
             e.graphic_style.is_none(),
@@ -731,6 +736,7 @@ impl Serialize for Node {
         field!("wrap", &e.wrap);
         field!("graph", &e.graph);
         field!("series_index", &e.series_index);
+        field!("type_outlines", &e.type_outlines);
         field!("shaper", &e.shaper);
         field!("kind", &self.kind);
         field!("graphic_style", &e.graphic_style);
@@ -778,6 +784,8 @@ struct NodeWire {
     #[serde(default)]
     series_index: Option<u32>,
     #[serde(default)]
+    type_outlines: bool,
+    #[serde(default)]
     shaper: Option<Box<crate::shaper::ShaperSpec>>,
     kind: NodeKind,
     #[serde(default)]
@@ -802,6 +810,7 @@ impl From<NodeWire> for Node {
             wrap: w.wrap,
             graph: w.graph,
             series_index: w.series_index,
+            type_outlines: w.type_outlines,
             shaper: w.shaper,
             graphic_style: w.graphic_style,
             attrs: w.attrs,
@@ -1938,6 +1947,7 @@ mod tests {
             e.mask = Some(Box::new(OpacityMask::new(Node::group(NodeId(8), vec![]), true)));
             e.trace = Some(Box::new(serde_json::json!({"preset": "p"})));
             e.series_index = Some(2);
+            e.type_outlines = true;
             e.graphic_style = Some(3);
             e.attrs = Some(Box::default());
             e.slice = Some(Box::default());
@@ -1976,6 +1986,7 @@ mod tests {
             "mask",
             "trace",
             "series_index",
+            "type_outlines",
             "kind",
             "graphic_style",
             "attrs",

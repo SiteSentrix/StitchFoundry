@@ -356,6 +356,48 @@ fn objects_without_transparency_stay_unless_outlined() {
 }
 
 #[test]
+fn outlined_type_keeps_its_underline() {
+    let _settings = settings_lock();
+    let mut s = session();
+    let text = run(&mut s, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 24}))["id"].as_u64().unwrap();
+    run(&mut s, "text.setFormat", json!({"ids": [text], "underline": true}));
+    let (ids, ..) = flatten(&mut s, json!({"ids": [text], "textToOutlines": true}));
+    // "Hi" has no ink below its baseline (y 150): the outlines reach the bar under it.
+    let b = node(&s, ids[0]).geometric_bounds().unwrap();
+    assert!(b.y1 > 151.0, "{b:?}");
+}
+
+#[test]
+fn outlined_type_keeps_its_gradient_on_the_outlines_its_transform_effect_moves() {
+    let _settings = settings_lock();
+    // "IIII" at 80 pt with its baseline at (x, y), its characters filled with a red-to-blue gradient
+    // that runs left to right, with a Transform effect of `params` if any.
+    let typed = |x: f64, y: f64, params: Option<Value>| {
+        let mut s = session();
+        let t = run(&mut s, "text.create", json!({"x": x, "y": y, "text": "IIII", "size": 80}))["id"].as_u64().unwrap();
+        let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+        run(&mut s, "paint.setFill", json!({"ids": [t], "gradient": {"kind": "linear", "stops": stops}}));
+        if let Some(params) = params {
+            run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": params, "ids": [t], "item": null}));
+        }
+        (s, t)
+    };
+    let mut diffs = vec![];
+    // The effect moves the type 30 pt right (along the gradient) or 20 pt down (across it). Type
+    // laid out at the moved baseline is the reference.
+    for (dx, dy) in [(30.0, 0.0), (0.0, 20.0)] {
+        let reference = picture(&typed(10.0 + dx, 150.0 + dy, None).0);
+        let (mut s, t) = typed(10.0, 150.0, Some(json!({"moveH": dx, "moveV": dy})));
+        flatten(&mut s, json!({"ids": [t], "textToOutlines": true}));
+        diffs.push(changed(&picture(&s), &reference));
+        // The outlines draw the same after the document is saved and opened again.
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        diffs.push(changed(&Renderer::new().render_region(&back, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true), &reference));
+    }
+    assert!(diffs.iter().all(|&d| d < 0.0002), "shares of the pixels that changed: {diffs:?}");
+}
+
+#[test]
 fn preserve_alpha_composites_over_nothing() {
     let _settings = settings_lock();
     let mut s = session();
