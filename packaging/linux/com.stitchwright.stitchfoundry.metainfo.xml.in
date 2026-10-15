@@ -2,13 +2,13 @@
 <!-- AppStream metadata (software centres, Flathub). Template: package.sh and the Flatpak
      manifest substitute @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
 <component type="desktop-application">
-  <id>com.sitesentrix.stitchfoundry</id>
+  <id>com.stitchwright.stitchfoundry</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
   <name>StitchFoundry</name>
   <summary>Digitize machine embroidery designs</summary>
-  <developer id="com.sitesentrix">
-    <name>SiteSentrix</name>
+  <developer id="com.stitchwright">
+    <name>Stitchwright</name>
   </developer>
   <description>
     <p>
@@ -18,12 +18,12 @@
       VP3, XXX and U01 files. It is based on VectorCraft.
     </p>
   </description>
-  <launchable type="desktop-id">com.sitesentrix.stitchfoundry.desktop</launchable>
-  <icon type="stock">com.sitesentrix.stitchfoundry</icon>
+  <launchable type="desktop-id">com.stitchwright.stitchfoundry.desktop</launchable>
+  <icon type="stock">com.stitchwright.stitchfoundry</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://github.com/SiteSentrix/StitchFoundry</url>
-  <url type="bugtracker">https://github.com/SiteSentrix/StitchFoundry/issues</url>
-  <url type="help">https://github.com/SiteSentrix/StitchFoundry</url>
+  <url type="homepage">https://github.com/Stitchwright/StitchFoundry</url>
+  <url type="bugtracker">https://github.com/Stitchwright/StitchFoundry/issues</url>
+  <url type="help">https://github.com/Stitchwright/StitchFoundry</url>
   <categories>
     <category>Graphics</category>
     <category>2DGraphics</category>
@@ -40,7 +40,7 @@
   <screenshots>
     <screenshot type="default">
       <caption>Digitizing: thirty satin petals and a fill vine sewn as one thread, with the Stitch Sequence panel</caption>
-      <image>https://raw.githubusercontent.com/SiteSentrix/StitchFoundry/main/docs/images/stitchfoundry-branching.png</image>
+      <image>https://raw.githubusercontent.com/Stitchwright/StitchFoundry/main/docs/images/stitchfoundry-branching.png</image>
     </screenshot>
   </screenshots>
   <branding>

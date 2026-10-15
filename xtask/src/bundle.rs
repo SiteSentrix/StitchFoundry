@@ -72,8 +72,8 @@ mod tests {
             plist.contains("<array><string>stitchfoundry</string><string>vectorcraft</string><string>drawcraft</string></array>"),
             "native format extensions"
         );
-        assert!(read("packaging/linux/com.sitesentrix.stitchfoundry.desktop").contains("Categories=Graphics;2DGraphics;VectorGraphics;"));
-        assert!(read("packaging/linux/com.sitesentrix.stitchfoundry.metainfo.xml.in").contains("<category>VectorGraphics</category>"));
+        assert!(read("packaging/linux/com.stitchwright.stitchfoundry.desktop").contains("Categories=Graphics;2DGraphics;VectorGraphics;"));
+        assert!(read("packaging/linux/com.stitchwright.stitchfoundry.metainfo.xml.in").contains("<category>VectorGraphics</category>"));
     }
 
     #[test]

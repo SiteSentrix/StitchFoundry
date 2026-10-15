@@ -6,7 +6,7 @@ installers for macOS, Windows, Linux (including Flatpak bundles and a RISC-V tar
 publishes it.
 
 User-facing names say **VectorCraft**. Files, binaries and ids stay lowercase
-(`stitchfoundry-<version>-<platform>-<arch>.<ext>`, `com.sitesentrix.stitchfoundry`).
+(`stitchfoundry-<version>-<platform>-<arch>.<ext>`, `com.stitchwright.stitchfoundry`).
 
 ## Cutting a release
 
@@ -75,7 +75,7 @@ The rules are in craftrules `standards/fonts.md`, the build option in
 `packaging/macos/package.sh` builds `aarch64-apple-darwin` and `x86_64-apple-darwin` with
 `MACOSX_DEPLOYMENT_TARGET=11.0`, joins them with `lipo` and assembles `VectorCraft.app`:
 
-- `Info.plist` is generated from `Info.plist.in` (bundle id `com.sitesentrix.stitchfoundry`,
+- `Info.plist` is generated from `Info.plist.in` (bundle id `com.stitchwright.stitchfoundry`,
   `LSMinimumSystemVersion` 11.0, the version and the build commit). The icon is
   `assets/app-icon/stitchfoundry.icns`. `cargo xtask bundle` fills in the same template for its
   development app.
@@ -157,7 +157,7 @@ against riscv64 libraries from ports.ubuntu.com (so the floor there is glibc 2.3
 `EMULATOR=qemu-riscv64` set: a `.tar.gz` only, with `stitchfoundry-cli --version` run under QEMU.
 
 **AppImage updates.** Each AppImage embeds the update information
-`gh-releases-zsync|SiteSentrix|StitchFoundry|latest|stitchfoundry-*-linux-<arch>.AppImage.zsync`
+`gh-releases-zsync|Stitchwright|StitchFoundry|latest|stitchfoundry-*-linux-<arch>.AppImage.zsync`
 (appimagetool `-u`), and `package.sh` writes the matching `.zsync` beside it when `zsyncmake` (the
 `zsync` package) is installed. [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate)
 and AppImageLauncher then download only the changed blocks from the newest published,
@@ -165,10 +165,10 @@ non-pre-release release. The job checks both are there.
 
 **Flatpak.** The `flatpak` jobs (x86_64 on `ubuntu-24.04`, aarch64 on `ubuntu-24.04-arm`) take the
 Linux job's tarball and repackage it with `packaging/linux/flatpak-bundle.sh` and
-`packaging/linux/flatpak/com.sitesentrix.stitchfoundry.bundle.yml` into a single-file bundle
+`packaging/linux/flatpak/com.stitchwright.stitchfoundry.bundle.yml` into a single-file bundle
 (`flatpak install --user vectorcraft-<v>-linux-<arch>.flatpak`), then install it and run
 `stitchfoundry-cli --version` in the sandbox. No Rust build happens there, so the bundle carries the
-same binaries as the AppImage. `packaging/linux/flatpak/com.sitesentrix.stitchfoundry.yml` is the
+same binaries as the AppImage. `packaging/linux/flatpak/com.stitchwright.stitchfoundry.yml` is the
 from-source manifest for a Flathub submission (its header says how to build it); packaging-lint
 keeps the runtime and sandbox permissions of the two manifests identical.
 

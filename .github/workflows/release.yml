@@ -225,7 +225,7 @@ jobs:
           dpkg-deb --info dist/release/*.deb
           dpkg-deb --contents dist/release/*.deb | grep -E 'usr/bin/stitchfoundry$|metainfo|applications'
           ldd target/release/stitchfoundry
-          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/com.sitesentrix.stitchfoundry.yml')); assert m['id'] == 'com.sitesentrix.stitchfoundry'"
+          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/com.stitchwright.stitchfoundry.yml')); assert m['id'] == 'com.stitchwright.stitchfoundry'"
           for appimage in dist/release/*.AppImage; do
             chmod +x "$appimage"
             APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --version
@@ -327,7 +327,7 @@ jobs:
             export CARGO_TARGET_DIR=/var/tmp/vectorcraft-target CARGO_BUILD_JOBS=4
             bash packaging/freebsd/package.sh
             tar -tzf dist/release/stitchfoundry-*-freebsd-x86_64.tar.gz \
-              | grep -E '/bin/stitchfoundry$|/bin/stitchfoundry-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
+              | grep -E '/bin/stitchfoundry$|/bin/stitchfoundry-cli$|/share/applications/com\.stitchwright\.stitchfoundry\.desktop$'
       - uses: actions/upload-artifact@v7
         with:
           name: release-freebsd
@@ -449,7 +449,7 @@ jobs:
       - name: Check the package
         run: |
           tar -tzf dist/release/stitchfoundry-*-linux-riscv64.tar.gz \
-            | grep -E '/bin/stitchfoundry$|/bin/stitchfoundry-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
+            | grep -E '/bin/stitchfoundry$|/bin/stitchfoundry-cli$|/share/applications/com\.stitchwright\.stitchfoundry\.desktop$'
           file target/riscv64gc-unknown-linux-gnu/release/stitchfoundry | grep -F 'RISC-V'
       - uses: actions/upload-artifact@v7
         with:

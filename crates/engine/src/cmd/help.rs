@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use super::*;
 
 /// This app's source repository.
-pub const GITHUB_URL: &str = "https://github.com/SiteSentrix/StitchFoundry";
+pub const GITHUB_URL: &str = "https://github.com/Stitchwright/StitchFoundry";
 
 /// The user guide, compiled in for the Help window.
 const GUIDE: &str = include_str!("../../../../docs/embroidery.md");
