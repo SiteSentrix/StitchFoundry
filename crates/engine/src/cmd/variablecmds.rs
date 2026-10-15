@@ -129,8 +129,7 @@ fn values_param(vars: &Variables, p: &Value, cmd: &str) -> Result<BTreeMap<Strin
 fn define(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.define";
     let name = var_name(p, C)?;
-    let kind =
-        str_param(p, "kind").and_then(VariableKind::parse).ok_or_else(|| bad(C, "`kind` must be `text`, `visibility`, `image` or `graph`"))?;
+    let kind = str_param(p, "kind").and_then(VariableKind::parse).ok_or_else(|| bad(C, "`kind` must be `text`, `visibility`, `image` or `graph`"))?;
     if s.doc()?.doc.variables.variable(&name).is_some() {
         return Err(bad(C, format!("variable `{name}` is already defined")));
     }
@@ -598,13 +597,15 @@ fn cell_to_value(kind: VariableKind, cell: &str, var: &str, cmd: &str) -> Result
     Ok(Some(match kind {
         VariableKind::Text => DataValue::Text(t.to_string()),
         VariableKind::Image => DataValue::Image(t.to_string()),
+        VariableKind::Graph if t.len() <= MAX_GRAPH_CSV => DataValue::Graph(t.to_string()),
+        VariableKind::Graph => return Err(bad(cmd, format!("value for `{var}` is longer than {MAX_GRAPH_CSV} bytes"))),
         VariableKind::Visibility => DataValue::Visible(parse_visible_cell(t, var, cmd)?),
     }))
 }
 
 fn value_to_cell(v: &DataValue) -> String {
     match v {
-        DataValue::Text(t) | DataValue::Image(t) => t.clone(),
+        DataValue::Text(t) | DataValue::Image(t) | DataValue::Graph(t) => t.clone(),
         DataValue::Visible(b) => if *b { "true" } else { "false" }.to_string(),
     }
 }
