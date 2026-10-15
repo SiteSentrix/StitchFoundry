@@ -322,6 +322,11 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let resp = widgets::chip_button(ui, 22.0, true, |ui, r| crate::panels::graphic_styles::paint_linked(app, ui, r))
                         .on_hover_text(tl!("Graphic Style"));
                     egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
+                    // Recolor Artwork, when the selection has colours to recolour.
+                    let colored = app.session.active().is_some_and(|st| crate::canvas::has_colors(&st.doc, &st.selection.objects));
+                    if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 24.0).clicked() {
+                        crate::menus::invoke(app, "ui.recolorDialog", json!({}));
+                    }
                 }
                 ui.separator();
                 crate::panels::character::control_bar(app, ui);
