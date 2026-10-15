@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (Finnish (`fi`) catalog added, complete under the tests; Swedish (`sv`) catalog added, complete under the tests; scores and estimates unchanged; Brazilian Portuguese (`pt-br`) catalog completed under the tests: menus, `tl!` literals and messages; 12-language score 71% → 74%; #1914) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (Bulgarian (`bg`) and Greek (`el`) catalogs complete under the tests, #1909, #2076; Finnish (`fi`) catalog added, complete under the tests; Swedish (`sv`) catalog added, complete under the tests; scores and estimates unchanged; Brazilian Portuguese (`pt-br`) catalog completed under the tests: menus, `tl!` literals and messages; 12-language score 71% → 74%; #1914) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -54,8 +54,10 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Finnish | `fi` | 4,770 rows: menus, `tl!` literals and messages complete (tests); one/other plurals, 668 `@msg` rows | full; AI-assisted, native proofreading pending |
 | Czech | `cs` | 4,411 catalog entries, including 636 `@msg` rows (measured locally 2026-10-11); menu, literal and message coverage enforced by tests | catalog complete; render-site gaps reduced; native review pending |
 | Swedish | `sv` | 4,770 rows, 668 of them `@msg` (counted 2026-10-15): menus, `tl!` literals and messages complete (tests); one/other plurals | full; native review welcome |
+| Bulgarian | `bg` | 4,910 rows, 703 of them `@msg` (counted 2026-10-16): menus, `tl!` literals and messages complete (tests) | full; AI-drafted, native review pending |
+| Greek | `el` | 4,880 rows, 709 of them `@msg` (counted 2026-10-16): menus, `tl!` literals and messages complete (tests) | full; native review welcome |
 
-Sixteen non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
+Eighteen non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
 interface languages (including Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
 
@@ -82,6 +84,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | Bulgarian (`bg`, #1909) and Greek (`el`, #2076) catalogs added, complete under the tests; Swedish (#2139) and Finnish (#1994) rows for strings added since; eighteen non-English catalogs |
 | 2026-10-16 | minor | Finnish (`fi`) catalog added, complete under the tests (menus, literals, messages; one/other plurals); AI-assisted, native proofreading pending |
 | 2026-10-15 | minor | Swedish (`sv`) catalog added, complete under the tests (menus, literals, messages; one/other plurals); every `sv-*` locale resolves to it; AI-drafted, native review welcome; scores and estimates unchanged |
 | 2026-10-14 | minor | Brazilian Portuguese (`pt-br`, #1914): catalog completed under the tests (menus, literals, messages); 12-language score 71% → 74%, hours 55–90 → 50–85 |
