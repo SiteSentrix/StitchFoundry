@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Refresh Font List",
             [],
             None,
-            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it (no fonts are installed on the web) → {families, faces} (families listed, installed faces found)",
+            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it, and text in a family that was removed redraws in the fallback font (no fonts are installed on the web) → {families, faces} (families listed, installed faces found)",
             always,
             rescan
         ),
