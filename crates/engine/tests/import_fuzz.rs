@@ -2239,6 +2239,7 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "/DeviceCMYK XN",
             "/DeviceGray XN",
             "[ 1 0 0 1 0 0 ] 0 0 2 2 2 2 8 3 1 0 1 0",
+            "[ 1 0 0 1 0 0 ] 0 0 3 2 3 2 1 4 1 0 1 0",
             "[ 1 0 0 1 0 0 ] 0 0 99999 99999 99999 99999 1 1 0 0 0 0",
             "[",
             "]",
