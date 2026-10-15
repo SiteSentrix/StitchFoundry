@@ -110,6 +110,44 @@ fn draw_behind_and_inside() {
     assert!(s.draw_inside.is_none());
 }
 
+/// In Draw Inside, a double-click with a selection tool outside the object being drawn into sets
+/// the drawing mode to Draw Normal, and the tool still takes the double-click. Inside the object's
+/// bounds, grown by the selection tolerance, and with other tools, Draw Inside stays on.
+#[test]
+fn double_clicking_outside_the_draw_inside_object_returns_to_draw_normal() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let inside = |s: &mut Session| {
+        s.execute("select.set", &json!({"ids": [a]})).unwrap();
+        s.execute("view.drawMode", &json!({"mode": "inside"})).unwrap();
+    };
+    let double = |s: &mut Session, x: f64, y: f64| {
+        s.pointer(&PointerEvent::new(PointerKind::DoubleClick, x, y), ViewInfo::default()).unwrap();
+        (s.draw_mode, s.draw_inside)
+    };
+    inside(&mut s);
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    // Inside the rectangle the Selection tool isolates it, as in Draw Normal; 2 pt past its edge
+    // is within the 3 px selection tolerance at 100%.
+    assert_eq!(double(&mut s, 150.0, 150.0), (DrawMode::Inside, Some(NodeId(a))));
+    assert_eq!(s.doc().unwrap().isolation, Some(NodeId(a)));
+    assert_eq!(double(&mut s, 202.0, 150.0), (DrawMode::Inside, Some(NodeId(a))));
+    // A double-click outside, on the empty canvas, sets Draw Normal and still leaves isolation mode.
+    assert_eq!(double(&mut s, 300.0, 250.0), (DrawMode::Normal, None));
+    assert_eq!(s.doc().unwrap().isolation, None);
+    // With the Rectangle tool a double-click leaves Draw Inside on; with Direct Selection it sets Draw Normal.
+    inside(&mut s);
+    s.select_tool("rectangle", ViewInfo::default()).unwrap();
+    assert_eq!(double(&mut s, 300.0, 250.0), (DrawMode::Inside, Some(NodeId(a))));
+    s.select_tool("directSelection", ViewInfo::default()).unwrap();
+    assert_eq!(double(&mut s, 300.0, 250.0), (DrawMode::Normal, None));
+    // Once the object is gone, any double-click with a selection tool sets Draw Normal.
+    inside(&mut s);
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert_eq!(double(&mut s, 150.0, 150.0), (DrawMode::Normal, None));
+}
+
 #[test]
 fn export_for_screens_writes_every_combination() {
     let mut s = Session::new();

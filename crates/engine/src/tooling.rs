@@ -267,6 +267,7 @@ impl Session {
         if let Some(r) = self.plane_widget_pointer(ev, view) {
             return r;
         }
+        self.leave_draw_inside(ev, view)?;
         let ev = &self.lend_selection_tool(ev);
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         let r = self.take_tool_panic().and_then(|()| {
@@ -280,6 +281,26 @@ impl Session {
             self.give_back_tool(view)?;
         }
         r
+    }
+
+    /// In Draw Inside, a double-click with a selection tool outside the geometric bounds of the
+    /// object new art goes inside, grown by the selection tolerance, or after that object is gone,
+    /// sets the drawing mode to Draw Normal (`view.drawMode {mode: "normal"}`, as Shift+D does).
+    /// The tool then takes the double-click as in Draw Normal.
+    fn leave_draw_inside(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<()> {
+        if ev.kind != PointerKind::DoubleClick
+            || self.draw_mode != crate::DrawMode::Inside
+            || !vectorcraft_tools::catalog::is_selection_tool(self.tool.id())
+        {
+            return Ok(());
+        }
+        let Some(d) = self.active() else { return Ok(()) };
+        let tol = self.prefs.selection_tolerance / view.zoom.max(1e-9);
+        let inside = self.draw_inside.and_then(|t| d.doc.bounds_of(&[t], false)).is_some_and(|b| b.inflate(tol, tol).contains(ev.pos));
+        if !inside {
+            self.execute("view.drawMode", &serde_json::json!({ "mode": "normal" }))?;
+        }
+        Ok(())
     }
 
     /// A guide dragged out of a ruler, whatever the tool: a vertical one out of the left ruler, a
