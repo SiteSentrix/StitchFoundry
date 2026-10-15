@@ -25,7 +25,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 23–39 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 15–25 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 8–16 | macOS pressure | [hardware-parity.md](hardware-parity.md) |
-| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 17–28 | no | [target-app-parity.md](target-app-parity.md) |
+| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 16–27 | no | [target-app-parity.md](target-app-parity.md) |
 | 12 | [G3 3D and Materials](#g3-3d-and-materials) | 25–45 | no | [effects-parity.md](effects-parity.md) |
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 8–14 | no | [target-app-parity.md](target-app-parity.md) |
@@ -240,8 +240,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Missing:** the Art brush's Overlap, auto-generated Pattern brush corners, new tile art in Pattern Brush
   Options, the Key Color eyedropper; original brush, symbol and graphic-style libraries generated in code (never
-  Adobe's); dynamic symbols; Start Global Edit.
-- **Estimate:** 17–28 h.
+  Adobe's); dynamic symbols; Start Global Edit. Symbol Options › Registration (9-point) is stored and
+  used by `symbol.place`; export type and 9-slice guides still missing.
+- **Estimate:** 16–27 h.
 
 ## G3 3D and Materials
 

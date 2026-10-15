@@ -4395,7 +4395,7 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
-
+	Registration:	기준점:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	치수
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	도면 : 실제 크기 — 1:10은 페이지의 1단위를 10으로 표시합니다.

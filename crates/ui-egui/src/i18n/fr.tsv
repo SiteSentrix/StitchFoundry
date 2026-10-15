@@ -4858,7 +4858,7 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
-
+	Registration:	Repère d'alignement :
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Cote
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Dessin : taille réelle — 1:10 étiquette 1 unité de la page comme 10.

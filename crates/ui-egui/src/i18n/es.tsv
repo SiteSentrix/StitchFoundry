@@ -4799,6 +4799,7 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+	Registration:	Registro:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	Crear cota
 	Dimension Tool	Herramienta Cota
@@ -4808,7 +4809,6 @@ mark-style	Japanese	Japonesas
 	Precision:	Precisión:
 	Update Dimensions	Actualizar cotas
 	Display	Visualización
-
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Cota
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Dibujo : tamaño real — 1:10 rotula 1 unidad de la página como 10.

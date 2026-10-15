@@ -449,7 +449,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.symbolOptions",
         "Symbol Options…",
         "",
-        "{} open Symbol Options for a new symbol made from the selection, what the Symbols panel's New Symbol opens (dialog `symbolOptions`, field `name`, default the first free \"New Symbol\"/\"New Symbol N\"); OK runs symbol.new {name}",
+        "{} open Symbol Options for a new symbol made from the selection, what the Symbols panel's New Symbol opens (dialog `symbolOptions`, fields `name` and `registration` 0..8 on the 9-point grid, default centre; default name the first free \"New Symbol\"/\"New Symbol N\"); OK runs symbol.new {name, registration}",
     ),
     (
         "tool.options",

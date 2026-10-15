@@ -3784,6 +3784,7 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	Registration:	對齊點:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	建立尺寸標註
 	Dimension Tool	尺寸標註工具
@@ -3793,7 +3794,6 @@ lighting	Light	光源
 	Precision:	精確度：
 	Update Dimensions	更新尺寸標註
 	Display	顯示
-
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	尺寸
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	圖紙 : 實際尺寸 — 1:10 會將頁面上的 1 個單位標示為 10。
