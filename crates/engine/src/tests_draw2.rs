@@ -130,6 +130,39 @@ fn pencil_continues_selected_open_path() {
     assert_eq!(p.subpaths[0].anchors[0].p, Point::new(100.0, 100.0));
 }
 
+/// With Keep selected off, the path a stroke draws or continues is not selected afterwards, the
+/// rest of the selection stays, and the stroke is one undo step.
+#[test]
+fn pencil_with_keep_selected_off_leaves_the_new_path_unselected() {
+    let mut s = session();
+    let r = rect(&mut s, 400.0, 400.0, 50.0, 50.0);
+    let selected = |s: &Session| s.doc().unwrap().selection.objects.clone();
+    // On (the default): the new path replaces the selection.
+    let on = s.execute("path.freehand", &json!({"points": [[100, 100], [150, 120], [200, 100]]})).unwrap();
+    assert_eq!(selected(&s), vec![NodeId(on["id"].as_u64().unwrap())]);
+    s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+    let undo = undo_steps(&s);
+    let off = s.execute("path.freehand", &json!({"points": [[100, 200], [150, 220], [200, 200]], "keepSelected": false})).unwrap();
+    let off = NodeId(off["id"].as_u64().unwrap());
+    assert!(s.doc().unwrap().doc.node(off).is_some());
+    assert_eq!(selected(&s), vec![r]);
+    assert_eq!(undo_steps(&s), undo + 1);
+    // Continuing a selected open path deselects it and keeps the rest.
+    let l = line(&mut s, 100.0, 300.0, 200.0, 300.0);
+    s.execute("select.set", &json!({"ids": [r.0, l.0]})).unwrap();
+    s.execute("path.freehand", &json!({"points": [[200, 300], [250, 320], [300, 300]], "extend": {"id": l.0}, "keepSelected": false})).unwrap();
+    assert!(path(&s, l).anchor_count() >= 3, "continued");
+    assert_eq!(selected(&s), vec![r]);
+    // The tools pass the option.
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("paintbrush", view()).unwrap();
+    s.set_tool_option("keepSelected", &json!(false));
+    let before = paths(&s).len();
+    drag(&mut s, "paintbrush", &wave(100.0, 300.0, 500.0), Mods::default());
+    assert_eq!(paths(&s).len(), before + 1, "a new brush path");
+    assert!(selected(&s).is_empty());
+}
+
 #[test]
 fn paintbrush_uses_stroke_blob_brush_fills() {
     let mut s = session();

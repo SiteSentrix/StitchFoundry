@@ -54,7 +54,7 @@ tools, never checked side by side) isn't captured row by row.
 | Each anchor snaps to Smart Guides and construction angles | done | `DrawSnap` |
 | Curvature tool: click/drag points, double-click or Alt-click for a corner, temporary Direct Selection, point conversion | partial | circular point markers without direction handles or duplicate markers, Anchor Size and Hide Edges regression-tested (#1236, in part); existing-path interpolation request and modifiers requested in #975 remain |
 | Add/Delete/Anchor Point tools; Anchor Point tool drags segments to reshape | done | |
-| Pencil: Fidelity, Keep selected, Alt to Smooth, edit selected paths, close by proximity | partial | Keep selected and Alt to Smooth are missing; a filled Pencil path keeps a stroke of None (#1804, part of #1679) |
+| Pencil: Fidelity, Keep selected, Alt to Smooth, edit selected paths, close by proximity | partial | Alt to Smooth is missing; with Keep selected (Pencil and Paintbrush, on by default) off, the path a stroke draws or continues is not selected afterwards; a filled Pencil path keeps a stroke of None (#1804, part of #1679) |
 | Join tool scrubbing, Average, Join | done | Join merges the direct-selected anchors lying on one another along a path, as after Average, into one (#1533) |
 | Average and Join in one step, with a corner or smooth choice for the joined anchor | missing | `path.join` and `path.average` are separate commands, and Join has no corner/smooth choice; [gap 1](gaps.md) |
 | Smooth tool smooths only the stretch of path under the drag | done | #1512 |
