@@ -2502,7 +2502,11 @@ documents every field:
   with; without preserveNumbers CMYK colours are separated again).
 
 Halftone screens and a fixed flatness are not written to the PDF (the output device's apply): the warnings say so,
-as they do for art larger than the imageable area.
+as they do for art larger than the imageable area. Type in a font family that isn't available prints in the fallback
+font, and the warnings of `file.print` and `print.preview` name those families. They count only type that prints:
+visible type that fits its frame or path, on the layers `printLayers` picks, on the paper of the artboards or tiles
+that print, and the type in the symbols, patterns, scatter brushes, opacity masks and placed documents of the art that
+prints.
 
 ```json
 {"name":"run_command","arguments":{"command":"print.setup","params":{"settings":{"media":"a4","scaling":"fit","marks":{"trim":true}}}}}
