@@ -627,6 +627,27 @@ fn rows_and_columns_flow_in_order() {
     }
 }
 
+/// Layout clamps area type's rows and columns to 100 each: 2^60 rows or columns with 100 of the
+/// other, 2^32 of each, and `usize::MAX` of each lay out as 100 rows and 100 columns.
+#[test]
+fn area_type_lays_out_in_at_most_100_rows_and_100_columns() {
+    // At 100 by 100, a cell is about 98 by 28 pt.
+    let with = |rows: usize, columns: usize| {
+        let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 10_000.0, 3_000.0), Justify::Left);
+        t.area.rows = rows;
+        t.area.columns = columns;
+        t.area.gutter = 2.0;
+        layout_soon(&t)
+    };
+    let most = with(100, 100);
+    assert_eq!(most.frames.len(), 10_000);
+    assert!(!most.overflow && most.lines.len() > 10, "{:?}", line_places(&most));
+    for (rows, columns) in [(1 << 60, 100), (100, 1 << 60), (1 << 32, 1 << 32), (usize::MAX, usize::MAX)] {
+        let l = with(rows, columns);
+        assert_eq!((&l.frames, line_places(&l)), (&most.frames, line_places(&most)), "{rows} by {columns}");
+    }
+}
+
 // ---------- vertical alignment ----------
 
 fn valign(a: VerticalAlign) -> LayoutOptions {
