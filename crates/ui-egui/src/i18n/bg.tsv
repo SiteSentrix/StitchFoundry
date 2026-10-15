@@ -4796,3 +4796,63 @@ theme	Appearance	Външен вид
 	[2P-Normal View]	[Нормален изглед (2P)]
 	[3P-Low View]	[Нисък изглед (3P)]
 	[3P-Normal View]	[Нормален изглед (3P)]
+
+# Legacy .ai options, the Dimension tool and Object › Dimensions, and Revolve's Cap.
+	Legacy (version 7)	Наследен (версия 7)
+	Transparent Images:	Прозрачни изображения:
+	Flatten	Сплескване
+	Omit	Пропускане
+	Legacy .ai Options	Опции за наследен .ai
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Наследеният .ai файл съдържа една работна област: всяка отметната работна област се записва като отделен файл.
+	{count} of {total} artboards	{count} от {total} работни области
+	Check an artboard to save.	Отметнете работна област за записване.
+	Hidden Objects:	Скрити обекти:
+	Hidden Layer	Скрит слой
+	Make Visible	Правене видими
+	Text:	Текст:
+	Editable	Редактируем
+	PDF-compatible	Съвместим с PDF
+	Dimension	Размер
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Чертеж : реален размер — 1:10 обозначава 1 единица на страницата като 10.
+	Preview (1 inch on the page)	Преглед (1 инч на страницата)
+	Set as Default	Задаване по подразбиране
+	 out from a highlighted edge to place its dimension  |  	 навън от осветен ръб, за да поставите размера му  |  
+	 cancels  |  Double-click the tool for options	 отказва  |  Двойно щракване върху инструмента за опции
+	Angular	Ъглов
+	Away from the Line	Встрани от линията
+	Between Line and Object	Между линията и обекта
+	Drag out from a segment, or click two points, then click to place.	Плъзнете навън от сегмент или щракнете върху две точки, след което щракнете за поставяне.
+	Drag out from a corner, or click two straight lines, then click to place.	Плъзнете навън от ъгъл или щракнете върху две прави линии, след което щракнете за поставяне.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Плъзнете навън от окръжност или дъга за радиуса ѝ, навътре – за диаметъра ѝ.
+@msg	Choose a circle or a perfect arc	Изберете окръжност или точна дъга
+@msg	Choose a precision from 0 to 6	Изберете точност от 0 до 6
+	Create Dimension	Създаване на размер
+	Dimension Tool	Инструмент за оразмеряване
+	Dimension Tool Options	Опции за инструмента за оразмеряване
+	Display	Показване
+	Font Family:	Семейство шрифтове:
+	Font Style:	Стил на шрифта:
+	Precision:	Точност:
+	Update Dimensions	Обновяване на размерите
+@msg	Angles require two straight segments	Ъглите изискват два прави сегмента
+@msg	Choose two different points	Изберете две различни точки
+@msg	Choose two non-parallel straight segments	Изберете два неуспоредни прави сегмента
+@msg	Choose two nonzero angle arms	Изберете две рамена на ъгъл с ненулева дължина
+@msg	Dimension point is outside the canvas	Точката на размера е извън платното
+@msg	Dimension size is outside its supported range	Големината на размера е извън поддържания обхват
+@msg	First measured segment no longer exists	Първият измерен сегмент вече не съществува
+@msg	Invalid dimension distance	Невалидно разстояние на размера
+@msg	Invalid dimension font name	Невалидно име на шрифт за размера
+@msg	Invalid drawing scale	Невалиден мащаб на чертежа
+@msg	Invalid real scale	Невалиден реален мащаб
+@msg	Measured anchor no longer exists	Измерената опорна точка вече не съществува
+@msg	Measured segment no longer exists	Измереният сегмент вече не съществува
+@msg	Non-finite dimension	Размерът не е крайно число
+@msg	Scale must be drawing:real, for example 1:10	Мащабът трябва да е чертеж:реалност, например 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Съотношението на мащаба трябва да е между 1:1000000 и 1000000:1
+@msg	Second measured segment no longer exists	Вторият измерен сегмент вече не съществува
+@msg	Unknown dimension mode	Непознат режим на размера
+@msg	Unknown dimension option {k}	Непозната опция за размер {k}
+@msg	Unknown dimension style	Непознат стил на размера
+@msg	Unknown unit	Непозната единица
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Затваря кръговите краища на отворени профили. При частично завъртане срязаните страни остават отворени.
