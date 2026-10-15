@@ -1283,12 +1283,15 @@ impl<'a> Reader<'a> {
         if bbox.width() <= 0.0 || bbox.height() <= 0.0 {
             return Ok(());
         }
-        // The art's own box onto the object's box (its measure of the same art), upside down:
-        // the object's space has y down, and the PDF's content is kept in its own y-up
-        // coordinates, so the PDF's bottom is the top of the box.
-        let fit = Affine::translate((target.x0, target.y1))
-            * Affine::scale_non_uniform(target.width() / bbox.width(), -target.height() / bbox.height())
-            * Affine::translate((-bbox.x0, -bbox.y0));
+        // The art's own box onto the object's box (its measure of the same art). The PDF importer
+        // hands the art back as the page shows it, and it keeps that orientation unless its
+        // placement mirrors it (a negative determinant): the usual `/RTransform` `1 0 0 -1 …` with
+        // the origin's flip doesn't, and the art then shows as the file's own PDF part draws it.
+        let fit = if place.determinant() < 0.0 {
+            Affine::translate((target.x0, target.y1)) * Affine::scale_non_uniform(target.width() / bbox.width(), -target.height() / bbox.height())
+        } else {
+            Affine::translate((target.x0, target.y0)) * Affine::scale_non_uniform(target.width() / bbox.width(), target.height() / bbox.height())
+        } * Affine::translate((-bbox.x0, -bbox.y0));
         for n in &mut art {
             n.transform(fit, true);
             // The PDF's swatches stay with it: its colours keep their values, unlinked.
