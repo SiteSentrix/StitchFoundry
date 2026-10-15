@@ -133,10 +133,9 @@ pub(crate) fn view_row(app: &mut VectorcraftApp, ui: &mut Ui, current: TraceView
 
 /// Trace the selected image, or trace the selected Image Trace object again, with built-in `preset`.
 fn trace_with(app: &mut VectorcraftApp, preset: &str) {
-    // Only reveal the controls after a successful trace; failures stay in the status bar.
-    if app.run("imageTrace.make", json!({ "preset": preset })).is_ok() {
-        open_settings(app);
-    }
+    // A failure is reported in the status bar. The panel stays as it was: the Image Trace
+    // button (Properties, Control bar) opens it.
+    let _ = app.run("imageTrace.make", json!({ "preset": preset }));
 }
 
 /// Reveal the editable tracing controls, including fidelity, in the panel's current location.
@@ -503,6 +502,12 @@ mod tests {
         traced_app_with_ink(0)
     }
 
+    /// A quick trace, then the Image Trace button.
+    fn trace_and_open(app: &mut VectorcraftApp, preset: &str) {
+        trace_with(app, preset);
+        open_settings(app);
+    }
+
     fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
@@ -520,7 +525,7 @@ mod tests {
         let mut app = traced_app();
         app.run("imageTrace.release", json!({})).unwrap();
         app.ui.image_trace_advanced = false;
-        trace_with(&mut app, "Sketched Art");
+        trace_and_open(&mut app, "Sketched Art");
         assert_eq!(app.ui.open_panel.as_deref(), Some("imageTrace"));
         assert!(app.ui.image_trace_advanced);
         assert_eq!(selected_trace(&app).unwrap().0, "Sketched Art");
@@ -560,12 +565,13 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_quick_trace_does_not_open_settings() {
+    fn a_quick_trace_leaves_the_panel_as_it_was() {
         let mut app = traced_app();
-        app.run("select.none", json!({})).unwrap();
+        app.run("imageTrace.release", json!({})).unwrap();
         app.ui.open_panel = None;
         app.ui.image_trace_advanced = false;
         trace_with(&mut app, "Sketched Art");
+        assert!(is_trace(&first_selected(&app).unwrap()));
         assert!(app.ui.open_panel.is_none());
         assert!(!app.ui.image_trace_advanced);
     }
@@ -575,7 +581,7 @@ mod tests {
         let mut app = traced_app();
         app.run("window.panel.float", json!({"panel": "imageTrace"})).unwrap();
         let before = app.ui.docking.clone().unwrap();
-        trace_with(&mut app, "Sketched Art");
+        trace_and_open(&mut app, "Sketched Art");
         let after = app.ui.docking.as_ref().unwrap();
         assert_eq!(after.floating.len(), before.floating.len());
         assert!(after.floating.iter().any(|g| g.panels == ["imageTrace"]));
@@ -585,7 +591,7 @@ mod tests {
     #[test]
     fn adjusting_sketch_threshold_changes_the_vector_result_and_can_be_undone() {
         let mut app = traced_app_with_ink(100);
-        trace_with(&mut app, "Sketched Art");
+        trace_and_open(&mut app, "Sketched Art");
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         frame(&mut app, &ctx, vec![]);
@@ -613,7 +619,7 @@ mod tests {
     #[test]
     fn sketch_adjustment_sliders_retrace_on_release() {
         let mut app = traced_app();
-        trace_with(&mut app, "Sketched Art");
+        trace_and_open(&mut app, "Sketched Art");
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         for (label, key) in [("Threshold", "threshold"), ("Paths", "paths"), ("Corners", "corners"), ("Noise", "noise")] {
