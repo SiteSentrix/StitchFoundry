@@ -530,3 +530,31 @@ fn repeat_commands_validate() {
     s.execute("select.none", &json!({})).ok();
     assert!(s.execute("object.pattern.make", &json!({})).is_err());
 }
+
+/// #1970: picking another pattern swatch keeps the transform the fill already had; a fill that was
+/// a colour gets the pattern untransformed.
+#[test]
+fn picking_another_pattern_swatch_keeps_the_pattern_transform() {
+    let mut s = session();
+    make_dots(&mut s);
+    let bars = rect(&mut s, 0.0, 0.0, 20.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [bars.0], "color": "#0000ff"})).unwrap();
+    s.execute("object.pattern.make", &json!({"ids": [bars.0], "name": "Bars", "edit": false})).unwrap();
+    let big = rect(&mut s, 20.0, 20.0, 200.0, 200.0);
+    s.execute("paint.setFill", &json!({"ids": [big.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [big.0], "swatch": "Bars"})).unwrap();
+    let Paint::Pattern { xf, .. } = node(&s, big).appearance.fill_paint() else { panic!() };
+    assert_eq!(xf.as_coeffs(), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+    s.execute("paint.setFill", &json!({"ids": [big.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.transform", &json!({"ids": [big.0], "matrix": [2, 0, 0, 2, 15, 10]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [big.0], "swatch": "Bars"})).unwrap();
+    let Paint::Pattern { pattern, xf } = node(&s, big).appearance.fill_paint() else { panic!() };
+    assert_eq!(pattern, "Bars");
+    assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0]);
+    // The Appearance panel picks the swatch for one fill through `appearance.setItem`.
+    let index = node(&s, big).appearance.items.iter().position(|it| matches!(it, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [big.0], "index": index, "swatch": "Dots"})).unwrap();
+    let Paint::Pattern { pattern, xf } = node(&s, big).appearance.fill_paint() else { panic!() };
+    assert_eq!(pattern, "Dots");
+    assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0]);
+}
