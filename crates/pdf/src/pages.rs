@@ -10,7 +10,7 @@ use craft_pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
-use crate::import_color::direct;
+use crate::import_color::{direct, values};
 use crate::{Choice, CropTo, ImportOptions, PdfError};
 
 /// What `info` tells about one page.
@@ -45,11 +45,6 @@ const MAX_LINKS: usize = 16;
 
 /// The application's calculator-procedure depth policy, layered over the shared reader's limits.
 const MAX_PROCEDURES: usize = 64;
-
-/// The values of `d` that the reader can parse (`Dict::entries` panics on one it can't).
-fn values<'a>(d: &Dict<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> {
-    d.keys().filter_map(|k| d.get_raw::<Object<'a>>(k.as_ref()))
-}
 
 /// What the function or colour space `o` is built on: the functions a stitching function joins;
 /// the base, alternate and tint of a colour space; the alternate of a colour profile. Nothing for
