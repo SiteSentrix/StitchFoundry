@@ -1594,6 +1594,17 @@ These follow the public descriptions of lettering sequencing and joins, for exam
 https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-15.htm
 and https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-16.htm.
 
+**Get Embroidery Fonts…** (Embroidery menu, and the Embroidery Lettering section; desktop app
+only, `ui.fontLibrary`) lists the fonts of an embroidery font library and downloads one with a
+click: Ink/Stitch's font library (github.com/inkstitch/embroidery-fonts, about 140 fonts, each
+under its own licence, kept in its folder), and StitchFoundry's own once it is published
+(github.com/Stitchwright/stitchfoundry-fonts; until then the window says it isn't). Search the
+list by name, open a font's *Preview* in the browser, and *Download*: its files go into the
+**Embroidery Fonts** folder next to the settings (a font downloaded again replaces its copy) and
+it is loaded and chosen for lettering, remembered like any font folder. Names and paths the
+library sends are checked and sizes capped before anything is written. The web demo has no
+server to keep fonts on, so it doesn't offer downloads.
+
 ## Warped lettering
 
 Lettering takes the envelopes and warps any art does (**Object › Envelope Distort › Make with

@@ -33,6 +33,7 @@ pub mod file_info;
 pub mod flare_options;
 pub mod flatten;
 pub mod flattener_presets;
+pub mod font_library;
 mod form;
 pub mod freehand;
 mod gradient_stop;
@@ -363,6 +364,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     help::show(app, ctx);
     life_size::show(app, ctx);
     my_machine::show(app, ctx);
+    font_library::show(app, ctx);
     crate::guide::show(app, ctx);
     settle(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and

@@ -201,6 +201,10 @@ pub use vectorcraft_embroidery::sf_core::ai::HttpRequest;
 /// from a thread of its own.
 pub type HttpPostFn = Arc<dyn Fn(&HttpRequest) -> Result<(u16, String), String> + Send + Sync>;
 
+/// Fetches a URL with an HTTPS GET and waits for it → (HTTP status, body, at most `limit` bytes),
+/// or why it didn't come. Called from a thread of its own.
+pub type HttpGetFn = Arc<dyn Fn(&str, u64) -> Result<(u16, Vec<u8>), String> + Send + Sync>;
+
 /// Keeps small secrets (Design from Prompt's API key) out of the settings, which the engine, the
 /// control channel and MCP agents can read.
 pub trait SecretStore {
@@ -274,6 +278,9 @@ pub struct Services {
     /// Send Design from Prompt's request to the AI service (desktop). Without it (the web, for
     /// now) Design from Prompt is unavailable.
     pub http_post: Option<HttpPostFn>,
+    /// Fetch a file over HTTPS (desktop): the embroidery font library downloads with it. Without
+    /// it (the web demo, which has no server to keep fonts on) fonts aren't downloaded.
+    pub http_get: Option<HttpGetFn>,
     /// Where Design from Prompt keeps the API key (desktop: a private file next to the settings).
     /// Without it a key lasts the session.
     pub secrets: Option<Box<dyn SecretStore>>,

@@ -5315,3 +5315,21 @@ machine	Stop	Parada
 	Needle height	Altura de la aguja
 	Start	Inicio
 @msg	moss sews fills and runs: give the satin a fill or run stitch first	el musgo borda rellenos y líneas: dé primero al satén una puntada de relleno o de línea
+	Get Embroidery Fonts…	Obtener fuentes de bordado…
+	About the library	Acerca de la biblioteca
+	Download Again	Descargar de nuevo
+	Download fonts from an embroidery font library, ready for lettering	Descargar fuentes de una biblioteca de fuentes de bordado, listas para rotular
+	Downloading	Descargando
+	Each font comes with its own licence, in its folder.	Cada fuente trae su propia licencia, en su carpeta.
+	Fonts are kept in	Las fuentes se guardan en
+	Get Embroidery Fonts	Obtener fuentes de bordado
+	Listing the fonts…	Listando las fuentes…
+	Try Again	Reintentar
+	fonts	fuentes
+	is ready for lettering	está lista para rotular
+@msg	a file of the font has an unsafe name: {path}	un archivo de la fuente tiene un nombre inseguro: {path}
+@msg	can't reach the font library: {e}	no se puede acceder a la biblioteca de fuentes: {e}
+@msg	downloading embroidery fonts works in the desktop app	la descarga de fuentes de bordado funciona en la aplicación de escritorio
+@msg	the font library answered {status} for {path}	la biblioteca de fuentes respondió {status} para {path}
+@msg	the font library answered {status}: try again later	la biblioteca de fuentes respondió {status}: inténtelo más tarde
+@msg	{_1} isn't published yet	{_1} aún no está publicada

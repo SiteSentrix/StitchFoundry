@@ -5311,3 +5311,21 @@ machine	Stop	停止
 	Needle height	針の高さ
 	Start	開始
 @msg	moss sews fills and runs: give the satin a fill or run stitch first	モスで縫えるのはフィルとランです。先にサテンをフィルまたはランに変えてください
+	Get Embroidery Fonts…	刺繍フォントを入手…
+	About the library	ライブラリについて
+	Download Again	再ダウンロード
+	Download fonts from an embroidery font library, ready for lettering	刺繍フォントライブラリからフォントをダウンロードし、文字入れに使えるようにします
+	Downloading	ダウンロード中
+	Each font comes with its own licence, in its folder.	各フォントには、そのフォルダーに独自のライセンスがあります。
+	Fonts are kept in	フォントの保存先
+	Get Embroidery Fonts	刺繍フォントを入手
+	Listing the fonts…	フォントを一覧表示しています…
+	Try Again	再試行
+	fonts	フォント
+	is ready for lettering	は文字入れに使えます
+@msg	a file of the font has an unsafe name: {path}	フォントのファイル名が安全ではありません: {path}
+@msg	can't reach the font library: {e}	フォントライブラリに接続できません: {e}
+@msg	downloading embroidery fonts works in the desktop app	刺繍フォントのダウンロードはデスクトップアプリで使えます
+@msg	the font library answered {status} for {path}	フォントライブラリが {path} に {status} を返しました
+@msg	the font library answered {status}: try again later	フォントライブラリが {status} を返しました。後でもう一度お試しください
+@msg	{_1} isn't published yet	{_1} はまだ公開されていません

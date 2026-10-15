@@ -512,6 +512,7 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
         // Embroidery › Design from Prompt: the request to the AI service, and the API key kept in a
         // file of its own next to the settings (not kept in runs without preferences).
         http_post: Some(std::sync::Arc::new(ai_service::post)),
+        http_get: Some(std::sync::Arc::new(ai_service::get)),
         secrets: Some(Box::new(ai_service::SecretFiles::new(prefs_path().and_then(|p| Some(p.parent()?.to_path_buf())).filter(|_| prefs_enabled())))),
         ..Default::default()
     }

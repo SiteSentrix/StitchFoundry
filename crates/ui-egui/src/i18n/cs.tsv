@@ -5342,3 +5342,21 @@ machine	Stop	Zastavení
 	Needle height	Výška jehly
 	Start	Začátek
 @msg	moss sews fills and runs: give the satin a fill or run stitch first	mech vyšívá výplně a linie: dejte nejprve saténu výplňový nebo liniový steh
+	Get Embroidery Fonts…	Získat vyšívací písma…
+	About the library	O knihovně
+	Download Again	Stáhnout znovu
+	Download fonts from an embroidery font library, ready for lettering	Stáhnout písma z knihovny vyšívacích písem, připravená pro nápisy
+	Downloading	Stahování
+	Each font comes with its own licence, in its folder.	Každé písmo má vlastní licenci ve své složce.
+	Fonts are kept in	Písma jsou uložena v
+	Get Embroidery Fonts	Získat vyšívací písma
+	Listing the fonts…	Načítání seznamu písem…
+	Try Again	Zkusit znovu
+	fonts	písem
+	is ready for lettering	je připraveno pro nápisy
+@msg	a file of the font has an unsafe name: {path}	soubor písma má nebezpečný název: {path}
+@msg	can't reach the font library: {e}	knihovna písem není dostupná: {e}
+@msg	downloading embroidery fonts works in the desktop app	stahování vyšívacích písem funguje v aplikaci pro počítač
+@msg	the font library answered {status} for {path}	knihovna písem odpověděla {status} pro {path}
+@msg	the font library answered {status}: try again later	knihovna písem odpověděla {status}: zkuste to později
+@msg	{_1} isn't published yet	{_1} ještě není zveřejněna

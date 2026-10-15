@@ -25,6 +25,23 @@ pub fn post(req: &HttpRequest) -> Result<(u16, String), String> {
     Ok((status, body))
 }
 
+/// Fetch `url` and wait for it → (HTTP status, body of at most `limit` bytes). Proxies and
+/// certificates as [`post`].
+pub fn get(url: &str, limit: u64) -> Result<(u16, Vec<u8>), String> {
+    let tls = ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::PlatformVerifier).build();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .tls_config(tls)
+        .timeout_global(Some(Duration::from_secs(120)))
+        .http_status_as_error(false)
+        .user_agent("StitchFoundry")
+        .build()
+        .into();
+    let mut res = agent.get(url).call().map_err(|e| e.to_string())?;
+    let status = res.status().as_u16();
+    let body = res.body_mut().with_config().limit(limit).read_to_vec().map_err(|e| e.to_string())?;
+    Ok((status, body))
+}
+
 /// Secrets kept as files in a folder of the user's own; a missing one falls back to an environment
 /// variable (`ANTHROPIC_API_KEY` for the key).
 pub struct SecretFiles {

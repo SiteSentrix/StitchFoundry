@@ -144,6 +144,8 @@ pub struct EmbroideryUi {
     pub new_type: String,
     /// Design from Prompt: the API key and the request on its way.
     pub prompt: prompt::PromptState,
+    /// Get Embroidery Fonts' window (NEW-20).
+    pub font_library: crate::dialogs::font_library::FontLibraryState,
     /// The colour a tatami fill blends into (Make Blend in the Embroidery panel).
     pub blend_to: [u8; 3],
     /// The whole design shown repeated, columns across and rows down (1 × 1: once), with a
@@ -339,6 +341,7 @@ impl Default for EmbroideryUi {
             send_folder: 0,
             send_status: String::new(),
             prompt: prompt::PromptState::default(),
+            font_library: Default::default(),
         }
     }
 }

@@ -5313,3 +5313,21 @@ machine	Stop	Остановка
 	Needle height	Высота иглы
 	Start	Начало
 @msg	moss sews fills and runs: give the satin a fill or run stitch first	мохом вышиваются заливки и линии: сначала задайте сатину стежок заливки или линии
+	Get Embroidery Fonts…	Получить шрифты для вышивки…
+	About the library	О библиотеке
+	Download Again	Скачать снова
+	Download fonts from an embroidery font library, ready for lettering	Скачать шрифты из библиотеки шрифтов для вышивки, готовые для надписей
+	Downloading	Загрузка
+	Each font comes with its own licence, in its folder.	У каждого шрифта своя лицензия, в его папке.
+	Fonts are kept in	Шрифты хранятся в
+	Get Embroidery Fonts	Получить шрифты для вышивки
+	Listing the fonts…	Загрузка списка шрифтов…
+	Try Again	Повторить
+	fonts	шрифтов
+	is ready for lettering	готов для надписей
+@msg	a file of the font has an unsafe name: {path}	у файла шрифта небезопасное имя: {path}
+@msg	can't reach the font library: {e}	не удаётся связаться с библиотекой шрифтов: {e}
+@msg	downloading embroidery fonts works in the desktop app	скачивание шрифтов для вышивки работает в настольном приложении
+@msg	the font library answered {status} for {path}	библиотека шрифтов ответила {status} для {path}
+@msg	the font library answered {status}: try again later	библиотека шрифтов ответила {status}: попробуйте позже
+@msg	{_1} isn't published yet	{_1} ещё не опубликована
