@@ -4693,7 +4693,6 @@ mark-style	Japanese	Japonesas
 	Release Image Trace	Liberar Rastreamento de Imagem
 	Release Text Wrap	Liberar Quebra de Texto
 	RGB	RGB
-	Rotate View	Girar Exibição
 	Scissors	Tesoura
 	Shades of Gray	Tons de Cinza
 	Shear:	Cisalhamento:
@@ -4804,3 +4803,43 @@ mark-style	Japanese	Japonesas
 @msg	choose a source folder	escolha uma pasta de origem
 @msg	open a document with data sets	abra um documento com conjuntos de dados
 @msg	the action has no steps	a ação não tem etapas
+@msg	Angles require two straight segments	Ângulos exigem dois segmentos retos
+@msg	Choose a circle or a perfect arc	Escolha um círculo ou um arco perfeito
+@msg	Choose a precision from 0 to 6	Escolha uma precisão de 0 a 6
+@msg	Choose two different points	Escolha dois pontos diferentes
+@msg	Choose two non-parallel straight segments	Escolha dois segmentos retos não paralelos
+@msg	Choose two nonzero angle arms	Escolha dois lados de ângulo não nulos
+@msg	Dimension point is outside the canvas	O ponto da cota está fora da tela
+@msg	Dimension size is outside its supported range	O tamanho da cota está fora do intervalo aceito
+@msg	First measured segment no longer exists	O primeiro segmento medido não existe mais
+@msg	Invalid dimension distance	Distância de cota inválida
+@msg	Invalid dimension font name	Nome de fonte de cota inválido
+@msg	Invalid drawing scale	Escala de desenho inválida
+@msg	Invalid real scale	Escala real inválida
+@msg	Measured anchor no longer exists	O ponto de ancoragem medido não existe mais
+@msg	Measured segment no longer exists	O segmento medido não existe mais
+@msg	Non-finite dimension	Cota não finita
+@msg	Scale must be drawing:real, for example 1:10	A escala deve ser desenho:real, por exemplo 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	A proporção da escala deve estar entre 1:1000000 e 1000000:1
+@msg	Second measured segment no longer exists	O segundo segmento medido não existe mais
+@msg	Unknown dimension mode	Modo de cota desconhecido
+@msg	Unknown dimension option {k}	Opção de cota desconhecida {k}
+@msg	the Color Picker is not open	o Seletor de Cores não está aberto
+@msg	the screen color sampler is already open	o coletor de cores da tela já está aberto
+@msg	this system has no screen color sampler	este sistema não tem coletor de cores da tela
+	Darkness	Escuridão
+	Dimension	Cota
+	Dimension Tool Options	Opções da Ferramenta Cota
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Desenho : tamanho real — 1:10 rotula 1 unidade na página como 10.
+	Font Family:	Família de Fonte:
+	Font Style:	Estilo de Fonte:
+	Precision:	Precisão:
+	Preview (1 inch on the page)	Visualização (1 polegada na página)
+	Sample Color from Screen	Amostrar Cor da Tela
+	Set as Default	Definir como Padrão
+	The active document changed while the screen color sampler was open	O documento ativo mudou enquanto o coletor de cores da tela estava aberto
+	This system has no screen color sampler	Este sistema não tem coletor de cores da tela
+	 cancels  |  Double-click the tool for options	 cancela  |  Clique duas vezes na ferramenta para ver as opções
+	 out from a highlighted edge to place its dimension  |  	 para fora a partir de uma borda destacada para posicionar a cota  |  
+	Color Panel Options	Opções do Painel Cor
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve ser grayscale, rgb, hsb, cmyk ou websafe
