@@ -1267,6 +1267,7 @@
 	Hide Print Tiling	Скрыть разбиение для печати
 	Hide Rulers	Скрыть линейки
 	Hide Slices	Скрыть фрагменты
+	Hide Template	Скрыть шаблон
 	Hide Text Threads	Скрыть связи текста
 	Hide Thumbnail	Скрыть миниатюру
 	Hide Thumbnails	Скрыть миниатюры
@@ -2770,6 +2771,7 @@
 	Show Slices	Показать фрагменты
 	Show Swatch Bounds	Показать границы образца
 	Show Swatch Kinds	Показать типы образцов
+	Show Template	Показать шаблон
 	Show Text Threads	Показать связи текста
 	Show The Home Screen When No Documents Are Open	Показывать начальный экран, когда документы не открыты
 	Show Thumbnail	Показать миниатюру

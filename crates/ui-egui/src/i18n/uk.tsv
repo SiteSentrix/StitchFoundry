@@ -1263,6 +1263,7 @@
 	Hide Print Tiling	Приховати розбиття для друку
 	Hide Rulers	Приховати лінійки
 	Hide Slices	Приховати фрагменти
+	Hide Template	Приховати шаблон
 	Hide Text Threads	Приховати зв’язки тексту
 	Hide Thumbnail	Приховати мініатюру
 	Hide Thumbnails	Приховати мініатюри
@@ -2766,6 +2767,7 @@
 	Show Slices	Показати фрагменти
 	Show Swatch Bounds	Показати межі зразка
 	Show Swatch Kinds	Показати типи зразків
+	Show Template	Показати шаблон
 	Show Text Threads	Показати зв’язки тексту
 	Show The Home Screen When No Documents Are Open	Показувати початковий екран, коли документи не відкриті
 	Show Thumbnail	Показати мініатюру

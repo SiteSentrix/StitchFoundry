@@ -1269,6 +1269,7 @@
 	Hide Print Tiling	Masquer les limites d’impression
 	Hide Rulers	Masquer les règles
 	Hide Slices	Masquer les tranches
+	Hide Template	Masquer le modèle
 	Hide Text Threads	Masquer les liens de texte
 	Hide Thumbnail	Masquer la vignette
 	Hide Thumbnails	Masquer les vignettes
@@ -2768,6 +2769,7 @@
 	Show Slices	Afficher les tranches
 	Show Swatch Bounds	Afficher les limites de la nuance
 	Show Swatch Kinds	Afficher les types de nuance
+	Show Template	Afficher le modèle
 	Show Text Threads	Afficher les liens de texte
 	Show The Home Screen When No Documents Are Open	Afficher l’écran d’accueil lorsqu’aucun document n’est ouvert
 	Show Thumbnail	Afficher la vignette

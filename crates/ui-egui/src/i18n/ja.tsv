@@ -496,6 +496,7 @@
 	Show Video Rulers	ビデオ定規を表示
 	Hide Bounding Box	バウンディングボックスを隠す
 	Show Transparency Grid	透明グリッドを表示
+	Hide Template	テンプレートを隠す
 	Hide Text Threads	テキストのスレッドを隠す
 	Hide Gradient Annotator	グラデーションガイドを隠す
 	Hide Corner Widget	コーナーウィジェットを隠す
@@ -656,6 +657,7 @@
 	Preview	プレビュー
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
+	Show Template	テンプレートを表示
 	Show Text Threads	テキストのスレッドを表示
 	Hide Hidden Characters	制御文字を隠す
 	Show Gradient Annotator	グラデーションガイドを表示

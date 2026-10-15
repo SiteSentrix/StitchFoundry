@@ -243,6 +243,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.edges", "Hide Edges", "Cmd+H", "{}"),
     ("view.artboards", "Hide Artboards", "Cmd+Shift+H", "{}"),
+    (
+        "view.template",
+        "Hide Template",
+        "Cmd+Shift+W",
+        "{} template layers left off the canvas (Show Template draws them again, dimmed as before) → shown",
+    ),
     ("view.rulers", "Show Rulers", "Cmd+R", "{}"),
     ("view.boundingBox", "Hide Bounding Box", "Cmd+Shift+B", "{}"),
     ("view.guides", "Hide Guides", "Cmd+;", "{}"),
@@ -1139,6 +1145,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "view.edges" => flag(&mut app.ui.view.edges),
         "view.artboards" => flag(&mut app.ui.view.artboards),
+        "view.template" => flag(&mut app.ui.view.templates),
         "view.rulers" => flag(&mut app.ui.view.rulers),
         "view.boundingBox" => flag(&mut app.ui.view.bounding_box),
         "view.guides" => {
@@ -1671,6 +1678,7 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "view.outline" => if v.outline { "Preview" } else { "Outline" }.into(),
         "window.workspace.reset" => format!("Reset {}", app.ui.workspace),
         "view.edges" => if v.edges { "Hide Edges" } else { "Show Edges" }.into(),
+        "view.template" => if v.templates { "Hide Template" } else { "Show Template" }.into(),
         "view.cornerWidget" => if v.corner_widgets { "Hide Corner Widget" } else { "Show Corner Widget" }.into(),
         "view.textThreads" => if v.text_threads { "Hide Text Threads" } else { "Show Text Threads" }.into(),
         "type.hiddenCharacters" => if v.hidden_chars { "Hide Hidden Characters" } else { "Show Hidden Characters" }.into(),
@@ -2650,6 +2658,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Show Print Tiling", "view.printTiling"),
                 c("Hide Slices", "view.slices.hide"),
                 c("Lock Slices", "view.slices.lock"),
+                c("Hide Template", "view.template"),
                 Sep,
                 sub("Rulers", vec![c("Show Rulers", "view.rulers"), todos("Change to Global Rulers", "Cmd+Alt+R"), todo("Show Video Rulers")]),
                 c("Hide Bounding Box", "view.boundingBox"),
@@ -3713,6 +3722,8 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Lock Guides",
     "Show Slices",
     "Hide Slices",
+    "Hide Template",
+    "Show Template",
     "Hide Print Tiling",
     "Show Print Tiling",
     "Edit Envelope",
@@ -3967,6 +3978,7 @@ mod tests {
             ("view.textThreads", "Hide Text Threads", "Show Text Threads"),
             ("view.gradientAnnotator", "Hide Gradient Annotator", "Show Gradient Annotator"),
             ("type.hiddenCharacters", "Show Hidden Characters", "Hide Hidden Characters"),
+            ("view.template", "Hide Template", "Show Template"),
         ] {
             assert_eq!(dynamic_label(&app, id, ""), on);
             app.run(id, json!({})).unwrap();

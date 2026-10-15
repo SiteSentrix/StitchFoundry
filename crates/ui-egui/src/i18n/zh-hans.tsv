@@ -1214,6 +1214,7 @@
 	Hide Print Tiling	隐藏打印分页
 	Hide Rulers	隐藏标尺
 	Hide Slices	隐藏切片
+	Hide Template	隐藏模板
 	Hide Text Threads	隐藏文本串接线
 	Hide Thumbnail	隐藏缩略图
 	Hide Thumbnails	隐藏缩略图
@@ -2617,6 +2618,7 @@
 	Show Slices	显示切片
 	Show Swatch Bounds	显示色板边界
 	Show Swatch Kinds	显示色板种类
+	Show Template	显示模板
 	Show Text Threads	显示文本串接线
 	Show The Home Screen When No Documents Are Open	没有打开文档时显示主页
 	Show Thumbnail	显示缩略图

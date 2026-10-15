@@ -1447,6 +1447,7 @@
 	Hide Print Tiling	Ẩn ghép trang in
 	Hide Rulers	Ẩn thước
 	Hide Slices	Ẩn lát cắt
+	Hide Template	Ẩn mẫu
 	Hide Text Threads	Ẩn luồng văn bản
 	Hide Thumbnail	Ẩn hình thu nhỏ
 	Hide Thumbnails	Ẩn các hình thu nhỏ
@@ -3078,6 +3079,7 @@
 	Show Slices	Hiện lát cắt
 	Show Swatch Bounds	Hiện vùng giới hạn mẫu màu
 	Show Swatch Kinds	Hiện loại mẫu màu
+	Show Template	Hiện mẫu
 	Show Text Threads	Hiện chuỗi văn bản
 	Show The Home Screen When No Documents Are Open	Hiện màn hình chính khi không có tài liệu nào mở
 	Show Thumbnail	Hiện hình thu nhỏ

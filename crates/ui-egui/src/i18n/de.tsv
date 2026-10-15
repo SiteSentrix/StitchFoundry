@@ -1253,6 +1253,7 @@
 	Hide Print Tiling	Druckaufteilung ausblenden
 	Hide Rulers	Lineale ausblenden
 	Hide Slices	Slices ausblenden
+	Hide Template	Vorlage ausblenden
 	Hide Text Threads	Textverkettungen ausblenden
 	Hide Thumbnail	Miniatur ausblenden
 	Hide Thumbnails	Miniaturen ausblenden
@@ -2723,6 +2724,7 @@
 	Show Slices	Slices einblenden
 	Show Swatch Bounds	Farbfeldbegrenzung einblenden
 	Show Swatch Kinds	Farbfeldarten einblenden
+	Show Template	Vorlage einblenden
 	Show Text Threads	Textverkettungen einblenden
 	Show The Home Screen When No Documents Are Open	Startbildschirm anzeigen, wenn keine Dokumente geöffnet sind
 	Show Thumbnail	Miniatur einblenden

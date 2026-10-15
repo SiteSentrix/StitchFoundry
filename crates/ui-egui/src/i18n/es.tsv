@@ -1270,6 +1270,7 @@
 	Hide Print Tiling	Ocultar mosaico de impresión
 	Hide Rulers	Ocultar reglas
 	Hide Slices	Ocultar sectores
+	Hide Template	Ocultar plantilla
 	Hide Text Threads	Ocultar enlaces de texto
 	Hide Thumbnail	Ocultar miniatura
 	Hide Thumbnails	Ocultar miniaturas
@@ -2771,6 +2772,7 @@
 	Show Slices	Mostrar sectores
 	Show Swatch Bounds	Mostrar límites de muestra
 	Show Swatch Kinds	Mostrar tipos de muestra
+	Show Template	Mostrar plantilla
 	Show Text Threads	Mostrar enlaces de texto
 	Show The Home Screen When No Documents Are Open	Mostrar la pantalla de inicio cuando no haya documentos abiertos
 	Show Thumbnail	Mostrar miniatura

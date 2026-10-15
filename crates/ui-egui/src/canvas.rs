@@ -283,6 +283,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         h,
         outline: app.ui.view.outline,
         trim: app.ui.view.trim_view,
+        templates: app.ui.view.templates,
         ppp,
         hidden: vec![],
         rot: v.rotation,
@@ -331,6 +332,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             proof: vectorcraft_render::proof::active_proof(),
             overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
             trim: app.ui.view.trim_view,
+            hide_templates: !app.ui.view.templates,
             tile_edge: vectorcraft_color::Color::from_hex(&app.session.prefs.pattern_tile_edge_color).map_or(opts.tile_edge, |c| {
                 let [r, g, b, _] = c.to_rgba8(1.0);
                 [r, g, b]
@@ -3253,6 +3255,38 @@ mod tests {
         app.view_mut().unwrap().zoom = 0.5;
         let (w, _, hard, _) = upload(&mut app);
         assert!(w > 600 && !hard, "zoomed out: the screen's pixels");
+    }
+
+    /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
+    /// draws it again, dimmed as before; each re-renders at once.
+    #[test]
+    fn hide_template_leaves_template_layers_off_the_canvas() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+        let layer = app.session.active().unwrap().doc.layers[0].id.0;
+        app.session.execute("layer.template", &json!({"ids": [layer], "on": true})).unwrap();
+        let ctx = egui::Context::default();
+        // How many pixels of the art's raster one frame uploads are painted, None when it was not
+        // re-rendered.
+        let painted = |app: &mut VectorcraftApp| -> Option<usize> {
+            let (_, mut delta) = frame_output(app, &ctx);
+            let art = app.canvas.texture.as_ref().unwrap().id();
+            let n = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+                let egui::ImageData::Color(img) = &d.image;
+                img.pixels.iter().filter(|c| c.a() != 0).count()
+            });
+            delta.clear();
+            n
+        };
+        let shown = painted(&mut app).expect("the first frame renders the art");
+        assert!(shown > 1000, "the template layer's art is drawn: {shown} pixels");
+        assert_eq!(app.run("view.template", json!({})).unwrap(), json!(false));
+        assert_eq!(painted(&mut app), Some(0), "Hide Template re-renders without the template layer");
+        assert_eq!(painted(&mut app), None, "nothing changed: no re-render");
+        assert_eq!(app.run("view.template", json!({})).unwrap(), json!(true));
+        assert_eq!(painted(&mut app), Some(shown), "Show Template draws it again as before");
     }
 
     /// General › Anti-aliased Artwork (#394): on (the default), the art's edges are smoothed on
