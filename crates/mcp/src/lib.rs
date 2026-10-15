@@ -39,6 +39,8 @@ mod tests_conventions;
 #[cfg(test)]
 mod tests_distortkeys;
 #[cfg(test)]
+mod tests_drawopts;
+#[cfg(test)]
 mod tests_exportas;
 #[cfg(test)]
 mod tests_fileio;
