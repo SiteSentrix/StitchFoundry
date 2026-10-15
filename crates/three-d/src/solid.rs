@@ -886,8 +886,8 @@ struct Membrane {
 }
 
 impl Membrane {
-    fn solve(rings: &[Vec<Point>], origin: Point, step: f64, nx: usize, ny: usize) -> Self {
-        let edges = Edges::new(rings);
+    /// `edges` is the index of `rings`' edges (`Edges::new(rings)`).
+    fn solve(rings: &[Vec<Point>], edges: &Edges, origin: Point, step: f64, nx: usize, ny: usize) -> Self {
         let node = |i: usize, j: usize| Point::new(origin.x + i as f64 * step, origin.y + j as f64 * step);
         let idx = |i: usize, j: usize| j * nx + i;
         // A node on the outline itself is held at zero with the outside.
@@ -1035,8 +1035,8 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
     const CELLS: usize = 48;
     let cell = size / CELLS as f64;
     let (nx, ny) = (((bounds.width() / cell).ceil() as usize).max(1), ((bounds.height() / cell).ceil() as usize).max(1));
-    let m = Membrane::solve(&rings, bounds.origin(), cell, nx + 1, ny + 1);
     let edges = Edges::new(&rings);
+    let m = Membrane::solve(&rings, &edges, bounds.origin(), cell, nx + 1, ny + 1);
     let outline = PathData::new(rings.iter().map(|r| vectorcraft_geom::SubPath::polyline(r, true)).collect());
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).
     let height = 2.0 * m.peak.sqrt() * o.volume / 50.0;

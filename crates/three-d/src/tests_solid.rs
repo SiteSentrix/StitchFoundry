@@ -284,10 +284,12 @@ fn the_inflate_membrane_matches_known_solutions() {
     let mut c = BezPath::new();
     c.extend(vectorcraft_geom::kurbo::Shape::path_elements(&vectorcraft_geom::kurbo::Circle::new((100.0, 100.0), 50.0), 0.01));
     let (p, b) = shape(&c);
-    let disc = Membrane::solve(&rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap(), b.origin(), b.width() / 48.0, 49, 49);
+    let r = rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap();
+    let disc = Membrane::solve(&r, &Edges::new(&r), b.origin(), b.width() / 48.0, 49, 49);
     assert!(close(disc.peak, 50.0 * 50.0 / 4.0, 625.0 * 0.02), "{}", disc.peak);
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
-    let sq = Membrane::solve(&rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap(), b.origin(), 100.0 / 48.0, 49, 49);
+    let r = rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap();
+    let sq = Membrane::solve(&r, &Edges::new(&r), b.origin(), 100.0 / 48.0, 49, 49);
     assert!(close(sq.peak, 0.07367 * 100.0 * 100.0, 736.7 * 0.02), "{}", sq.peak);
     // Smooth across the middle: no crease where a distance-to-the-edge height would have one
     // (the diagonals). The second difference along a diagonal stays small and even.
