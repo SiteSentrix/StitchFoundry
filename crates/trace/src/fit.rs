@@ -1,10 +1,14 @@
 //! Loop → Bézier curves, and the pieces of that which centre lines use too.
 
+use kurbo::ParamCurveArea;
 use vectorcraft_geom::{Anchor, AnchorKind, Point, SubPath};
 
 use crate::contour::Loop;
 use crate::logo::{Cubic, Stats, Style, all_within, fit_open, fit_outline, resample_closed, resample_open, sample_cubics};
 use crate::subpixel::{self, Crack};
+
+#[cfg(test)]
+mod snap_area_tests;
 
 fn seg_dist(p: Point, a: Point, b: Point) -> f64 {
     let ab = b - a;
@@ -148,6 +152,21 @@ pub(crate) fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
     }
     if style.upright {
         snap_upright(&mut segs, true, false);
+    }
+    // Opposite sides of a thin loop can both straighten onto the same chord.
+    // Distance-to-outline checks allow that fit, but it has no filled interior.
+    // Keep the positioned boundary when a nondegenerate loop loses all its area.
+    // Translate before integrating to avoid cancellation far from the origin.
+    let origin = pts.first().copied().unwrap_or(Point::new(0.0, 0.0));
+    let fitted_area: f64 = segs
+        .iter()
+        .map(|c| {
+            let [a, b, c, d] = c.map(|p| Point::new(p.x - origin.x, p.y - origin.y));
+            kurbo::PathSeg::Cubic(kurbo::CubicBez::new(a, b, c, d)).signed_area()
+        })
+        .sum();
+    if area2.abs() > 1e-8 && fitted_area.abs() < 1e-8 {
+        segs = polygon(&pts, 0.0);
     }
     Some(if flip { reversed(segs) } else { segs })
 }
