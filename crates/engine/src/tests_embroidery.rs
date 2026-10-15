@@ -183,7 +183,7 @@ fn an_opened_machine_files_stitches_become_runs_satins_and_fills() {
 fn a_texture_embosses_a_turning_satin_fill() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 200.0, 40.0);
-    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satinfill"})).unwrap();
     s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [150, 90], "b": [150, 150]})).unwrap();
     s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [250, 90], "b": [280, 150]})).unwrap();
     let plain = stitches(&s);
