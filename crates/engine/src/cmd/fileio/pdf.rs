@@ -365,7 +365,9 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let expanded = expand_preset(s, C, p)?;
     let p = &*expanded;
-    let (bytes, warnings) = encode(C, &s.doc()?.doc, p)?;
+    let st = s.doc()?;
+    let titled = super::titled_for_export(&st.doc, st.path.as_deref(), "pdf");
+    let (bytes, warnings) = encode(C, titled.as_ref().unwrap_or(&st.doc), p)?;
     write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": warnings }))
 }
 

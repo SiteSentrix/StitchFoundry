@@ -712,6 +712,18 @@ pub fn file_stem(name: &str) -> String {
     std::path::Path::new(name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string())
 }
 
+/// What a `format` export of `doc`, whose file is `path`, writes when it isn't `doc` itself: a
+/// document that only has the Untitled-N name New gave it is titled after its file, as its tab is
+/// (the title PDF, PNG and SVG metadata carry). A title of its own stays, and native files keep
+/// the stored title.
+pub fn titled_for_export(doc: &vectorcraft_doc::Document, path: Option<&str>, format: &str) -> Option<vectorcraft_doc::Document> {
+    let untitled = doc.title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+    let path = path.filter(|_| untitled && !matches!(format, "vectorcraft" | "template" | "ai"))?;
+    let mut d = doc.clone();
+    d.title = file_stem(path);
+    Some(d)
+}
+
 /// The format a file name's extension names.
 pub fn format_for_name(name: &str) -> Option<&'static Format> {
     Some(extension(name)).filter(|e| !e.is_empty()).and_then(|e| format(&e))
