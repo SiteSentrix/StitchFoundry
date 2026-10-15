@@ -614,7 +614,7 @@
 	Create Gradient Mesh…	Создать градиентную сетку…
 	Create Graph	Создать диаграмму
 	Create New Layer	Создать новый слой
-	Create New Sublayer	Создать новый подcлой
+	Create New Sublayer	Создать новый подслой
 	Create New Swatch…	Создать новый образец…
 	Create New {kind} Style	Создать новый стиль {kind}
 	Create Object Mosaic…	Создать мозаику объектов…
@@ -1370,7 +1370,7 @@
 	Invert	Инвертировать
 	Invert Colors	Инвертировать цвета
 	Invert Mask	Инвертировать маску
-	Isolate	Aизолировать
+	Isolate	Изолировать
 	Isolate Blending	Изолировать наложение
 	Isolate Group	Изолировать группу
 	Italian	Итальянский
@@ -1792,7 +1792,7 @@
 	New PDF Preset	Новый набор PDF
 	New Print Preset	Новый набор печати
 	New Scatter Brush from Selection	Новая кисть-распыление из выделенного
-	New Sublayer…	Новый подcлой…
+	New Sublayer…	Новый подслой…
 	New Swatch	Новый образец
 	New Swatch…	Новый образец…
 	New Symbol	Новый символ
