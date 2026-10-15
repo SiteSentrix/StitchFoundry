@@ -4475,3 +4475,8 @@ lighting	Light	Свет
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы остаются открытыми.
 	Distance	Расстояние
+@msg	span must be "object" or "selection", got {v}	span должен быть "object" или "selection", а не {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" размещает `gradient`, а не образец
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" размещает градиент: укажите `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" размещает линейный или радиальный градиент, а не произвольный
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам размещает градиент: уберите `start` и `end` (они уже задают его в координатах документа)

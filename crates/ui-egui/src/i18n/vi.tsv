@@ -4458,3 +4458,8 @@ theme	Appearance	Giao diện
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên vẫn mở.
 	Distance	Khoảng cách
+@msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" đặt một dải chuyển màu: hãy cung cấp `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính hoặc xuyên tâm, không phải dạng tự do
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" tự đặt dải chuyển màu: hãy bỏ `start` và `end` (chúng đã đặt nó theo tọa độ tài liệu)
