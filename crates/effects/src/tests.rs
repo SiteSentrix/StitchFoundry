@@ -540,6 +540,59 @@ fn scribble_produces_filled_outline_inside_bounds() {
 }
 
 #[test]
+fn scribble_variations_are_separate() {
+    // At 0° the lines run along x: the Path Overlap variation moves their ends in x only, the
+    // Spacing variation moves them in y only, and the Curviness variation curves some of the turns.
+    let base =
+        json!({"angle": 0, "curviness": 0, "strokeWidth": 0.5, "spacing": 10, "overlapVariation": 0, "spacingVariation": 0, "curvinessVariation": 0});
+    let with = |key: &str, v: f64| {
+        let mut p = base.clone();
+        p[key] = json!(v);
+        run("stylize.scribble", p, &square())
+    };
+    let plain = run("stylize.scribble", base.clone(), &square());
+    let b = plain.bounds().unwrap();
+    let moved = |a: f64, b: f64| (a - b).abs() > 0.5;
+    let along = with("overlapVariation", 4.0).bounds().unwrap();
+    assert!(close(along.y0, b.y0, 0.06) && close(along.y1, b.y1, 0.06), "{along:?} {b:?}");
+    assert!(moved(along.x0, b.x0) || moved(along.x1, b.x1), "{along:?} {b:?}");
+    let across = with("spacingVariation", 4.0).bounds().unwrap();
+    assert!(close(across.x0, b.x0, 0.06) && close(across.x1, b.x1, 0.06), "{across:?} {b:?}");
+    assert!(moved(across.y0, b.y0) || moved(across.y1, b.y1), "{across:?} {b:?}");
+    assert_ne!(with("curvinessVariation", 50.0), plain);
+    // On a curviness of its own, the variation changes how much each turn curves.
+    let mut p = base.clone();
+    p["curviness"] = json!(20);
+    let even = run("stylize.scribble", p.clone(), &square());
+    p["curvinessVariation"] = json!(20);
+    assert_ne!(run("stylize.scribble", p, &square()), even);
+}
+
+#[test]
+fn scribble_reads_its_earlier_single_variation() {
+    // Before the separate variations, one `variation` moved the ends both along and across.
+    let old = run("stylize.scribble", json!({"variation": 3}), &square());
+    assert_eq!(old, run("stylize.scribble", json!({"overlapVariation": 3, "spacingVariation": 3}), &square()));
+    assert_eq!(upgrade_params("stylize.scribble", &json!({"variation": 3})), json!({"overlapVariation": 3, "spacingVariation": 3}));
+    // A current key given with it wins.
+    assert_eq!(
+        upgrade_params("stylize.scribble", &json!({"variation": 3, "spacingVariation": 1})),
+        json!({"overlapVariation": 3, "spacingVariation": 1})
+    );
+    assert!(default_params("stylize.scribble").unwrap().get("variation").is_none());
+}
+
+#[test]
+fn scribble_angle_is_stored_above_minus_180_and_up_to_180() {
+    for (given, stored) in [(270.0, -90.0), (-180.0, 180.0), (180.0, 180.0), (540.0, 180.0), (-270.0, 90.0), (-200.0, 160.0)] {
+        assert_eq!(new_effect("stylize.scribble", &json!({"angle": given})).unwrap().params["angle"].as_f64(), Some(stored), "{given}");
+    }
+    // An angle in range is kept as given; other effects' angles are not changed.
+    assert_eq!(upgrade_params("stylize.scribble", &json!({"angle": 45})), json!({"angle": 45}));
+    assert_eq!(upgrade_params("distort.twist", &json!({"angle": 270})), json!({"angle": 270}));
+}
+
+#[test]
 fn effects_chain_in_order_and_skip_hidden_and_raster() {
     let chain = [fx("distort.transform", json!({"moveH": 10})), fx("distort.transform", json!({"scaleH": 200}))];
     let b = apply_geometry(&chain, &square(), Rect::new(0.0, 0.0, 100.0, 100.0)).bounds().unwrap();

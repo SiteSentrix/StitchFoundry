@@ -647,6 +647,24 @@ mod tests {
         assert_eq!(params(&s), json!({"lightRotation": 0.0, "lightHeight": 60, "lightBehind": false}));
     }
 
+    /// Scripts from before Scribble's separate variations give one `variation`, which is stored as the
+    /// Path Overlap and Spacing variations. An angle is stored above -180° and up to 180°.
+    #[test]
+    fn scribble_stores_an_earlier_variation_as_two_and_its_angle_within_180() {
+        let (mut s, id) = session_with_rect();
+        let p = json!({"effect": "stylize.scribble", "ids": [id.0], "item": null, "params": {"angle": 270, "variation": 2}});
+        s.execute("effect.apply", &p).unwrap();
+        let params = |s: &Session| node(s, id).appearance.effects[0].params.clone();
+        assert_eq!((params(&s)["angle"].as_f64(), params(&s).get("variation")), (Some(-90.0), None), "{}", params(&s));
+        assert_eq!((&params(&s)["overlapVariation"], &params(&s)["spacingVariation"]), (&json!(2), &json!(2)));
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"angle": -200}, "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(params(&s)["angle"].as_f64(), Some(160.0));
+        // A file of then stores its variation; setting one of the two keeps it for the other.
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.effects[0].params = json!({"variation": 3});
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"spacingVariation": 1}, "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(params(&s), json!({"overlapVariation": 3, "spacingVariation": 1}));
+    }
+
     fn effects_for_test(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
         effects::revolve_art(&node(s, id)).unwrap()
     }

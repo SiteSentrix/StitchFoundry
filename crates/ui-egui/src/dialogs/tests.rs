@@ -239,6 +239,28 @@ fn effect_dialog_applies_to_its_appearance_item() {
 }
 
 #[test]
+fn scribble_dialog_shows_the_angle_as_stored_and_each_variation() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "stylize.scribble"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(270));
+    frame(&mut app, Default::default());
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["angle"].as_f64(), Some(-90.0), "the field reads what is stored");
+    confirm(&mut app).unwrap();
+    let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    assert_eq!(n.appearance.effects[0].params["angle"].as_f64(), Some(-90.0));
+    // Each variation follows the option it varies, as in the reference app's Scribble Options.
+    let doc = vectorcraft_effects::effect_info("stylize.scribble").unwrap().params;
+    let order = ["angle", "overlap", "overlapVariation", "strokeWidth", "curviness", "curvinessVariation", "spacing", "spacingVariation", "seed"];
+    let ranks: Vec<usize> = order.iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[8] < usize::MAX, "{ranks:?}");
+    for key in ["overlapVariation", "curvinessVariation", "spacingVariation"] {
+        assert_eq!(super::form::humanize(key), "Variation:");
+    }
+}
+
+#[test]
 fn revolve_dialog_preview_cancel_confirm_and_undo() {
     let mut app = app();
     app.run("path.create", json!({"d":"M150 40 L180 60 L180 140 L150 160"})).unwrap();

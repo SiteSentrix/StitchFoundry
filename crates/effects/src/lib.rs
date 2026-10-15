@@ -134,7 +134,7 @@ fn lengths_of(id: &str) -> Lengths {
         "threeD.inflate" => always(&["depth"]),
         "path.outlineStroke" => always(&["width"]),
         "stylize.roundCorners" | "stylize.feather" | "blur.gaussian" | "blur.smart" | "sharpen.unsharpMask" => always(&["radius"]),
-        "stylize.scribble" => always(&["overlap", "strokeWidth", "spacing", "variation"]),
+        "stylize.scribble" => always(&["overlap", "overlapVariation", "strokeWidth", "spacing", "spacingVariation"]),
         "stylize.dropShadow" => always(&["x", "y", "blur"]),
         "stylize.innerGlow" | "stylize.outerGlow" => always(&["blur"]),
         "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
@@ -301,8 +301,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.scribble",
             "Scribble…",
             STYLIZE,
-            "{angle: deg (30), overlap: pt (0), strokeWidth: pt (3), curviness: % (5), spacing: pt (5), variation: pt (0.5), seed: int (0)} (simplified: a single hatching scribble outlined to a filled shape)",
-            json!({"angle": 30.0, "overlap": 0.0, "strokeWidth": 3.0, "curviness": 5.0, "spacing": 5.0, "variation": 0.5, "seed": 0}),
+            "{angle: deg (30; stored above -180 and up to 180: 270 becomes -90, -180 becomes 180), overlap: pt (0; Path Overlap: a positive value extends each line beyond the path, a negative one ends it inside), overlapVariation: pt (0..100, 0.5; how far each line's ends move along it), strokeWidth: pt (3), curviness: % (5), curvinessVariation: % (0..100, 0; how far each turn's curviness moves from curviness), spacing: pt (5), spacingVariation: pt (0..100, 0.5; how far each line's ends move across it), variation: pt (the earlier form, read as overlapVariation and spacingVariation unless those are given), seed: int (0)} (simplified: a single hatching scribble outlined to a filled shape)",
+            json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.5, "strokeWidth": 3.0, "curviness": 5.0, "curvinessVariation": 0.0, "spacing": 5.0, "spacingVariation": 0.5, "seed": 0}),
         ),
         r(
             "stylize.dropShadow",
@@ -642,8 +642,9 @@ pub fn default_params(id: &str) -> Option<Value> {
     }
 }
 
-/// `params` layered over the defaults of `id` (unknown keys are kept), with the 3D effects'
-/// earlier `perspective` read as `perspectiveAngle` (see [`upgrade_params`]).
+/// `params` layered over the defaults of `id` (unknown keys are kept), in their current form (see
+/// [`upgrade_params`]). The 3D effects' earlier `perspective` is read as `perspectiveAngle`, and
+/// Scribble's earlier `variation` is read as `overlapVariation` and `spacingVariation`.
 pub fn merged_params(id: &str, params: &Value) -> Value {
     let mut out = match catalog_index().get(id).map(|e| &e.defaults) {
         Some(Value::Object(m)) => m.clone(),
@@ -660,14 +661,17 @@ pub fn merged_params(id: &str, params: &Value) -> Value {
 /// `params` for effect `id` in their current form. The 3D effects took Perspective as a 0–100 %
 /// strength, `perspective`, before the documented 0°–160° angle, `perspectiveAngle`, and the light
 /// as `lightAzimuth` and `lightElevation` before the documented Rotation and Height
-/// (`lightRotation`, `lightHeight`, `lightBehind`). Earlier values (from a file or a script of
+/// (`lightRotation`, `lightHeight`, `lightBehind`). Scribble took one `variation` before its
+/// separate `overlapVariation` and `spacingVariation`. Earlier values (from a file or a script of
 /// then) become the current ones that show exactly the same, unless those are given too, which win.
+/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°).
 pub fn upgrade_params(id: &str, params: &Value) -> Value {
     match params {
         Value::Object(m) => {
             let mut m = m.clone();
             upgrade_perspective(id, &mut m);
             upgrade_light(id, &mut m);
+            upgrade_scribble(id, &mut m);
             Value::Object(m)
         }
         other => other.clone(),
@@ -697,6 +701,21 @@ fn upgrade_perspective(id: &str, m: &mut Map<String, Value>) {
     if !m.contains_key("perspectiveAngle") {
         let angle = vectorcraft_three_d::perspective_from_strength(strength.as_f64().unwrap_or(0.0) / 100.0);
         m.insert("perspectiveAngle".into(), json!(angle));
+    }
+}
+
+fn upgrade_scribble(id: &str, m: &mut Map<String, Value>) {
+    if id != "stylize.scribble" {
+        return;
+    }
+    if let Some(variation) = m.remove("variation") {
+        for key in ["overlapVariation", "spacingVariation"] {
+            m.entry(key).or_insert_with(|| variation.clone());
+        }
+    }
+    if let Some(angle) = m.get("angle").and_then(Value::as_f64).filter(|a| a.is_finite() && (*a <= -180.0 || *a > 180.0)) {
+        let wrapped = angle.rem_euclid(360.0);
+        m.insert("angle".into(), json!(if wrapped > 180.0 { wrapped - 360.0 } else { wrapped }));
     }
 }
 
