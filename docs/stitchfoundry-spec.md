@@ -267,7 +267,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BAS-07 | Save native design | Done | `.stitchfoundry` keeps every stitch setting (VectorCraft documents inside, so `.vectorcraft` files open too) | – |
 | BAS-08 | Send design by email | Out | Desktop share sheets vary; users attach the exported file | – |
 | BAS-09 | Select objects | Done | VectorCraft selection tools | – |
-| BAS-10 | Grids, rulers, guides, units, measure | Done | VectorCraft (major/minor grid, guides, smart guides, measure tool) | – |
+| BAS-10 | Grids, rulers, guides, units, measure | Done | VectorCraft (major/minor grid, guides, smart guides, measure tool); AL1: CAD-style centre alignment: the hoop's centre lines show faintly while dragging, centre to centre wins over a nearer edge, and a meeting of centres shows a crosshair (across the hoop for its centre), ringed centres and *page center* / *centered* | – |
 | BAS-11 | View embroidery / artwork / both, zoom, pan, overview | Done | Show stitches (Hidden/Lines/TrueView), artwork (Normal/Dimmed/Hidden), Navigator panel | – |
 | BAS-12 | Stitch player (slow redraw) | Done | Stitch Sequence panel player | – |
 | BAS-13 | Travel tools: step through a design by stitch, object, colour, trim, function | Done | Stitch Sequence panel: Travel by (stitch, object, colour, trim, function) with back and next buttons; the object reached is selected | 1 |
