@@ -11,6 +11,84 @@ use crate::theme::{self, Tokens};
 #[derive(Clone, Debug, Default)]
 pub struct MyMachineState {
     pub open: bool,
+    /// The hoop of one's own being added: its name, width and height (in the units shown) and
+    /// whether it is oval.
+    pub hoop_name: String,
+    pub hoop_width: String,
+    pub hoop_height: String,
+    pub hoop_oval: bool,
+    /// Why the last hoop couldn't be added.
+    pub hoop_error: Option<String>,
+}
+
+/// A size typed in the units shown (`inches` or millimetres), in millimetres.
+fn typed_mm(text: &str, inches: bool) -> Option<f64> {
+    let v: f64 = text.trim().trim_end_matches(['"', '″']).trim().replace(',', ".").parse().ok()?;
+    let mm = if inches { v * 25.4 } else { v };
+    (mm.is_finite() && mm > 0.0).then_some(mm)
+}
+
+/// "My own hoops": the hoops of one's own, each with Remove, and a row to add one (its name,
+/// width and height in the units chosen, square or oval).
+fn own_hoops(app: &mut VectorcraftApp, ui: &mut egui::Ui, mine: &Value, t: &Tokens) {
+    let inches = app.session.prefs.units_general == "inches";
+    let show = |mm: f64| if inches { format!("{:.2}″", mm / 25.4) } else { format!("{mm:.0} mm") };
+    ui.label(egui::RichText::new(tl!("My own hoops")).size(14.0));
+    let own = mine["own"].as_array().cloned().unwrap_or_default();
+    if own.is_empty() {
+        ui.label(egui::RichText::new(tl!("Hoop not listed? Add its sewing field here.")).size(12.0).color(t.text_dim));
+    }
+    for h in &own {
+        let (Some(name), Some(w), Some(ht)) = (h["name"].as_str(), h["width"].as_f64(), h["height"].as_f64()) else { continue };
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("{name}: {} × {}", show(w), show(ht))).size(13.0));
+            if ui.small_button(tl!("Remove")).clicked() {
+                app.run("embroidery.hoop.deleteCustom", json!({ "name": name })).ok();
+            }
+        });
+    }
+    let st = &mut app.ui.my_machine;
+    let unit = if inches { tl!("in") } else { "mm" };
+    ui.horizontal(|ui| {
+        ui.label(tl!("Name"));
+        ui.add(egui::TextEdit::singleline(&mut st.hoop_name).desired_width(120.0).hint_text(tl!("My hoop")));
+        ui.label(tl!("Width"));
+        ui.add(egui::TextEdit::singleline(&mut st.hoop_width).desired_width(44.0));
+        ui.label(tl!("Height"));
+        ui.add(egui::TextEdit::singleline(&mut st.hoop_height).desired_width(44.0));
+        ui.label(unit);
+    });
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut st.hoop_oval, false, tl!("Square corners"));
+        ui.radio_value(&mut st.hoop_oval, true, tl!("Oval"));
+    });
+    let mut add = None;
+    if ui.button(tl!("Add My Hoop")).clicked() {
+        let name = st.hoop_name.trim().to_string();
+        add = match (typed_mm(&st.hoop_width, inches), typed_mm(&st.hoop_height, inches)) {
+            _ if name.is_empty() => {
+                st.hoop_error = Some(tl!("Give the hoop a name").into());
+                None
+            }
+            (Some(w), Some(h)) => Some(json!({ "name": name, "width": w, "height": h, "shape": if st.hoop_oval { "oval" } else { "rect" } })),
+            _ => {
+                st.hoop_error = Some(tl!("Type the hoop's width and height as numbers").into());
+                None
+            }
+        };
+    }
+    if let Some(p) = add {
+        match app.run("embroidery.hoop.saveCustom", p) {
+            Ok(_) => {
+                let st = &mut app.ui.my_machine;
+                (st.hoop_name, st.hoop_width, st.hoop_height, st.hoop_error) = (String::new(), String::new(), String::new(), None);
+            }
+            Err(e) => app.ui.my_machine.hoop_error = Some(e),
+        }
+    }
+    if let Some(e) = &app.ui.my_machine.hoop_error {
+        ui.label(egui::RichText::new(e.as_str()).size(12.0).color(t.error));
+    }
 }
 
 /// `ui.myMachine`: opens the window.
@@ -129,6 +207,8 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     egui::RichText::new(tl!("Plug in the USB stick you take to your machine, then choose it here.")).size(12.0).color(t.text_dim),
                 );
             }
+            ui.add_space(10.0);
+            own_hoops(app, ui, &mine, &t);
             ui.add_space(12.0);
             if crate::widgets::primary_button(ui, tl!("Done")).clicked() {
                 done = true;
@@ -146,6 +226,8 @@ pub fn machine_name(name: &str) -> &str {
         "Brother or Baby Lock" => tl!("Brother or Baby Lock"),
         "Janome or Elna" => tl!("Janome or Elna"),
         "Another machine (DST)" => tl!("Another machine (DST)"),
+        "Brother or Baby Lock multi-needle" => tl!("Brother or Baby Lock multi-needle"),
+        "Commercial multi-needle (DST)" => tl!("Commercial multi-needle (DST)"),
         other => other,
     }
 }

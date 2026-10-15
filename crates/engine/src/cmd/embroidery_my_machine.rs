@@ -14,7 +14,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "My Machine",
             [],
             None,
-            "{} the machine chosen as one's own, the machines to choose from and the folder or USB stick designs were last saved to → {machine: name | null, format, hoops: [{name, width, height}] (mm, the everyday one first), folder: path | null, machines: [{name, format}]}",
+            "{} the machine chosen as one's own, the machines to choose from and the folder or USB stick designs were last saved to → {machine: name | null, format, hoops: [{name, width, height}] (mm, the everyday one first, then one's own), own: [{name, width, height, shape}] (the hoops of one's own, embroidery.hoop.saveCustom), folder: path | null, machines: [{name, format}]}",
             always,
             get
         ),
@@ -37,17 +37,31 @@ pub(super) fn mine(s: &Session) -> Option<&'static HomeMachine> {
 
 fn get(s: &mut Session, _: &Value) -> Result<Value> {
     let m = mine(s);
-    let hoops: Vec<Value> = m
+    let mut hoops: Vec<Value> = m
         .map(|m| m.hoops)
         .unwrap_or_default()
         .iter()
         .filter_map(|name| super::embroidery_hoops::find_hoop(s, name))
         .map(|h| json!({ "name": h.name, "width": h.width, "height": h.height }))
         .collect();
+    // hoops of one's own, after the machine's (when a machine is chosen)
+    let own: Vec<Value> = s
+        .prefs
+        .embroidery_custom_hoops
+        .iter()
+        .map(|h| {
+            let shape = if h.shape == sf_core::hoops::HoopShape::Oval { "oval" } else { "rect" };
+            json!({ "name": h.name, "width": h.width, "height": h.height, "shape": shape })
+        })
+        .collect();
+    if m.is_some() {
+        hoops.extend(own.iter().map(|h| json!({ "name": h["name"], "width": h["width"], "height": h["height"] })));
+    }
     Ok(json!({
         "machine": m.map(|m| m.name),
         "format": m.map(|m| m.format),
         "hoops": hoops,
+        "own": own,
         "folder": s.prefs.embroidery_send_dirs.first(),
         "machines": HOME_MACHINES.iter().map(|m| json!({ "name": m.name, "format": m.format })).collect::<Vec<_>>(),
     }))
@@ -80,10 +94,18 @@ mod tests {
         assert!(s.execute("embroidery.newDesign", &json!({})).is_err(), "no hoop and no machine");
         let r = s.execute("embroidery.myMachine.set", &json!({"machine": "Husqvarna Viking Designer Diamond deLuxe"})).unwrap();
         assert_eq!(r["format"], "vp3");
-        assert_eq!(r["hoops"][0]["name"], "Husqvarna 240 × 150");
+        // the Crown hoop it comes with first
+        assert_eq!(r["hoops"][0]["name"], "Husqvarna 260 × 200");
+        // a hoop of one's own joins the machine's
+        s.execute("embroidery.hoop.saveCustom", &json!({"name": "My quilting frame", "width": 300, "height": 250})).unwrap();
+        let r = s.execute("embroidery.myMachine", &json!({})).unwrap();
+        let names: Vec<&str> = r["hoops"].as_array().unwrap().iter().map(|h| h["name"].as_str().unwrap()).collect();
+        assert_eq!(names.last(), Some(&"My quilting frame"), "{names:?}");
+        assert_eq!(r["own"][0]["width"], 300.0);
+        s.execute("embroidery.hoop.deleteCustom", &json!({"name": "My quilting frame"})).unwrap();
         // a new design without a hoop: the machine's everyday hoop, its settings
         let d = s.execute("embroidery.newDesign", &json!({})).unwrap();
-        assert_eq!(d["hoop"], "Husqvarna 240 × 150");
+        assert_eq!(d["hoop"], "Husqvarna 260 × 200");
         s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap();
         s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
         let out = s.execute("embroidery.export", &json!({})).unwrap();
