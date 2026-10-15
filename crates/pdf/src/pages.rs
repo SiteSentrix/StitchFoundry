@@ -46,6 +46,11 @@ const MAX_LINKS: usize = 16;
 /// The application's calculator-procedure depth policy, layered over the shared reader's limits.
 const MAX_PROCEDURES: usize = 64;
 
+/// The values of `d` that the reader can parse (`Dict::entries` panics on one it can't).
+fn values<'a>(d: &Dict<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> {
+    d.keys().filter_map(|k| d.get_raw::<Object<'a>>(k.as_ref()))
+}
+
 /// What the function or colour space `o` is built on: the functions a stitching function joins;
 /// the base, alternate and tint of a colour space; the alternate of a colour profile. Nothing for
 /// any other object.
@@ -144,7 +149,7 @@ fn nests_without_end(pdf: &Pdf) -> bool {
         }
         match &o {
             Object::Array(a) => pending.extend(a.raw_iter().filter_map(direct)),
-            _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| d.entries()).filter_map(|(_, v)| direct(v))),
+            _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| values(d)).filter_map(direct)),
         }
     }
     false
