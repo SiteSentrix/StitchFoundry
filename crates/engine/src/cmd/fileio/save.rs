@@ -446,6 +446,11 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
 fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i64>) -> Result<SaveJob> {
     let cmd = plan.mode.command();
     let mut own = doc_to_save(st, plan.format);
+    // The file the document is saved as (else its own) titles it if New's name is all it has.
+    let file = plan.path.as_deref().filter(|_| plan.retargets()).or(st.path.as_deref());
+    if let Some(d) = super::titled_for_export(&own, file, plan.format.id) {
+        own = Arc::new(d);
+    }
     let mut snapshot = st.doc.clone();
     if let Some(at) = stamped {
         stamp_doc_dates(Arc::make_mut(&mut own), at);

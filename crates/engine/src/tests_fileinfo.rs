@@ -161,3 +161,47 @@ fn svg_metadata_carries_file_info_as_dublin_core() {
     let plain = String::from_utf8(b64(&s.execute("document.export", &json!({"format": "svg"})).unwrap())).unwrap();
     assert!(!plain.contains("<metadata>") && plain.contains("<desc>"));
 }
+
+/// The PDF `document.exportPdf` and `document.export` write of the active document (text
+/// uncompressed, so its metadata reads).
+fn pdf_texts(s: &mut Session) -> [String; 2] {
+    let p = json!({"compression": {"compressText": false}, "preserveEditing": false});
+    let a = b64(&s.execute("document.exportPdf", &p).unwrap());
+    let b = b64(&s.execute("document.export", &json!({"format": "pdf", "compression": {"compressText": false}, "preserveEditing": false})).unwrap());
+    [a, b].map(|pdf| String::from_utf8_lossy(&pdf).into_owned())
+}
+
+/// The XMP `dc:title` of a PDF's text.
+fn xmp_title(pdf: &str) -> &str {
+    let from = pdf.find("<dc:title>").expect("XMP title");
+    &pdf[from..from + pdf[from..].find("</dc:title>").unwrap()]
+}
+
+#[test]
+fn an_untitled_document_saved_to_a_file_exports_titled_after_it() {
+    let dir = std::env::temp_dir().join(format!("vc-pdftitle-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("Document C.vectorcraft");
+    // Saved as a file, then exported: Untitled-1 was only the name New gave it.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+    s.execute("document.save", &json!({"path": path.to_str().unwrap()})).unwrap();
+    for pdf in pdf_texts(&mut s) {
+        assert!(pdf.contains("/Title(Document C)") && xmp_title(&pdf).contains("Document C"), "{}", xmp_title(&pdf));
+    }
+    // Opened from that file, in another session.
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path.to_str().unwrap()})).unwrap();
+    for pdf in pdf_texts(&mut s) {
+        assert!(pdf.contains("/Title(Document C)") && !pdf.contains("Untitled"), "{}", xmp_title(&pdf));
+    }
+    // The document's own title is left as it was.
+    assert_eq!(s.doc().unwrap().doc.title, "Untitled-1");
+    // A title of its own (File Info, New Document's Name) stays.
+    let mut s = session();
+    s.execute("document.save", &json!({"path": dir.join("Document D.vectorcraft").to_str().unwrap()})).unwrap();
+    for pdf in pdf_texts(&mut s) {
+        assert!(pdf.contains("/Title(Poster)") && xmp_title(&pdf).contains("Poster"));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}

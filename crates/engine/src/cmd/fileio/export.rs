@@ -157,7 +157,9 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Co
     if f.id == "txt" && bool_or(p, "selectionOnly", false) {
         return Ok(Cow::Owned(selection(s, cmd)?.0));
     }
-    export_source(s.doc()?, p)
+    let st = s.doc()?;
+    let doc = export_source(st, p)?;
+    Ok(super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned))
 }
 
 /// The selected objects (not on template layers) alone on one layer, with one artboard: their
