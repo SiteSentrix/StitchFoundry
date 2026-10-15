@@ -179,6 +179,10 @@ pub struct ImportReport {
     /// Every page shows only text, over an editor's private data: that data, where it reads,
     /// is the file's art (a file saved without its PDF part shows a notice there instead).
     pub only_text: bool,
+    /// The size in points of a unit of the first page read's user space: the `UserUnit` the PDF
+    /// reader applies to that page (1 for a page without one). The page came in at its size in
+    /// points, its numbers times this.
+    pub user_unit: f64,
 }
 
 /// Result of an export with non-fatal warnings (features approximated or dropped).
