@@ -1899,7 +1899,7 @@ fn editing_eps(editing: &str) -> Vec<u8> {
 #[test]
 fn the_editing_fixture_reads_its_cmyk_image_with_its_mask() {
     let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing_text())].concat();
-    let (doc, warnings, layers) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true);
+    let (doc, warnings, layers) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
     let mut found = vec![];
     doc.visit_images(|n, im| found.push((doc.images[&im.key].cmyk().map(|i| i.data), n.extras().mask.is_some())));
     assert!(layers && found.contains(&(Some(vec![255, 0, 0, 0, 0, 0, 0, 255]), true)), "{found:?} {warnings:?}");
