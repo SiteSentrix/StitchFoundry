@@ -1385,7 +1385,15 @@ impl Session {
             self.note_depth = 1;
             self.batch_stash = None;
         }
-        let r = if self.depth == 0 { self.run_guarded(id, |s| (spec.run)(s, params)) } else { self.run_nested(|s| (spec.run)(s, params)) };
+        // A selection-only command given `ids` selects them first, in the same undo step (#2130).
+        let select_first = SELECTS_GIVEN_IDS.contains(&id).then(|| params.get("ids")).flatten();
+        let run = |s: &mut Session| {
+            if let Some(ids) = select_first {
+                s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
+            }
+            (spec.run)(s, params)
+        };
+        let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         let r = r?;
         if self.depth == 0 {
             self.inherit_new_art();
@@ -2022,6 +2030,8 @@ mod tests_scalestrokes;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]
+mod tests_select_ids_first;
+#[cfg(test)]
 mod tests_shaper;
 #[cfg(test)]
 mod tests_shortcutset;
@@ -2085,6 +2095,41 @@ mod tests_widthprofiles;
 mod tests_widthtool;
 #[cfg(test)]
 mod tests_xform;
+
+/// Commands that act on the selection and take `ids` by selecting them first (`select.set`, with
+/// its checks), then running as on the selection: the result and the selection afterwards are the
+/// menu command's (#2130).
+pub(crate) const SELECTS_GIVEN_IDS: &[&str] = &[
+    "edit.duplicate",
+    "object.arrange.bringForward",
+    "object.arrange.bringToFront",
+    "object.arrange.sendBackward",
+    "object.arrange.sendToBack",
+    "object.arrange.sendToCurrentLayer",
+    "object.clippingMask.make",
+    "object.clippingMask.release",
+    "object.compoundPath.make",
+    "object.compoundPath.release",
+    "object.group",
+    "object.hide",
+    "object.lock",
+    "object.move",
+    "object.pathfinder.crop",
+    "object.pathfinder.divide",
+    "object.pathfinder.exclude",
+    "object.pathfinder.intersect",
+    "object.pathfinder.merge",
+    "object.pathfinder.minusBack",
+    "object.pathfinder.minusFront",
+    "object.pathfinder.outline",
+    "object.pathfinder.trim",
+    "object.pathfinder.unite",
+    "object.reflect",
+    "object.rotate",
+    "object.scale",
+    "object.shear",
+    "object.ungroup",
+];
 
 /// The non-empty `ids` given to a command whose params description names `ids` as a key (the
 /// key callers outside the app may pass it, [`cmd::params::takes_key`]).
