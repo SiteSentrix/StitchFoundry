@@ -1381,6 +1381,20 @@
 	Left:	左：
 	Legacy Macintosh RGB (Gamma 1.8)	旧版 Macintosh RGB (Gamma 1.8)
 	Legacy vector clipboard	旧版矢量剪贴板
+	Legacy (version 7)	旧版 (版本 7)
+	Transparent Images:	透明图像：
+	Flatten	拼合
+	Omit	省略
+	Legacy .ai Options	旧版 .ai 选项
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	旧版 .ai 文件只包含一个画板：勾选的每个画板都会存储为单独的文件。
+	{count} of {total} artboards	{total} 个画板中的 {count} 个
+	Check an artboard to save.	请勾选要存储的画板。
+	Hidden Objects:	隐藏的对象：
+	Hidden Layer	隐藏图层
+	Make Visible	设为可见
+	Text:	文本：
+	Editable	可编辑
+	PDF-compatible	与 PDF 兼容
 	Legacy vector clipboard (no transparency)	旧版矢量剪贴板 (无透明度)
 	Less	较少
 	Letter	信纸

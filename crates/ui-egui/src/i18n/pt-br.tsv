@@ -1225,6 +1225,20 @@
 	Left:	Esquerda:
 	Legacy Macintosh RGB (Gamma 1.8)	Macintosh RGB Legado (Gama 1.8)
 	Legacy vector clipboard	Área de transferência vetorial legada
+	Legacy (version 7)	Legado (versão 7)
+	Transparent Images:	Imagens transparentes:
+	Flatten	Achatar
+	Omit	Omitir
+	Legacy .ai Options	Opções de .ai legado
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Um arquivo .ai legado contém uma prancheta: cada prancheta marcada é salva como um arquivo separado.
+	{count} of {total} artboards	{count} de {total} pranchetas
+	Check an artboard to save.	Marque uma prancheta para salvar.
+	Hidden Objects:	Objetos ocultos:
+	Hidden Layer	Camada oculta
+	Make Visible	Tornar visíveis
+	Text:	Texto:
+	Editable	Editável
+	PDF-compatible	Compatível com PDF
 	Legacy vector clipboard (no transparency)	Área de transferência vetorial legada (sem transparência)
 	Less	Menos
 	Levels…	Níveis…

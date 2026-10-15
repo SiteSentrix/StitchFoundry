@@ -73,6 +73,30 @@ pub(crate) fn string(text: &str) -> String {
     s
 }
 
+/// `bytes` as a PostScript string: `(` `)` `\` escaped, carriage returns, line feeds and tabs as
+/// `\r` `\n` `\t`, other bytes outside printable ASCII as octal escapes.
+pub(crate) fn bytes(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() + 2);
+    s.push('(');
+    for &b in bytes {
+        match b {
+            b'(' | b')' | b'\\' => {
+                s.push('\\');
+                s.push(char::from(b));
+            }
+            b'\r' => s.push_str("\\r"),
+            b'\n' => s.push_str("\\n"),
+            b'\t' => s.push_str("\\t"),
+            0x20..=0x7e => s.push(char::from(b)),
+            _ => {
+                let _ = write!(s, "\\{b:03o}");
+            }
+        }
+    }
+    s.push(')');
+    s
+}
+
 /// A matrix operand `[a b c d e f]`.
 pub(crate) fn matrix(a: Affine) -> String {
     let mut s = String::from("[");

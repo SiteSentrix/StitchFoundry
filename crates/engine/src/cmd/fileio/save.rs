@@ -335,7 +335,8 @@ impl<W: std::io::Write> std::io::Write for Counted<W> {
 /// The artboards a native or `.ai` save also writes to files of their own: with
 /// `separateArtboards`, those `range` names (default all).
 fn separate_boards(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<usize>> {
-    if !is_native(f) || !bool_or(p, "separateArtboards", false) {
+    // A legacy .ai file is a file per artboard already.
+    if !is_native(f) || !bool_or(p, "separateArtboards", false) || super::legacy_ai::wanted(cmd, p)? {
         return Ok(vec![]);
     }
     let range = str_param(p, "range").filter(|r| !r.trim().is_empty()).map(str::to_string);
@@ -346,7 +347,7 @@ fn separate_boards(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<V
 
 /// `doc` reduced to artboard `i` and the art on it (Save each artboard to a separate file):
 /// objects whose bounds touch the artboard, in their layers; resources are kept.
-fn artboard_doc(doc: &Document, i: usize) -> Document {
+pub(super) fn artboard_doc(doc: &Document, i: usize) -> Document {
     let mut d = doc.clone();
     let Some(a) = doc.artboards.get(i) else { return d };
     let r = a.rect;
@@ -387,6 +388,9 @@ const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens i
 
 /// The shared Save and Export encoder for PDF-compatible `.ai` files.
 pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Encoded> {
+    if super::legacy_ai::wanted(cmd, p)? {
+        return super::legacy_ai::encode(cmd, f, doc, p);
+    }
     let mut params = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = params.as_object_mut() {
         o.insert("preserveEditing".into(), json!(true));
@@ -463,9 +467,14 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
     }
     let boards = separate_boards(cmd, plan.format, &doc, &params)?;
     let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
+    let legacy = super::legacy_ai::wanted(cmd, &params)?;
     if let (Some(o), "ai") = (params.as_object_mut(), plan.format.id) {
-        // Save keeps every artboard; exports may choose a subset instead.
-        o.insert("range".into(), json!("all"));
+        // Save keeps every artboard; exports may choose a subset instead. A legacy .ai file per
+        // artboard keeps a range given: the artboards to save.
+        let chosen = legacy && o.get("range").and_then(Value::as_str).is_some_and(|r| !r.trim().is_empty());
+        if !chosen {
+            o.insert("range".into(), json!("all"));
+        }
     }
     Ok(SaveJob { plan, doc, params, snapshot, source: st.doc.clone(), stamped, boards })
 }
@@ -507,7 +516,9 @@ impl SaveJob {
     fn encode_one(&self, doc: &Document) -> Result<Encoded> {
         let (cmd, f) = (self.plan.mode.command(), self.plan.format);
         let enc = if f.id == "ai" { encode_ai(cmd, f, doc, &self.params)? } else { encode_all(doc, f.id, &self.params)? };
-        if enc.files.len() != 1 {
+        // A legacy .ai file per artboard.
+        let per_artboard = f.id == "ai" && super::legacy_ai::wanted(cmd, &self.params)?;
+        if enc.files.len() != 1 && !per_artboard {
             return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
         }
         Ok(enc)

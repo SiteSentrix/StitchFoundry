@@ -1477,6 +1477,20 @@
 	Left:	Izquierda:
 	Legacy Macintosh RGB (Gamma 1.8)	RGB de Macintosh heredado (Gamma 1.8)
 	Legacy vector clipboard	Portapapeles vectorial heredado
+	Legacy (version 7)	Heredado (versión 7)
+	Transparent Images:	Imágenes transparentes:
+	Flatten	Acoplar
+	Omit	Omitir
+	Legacy .ai Options	Opciones de .ai heredado
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Un archivo .ai heredado contiene una mesa de trabajo: cada mesa de trabajo marcada se guarda como un archivo independiente.
+	{count} of {total} artboards	{count} de {total} mesas de trabajo
+	Check an artboard to save.	Marque una mesa de trabajo para guardarla.
+	Hidden Objects:	Objetos ocultos:
+	Hidden Layer	Capa oculta
+	Make Visible	Hacer visibles
+	Text:	Texto:
+	Editable	Editable
+	PDF-compatible	Compatible con PDF
 	Legacy vector clipboard (no transparency)	Portapapeles vectorial heredado (sin transparencia)
 	Less	Menos
 	Letter	Carta

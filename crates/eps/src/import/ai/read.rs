@@ -30,9 +30,12 @@
 //!   `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`), the matrix
 //!   taking the pattern's space to art space (the other operands are what it is made of).
 //!
+//! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
+//!   [`legacy_text`].
+//!
 //! Sections the reader doesn't need (brushes, symbols, styles, swatches, filters) are skipped;
-//! type, symbols, fills with a pattern it can't read, placed files without a preview, legacy type
-//! and operators it doesn't know are errors.
+//! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
+//! it doesn't know are errors.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
@@ -54,6 +57,9 @@ use super::obj::{self, Obj, V};
 use super::paint::{self, GradientDef, Instance, Named};
 use crate::ps;
 
+#[path = "legacy_text.rs"]
+mod legacy_text;
+
 /// Deepest nesting of layers, groups and dictionaries.
 const MAX_DEPTH: usize = 256;
 /// Most operands on the stack.
@@ -64,6 +70,8 @@ const MAX_NODES: usize = 4_000_000;
 const MAX_POINTS: usize = 4_000_000;
 /// Largest image read (pixels).
 const MAX_PIXELS: u64 = 1 << 25;
+/// Most hex digits of an image's samples read from comment lines (CMYK and alpha at the largest size).
+const MAX_HEX: usize = (MAX_PIXELS as usize) * 10;
 /// Largest side of the document and its artboards (points).
 const MAX_SIDE: f64 = 1e6;
 /// Art space (y up) → a pattern's space in the document's terms (y down).
@@ -291,6 +299,11 @@ struct PatternHead {
 #[derive(Debug, Default)]
 struct Raster {
     space: Option<String>,
+    /// `XI`'s operands when its samples follow as hex in comment lines (`%FF00…`) up to
+    /// `%AI5_EndRaster`, the form the version 7 specification documents (§8).
+    operands: Option<Vec<V>>,
+    /// Those hex digits.
+    hex: Vec<u8>,
 }
 
 /// A placed file's operands, from `` ` `` and its preview, until `~`.
@@ -382,6 +395,9 @@ struct Reader<'a> {
     pattern: Option<PatternHead>,
     /// The tile's top left (y down) of each pattern read, by name.
     pattern_tiles: HashMap<String, Point>,
+    /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
+    text: Option<legacy_text::LegacyText>,
+    type_state: legacy_text::TypeState,
 }
 
 /// Operators that change nothing the reader keeps.
@@ -404,7 +420,8 @@ const IGNORED: &[&str] = &[
     "Np",
     // Flatness (`i`): how finely curves print.
     "i",
-    "TE",
+    // Path resolution (`Ar`, §12): how finely curves print.
+    "Ar",
     "TZ",
     "Xs",
     "Xt",
@@ -510,6 +527,8 @@ impl<'a> Reader<'a> {
             template_center: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
+            text: None,
+            type_state: legacy_text::TypeState::default(),
         }
     }
 
@@ -566,6 +585,16 @@ impl<'a> Reader<'a> {
     fn comment(&mut self, c: &[u8]) -> Result<(), String> {
         let line = String::from_utf8_lossy(c);
         let line = line.trim_end();
+        if let Some(r) = self.raster.as_mut()
+            && r.operands.is_some()
+            && !line.is_empty()
+            && line.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            if r.hex.len() < MAX_HEX {
+                r.hex.extend_from_slice(line.as_bytes());
+            }
+            return Ok(());
+        }
         let m = marker(line);
         // A pattern's definition (one inside another's isn't read).
         if m == "BeginPattern" && self.pattern.is_none() {
@@ -577,6 +606,9 @@ impl<'a> Reader<'a> {
             let section = self.section("EndArtStyles")?;
             self.styles = super::style::art_styles(section);
             return Ok(());
+        }
+        if m == "BeginEncoding" {
+            self.type_state.encoding_comment(line);
         }
         if let Some((_, end)) = SKIPPED.iter().find(|(b, _)| *b == m) {
             return self.skip_to(end);
@@ -597,7 +629,9 @@ impl<'a> Reader<'a> {
         if line.starts_with("AI5_BeginRaster") {
             self.raster = Some(Raster::default());
         } else if line.starts_with("AI5_EndRaster") {
-            self.raster = None;
+            if let Some(Raster { operands: Some(vals), hex, .. }) = self.raster.take() {
+                return self.image_from(vals, &hex);
+            }
         } else if line.starts_with("AI5_BeginPlace") {
             self.place = Some(Place::default());
         } else if line.starts_with("AI5_EndPlace") {
@@ -984,6 +1018,8 @@ impl<'a> Reader<'a> {
             // Ends a path that stays open.
             "H" => {}
             "W" => self.clip_next = true,
+            // A text object's frame or path.
+            "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" if self.in_text_path() => self.text_path(),
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" => self.paint(w, hidden, false)?,
             "*" => {
                 let op = vals.iter().rev().find_map(V::text).unwrap_or_else(|| "N".into());
@@ -1067,6 +1103,10 @@ impl<'a> Reader<'a> {
                 {
                     self.set_instance(&i);
                 }
+                // `1 BB` strokes the path the gradient just filled, `2 BB` closes it first (§3.5.3).
+                if matches!(Self::nums(&vals).last(), Some(f) if *f == 1.0 || *f == 2.0) {
+                    self.stroke_last();
+                }
             }
             // Images.
             "XN" => {
@@ -1087,7 +1127,23 @@ impl<'a> Reader<'a> {
             }
             "~" if self.place.is_some() => self.end_place(hidden)?,
             // Type in the legacy format.
-            "To" | "TO" | "Tp" | "TP" | "Tx" | "TX" | "Tj" | "Tk" => self.unreadable("type in the legacy format"),
+            "To" => self.begin_text(&vals, hidden),
+            "Tp" => self.begin_text_path(&vals),
+            "TP" => self.end_text_path(),
+            "TO" => self.end_text(hidden)?,
+            "Tx" | "Tj" | "TX" => self.text_body(w, &vals),
+            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" => self.text_attr(w, &vals),
+            // Attributes the reader doesn't keep (kerning pairs, spacing, hanging punctuation,
+            // Far-Eastern type) and final-form positions (§15.3).
+            "Tk" | "TK" | "TC" | "TW" | "Tq" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg"
+            | "Tu" | "Xu" => {}
+            "TE" => self.te(&vals),
+            // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
+            "XI" if self.raster.is_some() => {
+                if let Some(r) = self.raster.as_mut() {
+                    r.operands = Some(vals);
+                }
+            }
             _ if IGNORED.contains(&w) => {}
             // Before the art, the setup runs procedures of the printing format.
             _ if self.frames.is_empty() => {}
@@ -1612,6 +1668,24 @@ impl<'a> Reader<'a> {
         self.add(node, hidden)
     }
 
+    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.
+    fn stroke_last(&mut self) {
+        let gs = self.gs.clone();
+        let Some(n) = self.last_object() else { return };
+        if !matches!(n.kind, NodeKind::Path { clipping: false, .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
+            return;
+        }
+        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.width);
+        st.cap = gs.cap;
+        st.join = gs.join;
+        st.miter_limit = gs.miter;
+        st.dash = gs.dash.clone();
+        st.overprint = gs.overprint_stroke;
+        let mut a = (*n.appearance).clone();
+        a.items.push(AppearanceItem::Stroke(st));
+        n.appearance = a.into();
+    }
+
     fn set_instance(&mut self, i: &Instance) {
         let to_doc = self.space();
         match i.paint(&self.gradients, to_doc) {
@@ -1629,6 +1703,16 @@ impl<'a> Reader<'a> {
     /// The samples after `XI`, its operands on the stack.
     fn image(&mut self, data: &[u8]) -> Result<(), String> {
         let vals = self.operands();
+        // Operands that came before an `XI` on their own line.
+        let vals = match self.raster.as_mut().and_then(|r| r.operands.take()) {
+            Some(before) if !vals.iter().any(|v| matches!(v, V::Arr(_))) => before,
+            _ => vals,
+        };
+        self.image_from(vals, data)
+    }
+
+    /// An image of operands `vals` and samples `data`.
+    fn image_from(&mut self, vals: Vec<V>, data: &[u8]) -> Result<(), String> {
         let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
         let Some(m) = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None }) else { return Ok(()) };
         let n = Self::nums(&vals);
@@ -1753,7 +1837,11 @@ impl<'a> Reader<'a> {
     /// box's centre (half a point off the grid).
     fn sized_board(&self) -> Option<Rect> {
         let ((w, h), (cx, cy)) = (self.art_size?, self.template_center?);
-        let (x0, y1) = ((cx - w / 2.0).floor(), (cy + h / 2.0).ceil());
+        // Rounded out, but not off a whole point the decimals in the file only just miss.
+        let near = |v: f64| (v - v.round()).abs() < 1e-6;
+        let (left, top) = (cx - w / 2.0, cy + h / 2.0);
+        let x0 = if near(left) { left.round() } else { left.floor() };
+        let y1 = if near(top) { top.round() } else { top.ceil() };
         let r = Rect::new(x0, y1 - h, x0 + w, y1);
         (sane(r) && w > 0.0 && h > 0.0).then_some(r)
     }

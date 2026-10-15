@@ -4651,6 +4651,20 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+	Legacy (version 7)	Starsza (wersja 7)
+	Transparent Images:	Przezroczyste obrazy:
+	Flatten	Spłaszcz
+	Omit	Pomiń
+	Legacy .ai Options	Opcje starszego pliku .ai
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Starszy plik .ai zawiera jeden obszar kompozycji: każdy zaznaczony obszar kompozycji jest zapisywany jako osobny plik.
+	{count} of {total} artboards	{count} z {total} obszarów kompozycji
+	Check an artboard to save.	Zaznacz obszar kompozycji, aby zapisać.
+	Hidden Objects:	Ukryte obiekty:
+	Hidden Layer	Ukryta warstwa
+	Make Visible	Uwidocznij
+	Text:	Tekst:
+	Editable	Edytowalny
+	PDF-compatible	Zgodny z PDF
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Wymiar
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Rysunek : rozmiar rzeczywisty — 1:10 opisuje 1 jednostkę na stronie jako 10.
