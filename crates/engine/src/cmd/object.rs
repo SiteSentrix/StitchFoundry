@@ -184,7 +184,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} With anchor points selected (Direct Selection), the points are spaced evenly between the first and the last along the axis instead (#1636)",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the selection; \"key\" distributes as \"selection\" does; not used with anchor points selected), artboard?: index (0-based; with to: \"artboard\", the artboard to distribute across; the app passes the active one; default: as object.align's), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} space the objects' left edges, centers or right edges (top edges, centers or bottom edges) evenly, in their order on that line: the first and last objects stay put, and fewer than three objects don't move; with to: \"artboard\", the first one's left (top) edge goes to the artboard's left (top) edge, the last one's right (bottom) edge goes to the artboard's right (bottom) edge, and two objects are enough. With anchor points selected (Direct Selection), the points are spaced evenly between the first and the last along the axis instead (#1636)",
             can_distribute,
             distribute
         ),
@@ -193,7 +193,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute Spacing",
             ["Window", "Align"],
             None,
-            "{axis: \"horizontal\"|\"vertical\", spacing?: pt (the key object, select.key, stays put and the others are spaced from it), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} With anchor points selected (Direct Selection), the points are spaced evenly along the axis instead, or `spacing` apart from the first (#1636)",
+            "{axis: \"horizontal\"|\"vertical\", spacing?: pt (the key object, select.key, stays put and the others are spaced from it), to?: \"selection\"|\"artboard\"|\"key\" (used without spacing and without anchor points selected; default: the selection; \"key\" spaces as \"selection\" does), artboard?: index (0-based; with to: \"artboard\", the artboard to space across; the app passes the active one; default: as object.align's), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} without spacing, make the gaps between the objects equal, in the order of their left (top) edges: the first object's left (top) edge and the last one's right (bottom) edge stay put, or with to: \"artboard\" go to the artboard's left (top) and right (bottom) edges. With anchor points selected (Direct Selection), the points are spaced evenly along the axis instead, or `spacing` apart from the first (#1636)",
             can_distribute,
             distribute_spacing
         ),
@@ -1174,6 +1174,17 @@ fn reference_rect(s: &Session, p: &Value, ids: &[NodeId], preview: bool) -> Resu
     }
 }
 
+/// Returns the artboard for `to: "artboard"` of `object.distribute` and `object.distributeSpacing`
+/// (command `cmd`), the same artboard as `object.align` uses ([`reference_rect`]). It returns
+/// `None` for the other choices. A `to` outside the choices is an error. Both commands call it
+/// before they space selected anchor points, and they space those points without the artboard.
+fn distribute_to(s: &Session, p: &Value, ids: &[NodeId], preview: bool, cmd: &str) -> Result<Option<Rect>> {
+    match choice(p, cmd, "to", &["selection", "artboard", "key"])? {
+        Some("artboard") => reference_rect(s, p, ids, preview).map(Some),
+        _ => Ok(None),
+    }
+}
+
 /// Returns the selected root (one of `ids`) that is the key object or contains it, such as the
 /// compound path or selected group the key is in. Align to the key object and Distribute Spacing
 /// with a spacing keep it in place.
@@ -1319,6 +1330,7 @@ fn distribute_anchors(s: &mut Session, label: &str, horiz: bool, gap: Option<f64
 fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let preview = preview_bounds(s, p, "object.distribute")?;
+    let board = distribute_to(s, p, &ids, preview, "object.distribute")?;
     // Anchor points selected with Direct Selection are distributed themselves, as Align aligns them.
     if !s.doc()?.selection.anchors.is_empty() {
         return match direction(p, "object.distribute")? {
@@ -1348,11 +1360,20 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     };
     items.sort_by(|a, b| key(&a.1, horiz).total_cmp(&key(&b.1, horiz)));
     let n = items.len();
-    if n < 3 {
+    // Two objects are enough on an artboard: they go to its edges.
+    if n < 2 || (n < 3 && board.is_none()) {
         return ok();
     }
-    let first = key(&items[0].1, horiz);
-    let last = key(&items[n - 1].1, horiz);
+    let (first_box, last_box) = (&items[0].1, &items[n - 1].1);
+    // `first` and `last` are the lines that the first and last objects end on. Without an artboard
+    // the first and last objects stay where they are. On an artboard the first object moves until
+    // its left (top) edge is on the artboard's left (top) edge, and the last object moves until its
+    // right (bottom) edge is on the artboard's right (bottom) edge.
+    let (first, last) = match board {
+        Some(r) if horiz => (key(first_box, horiz) + r.x0 - first_box.x0, key(last_box, horiz) + r.x1 - last_box.x1),
+        Some(r) => (key(first_box, horiz) + r.y0 - first_box.y0, key(last_box, horiz) + r.y1 - last_box.y1),
+        None => (key(first_box, horiz), key(last_box, horiz)),
+    };
     let moves: Vec<(NodeId, Vec2)> = items
         .iter()
         .enumerate()
@@ -1369,6 +1390,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let horiz = choice(p, "object.distributeSpacing", "axis", &["horizontal", "vertical"])? != Some("vertical");
     let preview = preview_bounds(s, p, "object.distributeSpacing")?;
+    let board = distribute_to(s, p, &ids, preview, "object.distributeSpacing")?;
     let spacing = p
         .get("spacing")
         .filter(|v| !v.is_null())
@@ -1385,14 +1407,20 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let size = |r: &Rect| if horiz { r.width() } else { r.height() };
     let start = |r: &Rect| if horiz { r.x0 } else { r.y0 };
+    // The objects start at `lo`, and without a spacing the last one ends at `hi`. These are the
+    // first object's left (top) edge and the last one's right (bottom) edge, or the artboard's
+    // edges with Align to Artboard and no spacing.
+    let (lo, hi) = match board.filter(|_| spacing.is_none()) {
+        Some(r) if horiz => (r.x0, r.x1),
+        Some(r) => (r.y0, r.y1),
+        None if horiz => (first.x0, last.x1),
+        None => (first.y0, last.y1),
+    };
     let gap = match spacing {
         Some(g) => g,
-        None => {
-            let span = if horiz { last.x1 - first.x0 } else { last.y1 - first.y0 };
-            (span - items.iter().map(|i| size(&i.1)).sum::<f64>()) / (n - 1) as f64
-        }
+        None => (hi - lo - items.iter().map(|i| size(&i.1)).sum::<f64>()) / (n - 1) as f64,
     };
-    let mut pos = start(&first);
+    let mut pos = lo;
     let mut deltas = vec![];
     for (id, r) in &items {
         deltas.push((*id, pos - start(r)));

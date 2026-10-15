@@ -547,16 +547,25 @@ impl DocState {
 pub const MAX_COORD: f64 = 4.0e6;
 
 /// The commands that act on the active artboard (#693), which the app passes as their `artboard`:
-/// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, and All on
+/// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, Distribute
+/// Objects and Distribute Spacing with Align to Artboard distribute objects across it, and All on
 /// Active Artboard selects on it. A `command.batch` given `artboard` passes it on to each of their
 /// steps that names none.
-pub const ON_ACTIVE_ARTBOARD: [&str; 5] = ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack", "object.align", "select.allOnArtboard"];
+pub const ON_ACTIVE_ARTBOARD: [&str; 7] = [
+    "edit.pasteInPlace",
+    "edit.pasteInFront",
+    "edit.pasteInBack",
+    "object.align",
+    "object.distribute",
+    "object.distributeSpacing",
+    "select.allOnArtboard",
+];
 
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
 /// (dates from the clock: `cmd::clock_date`; the active artboard the app passes to the
 /// [`ON_ACTIVE_ARTBOARD`] commands and to a batch); an action leaves them out
 /// ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 9] = [
+const REPLAY_ONLY: [(&str, &str); 11] = [
     ("file.new", "created"),
     ("document.save", "modified"),
     ("file.saveAs", "modified"),
@@ -564,6 +573,8 @@ const REPLAY_ONLY: [(&str, &str); 9] = [
     ("edit.pasteInFront", "artboard"),
     ("edit.pasteInBack", "artboard"),
     ("object.align", "artboard"),
+    ("object.distribute", "artboard"),
+    ("object.distributeSpacing", "artboard"),
     ("select.allOnArtboard", "artboard"),
     ("command.batch", "artboard"),
 ];

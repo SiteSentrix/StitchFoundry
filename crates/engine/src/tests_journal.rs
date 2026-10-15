@@ -67,8 +67,9 @@ fn recorded_actions_leave_out_replay_only_values() {
 }
 
 /// The artboard the app passes to Paste in Place, in Front and in Back, to Align to Artboard, to
-/// All on Active Artboard and to a batch (its active one) is journaled and left out of recorded
-/// actions, so a played action uses the artboard active when it plays.
+/// Distribute Objects and Distribute Spacing, to All on Active Artboard and to a batch (its active
+/// one) is journaled and left out of recorded actions, so a played action uses the artboard active
+/// when it plays.
 #[test]
 fn recorded_actions_leave_out_the_artboard_the_app_passes() {
     let mut s = Session::new();
@@ -82,6 +83,8 @@ fn recorded_actions_leave_out_the_artboard_the_app_passes() {
         ("edit.pasteInBack", json!({"artboard": 1})),
         ("select.allOnArtboard", json!({"artboard": 1})),
         ("object.align", json!({"horizontal": "left", "to": "artboard", "artboard": 1})),
+        ("object.distribute", json!({"horizontal": "left", "to": "artboard", "artboard": 1})),
+        ("object.distributeSpacing", json!({"axis": "horizontal", "to": "artboard", "artboard": 1})),
         ("command.batch", json!({"artboard": 1, "commands": [{"command": "select.allOnArtboard", "params": {}}]})),
     ];
     for (id, p) in &steps {

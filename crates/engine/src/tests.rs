@@ -451,8 +451,10 @@ fn align_and_distribute_reject_bad_params_without_changing_state() {
         ("object.distribute", json!({"horizontal": "middle"}), h),
         ("object.distribute", json!({"vertical": "centre"}), v),
         ("object.distribute", json!({"horizontal": "left", "vertical": "middle"}), v),
+        ("object.distribute", json!({"horizontal": "left", "to": "page"}), to),
         ("object.distributeSpacing", json!({"axis": "diagonal"}), "`axis` must be one of horizontal, vertical"),
         ("object.distributeSpacing", json!({"axis": "vertical", "spacing": "5"}), "`spacing` must be a number"),
+        ("object.distributeSpacing", json!({"axis": "vertical", "to": 0}), to),
     ] {
         let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}"));
         assert_eq!(e.to_string(), format!("invalid parameters for `{cmd}`: {msg}"));
@@ -504,6 +506,97 @@ fn align_to_artboard_uses_the_artboard_named() {
     s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
     s.execute("object.align", &json!({"horizontal": "left", "to": "artboard"})).unwrap();
     assert_eq!(x0(&s, c), boards[0].x0, "off every artboard: the first");
+}
+
+/// Rectangles `(x, width)`, 20 pt tall at y 10, selected → their ids. `vertical`: the same
+/// numbers on the other axis, `(y, height)` of rectangles 20 pt wide at x 10.
+fn selected_row(s: &mut Session, row: &[(f64, f64)], vertical: bool) -> Vec<NodeId> {
+    let ids: Vec<NodeId> =
+        row.iter().map(|&(at, size)| if vertical { rect(s, 10.0, at, 20.0, size) } else { rect(s, at, 10.0, size, 20.0) }).collect();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    ids
+}
+
+/// The left edges of `ids`, or with `vertical` their top edges.
+fn starts(s: &Session, ids: &[NodeId], vertical: bool) -> Vec<f64> {
+    let b = |id| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+    ids.iter().map(|id| if vertical { b(*id).y0 } else { b(*id).x0 }).collect()
+}
+
+/// With Align to Artboard, Distribute moves the first object until its left edge is on the
+/// artboard's left edge, and it moves the last one until its right edge is on the artboard's right
+/// edge. It spaces the left edges evenly between them, and two objects are enough. With Align to
+/// Selection or to the key object, the first and last objects stay put, and two objects don't move.
+/// `artboard` names the artboard.
+#[test]
+fn distribute_to_artboard_puts_the_outermost_objects_on_its_edges() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400, "artboards": 2})).unwrap();
+    let boards: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let ids = selected_row(&mut s, &[(100.0, 20.0), (150.0, 20.0), (260.0, 20.0)], false);
+    s.execute("object.distribute", &json!({"horizontal": "left", "to": "artboard"})).unwrap();
+    assert_eq!(starts(&s, &ids, false), [0.0, 190.0, 380.0], "on artboard 0's edges");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.distribute", &json!({"horizontal": "left", "to": "artboard", "artboard": 1})).unwrap();
+    let x0 = boards[1].x0;
+    assert_eq!(starts(&s, &ids, false), [x0, x0 + 190.0, x0 + 380.0], "on artboard 1's edges");
+    for p in [json!({"horizontal": "left", "to": "selection"}), json!({"horizontal": "left", "to": "key"}), json!({"horizontal": "left"})] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("object.distribute", &p).unwrap();
+        assert_eq!(starts(&s, &ids, false), [100.0, 180.0, 260.0], "{p}");
+    }
+    let pair = selected_row(&mut s, &[(100.0, 20.0), (260.0, 40.0)], false);
+    s.execute("object.distribute", &json!({"horizontal": "left", "to": "selection"})).unwrap();
+    assert_eq!(starts(&s, &pair, false), [100.0, 260.0], "two objects stay put");
+    s.execute("object.distribute", &json!({"horizontal": "left", "to": "artboard"})).unwrap();
+    assert_eq!(starts(&s, &pair, false), [0.0, 360.0], "two objects on the artboard's edges");
+}
+
+/// With Align to Artboard, each Distribute button spaces its own line between the first and last
+/// objects (20, 60 and 40 pt wide or tall), which go to the artboard's edges: left edges, centers
+/// or right edges, and top edges, centers or bottom edges.
+#[test]
+fn distribute_to_artboard_spaces_the_line_of_each_button() {
+    for vertical in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let ids = selected_row(&mut s, &[(100.0, 20.0), (150.0, 60.0), (300.0, 40.0)], vertical);
+        let (axis, lines) = if vertical { ("vertical", ["top", "center", "bottom"]) } else { ("horizontal", ["left", "center", "right"]) };
+        for (line, middle) in lines.into_iter().zip([180.0, 165.0, 150.0]) {
+            s.execute("object.distribute", &json!({axis: line, "to": "artboard"})).unwrap();
+            assert_eq!(starts(&s, &ids, vertical), [0.0, middle, 360.0], "{axis} {line}");
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+    }
+}
+
+/// With Align to Artboard and no spacing, Distribute Spacing puts the first object's left (top)
+/// edge on the artboard's left (top) edge, and it puts the last one's right (bottom) edge on the
+/// artboard's right (bottom) edge, with equal gaps between the objects; two objects are enough.
+/// Without Align to Artboard the outermost edges stay put, and with a spacing the key object stays
+/// put, with Align to Artboard too.
+#[test]
+fn distribute_spacing_to_artboard_spans_it_with_equal_gaps() {
+    for vertical in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let ids = selected_row(&mut s, &[(100.0, 20.0), (150.0, 60.0), (300.0, 40.0)], vertical);
+        let axis = if vertical { "vertical" } else { "horizontal" };
+        // The objects are 120 pt wide (tall) together, which leaves 280 pt for the gaps on the
+        // artboard and 120 pt between the outermost edges.
+        s.execute("object.distributeSpacing", &json!({"axis": axis, "to": "artboard"})).unwrap();
+        assert_eq!(starts(&s, &ids, vertical), [0.0, 160.0, 360.0], "{axis}: 140 pt gaps");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("object.distributeSpacing", &json!({"axis": axis, "to": "selection"})).unwrap();
+        assert_eq!(starts(&s, &ids, vertical), [100.0, 180.0, 300.0], "{axis}: 60 pt gaps");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.select(|_, sel| sel.key = Some(ids[1])).unwrap();
+        s.execute("object.distributeSpacing", &json!({"axis": axis, "spacing": 10, "to": "artboard"})).unwrap();
+        assert_eq!(starts(&s, &ids, vertical), [120.0, 150.0, 220.0], "{axis}: 10 pt from the key");
+        let pair = selected_row(&mut s, &[(100.0, 20.0), (260.0, 40.0)], vertical);
+        s.execute("object.distributeSpacing", &json!({"axis": axis, "to": "artboard"})).unwrap();
+        assert_eq!(starts(&s, &pair, vertical), [0.0, 360.0], "{axis}: two objects");
+    }
 }
 
 #[test]
@@ -2381,6 +2474,30 @@ fn distribute_spaces_selected_anchor_points() {
     s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
     s.execute("object.distributeSpacing", &json!({"axis": "horizontal"})).unwrap();
     assert_eq!((pts(&s, a)[0].0, pts(&s, b), pts(&s, a)[2].0), (10.0, vec![(55.0, 200.0), (400.0, 300.0)], 100.0));
+}
+
+/// With anchor points selected, the Distribute commands space the points among themselves and
+/// don't use `to: "artboard"` or `artboard`. A `to` outside the three values is an error for them
+/// too, and nothing moves.
+#[test]
+fn distribute_spaces_anchor_points_among_themselves_with_to_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400, "artboards": 2})).unwrap();
+    let id = NodeId(s.execute("path.create", &json!({"d": "M10 10 L20 50 L100 20 L60 90"})).unwrap()["id"].as_u64().unwrap());
+    let pts = |s: &Session| -> Vec<(f64, f64)> {
+        s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| (a.p.x, a.p.y)).collect()
+    };
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    let to = "`to` must be one of selection, artboard, key";
+    for (cmd, p) in [("object.distribute", json!({"horizontal": "left", "to": "page"})), ("object.distributeSpacing", json!({"to": 0}))] {
+        let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}"));
+        assert_eq!(e.to_string(), format!("invalid parameters for `{cmd}`: {to}"));
+    }
+    assert_eq!(pts(&s), [(10.0, 10.0), (20.0, 50.0), (100.0, 20.0), (60.0, 90.0)], "nothing moved");
+    s.execute("object.distribute", &json!({"horizontal": "left", "to": "artboard", "artboard": 1})).unwrap();
+    assert_eq!(pts(&s), [(10.0, 10.0), (55.0, 50.0), (100.0, 20.0), (60.0, 90.0)], "between the first and the last point");
+    s.execute("object.distributeSpacing", &json!({"axis": "vertical", "to": "artboard"})).unwrap();
+    assert_eq!(pts(&s), [(10.0, 10.0), (55.0, 50.0), (100.0, 30.0), (60.0, 90.0)], "equal gaps between 10 and 50");
 }
 
 /// Repeating anchor Align must leave one Undo for the move that actually changed the path.
