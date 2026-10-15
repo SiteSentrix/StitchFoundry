@@ -613,6 +613,46 @@ fn inset_and_first_baseline_options() {
     assert!(cap.lines[0].baseline < base.lines[0].baseline && cap.lines[0].baseline > 5.0);
 }
 
+/// `LineInfo::first_baseline`: each line that starts a column has its baseline that far below the
+/// column's top inside the inset, for every first baseline option, with and without a minimum and
+/// an inset, in both leading models, and for lines of several sizes (each line in one size).
+#[test]
+fn lines_starting_a_column_sit_at_their_first_baseline() {
+    let paras = [
+        ("A heading in large type\n", 24.0),
+        ("Body copy in a smaller size that runs over two or three lines of a column.\n", 12.0),
+        ("A middle size\n", 18.0),
+    ];
+    let runs: Vec<TextRun> = paras.repeat(4).into_iter().map(|(text, size)| run(text, size)).collect();
+    let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let mut other_sizes = 0;
+    for model in [vectorcraft_doc::LeadingModel::RomanBaseline, vectorcraft_doc::LeadingModel::EmBoxTop] {
+        for first_baseline in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading, FirstBaseline::Fixed]
+        {
+            for (first_baseline_min, inset) in [(0.0, 0.0), (18.0, 6.0)] {
+                for height in [100.0, 120.0, 140.0] {
+                    let mut t = area(&text, style(12.0), Rect::new(0.0, 0.0, 420.0, height), Justify::Left);
+                    t.runs = runs.clone();
+                    t.para.leading_model = model;
+                    let opts = LayoutOptions { columns: 3, gutter: 10.0, first_baseline, first_baseline_min, inset, ..Default::default() };
+                    let l = layout_with(db(), &t, &opts);
+                    let starts: Vec<&LineInfo> =
+                        l.lines.iter().enumerate().filter(|(i, li)| *i == 0 || l.lines[i - 1].region != li.region).map(|(_, li)| li).collect();
+                    assert_eq!(starts.len(), 3, "{model:?} {first_baseline:?} {height}");
+                    other_sizes += starts.iter().filter(|li| li.ascent != starts[0].ascent).count();
+                    for li in starts {
+                        assert!(
+                            (li.baseline - (inset + li.first_baseline)).abs() < 1e-9,
+                            "{model:?} {first_baseline:?} {first_baseline_min} {height}: {li:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    assert!(other_sizes >= 20, "lines of another size than the first start {other_sizes} columns");
+}
+
 #[test]
 fn rows_and_columns_flow_in_order() {
     let text = COPY.repeat(2);
