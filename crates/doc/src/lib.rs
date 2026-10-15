@@ -311,7 +311,10 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
         && !s.ends_with("pt")
         && !s.ends_with("px")
     {
-        return Some(p.trim().parse::<f64>().ok()? * 12.0 + pt.trim().parse::<f64>().unwrap_or(0.0));
+        // The sign belongs to the whole value: `-2p6` is -(2 picas + 6 points).
+        let sign = if p.trim_start().starts_with('-') { -1.0 } else { 1.0 };
+        let picas = p.trim().parse::<f64>().ok()?.abs();
+        return Some(sign * (picas * 12.0 + pt.trim().parse::<f64>().unwrap_or(0.0)));
     }
     let (v, unit) = number_unit(s)?;
     Some(unit.unwrap_or(default).to_pt(v))
@@ -1788,6 +1791,14 @@ mod tests {
         assert_eq!(Unit::Points.parse("abc"), None);
         assert_eq!(Unit::Points.format(12.5), "12.5 pt");
         assert_eq!(Unit::Inches.format(144.0), "2 in");
+    }
+
+    #[test]
+    fn negative_picas_and_points_sign_applies_to_whole_value() {
+        assert_eq!(Unit::Points.parse("-2p6"), Some(-30.0));
+        assert_eq!(Unit::Points.parse("-0p6"), Some(-6.0));
+        assert_eq!(Unit::Points.parse("-2p"), Some(-24.0));
+        assert_eq!(Unit::Points.parse("2p6"), Some(30.0));
     }
 }
 
