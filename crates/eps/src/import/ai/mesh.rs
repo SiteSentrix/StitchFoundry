@@ -6,9 +6,9 @@
 //! towards the previous one and a weight `]`, in art space. A patch whose edges bend through more
 //! anchors has them as `[x y` with a handle towards each neighbor and a weight `] /A` or `/S`,
 //! after the corner their edge starts from (before the first corner for the edge back to it), in
-//! the edge's direction (`/A`) or against it (`/S`). A patch with single cubic edges becomes a 1×1
-//! mesh; one with more anchors, the Coons patch of its edges, cut into cells where any edge has an
-//! anchor.
+//! the mesh's own direction whichever the key: along the first two edges, against the last two. A
+//! patch with single cubic edges becomes a 1×1 mesh; one with more anchors, the Coons patch of its
+//! edges, cut into cells where any edge has an anchor.
 //!
 //! `X!`/`X#` aren't publicly documented (the AI7 specification predates meshes).
 
@@ -25,9 +25,8 @@ const MAX_PATCHES: usize = 4096;
 pub(super) struct MeshReader {
     space: String,
     corners: Vec<Vec<f64>>,
-    /// The patch's anchors between its corners (`/A`, `/S`): the edge, whether listed against it, and
-    /// a point and its two handles.
-    anchors: Vec<(usize, bool, [f64; 6])>,
+    /// The patch's anchors between its corners (`/A`, `/S`): the edge, and a point and its two handles.
+    anchors: Vec<(usize, [f64; 6])>,
     pub patches: Vec<GradientMesh>,
     /// Something in it this doesn't read.
     pub unread: bool,
@@ -57,7 +56,7 @@ impl MeshReader {
                         &[x, y, ax, ay, bx, by, ..] if self.anchors.len() < 64 && [x, y, ax, ay, bx, by].iter().all(|v| v.is_finite()) => {
                             let p = |x, y| to_doc * Point::new(x, y);
                             let (at, a, b) = (p(x, y), p(ax, ay), p(bx, by));
-                            self.anchors.push(((self.corners.len() + 3) % 4, key == "S", [at.x, at.y, a.x, a.y, b.x, b.y]));
+                            self.anchors.push(((self.corners.len() + 3) % 4, [at.x, at.y, a.x, a.y, b.x, b.y]));
                         }
                         _ => self.unread = true,
                     }
@@ -85,7 +84,7 @@ impl MeshReader {
         })
     }
 
-    fn patch(&self, corners: &[Vec<f64>], anchors: &[(usize, bool, [f64; 6])], to_doc: Affine) -> Option<GradientMesh> {
+    fn patch(&self, corners: &[Vec<f64>], anchors: &[(usize, [f64; 6])], to_doc: Affine) -> Option<GradientMesh> {
         let [n0, n1, n2, n3] = corners else { return None };
         // (anchor, towards the next corner, towards the previous one, colour, opacity)
         let read = |n: &Vec<f64>| -> Option<(Point, Vec2, Vec2, Color, f32)> {
@@ -128,21 +127,21 @@ type Cubic = [Point; 4];
 /// A patch whose edges bend through more anchors: its edges (first corner → second → third → fourth
 /// → first) as runs of cubics, each anchor on the edge it lies along, and the Coons patch they bound
 /// as a mesh cut wherever an edge has an anchor, so each cell's edges are single cubics again.
-fn coons(corners: [Corner; 4], anchors: &[(usize, bool, [f64; 6])]) -> GradientMesh {
+fn coons(corners: [Corner; 4], anchors: &[(usize, [f64; 6])]) -> GradientMesh {
     let runs: Vec<Vec<Cubic>> = (0..4)
         .map(|e| {
             let (p, q) = (&corners[e], &corners[(e + 1) % 4]);
-            // Each anchor's first handle points to the one listed before it, so back along the edge
-            // for `/A`, forward for `/S`, which lists them against the edge.
+            // Each anchor's first handle points to the one listed before it, back along the first two edges.
+            let against = e >= 2;
             let mut stops: Vec<(Point, Point, Point)> = anchors
                 .iter()
                 .filter(|(edge, ..)| *edge == e)
-                .map(|&(_, against, [x, y, ax, ay, bx, by])| {
+                .map(|&(_, [x, y, ax, ay, bx, by])| {
                     let (at, h1, h2) = (Point::new(x, y), Point::new(ax, ay), Point::new(bx, by));
                     if against { (h2, at, h1) } else { (h1, at, h2) }
                 })
                 .collect();
-            if anchors.iter().any(|&(edge, against, _)| edge == e && against) {
+            if against {
                 stops.reverse();
             }
             let (mut from, mut out) = (p.0, p.0 + p.1);
@@ -299,6 +298,34 @@ mod tests {
         // The edge still starts and ends at its corners, with their handles.
         assert!((mesh.points[0].handles[H_DOWN] - Vec2::new(0.0, 2.0)).hypot() < 1e-9);
         assert!((mesh.points[4].p - Point::new(0.0, 10.0)).hypot() < 1e-9);
+    }
+
+    /// Anchors are listed in the mesh's direction whatever their key: two `/S` anchors after the
+    /// first corner run along its edge, as the patch above a shared edge lists them.
+    #[test]
+    fn anchors_keyed_s_on_a_first_edge_run_along_it() {
+        let mut reader = MeshReader { space: "DeviceGray".into(), ..MeshReader::default() };
+        let corner = |x: f64, y: f64, next: (f64, f64), prev: (f64, f64)| {
+            vec![V::Arr([0.0, 1.0, x, y, next.0, next.1, 1.0, prev.0, prev.1, 1.0].map(V::Num).to_vec()), V::Name("N".into())]
+        };
+        let anchor = |y: f64| vec![V::Arr([-1.0, y, -1.0, y - 1.0, -1.0, y + 1.0, 1.0].map(V::Num).to_vec()), V::Name("S".into())];
+        reader.entry(&corner(0.0, 0.0, (0.0, 1.0), (1.0, 0.0)), Affine::IDENTITY);
+        reader.entry(&anchor(3.0), Affine::IDENTITY);
+        reader.entry(&anchor(7.0), Affine::IDENTITY);
+        reader.entry(&corner(0.0, 10.0, (1.0, 10.0), (0.0, 9.0)), Affine::IDENTITY);
+        reader.entry(&corner(10.0, 10.0, (10.0, 9.0), (9.0, 10.0)), Affine::IDENTITY);
+        reader.entry(&corner(10.0, 0.0, (9.0, 0.0), (10.0, 1.0)), Affine::IDENTITY);
+        reader.entry(&[V::Num(0.0), V::Name("E".into())], Affine::IDENTITY);
+        let mesh = &reader.patches[0];
+        assert_eq!((mesh.rows, mesh.cols), (3, 1));
+        let (first, second) = (&mesh.points[2], &mesh.points[4]);
+        assert!(
+            (first.p - Point::new(-1.0, 3.0)).hypot() < 1e-9 && (second.p - Point::new(-1.0, 7.0)).hypot() < 1e-9,
+            "{:?} {:?}",
+            first.p,
+            second.p
+        );
+        assert!((first.handles[H_DOWN] - Vec2::new(0.0, 1.0)).hypot() < 1e-9, "{:?}", first.handles);
     }
 
     #[test]
