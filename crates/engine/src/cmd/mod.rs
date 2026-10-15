@@ -65,6 +65,7 @@ pub mod embroidery_start;
 pub mod embroidery_stitches;
 pub mod embroidery_tartan;
 pub mod embroidery_templates;
+pub mod embroidery_testsew;
 pub mod embroidery_tiles;
 pub mod embroidery_visualizer;
 pub mod expand;
@@ -309,6 +310,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_cutwork::specs());
         v.extend(embroidery_merge::specs());
         v.extend(embroidery_tartan::specs());
+        v.extend(embroidery_testsew::specs());
         v.extend(embroidery_sheet_setup::specs());
         v.extend(embroidery_scatter::specs());
         v.extend(xform::specs());
