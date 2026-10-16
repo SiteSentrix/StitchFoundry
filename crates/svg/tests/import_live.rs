@@ -101,6 +101,16 @@ fn two_uses_give_one_symbol_and_two_instances() {
 }
 
 #[test]
+fn an_instance_is_measured_by_its_symbols_art() {
+    let (d, _) = open(&format!(r##"{SYMBOL}<use href="#Star" x="20" y="30"/>"##));
+    let id = art(&d)[0].id;
+    // The art, (0, 0) to (20, 20), drawn from (20, 30): not the 20 × 20 square around the origin,
+    // which the same transform places from (10, 20) to (30, 40).
+    assert_eq!(d.bounds_of(&[id], false), Some(Rect::new(20.0, 30.0, 40.0, 50.0)));
+    assert_eq!(d.bounds_of(&[id], true), Some(Rect::new(20.0, 30.0, 40.0, 50.0)));
+}
+
+#[test]
 fn uses_the_symbol_cant_stand_for_stay_art() {
     // Inherited paint: the second use shows the symbol in another colour. Scaled: the canvas keeps
     // stroke weights as they are.
@@ -125,6 +135,35 @@ fn symbols_round_trip_through_export() {
     assert_similar(&render_artboard(&d), &render_artboard(&back), 8.0, 0.001);
 }
 
+/// `name="…"` of the first element `tag` in `svg`, as a number.
+fn number_attr(svg: &str, tag: &str, name: &str) -> f64 {
+    let at = svg.find(&format!("<{tag} ")).unwrap_or_else(|| panic!("no <{tag}> in {svg}"));
+    let rest = &svg[at..];
+    let from = rest.find(&format!(" {name}=\"")).unwrap() + name.len() + 3;
+    rest[from..from + rest[from..].find('"').unwrap()].parse().unwrap()
+}
+
+#[test]
+fn an_instances_shadow_filter_and_the_art_export_cover_its_symbols_art() {
+    let (mut d, _) = open(&format!(r##"{SYMBOL}<use href="#Star" x="20" y="30"/>"##));
+    let id = art(&d)[0].id;
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({"x": 0, "y": 0, "blur": 0}), visible: true };
+    d.node_mut(id).unwrap().appearance.effects.push(shadow);
+    // The filter region holds the art, (20, 30) to (40, 50).
+    let svg = export(&d, &ExportOptions::default());
+    let (x, y) = (number_attr(&svg, "filter", "x"), number_attr(&svg, "filter", "y"));
+    let (w, h) = (number_attr(&svg, "filter", "width"), number_attr(&svg, "filter", "height"));
+    assert!(x <= 20.0 && y <= 30.0 && x + w >= 40.0 && y + h >= 50.0, "({x}, {y}) {w} × {h}");
+    // Exported without an artboard, the file is the art's size and the instance draws the art from
+    // the file's top left corner.
+    d.node_mut(id).unwrap().appearance.effects.clear();
+    let svg = export(&d, &ExportOptions { artboard: None, ..ExportOptions::default() });
+    assert_eq!((number_attr(&svg, "svg", "width"), number_attr(&svg, "svg", "height")), (20.0, 20.0), "{svg}");
+    let back = import(&svg).unwrap();
+    let NodeKind::SymbolInstance { xf, .. } = &art(&back)[0].kind else { panic!("an instance: {svg}") };
+    assert!((*xf * Point::ORIGIN).distance(Point::ORIGIN) < 1e-9, "{svg}");
+}
+
 #[test]
 fn a_gaussian_blur_becomes_the_effect_with_its_radius() {
     let (d, w) = open(
@@ -145,8 +184,9 @@ fn a_gaussian_blur_becomes_the_effect_with_its_radius() {
 fn shadow(d: &Document) -> (f64, f64, f64, Color, f32) {
     let fx = vectorcraft_effects::raster_effects(&effects(d));
     match fx.as_slice() {
-        [RasterFx::DropShadow { dx, dy, blur, color, opacity, mode }] => {
+        [RasterFx::DropShadow { dx, dy, blur, color, opacity, mode, darkness }] => {
             assert_eq!(*mode, BlendMode::Normal, "filters composite normally");
+            assert_eq!(*darkness, None);
             (*dx, *dy, *blur, *color, (opacity * 100.0).round())
         }
         other => panic!("{other:?}"),
@@ -175,6 +215,38 @@ fn drop_shadow_chains_become_drop_shadows() {
     }
 }
 
+/// The object blurred, moved and its colors scaled under it is a drop shadow with Darkness when
+/// the blur and the scale work on sRGB values, or when the scale is 0; otherwise, on linear RGB
+/// values (the SVG default), it is reported. A blur on linear values whose result goes unused
+/// does not count.
+#[test]
+fn a_darkened_copy_of_the_object_becomes_a_drop_shadow_with_darkness() {
+    let chain = |space: &str, transfer: &str, slope: f64| {
+        format!(
+            r##"<defs><filter id="s"{space}><feGaussianBlur in="SourceGraphic" stdDeviation="3" color-interpolation-filters="linearRGB" result="unused"/><feGaussianBlur in="SourceGraphic" stdDeviation="2"/><feOffset dx="4" dy="5"/><feComponentTransfer result="p"{transfer}><feFuncR type="linear" slope="{slope}"/><feFuncG type="linear" slope="{slope}"/><feFuncB type="linear" slope="{slope}"/><feFuncA type="linear" slope="0.6"/></feComponentTransfer><feMerge><feMergeNode in="p"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="50" y="30" width="60" height="40" fill="#f00" filter="url(#s)"/>"##
+        )
+    };
+    let srgb = r#" color-interpolation-filters="sRGB""#;
+    // The scale 0 makes black whatever values it works on.
+    for (space, slope, darkness) in [(srgb, 0.5, 50.0), ("", 0.0, 100.0)] {
+        let (d, w) = open(&chain(space, "", slope));
+        assert!(w.is_empty(), "{w:?}");
+        let fx = effects(&d);
+        let p = &fx[0].params;
+        assert_eq!(
+            (fx[0].id.as_str(), &p["shade"], &p["darkness"], &p["opacity"]),
+            ("stylize.dropShadow", &json!("darkness"), &json!(darkness), &json!(60.0))
+        );
+        assert_eq!((&p["x"], &p["y"], &p["blur"]), (&json!(4.0), &json!(5.0), &json!(4.0)));
+    }
+    // Scaled on linear values, or blurred on them before an sRGB scale.
+    for (space, transfer) in [("", ""), ("", srgb)] {
+        let (d, w) = open(&chain(space, transfer, 0.5));
+        assert!(w.iter().any(|w| w.contains("filter")), "{transfer}: {w:?}");
+        assert!(effects(&d).is_empty());
+    }
+}
+
 #[test]
 fn other_filters_are_reported() {
     let (d, w) =
@@ -200,6 +272,7 @@ fn exported_effects_import_as_the_same_effects() {
     let fx = |id: &str, p: serde_json::Value| Effect { id: id.into(), params: p, visible: true };
     let cases = [
         vec![fx("stylize.dropShadow", json!({"x": 7.0, "y": -3.0, "blur": 5.0, "opacity": 60.0, "color": "#203040"}))],
+        vec![fx("stylize.dropShadow", json!({"x": 7.0, "y": -3.0, "blur": 5.0, "opacity": 60.0, "shade": "darkness", "darkness": 40.0}))],
         vec![fx("stylize.outerGlow", json!({"blur": 8.0, "color": "#ffcc00", "opacity": 80.0}))],
         vec![fx("stylize.innerGlow", json!({"blur": 6.0, "color": "#ffffff", "source": "edge", "mode": "normal"}))],
         vec![fx("stylize.innerGlow", json!({"blur": 6.0, "color": "#00ff00", "source": "center", "mode": "multiply"}))],
@@ -218,6 +291,28 @@ fn exported_effects_import_as_the_same_effects() {
         let got = vectorcraft_effects::raster_effects(&art(&back)[0].appearance.effects);
         assert_eq!(got, vectorcraft_effects::raster_effects(&effects), "{effects:?}");
     }
+}
+
+#[test]
+fn a_drop_shadow_with_darkness_exports_as_the_canvas_draws_it() {
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0),
+    );
+    let shadow = json!({"x": 30.0, "y": 30.0, "blur": 0.0, "opacity": 100.0, "mode": "normal", "shade": "darkness", "darkness": 50.0});
+    n.appearance.effects = vec![Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    let (canvas, exported) = (render_artboard(&d), resvg_render(&svg, 200, 120));
+    // Where only the shadow lies: the red at half its value.
+    for img in [&canvas, &exported] {
+        let [r, g, b] = img.over_white(115, 90);
+        assert!(r.abs_diff(128) <= 2 && g <= 2 && b <= 2, "{:?}", [r, g, b]);
+    }
+    assert_similar(&canvas, &exported, 40.0, 0.02);
 }
 
 #[test]

@@ -8,7 +8,7 @@ use std::io::Cursor;
 
 use kurbo::PathEl;
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, Node, NodeKind, StrokeLayer, TextKind, TextObject, Unit};
+use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, Node, NodeKind, StrokeLayer, SymbolBoxes, TextKind, TextObject, Unit};
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
@@ -158,6 +158,9 @@ struct LayerFlags {
 
 pub(crate) struct Scene<'a> {
     doc: &'a Document,
+    /// The art boxes of `doc`'s symbols, which the walk measures symbol instances by when it
+    /// crops to the region ([`SymbolBoxes::quick`]).
+    symbols: SymbolBoxes<'a>,
     o: &'a DxfOptions,
     /// Document space → drawing units (y up, origin at the region's bottom-left).
     to_dxf: Affine,
@@ -192,6 +195,7 @@ impl<'a> Scene<'a> {
         let r = o.region;
         Self {
             doc,
+            symbols: doc.symbol_boxes().quick(),
             o,
             to_dxf: Affine::new([k, 0.0, 0.0, -k, -r.x0 * k, r.y1 * k]),
             k,
@@ -271,7 +275,7 @@ impl<'a> Scene<'a> {
             return;
         }
         if self.o.crop && !layer {
-            match n.visual_bounds() {
+            match n.visual_bounds_with(&self.symbols) {
                 Some(b) if !overlaps(b, self.o.region) => return,
                 None if !n.is_container() => return,
                 _ => {}
@@ -316,7 +320,12 @@ impl<'a> Scene<'a> {
                 }
             }
             // Live blends, envelopes, meshes and repeats are written as their evaluated art.
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
                 for c in g.children().into_iter().flatten() {
                     self.node(c, false);
@@ -349,7 +358,7 @@ impl<'a> Scene<'a> {
         if n.blend != vectorcraft_color::BlendMode::Normal {
             self.warn("blending modes are left out");
         }
-        if n.mask.as_ref().is_some_and(|m| !m.disabled) {
+        if n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
             self.warn("opacity masks are left out");
         }
         let raster = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id));
@@ -502,7 +511,7 @@ impl<'a> Scene<'a> {
         let doc = self.doc;
         let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
         let b = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name))?;
-        Some(vectorcraft_brush::stroke_pieces(b, bp, st))
+        Some(vectorcraft_brush::stroke_pieces(doc, b, bp, st))
     }
 
     /// A filled area as its outlines followed by a solid hatch (R12: the outlines alone). Laser
@@ -652,8 +661,10 @@ impl<'a> Scene<'a> {
         let h = self.handle();
         self.e.entity("SPLINE", h, fixed::MODEL_RECORD, &layer, style, "AcDbSpline");
         self.e.normal();
-        // Planar.
-        self.e.int(70, 8);
+        // Planar (bit 3) and, if the subpath is closed, also closed (bit 0). A geometrically
+        // closed cut needs the closed flag set so CAM/CAM tools (e.g. VCarve) treat it as a
+        // pocket/profile rather than asking the operator to join endpoints. (#1299)
+        self.e.int(70, if sub.closed { 8 | 1 } else { 8 });
         self.e.int(71, 3);
         self.e.int(72, knots.len() as i64);
         self.e.int(73, ctrl.len() as i64);

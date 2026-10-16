@@ -136,7 +136,7 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
 /// `art` in a clip group clipped by `path` filled by `rule` (a clipping path that paints nothing).
 pub(crate) fn clip_group(d: &mut Document, path: PathData, rule: FillRule, art: Node) -> Node {
     let mut clip = super::pathops::shape_node(d, path, None);
-    clip.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+    clip.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
     match &mut clip.kind {
         NodeKind::Path { clipping, rule: r, .. } => (*clipping, *r) = (true, rule),
         NodeKind::Compound { rule: r, .. } => *r = rule,
@@ -173,7 +173,7 @@ pub(crate) fn effects_scale(doc: &Document) -> f64 {
 pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&Node>, scale: f64) -> Option<Node> {
     // What it paints (its members' effects included), and how far its fills' and strokes' raster
     // effects reach beyond that.
-    let b = vectorcraft_render::painted_bounds(whole)?;
+    let b = vectorcraft_render::painted_bounds(out, whole)?;
     let look = out.raster_effects.clone();
     let reach = whole.appearance.items.iter().map(|i| effects::outset(i.effects(), b)).fold(0.0, f64::max) + 2.0 + look.add_around;
     let b = b.inflate(reach, reach);
@@ -203,8 +203,10 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
     }
     out.images.insert(key.clone(), ImageBlob::new("image/png", png));
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-    let mut image =
-        Node::new(id, NodeKind::Image(ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() }));
+    let mut image = Node::new(
+        id,
+        NodeKind::Image(Box::new(ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() })),
+    );
     image.name = Some("Raster effect".into());
     Some(image)
 }
@@ -277,7 +279,8 @@ fn below_images(d: &mut Document, n: &Node) -> Option<Vec<Node>> {
 /// effects (they get images of their own).
 pub(crate) fn raster_image(d: &mut Document, n: &Node, below: bool, members: bool) -> Option<Node> {
     let mut whole = n.clone();
-    (whole.opacity, whole.blend, whole.mask) = (1.0, Default::default(), None);
+    (whole.opacity, whole.blend) = (1.0, Default::default());
+    whole.extras_mut().mask = None;
     if below && members && is_container(&whole) {
         for c in whole.children_mut().into_iter().flatten() {
             strip_raster(Arc::make_mut(c), true);
@@ -317,7 +320,8 @@ pub(crate) fn put_below(d: &mut Document, m: &mut Node, image: Node) {
         _ => {
             let mut inner = m.clone();
             inner.id = d.alloc_id();
-            (inner.name, inner.opacity, inner.blend, inner.isolate, inner.mask) = (None, 1.0, Default::default(), false, None);
+            (inner.name, inner.opacity, inner.blend, inner.isolate) = (None, 1.0, Default::default(), false);
+            inner.extras_mut().mask = None;
             // Knockout is between the object's own parts (a blend's steps): it stays with them,
             // so the image doesn't knock out the art over it.
             m.knockout = Default::default();
@@ -363,7 +367,7 @@ fn split_items(out: &mut Document, n: &Node) -> Option<Node> {
     }
     let mut stroke_piece = |d: &mut Document, path: &PathData, rule: FillRule, st: &StrokeLayer| {
         let mut p = super::pathops::shape_node(d, path.clone(), None);
-        p.appearance = Appearance { items: vec![AppearanceItem::Stroke(st.clone())], ..Default::default() };
+        p.appearance = Appearance { items: vec![AppearanceItem::Stroke(st.clone())], ..Default::default() }.into();
         if let NodeKind::Path { rule: r, .. } | NodeKind::Compound { rule: r, .. } = &mut p.kind {
             *r = rule;
         }
@@ -379,7 +383,9 @@ fn placed_symbol(d: &Document, n: &Node) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return None };
     let mut art = vectorcraft_render::instance_art(&d.symbols.iter().find(|s| s.name == *symbol)?.art, n);
     art.transform(*xf, false);
-    Some(Node { kind: NodeKind::Group { children: vec![Arc::new(art)], clip: false }, ..n.clone() })
+    let mut g = n.clone();
+    g.kind = NodeKind::Group { children: vec![Arc::new(art)], clip: false };
+    Some(g)
 }
 
 /// Which objects' raster effects become images.
@@ -407,13 +413,13 @@ fn needs(n: &Node, which: Which) -> bool {
     n.visible
         && !matches!(n.kind, NodeKind::Layer { template: true, .. })
         && (imaged(n, which)
-            || n.mask.as_ref().is_some_and(|m| needs(&m.art, which))
+            || n.extras().mask.as_ref().is_some_and(|m| needs(&m.art, which))
             || (is_container(n) && n.children().is_some_and(|ch| ch.iter().any(|c| needs(c, which)))))
 }
 
 /// The art of `n`'s opacity mask with its raster effects as images.
 fn walk_mask(out: &mut Document, n: &mut Node, report: &mut FlattenReport) {
-    if let Some(m) = n.mask.as_mut()
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
         && let Some(art) = walk(out, &m.art, report)
     {
         m.art = Arc::new(art);

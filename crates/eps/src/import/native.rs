@@ -29,7 +29,7 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, Scaling, TextKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 
 use super::Imported;
@@ -453,10 +453,11 @@ fn plan(
             Some(s.line_starts(t).into_iter().map(|(text, (x, y))| (text, to_doc * Point::new(x, y))).collect())
         })
         .collect();
-    // The page's objects that are where a shown slot's lines are, nearest first.
+    // The page's objects that are where a slot's lines are, nearest first. A slot that doesn't show
+    // has them too: a file's page may draw what its layers have hidden since.
     let mut pairs: Vec<(f64, usize, usize)> = vec![];
-    for (k, info) in infos.iter().enumerate() {
-        let Some(l) = lines.get(k).and_then(Option::as_ref).filter(|_| info.shown) else { continue };
+    for (k, _) in infos.iter().enumerate() {
+        let Some(l) = lines.get(k).and_then(Option::as_ref) else { continue };
         for (j, object) in shown.iter().enumerate() {
             if let Some(d) = object.iter().filter_map(|n| same_type(n, l)).min_by(f64::total_cmp) {
                 pairs.push((d, k, j));
@@ -472,6 +473,9 @@ fn plan(
     }
     // Type the text document makes, shown or not: the page's pieces of it aren't needed.
     let mut content: Vec<Content> = infos.iter().map(|_| Content::Empty).collect();
+    // Where the made type that doesn't show lies, by slot.
+    let mut hidden_at: Vec<(usize, Rect)> = vec![];
+    let mut taller = 0;
     if let Some(t) = template {
         for (k, info) in infos.iter().enumerate() {
             let Some(Some(story)) = stories.get(k) else { continue };
@@ -493,10 +497,23 @@ fn plan(
                     TextKind::Point => {}
                 }
             }
+            if let (false, Some(r)) = (info.shown, region) {
+                hidden_at.push((k, r));
+            }
+            if let NodeKind::Text(text) = &mut node.kind
+                && story.fit_first_line(text)
+            {
+                taller += 1;
+            }
             if let Some(c) = content.get_mut(k) {
                 *c = Content::Made(Box::new(node), region.filter(|_| info.shown), false, vec![]);
             }
         }
+    }
+    if taller > 0 {
+        warn.push(format!(
+            "area type in frames too short for a line of the font it shows in got taller frames ({taller}): their type wouldn't show otherwise"
+        ));
     }
     // The file's text document is trusted where it agrees with the page about something (its lines
     // start where the page's type does, or the page has type where it lays type out), or where the
@@ -506,9 +523,26 @@ fn plan(
     if !trusted {
         content.iter_mut().for_each(|c| *c = Content::Empty);
     }
+    // Is `object` the type of a text object that doesn't show, as the page draws it: in its frame,
+    // with its words? (A copied object's lines are where its original's are, so they don't say.)
+    let hidden_type = |object: &[Arc<Node>]| {
+        let Some(r) = extent(object) else { return false };
+        let words: Vec<String> =
+            object.iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(letters(&t.plain_text())) } else { None }).collect();
+        hidden_at.iter().any(|(k, place)| {
+            place.intersect(r).area() >= 0.5 * r.area().max(1e-9)
+                && lines
+                    .get(*k)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|l| !words.is_empty() && words.iter().all(|w| l.iter().any(|(text, _)| letters(text).contains(w.as_str()))))
+        })
+    };
     let mut spare: Vec<Vec<Arc<Node>>> = vec![];
     for (j, object) in shown.iter().enumerate() {
         match owner.get(j).copied().flatten().filter(|_| trusted) {
+            // The type of a text object the layers hide: the layers have it, hidden, so the page's
+            // isn't another text object's.
+            Some(k) if infos.get(k).is_some_and(|i| !i.shown) && matches!(content.get(k), Some(Content::Made(..))) => {}
             Some(k) => match content.get_mut(k) {
                 Some(Content::Made(_, _, seen, _)) => *seen = true,
                 Some(Content::Page(p)) => p.extend(object.iter().cloned()),
@@ -526,6 +560,7 @@ fn plan(
                     }
                 }
             }
+            None if trusted && hidden_type(object) => {}
             None => spare.push(object.clone()),
         }
     }
@@ -835,9 +870,21 @@ struct Frame<'a> {
 /// file read as its page, put in its text objects → the document and its notes. Without a page
 /// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
-/// the text objects.
-fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) -> Result<(Document, Vec<String>), String> {
-    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data)?;
+/// the text objects. `unit`: the size in points of a unit of the page's user space (see
+/// [`layered_ai`]).
+fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, trust: bool, unit: f64) -> Result<(Document, Vec<String>), String> {
+    // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
+    // space, as its PDF part may (#2031).
+    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data, matches!(page, Page::Art))?;
+    // Editing data in the units of the page's user space ([`in_units`]) is compared with the page
+    // scaled down to those units, and the document read from it is scaled up by `unit`.
+    let board = artboard.map(|a| to_doc.transform_rect_bbox(a));
+    let small = visible.filter(|v| matches!(page, Page::Artboard) && in_units(board, v, unit)).map(|v| {
+        let mut v = v.clone();
+        scale_document(&mut v, 1.0 / unit);
+        v
+    });
+    let visible = small.as_ref().or(visible);
     let (mut shown, mut hidden) = (vec![], vec![]);
     let mut frame = None;
     if let Some(visible) = visible {
@@ -846,18 +893,35 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) ->
             Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
         };
         let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
-        if (art_box.width() - page_rect.width()).abs() > 0.5 || (art_box.height() - page_rect.height()).abs() > 0.5 {
+        // The layers' art in the document's terms: a Large Canvas editing copy is written at 1/N
+        // scale, which `to_doc` carries, so its art and the page reach the same size (#2031).
+        let rect = to_doc.transform_rect_bbox(art_box);
+        if (rect.width() - page_rect.width()).abs() > 0.5 || (rect.height() - page_rect.height()).abs() > 0.5 {
             return Err("its editing data is for a different page".into());
         }
         // The page's area in the layers' document, and the page's type moved there.
-        let rect = to_doc.transform_rect_bbox(art_box);
         let shift = Affine::translate(Vec2::new(rect.x0 - page_rect.x0, rect.y0 - page_rect.y0));
         for l in &visible.layers {
             if let Some(c) = l.children() {
                 text_objects(c, l.visible, &mut shown, &mut hidden);
             }
         }
+        // A `.ai` read as its PDF part has a page for each artboard, in a row: the type on each
+        // goes where the layers have that artboard.
+        let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
+        let same =
+            |(a, p): (&vectorcraft_doc::Artboard, &Rect)| (a.rect.width() - p.width()).abs() <= 0.5 && (a.rect.height() - p.height()).abs() <= 0.5;
+        let boards = (pages.len() == doc.artboards.len() && doc.artboards.iter().zip(&pages).all(same)).then_some(&doc.artboards);
         for object in shown.iter_mut().chain(hidden.iter_mut()) {
+            // The page with most of it, the first for what is on none.
+            let on = extent(object).and_then(|r| {
+                let inside = |p: &Rect| p.intersect(r).area().max(0.0);
+                pages.iter().enumerate().skip(1).filter(|(_, p)| inside(p) > inside(&page_rect)).max_by(|a, b| inside(a.1).total_cmp(&inside(b.1)))
+            });
+            let shift = match on.and_then(|(i, page)| Some((boards?.get(i)?, page))) {
+                Some((board, page)) => Affine::translate(board.rect.origin() - page.origin()),
+                None => shift,
+            };
             for n in object.iter_mut() {
                 Arc::make_mut(n).transform(shift, false);
             }
@@ -935,11 +999,42 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) ->
             if unseen > 0 {
                 notes.push(format!("{unseen} {UNSEEN_TEXT}"));
             }
-            notes.extend(compare(&frame, &mut view, &doc)?);
+            match compare(&frame, &mut view, &doc) {
+                Ok(note) => notes.extend(note),
+                Err(why) if trust => notes.push(format!("{why}: they come from its editing data all the same")),
+                Err(why) => return Err(why),
+            }
         }
         None => unmark(&mut doc.layers, true, &mut vec![]),
     }
+    doc.limit_depth_noting(&mut notes);
+    if small.is_some() {
+        scale_document(&mut doc, unit);
+    }
     Ok((doc, notes))
+}
+
+/// Does the editing data's first artboard `board` (in the document read from it: art space through
+/// `to_doc`) have the size of `page`'s first artboard in units of `unit` points, `unit` being above
+/// 1, and not its size in points? `page` is a PDF part read in points from pages of `unit` points a
+/// unit (their `UserUnit`).
+fn in_units(board: Option<Rect>, page: &Document, unit: f64) -> bool {
+    let (Some(board), Some(p)) = (board, page.artboards.first().map(|a| a.rect)) else { return false };
+    let fits = |k: f64| (board.width() - p.width() / k).abs() <= 0.5 && (board.height() - p.height() / k).abs() <= 0.5;
+    unit.is_finite() && unit > 1.0 && fits(unit) && !fits(1.0)
+}
+
+/// Draw `doc`'s layers and artboards `k` times as large, from the origin, with their strokes,
+/// effects and pattern tiles.
+fn scale_document(doc: &mut Document, k: f64) {
+    let a = Affine::scale(k);
+    let scaling = Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() };
+    for layer in &mut doc.layers {
+        Arc::make_mut(layer).transform(a, scaling);
+    }
+    for board in &mut doc.artboards {
+        board.rect = a.transform_rect_bbox(board.rect);
+    }
 }
 
 /// Marks (in a node's name, until [`prune_unseen`] has looked) the text objects made from the file's
@@ -1062,7 +1157,7 @@ fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result
 /// has one that can't be used, `visible` with a warning that says why.
 pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
     let Some(data) = editing_copy(ps) else { return visible };
-    let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art, false));
+    let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art, false, false, 1.0));
     match result {
         Ok((document, mut warnings)) => {
             for w in &visible.warnings {
@@ -1080,46 +1175,73 @@ pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
     }
 }
 
-/// The `.ai` `visible` (read as its PDF part) read through its editing copy (`private`, the joined
-/// `AIPrivateData` streams) instead, as [`layered`] reads an EPS: with the layers and objects of the
-/// file, its artboards, and the art that lies outside them, which its PDF part doesn't have.
+/// The `.ai` `visible` (read as its PDF part), or a PDF saved with the editing data, read through
+/// its editing copy (`private`, the joined `AIPrivateData` or `AIPDFPrivateData` streams) instead,
+/// as [`layered`] reads an EPS: with the layers and objects of the file, its artboards (with the
+/// PDF part's bleed), and the art that lies outside them, which its PDF part doesn't have.
 /// `warnings` are the notes of reading the PDF part; the notes returned are those, and the layers'.
-/// `outlined`: the PDF part's type was read as outlines (a file whose type shows then comes in as
-/// its PDF part).
-pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool) -> (Document, Vec<String>) {
-    let Ok(data) = ai::decode_private(private) else { return (visible, warnings) };
+/// The flag returned is `true` when the document is the one read from the layers; else the document
+/// is `visible`, its pages moved by `place_pages` when the layers can't be read. `outlined`: the
+/// PDF part's type was read as outlines (a file whose type shows then comes in as its PDF part).
+/// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
+/// `unit`: the size in points of a unit of the PDF part's user space, its first page's `UserUnit`,
+/// by which its art came in scaled. Editing data whose artboard matches the page only in those
+/// units comes in `unit` times as large, and so does the artboard layout `place_pages` takes from
+/// it.
+pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool, trust: bool, unit: f64) -> (Document, Vec<String>, bool) {
+    let Ok(data) = ai::decode_private(private) else { return (visible, warnings, false) };
     if !has_layers(&data) {
-        return (visible, warnings);
+        return (visible, warnings, false);
     }
-    match build(&data, Some(&visible), Page::Artboard, outlined) {
-        Ok((done, notes)) => {
+    match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit) {
+        Ok((mut done, notes)) => {
+            done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;
             all.extend(notes.into_iter().filter(|n| !all.contains(n)).collect::<Vec<_>>());
-            (done, all)
+            (done, all, true)
         }
         Err(why) => {
             let mut all = warnings;
             all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
             let mut visible = visible;
-            place_pages(&ai::artboards(&data), &mut visible);
-            (visible, all)
+            place_pages(&ai::artboards(&data), &mut visible, unit);
+            (visible, all, false)
         }
     }
 }
 
-/// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) moved, with
-/// the art on each, to where `boards` (the artboards of its editing data, in art space) are, so
-/// the artboards keep their layout when the layers can't be read (#1068). Left as they are unless
-/// there are as many artboards as pages, of the same sizes.
-fn place_pages(boards: &[Rect], doc: &mut Document) {
-    let (Some(first), true) = (boards.first(), boards.len() == doc.artboards.len() && boards.len() > 1) else { return };
-    if boards.iter().zip(&doc.artboards).any(|(b, a)| (b.width() - a.rect.width()).abs() > 0.5 || (b.height() - a.rect.height()).abs() > 0.5) {
+/// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) named as
+/// `boards` (the artboards of its editing data, in art space) name them, and moved, with the art on
+/// each, to where they are, so the artboards keep their names and layout when the layers can't be
+/// read (#1068). Left as they are unless there are as many artboards as pages, each the size of its
+/// page in points, or, when `unit` is above 1, each the size of its page in units of `unit` points:
+/// then the layout is drawn `unit` times as large.
+fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
+    if boards.is_empty() || boards.len() != doc.artboards.len() {
         return;
     }
-    // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it.
-    let to_doc = Affine::new([1.0, 0.0, 0.0, -1.0, -first.x0, first.y1]);
+    let differ = |k: f64| {
+        boards
+            .iter()
+            .zip(&doc.artboards)
+            .any(|((_, b), a)| (b.width() - a.rect.width() / k).abs() > 0.5 || (b.height() - a.rect.height() / k).abs() > 0.5)
+    };
+    let k = if !differ(1.0) {
+        1.0
+    } else if unit.is_finite() && unit > 1.0 && !differ(unit) {
+        unit
+    } else {
+        return;
+    };
+    for ((name, _), a) in boards.iter().zip(&mut doc.artboards) {
+        a.name.clone_from(name);
+    }
+    let [(_, first), _, ..] = boards else { return };
+    // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it,
+    // `k` points a unit.
+    let to_doc = Affine::new([k, 0.0, 0.0, -k, -first.x0 * k, first.y1 * k]);
     let pages: Vec<Rect> = doc.artboards.iter().map(|a| a.rect).collect();
-    let moves: Vec<Vec2> = boards.iter().zip(&pages).map(|(b, page)| to_doc.transform_rect_bbox(*b).origin() - page.origin()).collect();
+    let moves: Vec<Vec2> = boards.iter().zip(&pages).map(|((_, b), page)| to_doc.transform_rect_bbox(*b).origin() - page.origin()).collect();
     for layer in &mut doc.layers {
         place_art(Arc::make_mut(layer), &pages, &moves);
     }
@@ -1151,7 +1273,7 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
 /// alone (`private`, the joined `AIPrivateData` streams) → the document and the import's notes.
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
-    build(&data, None, Page::Artboard, false)
+    build(&data, None, Page::Artboard, false, false, 1.0)
 }
 
 /// Does the editing data (or a program in the legacy format) have layers?
@@ -1172,7 +1294,7 @@ fn editing_copy(ps: &[u8]) -> Option<Result<Cow<'_, [u8]>, String>> {
 /// prolog without including it) from its layers alone (`ps`: its program, which has them) → the
 /// document and the import's notes. `None` when the layers aren't in the program.
 pub(super) fn program_alone(ps: &[u8]) -> Option<Result<(Document, Vec<String>), String>> {
-    (!ai::has_eps_data(ps) && has_layers(ps)).then(|| build(ps, None, Page::Art, false))
+    (!ai::has_eps_data(ps) && has_layers(ps)).then(|| build(ps, None, Page::Art, false, false, 1.0))
 }
 
 #[cfg(test)]

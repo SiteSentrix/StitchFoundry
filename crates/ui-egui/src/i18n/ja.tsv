@@ -170,6 +170,7 @@
 	Horizontal Align Right	水平方向右に整列
 	Vertical Align Top	垂直方向上に整列
 	Vertical Align Center	垂直方向中央に整列
+	Horizontal & Vertical Align Center	水平方向および垂直方向中央に整列
 	Vertical Align Bottom	垂直方向下に整列
 	Group	グループ
 	Ungroup	グループ解除
@@ -325,6 +326,7 @@
 	Fit Headline	ヘッドラインを合わせる
 	Decrease Font Size	フォントサイズを小さく
 	Increase Font Size	フォントサイズを大きく
+	Reset Tracking and Kerning	トラッキングとカーニングをリセット
 	Step Type	文字を段階的に調整
 	Find Font…	フォントの検索と置換…
 	Change Case	大文字と小文字の変更
@@ -421,6 +423,8 @@
 	Pathfinder	パスファインダー
 	Add	追加
 	Intersect	交差
+	Intertwine	織り交ぜ
+	Arrange Intertwine Area	織り交ぜ領域の重ね順
 	Exclude	中マド
 	Subtract	前面オブジェクトで型抜き
 	Minus Back	背面オブジェクトで型抜き
@@ -470,6 +474,7 @@
 	Monitor RGB	モニター RGB
 	Color blindness – Protanopia-type	P 型（1 型）色覚
 	Color blindness – Deuteranopia-type	D 型（2 型）色覚
+	Color blindness – Tritanopia-type	T 型（3 型）色覚
 	Customize…	カスタマイズ…
 	Proof Colors	色の校正
 	Zoom In	ズームイン
@@ -477,6 +482,7 @@
 	Fit Artboard in Window	アートボードを全体表示
 	Fit All in Window	すべてのアートボードを全体表示
 	Actual Size	100% 表示
+	Rotate View	ビューを回転
 	Reset Rotate View	ビューを回転の初期化
 	Hide Edges	エッジを隠す
 	Hide Artboards	アートボードを隠す
@@ -489,6 +495,7 @@
 	Show Video Rulers	ビデオ定規を表示
 	Hide Bounding Box	バウンディングボックスを隠す
 	Show Transparency Grid	透明グリッドを表示
+	Hide Template	テンプレートを隠す
 	Hide Text Threads	テキストのスレッドを隠す
 	Hide Gradient Annotator	グラデーションガイドを隠す
 	Hide Corner Widget	コーナーウィジェットを隠す
@@ -510,6 +517,7 @@
 	Three Point Perspective	3 点遠近法
 	Save Grid as Preset…	グリッドをプリセットとして保存…
 	Snap to Pixel	ピクセルにスナップ
+	Precise Cursors	精密カーソル
 	Snap to Point	ポイントにスナップ
 	Snap to Glyph	グリフにスナップ
 	New View…	新規表示…
@@ -644,6 +652,7 @@
 	Preview	プレビュー
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
+	Show Template	テンプレートを表示
 	Show Text Threads	テキストのスレッドを表示
 	Hide Hidden Characters	制御文字を隠す
 	Show Gradient Annotator	グラデーションガイドを表示
@@ -658,8 +667,10 @@
 	Hide Print Tiling	プリント分割を隠す
 	Unlock Grid	グリッドをロック解除
 	Edit Envelope	エンベロープを編集
+	Auto Color	自動カラー
 	Automatic	自動
 	Isolate Selected Group	選択したグループを分離
+	Isolate Selected Object	選択したオブジェクトを分離
 	Exit Isolation Mode	分離モードを終了
 	Make Clipping Mask	クリッピングマスクを作成
 	Release Clipping Mask	クリッピングマスクを解除
@@ -844,7 +855,6 @@
 	Arrowheads:	矢印:
 	Art using a deleted global swatch keeps its colour.	削除したグローバルスウォッチを使っているアートは、そのカラーを保持します。
 	Artboard Options	アートボードオプション
-	Artboard Options: edit with the Artboard tool	アートボードオプション: アートボードツールで編集
 	Artboard Options…	アートボードオプション…
 	Artboard Tool	アートボードツール
 	Artboard {number}	アートボード {number}
@@ -926,6 +936,59 @@
 	Character Set:	文字セット:
 	Character Style Options	文字スタイルオプション
 	Check Links	リンクを確認
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	スクリプトをチェック
+	Check Script…	スクリプトをチェック…
+	Copy Report	レポートをコピー
+	StitchFoundry read this script without running it.	StitchFoundry はこのスクリプトを実行せずに読み取りました。
+	Needs nothing beyond plain JavaScript	通常の JavaScript 以外は不要
+	Needs the script language's own objects or directives	スクリプト言語固有のオブジェクトまたはディレクティブが必要
+	Needs the document model	ドキュメントモデルが必要
+	Needs files	ファイルが必要
+	Needs menu commands	メニューコマンドが必要
+	Needs dialogs	ダイアログが必要
+	Needs features only the reference app has	参照アプリだけにある機能が必要
+	Outside the document	ドキュメントの外
+	Writes, moves or deletes files	ファイルを書き込み、移動、削除
+	Opens files in other apps	ほかのアプリでファイルを開く
+	Opens network connections	ネットワーク接続を開く
+	Loads native code	ネイティブコードを読み込む
+	Sends messages to other apps	ほかのアプリにメッセージを送る
+	Reads or sets environment variables	環境変数を読み取りまたは設定
+	Runs code the checker can't read	チェックで読み取れないコードを実行
+	Changes the reference app's preferences	参照アプリの環境設定を変更
+	Menu commands	メニューコマンド
+	Names the script builds as it runs: {count}	スクリプトが実行時に組み立てる名前：{count}
+	Document model	ドキュメントモデル
+	Object types: {names}	オブジェクトの種類：{names}
+	Directives	ディレクティブ
+	Includes	インクルード
+	Checked	チェック済み
+	Not followed: outside the script's folder	読み込み対象外：スクリプトのフォルダーの外
+	Includes itself	自身をインクルードしています
+	Not read	読み込んでいません
+	Not read: a limit was reached	読み込んでいません：上限に達しました
+	Compiled or not text	コンパイル済みかテキストではありません
+	Problems	問題
+	String not closed	文字列が閉じていません
+	Comment not closed	コメントが閉じていません
+	Regular expression not closed	正規表現が閉じていません
+	Template literal not closed	テンプレートリテラルが閉じていません
+	XML literal not closed	XML リテラルが閉じていません
+	Bracket never closed	括弧が閉じていません
+	Closing bracket with no opening one	対応する開き括弧のない閉じ括弧
+	Syntax newer than ES3	ES3 より新しい構文
+	Unknown directive	不明なディレクティブ
+	Not valid UTF-8: unreadable bytes were replaced	有効な UTF-8 ではありません：読み取れないバイトを置き換えました
+	Mixed line endings	改行コードが混在しています
+	Nesting too deep to follow	入れ子が深すぎてたどれません
+	line {line}	{line} 行目
+	lines {lines}	{lines} 行目
+	{file}, line {line}	{file}、{line} 行目
+	Compiled script: ask its author for the .jsx file	コンパイル済みスクリプト：作成者に .jsx ファイルを依頼してください
+	Too large to check	大きすぎてチェックできません
+	Not a script for the reference app	参照アプリ用のスクリプトではありません
+	Some lists were cut short at their limit.	一部の一覧は上限で打ち切られました。
 	Choose a folder	フォルダーを選択
 	Choose…	選択…
 	Circle	円
@@ -1069,6 +1132,7 @@
 	DXF Options	DXF オプション
 	DXF Options Dialog	DXF オプションダイアログ
 	Darken	比較 (暗)
+	Darkness	濃さ
 	Dashed	破線
 	Dashed Line	破線
 	Data Recovery	データ復帰
@@ -1158,6 +1222,8 @@
 	Divide Vertically Into	垂直方向に分割
 	Do you want to save the changes you made to “{name}”?	「{name}」への変更を保存しますか？
 	Can't open “{name}”.	「{name}」を開けません。
+	Can't save “{name}”.	「{name}」を保存できません。
+	Can't export “{name}”.	「{name}」を書き出せません。
 	Document	ドキュメント
 	Document Ink Options	ドキュメントのインキオプション
 	Document JSON	ドキュメント JSON
@@ -1313,6 +1379,9 @@
 	Export:	書き出し:
 	Export…	書き出し…
 	Eyedropper	スポイト
+	Sample Color from Screen	画面からカラーをサンプル
+	This system has no screen color sampler	このシステムには画面のカラーサンプラーがありません
+	The active document changed while the screen color sampler was open	画面のカラーサンプラーが開いている間にアクティブなドキュメントが変わりました
 	Eyedropper Applies:	スポイトの適用:
 	Eyedropper Options	スポイトオプション
 	Eyedropper Picks Up:	スポイトの抽出:
@@ -1338,6 +1407,7 @@
 	Fill Rule	塗りのルール
 	Fill and Stroke	塗りと線
 	Fill new strokes	新しいストロークに塗りを適用
+	Keep selected	選択を保持
 	Fill:	塗り:
 	Find	検索
 	Find Font	フォントを検索
@@ -1411,6 +1481,8 @@
 	Graphic Style Library	グラフィックスタイルライブラリ
 	Graphic Style Options	グラフィックスタイルオプション
 	Graphic Style Options…	グラフィックスタイルオプション…
+	Symbol Options	シンボルオプション
+	Symbol Options…	シンボルオプション…
 	Graphic Styles Options	グラフィックスタイルオプション
 	Graphics Processor	グラフィックプロセッサー
 	Graphics: {adapter}	グラフィックス: {adapter}
@@ -1471,6 +1543,9 @@
 	Identify Objects By	オブジェクトの識別方法
 	Ignore	無視
 	Ignore Artboards (all the art as one page)	アートボードを無視 (すべてのアートを 1 ページとして扱う)
+	Auto Grouping	自動グループ化
+	Enhanced	拡張
+	Ignore Color	カラーを無視
 	Ignore White	白を無視
 	Palette:	パレット:
 	Limited	限定
@@ -1529,6 +1604,44 @@
 	Keyboard Increment	キー入力
 	Keyboard Shortcut Conflicts	キーボードショートカットの競合
 	Keyboard Shortcut Set	キーボードショートカットセット
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	ショートカットセットを読み込み
+	Import Shortcut Set…	ショートカットセットを読み込み…
+	Each entry of the file is matched to a StitchFoundry tool, command or panel. Check the matches and answer what is left.	ファイルの各項目を StitchFoundry のツール、コマンド、パネルに対応付けます。対応を確認して、残りの項目を指定してください。
+	Keys	キー
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	このファイルはキーと修飾キーをコードで記録しています。提案された意味を確認して、まだ分からないコードを指定してください。
+	Click, then press the key this code stands for (Esc cancels)	クリックしてから、このコードが表すキーを押します (Esc でキャンセル)
+	Press a key…	キーを押してください…
+	from your earlier imports	以前の読み込みより
+	from the format's public description	形式の公開されている説明より
+	not known yet	未確定
+	Shortcuts	ショートカット
+	Shortcut	ショートカット
+	In the File	ファイル内の名前
+	In StitchFoundry	StitchFoundry での対応
+	Needs Attention Only	要確認の行のみ
+	Ready	適用可能
+	Needs a choice	選択が必要
+	Needs a key	キーが必要
+	No equivalent	対応なし
+	Tools take a single key (optionally with Shift)	ツールには 1 つのキーのみ割り当てられます (Shift との組み合わせは可)
+	A later row takes this shortcut	後の行がこのショートカットを使用
+	Same item as a later row	後の行と同じ項目
+	Start from StitchFoundry Defaults	StitchFoundry の初期設定から開始
+	Add to the Current Shortcuts	現在のショートカットに追加
+	Remember My Choices	選択内容を記憶
+	{ready} of {total} ready	{total} 件中 {ready} 件が適用可能
+	The file is too large to read in full, so only its first part is listed.	ファイルが大きすぎて全体を読み込めないため、最初の部分のみを表示しています。
+	Report copied	レポートをコピーしました
+	Line {line}	{line} 行目
+	Line {line}: {name}: {status}	{line} 行目: {name}: {status}
+	Imported. Press OK to keep the imported set.	読み込みました。読み込んだセットを保持するには OK を押してください。
+	Read Shortcut Set File	ショートカットセットファイルを読む
+	Import Matches	読み込み時の対応付け
+	Remember Import Matches	読み込み時の対応付けを記憶
+	Forget Import Matches	読み込み時の対応付けを消去
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	{n} 個の初期設定ショートカットと一致
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	ファイルの {n} 箇所を読み込めませんでした
 	Keywords:	キーワード:
 	Knife	ナイフ
 	Knockout Group	グループの抜き
@@ -1554,6 +1667,20 @@
 	Left Plane	左面
 	Left:	左:
 	Legacy vector clipboard	従来のベクタークリップボード
+	Legacy (version 7)	従来 (バージョン 7)
+	Transparent Images:	透明な画像:
+	Flatten	統合
+	Omit	省略
+	Legacy .ai Options	従来の .ai オプション
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	従来の .ai ファイルにはアートボードが 1 つしか入りません。チェックした各アートボードは別々のファイルとして保存されます。
+	{count} of {total} artboards	{total} 個中 {count} 個のアートボード
+	Check an artboard to save.	保存するアートボードをチェックしてください。
+	Hidden Objects:	非表示のオブジェクト:
+	Hidden Layer	非表示レイヤー
+	Make Visible	表示する
+	Text:	テキスト:
+	Editable	編集可能
+	PDF-compatible	PDF 互換
 	Legacy vector clipboard (no transparency)	従来のベクタークリップボード (透明なし)
 	Less	少なく
 	Ligatures are off while the text is tracked.	テキストにトラッキングが設定されている間、合字は無効です。
@@ -1966,6 +2093,7 @@
 	Panel Options…	パネルオプション…
 	Panel menu	パネルメニュー
 	Panels	パネル
+	Panels Except Tools and Control	ツールとコントロール以外のパネル
 	Paragraph Style Options	段落スタイルオプション
 	Password	パスワード
 	Paste Offset	ペースト位置のオフセット
@@ -1976,6 +2104,7 @@
 	Pathfinder Options…	パスファインダーオプション…
 	Pathfinders:	パスファインダー:
 	Paths	パス
+	Path Length	パスの長さ
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	パス：{paths}    アンカー：{anchors}    カラー：{colors}
 	Pattern Editing	パターン編集
 	Pattern options are available in pattern editing mode.	パターンオプションはパターン編集モードで使用できます。
@@ -2139,6 +2268,9 @@
 	Rectangle Properties:	長方形のプロパティ:
 	Rectangle Tool	長方形ツール
 	Rectangular Grid	長方形グリッド
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	水平方向の分割線:
+	Vertical Dividers:	垂直方向の分割線:
 	Rectangular Grid Tool	長方形グリッドツール
 	Red	レッド
 	Redefine Character Style	文字スタイルを再定義
@@ -2184,6 +2316,13 @@
 	Relink	再リンク
 	Relink to Folder…	フォルダーに再リンク…
 	Relink…	再リンク…
+	Find Linked Files	リンクファイルを検索
+	Find Linked Files in Folder…	フォルダー内のリンクファイルを検索…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	リンクファイルごとに、再リンク先のファイルを選んでください。リンクに保存されたサイズと内容が同じファイルが先頭に表示されます。
+	Same file	同じファイル
+	Same size	同じサイズ
+	Don't Relink	再リンクしない
+	Copy into the document's folder	ドキュメントのフォルダーにコピー
 	Remove	削除
 	Remove Asset	アセットを削除
 	Remove Brush Stroke	ブラシストロークを削除
@@ -2333,6 +2472,17 @@
 	Screen	スクリーン
 	Screens	スクリーン
 	Search All	すべてを検索
+	Filter	フィルター
+	Clear All	すべてクリア
+	By Object	オブジェクト別
+	By Layer	レイヤー別
+	Images	画像
+	Groups	グループ
+	Linked Files	リンクファイル
+	Locked	ロック
+	Hidden	非表示
+	Filter Layers Panel Rows	レイヤーパネルの行をフィルター
+@msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
 	Search commands and tools	コマンドとツールを検索
 	Search commands and tools…	コマンドとツールを検索…
 	Secondary	セカンダリ
@@ -2341,6 +2491,7 @@
 	Select All Instances	すべてのインスタンスを選択
 	Select All Unused	未使用項目をすべて選択
 	Select Anchors	アンカーを選択
+	Select Segments	パスのセグメントを選択
 	Select Appearance Item	アピアランス項目を選択
 	Select Freeform Point	フリーフォームポイントを選択
 	Select Gradient Stop	グラデーションの分岐点を選択
@@ -2378,7 +2529,6 @@
 	Set Anchors	アンカーポイントを設定
 	Set Bounds	境界を設定
 	Set Current Layer	現在のレイヤーを設定
-	Set Key Object	キーオブジェクトを設定
 	Set Keyboard Shortcut	キーボードショートカットを設定
 	Set Mesh Point Color	メッシュポイントのカラーを設定
 	Set Preference	環境設定を設定
@@ -2416,6 +2566,7 @@
 	Show List View	リスト表示
 	Show Note	メモを表示
 	Show Options	オプションを表示
+	Color Panel Options	カラーパネルオプション
 	Show Package	パッケージを表示
 	Show Panel	パネルを表示
 	Show Perspective Grid	遠近グリッドを表示
@@ -2497,6 +2648,8 @@
 	Spiral Tool	スパイラルツール
 	Split Freeform Line	フリーフォームラインを分割
 	Split Into Grid	グリッドに分割
+	Total:	合計:
+	Add Guides	ガイドを追加
 	Split Path	パスを分割
 	Spot Color	特色
 	Spot Colors	特色
@@ -2963,6 +3116,23 @@
 	Gradient (.)	グラデーション (.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
+	Graph Design	グラフのデザイン
+	Graph Marker	グラフのマーカー
+	New Design	新規デザイン
+	Delete Design	デザインを削除
+	Paste Design	デザインをペースト
+	Select Unused	未使用を選択
+	Import Data…	データを読み込み…
+	Transpose	行と列を入れ替え
+	Switch x/y	X/Y を入れ替え
+	Number of Decimals:	小数点以下の桁数:
+	Column Width:	列の幅:
+	No Legend	凡例なし
+	Standard Legend	標準の凡例
+	Legends in Wedges	くさび形内に凡例
+	Ratio	比率
+	Even	均等
+	Stacked	積み重ね
 	Graphic Style Libraries Menu	グラフィックスタイルライブラリメニュー
 	Graphics	グラフィックス
 	Greek & Cyrillic	ギリシャ文字とキリル文字
@@ -3175,6 +3345,7 @@
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]
 	[Normal Paragraph Style]	[標準段落スタイル]
+imageTrace	Outline	アウトライン
 @plural	Color Table ({n} color)|Color Table ({n} colors)	カラーテーブル ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	{n} 個のグラフィックスタイルを削除しますか？
 @plural	{n} Layer|{n} Layers	{n} レイヤー
@@ -3333,6 +3504,10 @@ theme	Appearance	外観
 	Draft	ドラフト
 	Good	標準
 	Best	高品質
+	Mode	モード
+	Blur Mode	ぼかしモード
+	Edge Only	エッジのみ
+	Overlay Edge	エッジをオーバーレイ
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
@@ -3340,6 +3515,52 @@ theme	Appearance	外観
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Japanese: no final 。 (these are status lines, and reasons that follow a colon), unless the English ends
 # with a period; a space between Japanese text and an adjacent Latin word, number or {placeholder}.
+# Swatches panel: the default swatches' names (shown in the UI language; documents keep them)
+swatch	[None]	[なし]
+swatch	[Registration]	[レジストレーション]
+swatch	White	ホワイト
+swatch	Black	ブラック
+swatch	Red	レッド
+swatch	Orange Red	オレンジレッド
+swatch	Orange	オレンジ
+swatch	Amber	アンバー
+swatch	Yellow	イエロー
+swatch	Yellow Green	イエローグリーン
+swatch	Lime	ライム
+swatch	Green	グリーン
+swatch	Emerald	エメラルド
+swatch	Teal	ティール
+swatch	Aqua	アクア
+swatch	Cyan Green	シアングリーン
+swatch	Cyan	シアン
+swatch	Azure	アジュール
+swatch	Blue	ブルー
+swatch	Indigo	インディゴ
+swatch	Violet	バイオレット
+swatch	Purple	パープル
+swatch	Magenta	マゼンタ
+swatch	Rose	ローズ
+swatch	Pink	ピンク
+swatch	Brown	ブラウン
+swatch	Tan	タン
+swatch	Coffee	コーヒー
+swatch	Chocolate	チョコレート
+swatch	Sand	サンド
+swatch	Copper	カッパー
+swatch	Rust	ラスト
+swatch	Walnut	ウォルナット
+swatch	Espresso	エスプレッソ
+swatch	White, Black	ホワイト、ブラック
+swatch	Radial White, Black	円形 ホワイト、ブラック
+swatch	Sunset	サンセット
+swatch	Ocean	オーシャン
+swatch	Grays	グレー
+swatch	Brights	ビビッド
+swatch	Bright Red	ビビッドレッド
+swatch	Bright Yellow	ビビッドイエロー
+swatch	Bright Green	ビビッドグリーン
+swatch	Bright Blue	ビビッドブルー
+swatch	Bright Violet	ビビッドバイオレット
 @msg	Reset {_1}	{_1} をリセットしました
 @msg	Saving	保存中
 @msg	Saving {_1}	{_1} を保存中
@@ -3356,6 +3577,9 @@ theme	Appearance	外観
 @msg	The graphics were lost and couldn't be restarted.	グラフィックス機能が利用できなくなり、再起動できませんでした。
 @msg	The graphics were lost and have been restarted	グラフィックス機能が利用できなくなったため、再起動しました
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	未保存の変更はこのブラウザーに残っています: 復元するにはページを再読み込みしてください。
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で StitchFoundry を再起動しました
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	前回の StitchFoundry の起動はウィンドウが表示される前に {name} で終了したため、{summary} で起動しました。このグラフィックプロセッサーをもう一度試すには、「環境設定 › パフォーマンス › グラフィックプロセッサー」を変更するか、WGPU_BACKEND を設定して起動してください
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	前回の StitchFoundry の起動はグラフィックプロセッサーの一覧を取得している間に終了したため、OpenGL のみを使って {summary} で起動しました。ほかのグラフィックバックエンドをもう一度試すには、「環境設定 › パフォーマンス › グラフィックプロセッサー」を変更するか、WGPU_BACKEND を設定して起動してください
 @msg	not a DXF drawing	DXF 図面ではありません
 @msg	scale must be a number from {_1} to {_2}, not {s}	縮尺は {_1} から {_2} までの数値にしてください ({s} は指定できません)
 @msg	the artboard to fit must be a positive size up to {_1} pt	合わせる先のアートボードのサイズは 0 より大きく {_1} pt 以下にしてください
@@ -3425,6 +3649,7 @@ theme	Appearance	外観
 @msg	no such segment	指定されたセグメントが見つかりません
 @msg	no such subpath	指定されたサブパスが見つかりません
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません
+@msg	object {id} is not a selected top-level object	オブジェクト {id} は選択されている最上位のオブジェクトではありません
 @msg	nothing to redo	やり直す操作がありません
 @msg	nothing to undo	取り消す操作がありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
@@ -3497,6 +3722,7 @@ theme	Appearance	外観
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
 @msg	no library `{id}`	ライブラリ `{id}` が見つかりません
+@msg	{path}: not a file	{path}: ファイルではありません
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 画像は書き出せません
 @msg	Replace Spine: select a blend and a path	ブレンド軸を置き換え: ブレンドとパスを選択してください
@@ -3537,6 +3763,7 @@ theme	Appearance	外観
 @msg	Divide Objects Below: select a path	背面のオブジェクトで型抜き: パスを選択してください
 @msg	Divide Objects Below: select exactly one path	背面のオブジェクトで型抜き: パスを 1 つだけ選択してください
 @msg	Offset Path: select paths	パスのオフセット: パスを選択してください
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	パスのオフセット: オフセットすると選択したパスが何も残りません (内側へのオフセットがシェイプより大きい)
 @msg	Outline Stroke: no stroked paths selected	パスのアウトライン: 線のあるパスが選択されていません
 @msg	Split Into Grid: select paths large enough for the grid	グリッドに分割: グリッドが収まる大きさのパスを選択してください
 @msg	empty cutter	型抜きに使うパスが空です
@@ -3550,6 +3777,7 @@ theme	Appearance	外観
 @msg	not in pattern editing mode	パターン編集モードではありません
 @msg	pattern missing	パターンが見つかりません
 @msg	select a repeat	リピートを選択してください
+@msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select the art to repeat	リピートするアートを選択してください
 @msg	the document has no patterns	ドキュメントにパターンがありません
 @msg	no artboard	アートボードがありません
@@ -3612,6 +3840,8 @@ theme	Appearance	外観
 @msg	no interaction in progress	進行中の操作がありません
 @msg	no such object {0}	オブジェクト {0} が見つかりません
 @msg	result would exceed the canvas (coordinates out of range)	結果がカンバスの範囲を超えます (座標が範囲外です)
+@msg	objects can't be nested more than 32 deep	オブジェクトは 32 階層より深く入れ子にできません
+@msg	the SVG's elements are nested more than {0} deep	SVG の要素が {0} 階層より深く入れ子になっています
 @msg	unknown command `{0}`	`{0}` は不明なコマンドです
 @msg	`{what}` closes nothing	`{what}` に対応する開始部分がありません
 @msg	`{what}` closes something it didn't open	`{what}` が対応しない開始部分を閉じています
@@ -3624,6 +3854,8 @@ theme	Appearance	外観
 @msg	its objects are nested too deeply	オブジェクトの入れ子が深すぎます
 @msg	its section ending with `%{end}` doesn't end	`%{end}` で終わるはずのセクションが終わっていません
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
+@msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
+@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
 @msg	patterns nested too deeply are filled with mid-grey	入れ子が深すぎるパターンは中間のグレーで塗りつぶされています
@@ -3647,6 +3879,9 @@ theme	Appearance	外観
 @msg	its editing data is for a different page	編集データが別のページのものです
 @msg	its page has text, and its layers have no text objects to put it in	ページにテキストがありますが、レイヤーにはそれを入れるテキストオブジェクトがありません
 @msg	the art on them differs from the page's in {_1}% of it	レイヤー上のアートの {_1}% がページのアートと異なります
+@msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	レイヤー上のアートの {_1}% がページのアートと異なりますが、レイヤーは編集データから読み込まれました
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	ファイルのレイヤーを読み込めませんでした ({_1})。ページとして 1 つのレイヤーに読み込みます
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	編集データからファイルのレイヤーを読み込めませんでした ({_1})。PDF 部分から読み込みます
 @msg	its Windows metafile preview was opened instead, which may simplify the art	代わりに Windows メタファイルのプレビューを開いたため、アートが簡略化されている場合があります
 @msg	its preview was placed instead, at screen resolution	代わりにプレビューを画面解像度で配置しました
 @msg	shadings of more than 4096 patches or triangles were left out	パッチまたは三角形が 4096 個を超えるシェーディングは除外されました
@@ -3686,7 +3921,7 @@ theme	Appearance	外観
 @msg	the PDF is password-protected: give its password	この PDF はパスワードで保護されています: パスワードを入力してください
 @msg	the PDF password is wrong	PDF のパスワードが正しくありません
 @msg	the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG	ファイルには仮のページだけが含まれ、アートは含まれていません (PDF 互換なしで保存されています): PDF 互換をオンにして保存し直すか、PDF または SVG として保存してください
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	これは PostScript ファイル (古い形式または PDF 互換なしで保存された .ai、または EPS ファイル) のため、まだ開けません: PDF、PDF 互換の .ai、または SVG として保存してください
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	これは PDF ではなく PostScript ファイル (古い形式または PDF 互換なしで保存された .ai、または EPS ファイル) です: 「ファイル › 開く」と「ファイル › 配置」で EPS として読み込めます
 @msg	unsupported: {0}	対応していません: {0}
 @msg	a page is missing	見つからないページがあります
 @msg	a page tree kid isn't a reference	ページツリーの子要素が参照になっていません
@@ -3723,6 +3958,9 @@ theme	Appearance	外観
 @msg	{label}…	{label}…
 @msg	no blend options	ブレンドオプションがありません
 @msg	bad color {v}	カラー {v} が正しくありません
+@msg	the Color Picker is not open	カラーピッカーが開いていません
+@msg	the screen color sampler is already open	画面のカラーサンプラーはすでに開いています
+@msg	this system has no screen color sampler	このシステムには画面のカラーサンプラーがありません
 @msg	Corners edits the corners of a path	「コーナー」で編集できるのはパスの角だけです
 @msg	give corners of the path: anchors where its sides meet at an angle	パスの角 (辺が角度をなして交わるアンカーポイント) を指定してください
 @msg	select one path, or give its `id`	パスを 1 つ選択するか、その `id` を指定してください
@@ -3815,6 +4053,7 @@ theme	Appearance	外観
 @msg	Opened {url}	{url} を開きました
 @msg	No saved views (View → New View…)	保存した表示はありません (表示 → 新規表示…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` には、メニュー項目がダイアログを開くコマンドを指定してください (ui.menuDialog を参照)
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness には dark|mediumDark|mediumLight|light のいずれかを指定してください
 @msg	index must be a number or first, previous, next or last	index には数値、または first、previous、next、last のいずれかを指定してください
@@ -3845,6 +4084,7 @@ theme	Appearance	外観
 @msg	{_1} font families available	{_1} 個のフォントファミリーを使用できます
 @msg	{_1} has no {_2} style	{_1} には {_2} スタイルがありません
 @msg	Copied the CSS of {rules} object(s)	{rules} 個のオブジェクトの CSS をコピーしました
+@msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
 @msg	unknown highlight `{h}`	`{h}` は不明なハイライトの指定です
@@ -3875,12 +4115,15 @@ theme	Appearance	外観
 @msg	Discarded {_1} recovered document(s)	復帰用データのドキュメントを {_1} 件破棄しました
 @msg	Restored {_1} recovered document(s): save them to keep them	復帰用データからドキュメントを {_1} 件復元しました: 残すには保存してください
 @msg	Saving recovery data for {_1}	{_1} の復帰用データを保存中
+@msg	This shortcut file is in a form StitchFoundry can't read.	このショートカットファイルは StitchFoundry で読み込めない形式です。
 @msg	bad shortcut	ショートカットが正しくありません
 @msg	can't parse shortcut `{c}`	ショートカット `{c}` を解釈できません
 @msg	can't parse shortcut `{s}` for `{k}`	`{k}` のショートカット `{s}` を解釈できません
 @msg	no dialog open	ダイアログが開かれていません
 @msg	no file reader	ファイルの読み込み機能がありません
 @msg	no file writer	ファイルの書き込み機能がありません
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	StitchFoundry のショートカットセットではありません (`overrides` がありません)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	ショートカットセットではありません: テキストの先頭にスラッシュ付きの名前と開き波かっこがありません
 @msg	shortcut for `{k}` must be a string	`{k}` のショートカットは文字列で指定してください
 @msg	tool shortcuts must be a single key (optionally with Shift)	ツールのショートカットには 1 つのキーを指定してください (Shift との組み合わせも可)
 @msg	unknown preset (one of {_1})	不明なプリセットです ({_1} のいずれかを指定してください)
@@ -3914,6 +4157,9 @@ theme	Appearance	外観
 @msg	larger than 256 MB	256 MB を超えています
 @msg	the files come to more than 1 GB: add fewer at a time	ファイルの合計が 1 GB を超えています: 一度に追加するファイルを減らしてください
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
+@msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
+@msg	No linked files to look for	検索するリンクファイルがありません
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	画像を {n} 枚再リンクしましたが、{name} は再リンクできませんでした: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
@@ -4018,6 +4264,9 @@ effect	Vertical	垂直
 	Blocks	ブロック
 	Frosted	すりガラス
 	Tiny Lens	小さなレンズ
+	Loaded Texture	読み込んだテクスチャ
+	Load Texture…	テクスチャを読み込み…
+	Texture Image	テクスチャ画像
 	Rename Data Set	データセットの名前を変更
 	Variable Options	変数のオプション
 	Edit Data Set	データセットを編集
@@ -4061,9 +4310,6 @@ effect	Vertical	垂直
 	Rotation Y	Y 軸回転
 	Rotation Z	Z 軸回転
 	Shading	陰影
-	Direction	方向
-	Elevation	仰角
-	Ambient	環境光
 	Segments	分割数
 	Show axis	軸を表示
 	Reset all	すべてリセット
@@ -4125,7 +4371,6 @@ lighting	Light	ライト
 	Hide StitchFoundry	StitchFoundry を隠す
 @msg	Loading StitchFoundry…	StitchFoundry を読み込んでいます…
 @msg	StitchFoundry failed to start: {e}	StitchFoundry を起動できませんでした: {e}
-@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で StitchFoundry を再起動しました
 @msg	it has {_1}, which StitchFoundry doesn't read from it yet	{_1} が含まれていますが、StitchFoundry はまだこのファイルからは読み込めません
 @msg	an image StitchFoundry can't read was left out	StitchFoundry で読み込めない画像は除外されました
 @msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	StitchFoundry の PostScript 読み込み機能が対応していない `{at}` を使用しています
@@ -4133,7 +4378,6 @@ lighting	Light	ライト
 @msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	バージョン {0} では保存できません: StitchFoundry で保存できるのはバージョン {MIN_VERSION} から {VERSION} までです
 @msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	ファイルのバージョン {0} は、この StitchFoundry が対応するバージョン ({VERSION}) より新しいものです
 @msg	is not an image StitchFoundry reads	StitchFoundry で読み込める画像ではありません
-@msg	not a StitchFoundry shortcut set (missing `overrides`)	StitchFoundry のショートカットセットではありません (`overrides` がありません)
 @msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry は他のアプリやシステムのフォルダーを検索しません: {path}
 @msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry は Users 内の Shared フォルダーと Public フォルダーを検索しません: {path}
 @msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では StitchFoundry の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
@@ -4200,7 +4444,6 @@ lighting	Light	ライト
 	Fits the hoop	刺繍枠に収まります
 	Give objects a stitch type in the Embroidery panel.	刺繍パネルでオブジェクトにステッチの種類を設定してください。
 	Gradient to	グラデーション終点
-	Hidden	非表示
 	Hide Digitizing Widget	デジタイズウィジェットを隠す
 	Hoop	刺繍枠
 	Inclination Tool	縫い方向ツール
@@ -4519,7 +4762,7 @@ machine	Stop	停止
 	Hand stitch	手縫い風ステッチ
 	Gap	すき間
 	Jagged edges	ギザギザの縁
-	Both sides	両側
+	Both sides	両面
 	Side 1	サイド 1
 	Side 2	サイド 2
 	Jag depth	ギザギザの深さ
@@ -4542,7 +4785,6 @@ machine	Stop	停止
 
 # Embroidery (StitchFoundry): spacing profiles and blends
 	Spacing profile	間隔プロファイル
-	Even	均一
 	Accordion	アコーディオン
 	Fade out	フェードアウト
 	Fade in	フェードイン
@@ -4585,7 +4827,7 @@ machine	Stop	停止
 	Bean Ring	三重縫いのリング
 	Hexagons	六角形
 	Chevrons	山形
-	Ogee	オジー
+	Ogee	S字
 	Basket weave	バスケット織り
 	Stars	星
 	Hearts	ハート
@@ -4767,7 +5009,6 @@ machine	Stop	停止
 @msg	the machine file didn't encode	ミシンファイルをエンコードできませんでした
 	Worksheet	作業シート
 	Outline Around	周りに輪郭
-	Stacked	縦積み
 	Oval	楕円
 	Octagon	八角形
 	Shield	盾
@@ -5175,8 +5416,8 @@ machine	Stop	停止
 	Make a Design…	デザインを作る…
 	Make a Design, Step by Step	ステップごとにデザインを作る
 	Step by step: words, a shape, appliqué, a picture or a sample	ステップごとに：文字、かたち、アップリケ、画像、サンプル
-	Step	ステップ
-	Back	戻る
+	Step	段
+	Back	背面
 	What would you like to make?	何を作りますか？
 	A name or some words	名前やことば
 	For towels, bags, pillows and gifts	タオル、バッグ、クッション、贈り物に
@@ -5394,3 +5635,149 @@ machine	Stop	停止
 	Top thread (m)	上糸 (m)
 	Width (mm)	幅 (mm)
 	same	同じ
+	Ruler Origin	定規の原点
+	Reset Ruler Origin	定規の原点をリセット
+	Artistic	アーティスティック
+	Film Grain…	フィルム粒子…
+	Highlight Area	ハイライト領域
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	圧縮ファイルを展開すると StitchFoundry が読み込める量を超えます (ドキュメント {_1} MB、画像 1 枚あたり {_2} MB)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	ドキュメントが大きすぎて圧縮保存できません ({0}): 「圧縮を使用」をオフにして保存してください
+@msg	the file stopped being read (please report this bug)	ファイルの読み込みが中断されました (このバグを報告してください)
+	Concentric Dividers:	同心円の分割線:
+	Radial Dividers:	放射状の分割線:
+	Skew:	歪み:
+	Inside	内側
+	Outside	外側
+	Use Outside Rectangle As Frame	外側の長方形をフレームとして使用
+	Create Compound Path From Ellipses	楕円形から複合パスを作成
+	Fill Grid	グリッドを塗りつぶす
+	Select two or more objects, or a group	2 つ以上のオブジェクト、またはグループを選択してください
+	Cove	凹面
+	Depth	奥行き
+	Front	正面
+	Isometric Bottom	等角図（底面）
+	Isometric Left	等角図（左）
+	Isometric Right	等角図（右）
+	Isometric Top	等角図（上面）
+	Off-Axis Back	斜め（背面）
+	Off-Axis Bottom	斜め（底面）
+	Off-Axis Front	斜め（正面）
+	Off-Axis Left	斜め（左）
+	Off-Axis Right	斜め（右）
+	Off-Axis Top	斜め（上面）
+	Reset all 3D settings to their defaults.	すべての 3D 設定を初期値に戻します。
+	Taper	テーパー
+	Twist	ねじれ
+	Volume	ボリューム
+3d	Cap	キャップ
+3d	Solid	ソリッド
+3d	Hollow	中空
+3d	Bevel	ベベル
+3d	Rounded	丸み
+3d	Space	間隔
+	Bevel Shape	ベベルシェイプ
+	Bevel Inside	ベベルを内側に
+	Bevel both sides	両面にベベル
+	Presets	プリセット
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	1 つのオブジェクトに適用できる 3D 効果は 1 つです。既存の効果のオプションを編集するか、先に削除してください。
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} には現在、パスまたは複合パスが必要です。テキスト、画像、グループは先にパスに変換してください。
+@msg	{label} requires a shape with at least two anchors	{label} には 2 つ以上のアンカーポイントを持つシェイプが必要です
+@msg	The shape is too complex for a 3D effect	シェイプが複雑すぎるため 3D 効果を適用できません
+@msg	The 3D surface is too complex; simplify the shape	3D サーフェスが複雑すぎます。シェイプを単純化してください
+	Transform Objects	オブジェクトの変形
+@msg	unknown parameter `{key}`; did you mean `{near}`?	`{key}` は不明なパラメーターです。`{near}` のことですか?
+@msg	unknown parameter `{key}`; the command takes no parameters	`{key}` は不明なパラメーターです。このコマンドにパラメーターはありません
+@msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
+	Load EPS into Clipboard	EPS をクリップボードに読み込む
+@msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
+@msg	the image can't be read as a texture	この画像はテクスチャとして読み込めません
+	Basic	基本
+	Fill and Stroke Controls	塗りと線のコントロール
+	Coloring Controls	カラーのコントロール
+	Draw Mode Controls	描画モードのコントロール
+	Screen Mode Controls	スクリーンモードのコントロール
+	Drawer menu	ドロワーメニュー
+	Toolbar: Show Controls	ツールバー: コントロールを表示
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control は fillStroke、coloring、drawMode、screenMode のいずれかです
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	不明なコントロール `{name}`：fillStroke、coloring、drawMode、screenMode のいずれかです
+@msg	give a fraction `t` from 0 to 1	0 から 1 までの値 `t` を指定してください
+@msg	give the path `id`	パスの `id` を指定してください
+@msg	invalid stroke widths	線幅が無効です
+@msg	object has no weighted stroke	オブジェクトに有効な正の線幅を持つ線がありません
+	Single Corner Radius	角丸の半径を統一
+	Top Left:	左上:
+	Top Right:	右上:
+	Bottom Left:	左下:
+	Bottom Right:	右下:
+	Softness	柔らかさ
+	Ambient Light	環境光
+	Light behind the object	オブジェクトの背後のライト
+	Registration:	基準点:
+	Create Dimension	寸法を作成
+	Dimension Tool	寸法ツール
+	Dimension Tool Options	寸法ツールオプション
+	Font Family:	フォントファミリー:
+	Font Style:	フォントスタイル:
+	Precision:	精度:
+	Update Dimensions	寸法を更新
+	Display	表示
+	Dimension	寸法
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	図面 : 実寸 — 1:10 では、ページ上の 1 単位を 10 と表示します。
+	Preview (1 inch on the page)	プレビュー（ページ上の 1 インチ）
+	Set as Default	デフォルトに設定
+	 out from a highlighted edge to place its dimension  |  	 でハイライトされた辺から外側へ寸法を配置  |  
+	 cancels  |  Double-click the tool for options	 でキャンセル  |  ツールをダブルクリックしてオプション
+	Linear	直線
+	Angular	角度
+	Away from the Line	寸法線から離す
+	Between Line and Object	寸法線とオブジェクトの間
+	Drag out from a segment, or click two points, then click to place.	セグメントから外側へドラッグするか、2 点をクリックしてからクリックして配置します。
+	Drag out from a corner, or click two straight lines, then click to place.	角から外側へドラッグするか、2 本の直線をクリックしてからクリックして配置します。
+	Drag out from a circle or arc for its radius, inwards for its diameter.	円または円弧から外側へドラッグすると半径、内側へドラッグすると直径になります。
+@msg	Choose a circle or a perfect arc	円または正確な円弧を選択してください
+@msg	Choose a precision from 0 to 6	精度は 0〜6 で選択してください
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	角度には直線セグメントが 2 つ必要です
+@msg	Choose two different points	異なる 2 点を選択してください
+@msg	Choose two non-parallel straight segments	平行でない直線セグメントを 2 つ選択してください
+@msg	Choose two nonzero angle arms	長さが 0 でない角度の辺を 2 つ選択してください
+@msg	Dimension point is outside the canvas	寸法の点がカンバスの外にあります
+@msg	Dimension size is outside its supported range	寸法のサイズがサポート範囲外です
+@msg	First measured segment no longer exists	最初の測定セグメントはもう存在しません
+@msg	Invalid dimension distance	寸法の距離が無効です
+@msg	Invalid dimension font name	寸法のフォント名が無効です
+@msg	Invalid drawing scale	図面の縮尺が無効です
+@msg	Invalid real scale	実寸の縮尺が無効です
+@msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
+@msg	Measured segment no longer exists	測定したセグメントはもう存在しません
+@msg	Non-finite dimension	寸法が有限ではありません
+@msg	Scale must be drawing:real, for example 1:10	縮尺は 図面:実寸 の形式にしてください (例: 1:10)
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	縮尺の比率は 1:1000000 から 1000000:1 の間にしてください
+@msg	Second measured segment no longer exists	2 番目の測定セグメントはもう存在しません
+@msg	Unknown dimension mode	寸法のモードが不明です
+@msg	Unknown dimension option {k}	不明な寸法オプション {k}
+@msg	Unknown dimension style	寸法のスタイルが不明です
+@msg	Unknown unit	単位が不明です
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面は開いたままです。
+	Distance	距離
+@msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" はグラデーションを配置します: `gradient` を指定してください
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" は線形または円形グラデーションを配置します。フリーグラデーションは配置できません
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" はグラデーション自体を配置します: `start` と `end` は省略してください (これらはすでにドキュメント座標で配置を指定します)
+	Make Image Dynamic	画像を動的にする
+	Import Data Sets…	データセットを読み込み…
+	Export Data Sets…	データセットを書き出し…
+	Make Graph Dynamic	グラフを動的にする
+	Batch…	バッチ…
+	Source Folder:	ソースフォルダー:
+	Destination Folder:	出力先フォルダー:
+	Overrides	上書き
+	Uses every data set of the open document.	開いているドキュメントのすべてのデータセットを使用します。
+@msg	Batch: {count} processed	バッチ: {count} 件を処理しました
+@msg	Batch: {count} processed, {failed} failed	バッチ: {count} 件を処理、{failed} 件が失敗しました
+@msg	choose a destination folder	出力先フォルダーを選択してください
+@msg	choose a source folder	ソースフォルダーを選択してください
+@msg	open a document with data sets	データセットのあるドキュメントを開いてください
+@msg	the action has no steps	アクションにステップがありません

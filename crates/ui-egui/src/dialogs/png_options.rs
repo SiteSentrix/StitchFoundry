@@ -239,7 +239,7 @@ fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, 
     label(ui, tl!("Quality:"));
     let mut q = (d.f64("quality", 90.0) / 10.0).round().clamp(0.0, 10.0) as u8;
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut q, 0..=10)).changed() {
+        if widgets::slider(ui, egui::Slider::new(&mut q, 0..=10)).changed() {
             d.fields.insert("quality".into(), json!(u32::from(q) * 10));
         }
         label(ui, QUALITY_BANDS[q as usize]);

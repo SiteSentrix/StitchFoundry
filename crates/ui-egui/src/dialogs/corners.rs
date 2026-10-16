@@ -120,7 +120,7 @@ mod tests {
         let Some(NodeKind::Path { live: Some(l), .. }) = app.session.active().unwrap().doc.node(NodeId(id)).map(|n| n.kind.clone()) else {
             panic!("not live")
         };
-        l
+        *l
     }
 
     fn corners(app: &VectorcraftApp, id: u64) -> ([f64; 4], [CornerKind; 4]) {
@@ -239,7 +239,7 @@ mod tests {
         d.fields.insert("radius".into(), json!(5));
         super::super::confirm(&mut app).unwrap();
         let n = app.session.active().unwrap().doc.node(NodeId(id)).unwrap().clone();
-        assert!(matches!(&n.kind, NodeKind::Path { live: Some(LiveShape::Path { .. }), .. }));
+        assert!(matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Path { .. })));
         assert_eq!(crate::panels::corner_radius(&app, &n), Some(5.0));
     }
 }

@@ -3,13 +3,14 @@
 //! checkboxes), the destination (folder picker, Open Location after Export, Create Sub-folders;
 //! the web downloads instead), the format rows (scale as `2x`, `100w`, `100h` or `72ppi`, suffix,
 //! format), the presets, Format Settings (the gear) and the prefix. It opens on the settings the
-//! document last exported with; the format rows are the Asset Export panel's too ([`formats`]).
+//! document last exported with, except that while the Artboard tool is in use the artboards it has
+//! selected are the ones chosen; the format rows are the Asset Export panel's too ([`formats`]).
 //!
 //! Fields (`ui.dialog.set`): `tab` (artboards|assets), `select` (all|range|full), `range`,
 //! `boards` ([bool] per artboard), `assets` ([asset id] checked on the Assets tab), `includeBleed`,
 //! `folder`, `openLocation`, `subfolders`, `prefix`, `preset` (""|mobile|density: where the rows
 //! came from), `formats` (rows of `document.exportForScreens`, `scale` as text), `settings`
-//! ({png|png8|jpg|webp|gif|svg|pdf: {…}}); `__settings` names the format whose Format Settings
+//! ({png|png8|jpg|webp|gif|tiff|svg|pdf: {…}}); `__settings` names the format whose Format Settings
 //! show ("" when closed).
 
 use serde::Deserialize;
@@ -39,7 +40,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 pub const KIND: &str = "exportForScreens";
 
 /// The format choices of a row: (label, format, JPEG quality).
-const FORMATS: [(&str, &str, Option<u8>); 9] = [
+const FORMATS: [(&str, &str, Option<u8>); 10] = [
     ("PNG", "png", None),
     ("PNG 8", "png8", None),
     ("JPG 100", "jpg", Some(100)),
@@ -47,15 +48,16 @@ const FORMATS: [(&str, &str, Option<u8>); 9] = [
     ("JPG 50", "jpg", Some(50)),
     ("WebP", "webp", None),
     ("GIF", "gif", None),
+    ("TIFF", "tiff", None),
     ("SVG", "svg", None),
     ("PDF", "pdf", None),
 ];
-const FORMAT_LABELS: [&str; 9] = ["PNG", "PNG 8", "JPG 100", "JPG 80", "JPG 50", "WebP", "GIF", "SVG", "PDF"];
+const FORMAT_LABELS: [&str; 10] = ["PNG", "PNG 8", "JPG 100", "JPG 80", "JPG 50", "WebP", "GIF", "TIFF", "SVG", "PDF"];
 
 /// The formats Format Settings has options for: (format, label).
-const SETTINGS: [(&str, &str); 7] =
-    [("png", "PNG"), ("png8", "PNG 8"), ("jpg", "JPG"), ("webp", "WebP"), ("gif", "GIF"), ("svg", "SVG"), ("pdf", "PDF")];
-const SETTINGS_LABELS: [&str; 7] = ["PNG", "PNG 8", "JPG", "WebP", "GIF", "SVG", "PDF"];
+const SETTINGS: [(&str, &str); 8] =
+    [("png", "PNG"), ("png8", "PNG 8"), ("jpg", "JPG"), ("webp", "WebP"), ("gif", "GIF"), ("tiff", "TIFF"), ("svg", "SVG"), ("pdf", "PDF")];
+const SETTINGS_LABELS: [&str; 8] = ["PNG", "PNG 8", "JPG", "WebP", "GIF", "TIFF", "SVG", "PDF"];
 
 /// The sizes a row's scale list offers (any can be typed).
 const SIZES: [&str; 12] = ["0.5x", "0.75x", "1x", "1.5x", "2x", "3x", "4x", "512w", "512h", "72ppi", "150ppi", "300ppi"];
@@ -85,7 +87,8 @@ pub(crate) fn open_assets(app: &mut VectorcraftApp, checked: Option<&[u64]>) {
 }
 
 /// Open the dialog on the settings the active document last exported with (else one PNG row at
-/// 1x, into the Desktop), every asset checked.
+/// 1x, into the Desktop), every asset checked. While the Artboard tool is in use, the artboards it
+/// has selected (the rows the Artboards panel highlights) are the ones chosen instead.
 pub fn open(app: &mut VectorcraftApp) {
     let (n, saved, assets) = app
         .session
@@ -94,9 +97,12 @@ pub fn open(app: &mut VectorcraftApp) {
         .unwrap_or_default();
     let get = |k: &str| saved.get(k).filter(|v| !v.is_null());
     let flag = |k: &str, default: bool| get(k).and_then(Value::as_bool).unwrap_or(default);
-    // The artboards: Full Document, a range (or a list of them), else all.
-    let chosen = ArtboardPick::deserialize(&Value::Object(saved.clone())).ok().and_then(|p| p.resolve(n).ok().flatten());
-    let select = match (flag("fullDocument", false), &chosen) {
+    // The artboards are those the Artboard tool has selected while it is in use, else Full
+    // Document, a range (or a list of them), else all.
+    let picked = (app.session.tool_id() == "artboard").then(|| crate::panels::artboards::picked(app, n));
+    let full = picked.is_none() && flag("fullDocument", false);
+    let chosen = picked.or_else(|| ArtboardPick::deserialize(&Value::Object(saved.clone())).ok().and_then(|p| p.resolve(n).ok().flatten()));
+    let select = match (full, &chosen) {
         (true, _) => "full",
         (false, Some(c)) if c.len() < n => "range",
         _ => "all",
@@ -106,11 +112,7 @@ pub fn open(app: &mut VectorcraftApp) {
     // Every format's settings: its defaults, then the saved ones.
     let mut settings = Map::new();
     for (id, _) in SETTINGS {
-        let mut s = defaults(app, id);
-        if let Some(o) = get("settings").and_then(|v| v.get(id)).and_then(Value::as_object) {
-            s.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
-        }
-        settings.insert(id.into(), Value::Object(s));
+        settings.insert(id.into(), Value::Object(saved_options(app, &saved, id)));
     }
     let folder = get("folder").and_then(Value::as_str).filter(|f| !f.is_empty()).map(str::to_string).or_else(fileio::export_folder);
     let fields = json!({
@@ -148,6 +150,21 @@ fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
         o.remove(k);
     }
     o
+}
+
+/// The format's defaults with the document's saved choices overlaid.
+pub(crate) fn saved_options(app: &VectorcraftApp, saved: &Map<String, Value>, id: &str) -> Map<String, Value> {
+    let mut options = defaults(app, id);
+    // TIFF's new defaults must not mask an existing shared anti-aliasing choice.
+    if id == "tiff"
+        && let Some(aa) = saved.get("antiAlias")
+    {
+        options.insert("antiAlias".into(), aa.clone());
+    }
+    if let Some(o) = saved.get("settings").and_then(|v| v.get(id)).and_then(Value::as_object) {
+        options.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+    options
 }
 
 /// A row with its size as the text the Scale field shows (`2x`, `100w`, `100h`, `72ppi`).
@@ -444,7 +461,13 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
         widgets::dim_label(ui, tl!("Formats:"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::icon_button(ui, "settings", tl!("Format Settings"), false, 24.0).clicked() {
-                let first = rows.first().and_then(|r| r["format"].as_str()).filter(|f| SETTINGS.iter().any(|(id, _)| id == f));
+                // Preserve row spellings; format settings use canonical IDs.
+                let first = rows
+                    .first()
+                    .and_then(|r| r["format"].as_str())
+                    .and_then(fileio::format)
+                    .map(|f| f.id)
+                    .filter(|f| SETTINGS.iter().any(|(id, _)| id == f));
                 d.fields.insert("__settings".into(), json!(first.unwrap_or("png")));
             }
             let preset = d.str("preset");
@@ -578,7 +601,7 @@ fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
 }
 
 /// A small cached rendering of artboard `i` (keyed by document revision).
-fn artboard_thumb(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize) -> Option<egui::TextureHandle> {
+pub(super) fn artboard_thumb(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize) -> Option<egui::TextureHandle> {
     let st = app.session.active()?;
     let key = egui::Id::new(("ab-thumb", i, st.revision));
     if let Some(t) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(key)) {

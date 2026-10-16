@@ -73,6 +73,30 @@ pub(crate) fn string(text: &str) -> String {
     s
 }
 
+/// `bytes` as a PostScript string: `(` `)` `\` escaped, carriage returns, line feeds and tabs as
+/// `\r` `\n` `\t`, other bytes outside printable ASCII as octal escapes.
+pub(crate) fn bytes(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() + 2);
+    s.push('(');
+    for &b in bytes {
+        match b {
+            b'(' | b')' | b'\\' => {
+                s.push('\\');
+                s.push(char::from(b));
+            }
+            b'\r' => s.push_str("\\r"),
+            b'\n' => s.push_str("\\n"),
+            b'\t' => s.push_str("\\t"),
+            0x20..=0x7e => s.push(char::from(b)),
+            _ => {
+                let _ = write!(s, "\\{b:03o}");
+            }
+        }
+    }
+    s.push(')');
+    s
+}
+
 /// A matrix operand `[a b c d e f]`.
 pub(crate) fn matrix(a: Affine) -> String {
     let mut s = String::from("[");
@@ -181,13 +205,26 @@ fn push85(s: &mut String, mut v: u32, n: usize) {
     }
 }
 
-/// ASCII85 `text` (whitespace ignored, up to `~>`) decoded; `None` when it is malformed.
+/// Most bytes [`ascii85_decode`] makes: what one filter or data section may hold.
+pub(crate) const MAX_ASCII85: usize = 1 << 28;
+
+/// ASCII85 `text` (whitespace ignored, up to `~>`) decoded; `None` when it is malformed or longer
+/// than [`MAX_ASCII85`].
 pub(crate) fn ascii85_decode(text: &str) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity(text.len() * 4 / 5);
+    ascii85_decode_within(text, MAX_ASCII85)
+}
+
+/// [`ascii85_decode`] of at most `max` bytes: `z` is four bytes for one, so the length of the
+/// text doesn't bound what it becomes (#1715).
+pub(crate) fn ascii85_decode_within(text: &str, max: usize) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity((text.len() / 5 * 4).min(max));
     let mut group = [0u8; 5];
     let mut n = 0;
     let mut chars = text.bytes().filter(|b| !b.is_ascii_whitespace()).peekable();
     while let Some(b) = chars.next() {
+        if out.len() > max {
+            return None;
+        }
         match b {
             b'~' => {
                 if chars.next() != Some(b'>') {
@@ -201,7 +238,7 @@ pub(crate) fn ascii85_decode(text: &str) -> Option<Vec<u8>> {
                     let v = value85(&padded)?;
                     out.extend(v.to_be_bytes().iter().take(n - 1));
                 }
-                return Some(out);
+                return (out.len() <= max).then_some(out);
             }
             b'z' if n == 0 => out.extend([0; 4]),
             b'!'..=b'u' => {

@@ -97,6 +97,11 @@ impl Session {
         if self.active().map(|d| d.uid) != Some(uid) {
             return Ok(none());
         }
+        // A drag is in progress: its next preview or cancel would throw an update away while the new
+        // stamp stayed recorded. Leave the stamps alone; the first look after the drag sees the change.
+        if self.in_interaction() {
+            return Ok(none());
+        }
         // This document's last stamps; those of closed documents are dropped.
         let open: HashSet<u64> = self.documents().iter().map(|d| d.uid).collect();
         let mut before: HashMap<String, Stamp> = HashMap::new();

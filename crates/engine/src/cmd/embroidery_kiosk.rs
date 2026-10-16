@@ -220,7 +220,7 @@ fn order(s: &mut Session, p: &Value) -> Result<Value> {
     let bounds = |s: &Session| -> Result<kurbo::Rect> {
         let d = &s.doc()?.doc;
         d.node(vectorcraft_doc::NodeId(id))
-            .and_then(|n| n.bounds_in(kurbo::Affine::IDENTITY, false))
+            .and_then(|n| n.bounds_in(&d.symbol_boxes(), kurbo::Affine::IDENTITY, false))
             .ok_or_else(|| bad(CMD, "the lettering has no size"))
     };
     // made to fit the area unless a size was asked for

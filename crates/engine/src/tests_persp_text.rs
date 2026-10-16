@@ -75,6 +75,21 @@ fn type_in_perspective_exports_projected_outlines() {
 }
 
 #[test]
+fn type_in_perspective_in_a_group_with_a_geometry_effect_exports_projected() {
+    let (mut s, rect) = persp_session();
+    let id = persp_text(&mut s);
+    let b = drawn_bounds(&s, id);
+    s.execute("select.set", &json!({"ids": [rect.0, id.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    // Offset Path 0 on the group leaves every path as it is.
+    s.execute("effect.apply", &json!({"effect": "path.offsetPath", "params": {"offset": 0}})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let baked = vectorcraft_render::effects::bake_document(&doc).unwrap();
+    let bb = baked.node(id).unwrap().geometric_bounds().unwrap();
+    assert!((bb.x0 - b.x0).abs() < 1e-6 && (bb.y1 - b.y1).abs() < 1e-6, "{bb:?} {b:?}");
+}
+
+#[test]
 fn moving_type_in_perspective_moves_its_projection() {
     let (mut s, rect) = persp_session();
     let id = persp_text(&mut s);
@@ -117,7 +132,7 @@ fn edit_text_shows_it_flat_in_isolation_then_projects_it_again() {
     assert!(n.projection().is_some(), "projected again");
     // Nothing left flat anywhere in the history.
     for e in &s.doc().unwrap().history.undo {
-        if let Some(p) = e.doc.node(id).and_then(|n| n.perspective.as_deref()) {
+        if let Some(p) = e.doc.node(id).and_then(|n| n.extras().perspective.as_deref()) {
             assert!(!p.editing);
         }
     }

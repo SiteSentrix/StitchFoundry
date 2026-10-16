@@ -110,6 +110,44 @@ fn draw_behind_and_inside() {
     assert!(s.draw_inside.is_none());
 }
 
+/// In Draw Inside, a double-click with a selection tool outside the object being drawn into sets
+/// the drawing mode to Draw Normal, and the tool still takes the double-click. Inside the object's
+/// bounds, grown by the selection tolerance, and with other tools, Draw Inside stays on.
+#[test]
+fn double_clicking_outside_the_draw_inside_object_returns_to_draw_normal() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let inside = |s: &mut Session| {
+        s.execute("select.set", &json!({"ids": [a]})).unwrap();
+        s.execute("view.drawMode", &json!({"mode": "inside"})).unwrap();
+    };
+    let double = |s: &mut Session, x: f64, y: f64| {
+        s.pointer(&PointerEvent::new(PointerKind::DoubleClick, x, y), ViewInfo::default()).unwrap();
+        (s.draw_mode, s.draw_inside)
+    };
+    inside(&mut s);
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    // Inside the rectangle the Selection tool isolates it, as in Draw Normal; 2 pt past its edge
+    // is within the 3 px selection tolerance at 100%.
+    assert_eq!(double(&mut s, 150.0, 150.0), (DrawMode::Inside, Some(NodeId(a))));
+    assert_eq!(s.doc().unwrap().isolation, Some(NodeId(a)));
+    assert_eq!(double(&mut s, 202.0, 150.0), (DrawMode::Inside, Some(NodeId(a))));
+    // A double-click outside, on the empty canvas, sets Draw Normal and still leaves isolation mode.
+    assert_eq!(double(&mut s, 300.0, 250.0), (DrawMode::Normal, None));
+    assert_eq!(s.doc().unwrap().isolation, None);
+    // With the Rectangle tool a double-click leaves Draw Inside on; with Direct Selection it sets Draw Normal.
+    inside(&mut s);
+    s.select_tool("rectangle", ViewInfo::default()).unwrap();
+    assert_eq!(double(&mut s, 300.0, 250.0), (DrawMode::Inside, Some(NodeId(a))));
+    s.select_tool("directSelection", ViewInfo::default()).unwrap();
+    assert_eq!(double(&mut s, 300.0, 250.0), (DrawMode::Normal, None));
+    // Once the object is gone, any double-click with a selection tool sets Draw Normal.
+    inside(&mut s);
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert_eq!(double(&mut s, 150.0, 150.0), (DrawMode::Normal, None));
+}
+
 #[test]
 fn export_for_screens_writes_every_combination() {
     let mut s = Session::new();
@@ -166,6 +204,71 @@ fn export_selection_crops_to_the_selection() {
     let svg = s.execute("document.exportSelection", &json!({"format": "svg"})).unwrap();
     let text = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
     assert_eq!(text.matches("<path").count(), 1, "{text}");
+}
+
+/// The crop of a selection export takes in the object's effects: a drop shadow, an outer glow and
+/// an Offset Path effect paint inside the image, which is the image of the art that Export with
+/// Use Artboards off writes.
+#[test]
+fn export_selection_keeps_the_effects_in_the_crop() {
+    // The right edge of what the effect paints: the shadow 8 pt to the right, the glow and the
+    // grown path 6 pt past the square (the stroke's half point included).
+    for (effect, params, right) in [
+        ("stylize.dropShadow", json!({"x": 8, "y": 0, "blur": 0}), 128.5),
+        ("stylize.outerGlow", json!({"blur": 4}), 126.5),
+        ("path.offsetPath", json!({"offset": 6}), 126.5),
+    ] {
+        let mut s = session();
+        s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+        let plain = s.execute("document.exportSelection", &json!({"format": "png"})).unwrap();
+        assert_eq!(plain["bounds"], json!([99.5, 99.5, 21.0, 21.0]), "a plain path keeps its crop: {plain}");
+        s.execute("effect.apply", &json!({"effect": effect, "params": params})).unwrap();
+        let png = |v: &serde_json::Value| {
+            image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8()
+        };
+        let v = s.execute("document.exportSelection", &json!({"format": "png", "background": "transparent"})).unwrap();
+        let b: Vec<f64> = v["bounds"].as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect();
+        assert!(b[0] < 99.5 && b[1] < 99.5 && b[0] + b[2] >= right && b[1] + b[3] > 120.5, "{effect}: {v}");
+        let img = png(&v);
+        let (w, h) = img.dimensions();
+        assert_eq!((w, h), (b[2].round() as u32, b[3].round() as u32), "{effect}");
+        // 2 pt past the square's stroke, on the right.
+        assert!(img.get_pixel((122.5 - b[0]) as u32, h / 2)[3] > 0, "{effect}: the effect is in the image");
+        let edge = (0..w).flat_map(|x| [(x, 0), (x, h - 1)]).chain((0..h).flat_map(|y| [(0, y), (w - 1, y)]));
+        assert!(edge.into_iter().all(|(x, y)| img.get_pixel(x, y)[3] == 0), "{effect}: nothing is cut off at the image's edge");
+        let art = s.execute("document.export", &json!({"format": "png", "useArtboards": false, "background": "transparent"})).unwrap();
+        assert!(png(&art) == img, "{effect}: the same image as the art's bounds");
+    }
+}
+
+/// A group's own drop shadow is inside the crop of the group's selection export too.
+#[test]
+fn export_selection_keeps_a_groups_shadow_in_the_crop() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let plain = s.execute("document.exportSelection", &json!({"format": "png"})).unwrap();
+    assert_eq!(plain["bounds"], json!([99.5, 99.5, 51.0, 21.0]), "{plain}");
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [group], "params": {"x": 8, "y": 0, "blur": 0}})).unwrap();
+    let v = s.execute("document.exportSelection", &json!({"format": "png", "background": "transparent"})).unwrap();
+    let b: Vec<f64> = v["bounds"].as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect();
+    // The shadow of the right square reaches x = 158.5.
+    assert!(b[0] < 99.5 && b[0] + b[2] >= 158.5, "{v}");
+    let img = image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    assert!(img.get_pixel((155.0 - b[0]) as u32, img.height() / 2)[3] > 0, "the shadow is in the image");
+}
+
+/// The crop of a brushed path is its visual bounds, with no room added for brush art.
+#[test]
+fn export_selection_crops_a_brushed_path_to_its_visual_bounds() {
+    let mut s = session();
+    let id = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("brush.apply", &json!({"name": "Charcoal"})).unwrap();
+    let v = s.execute("document.exportSelection", &json!({"format": "png"})).unwrap();
+    let b = s.doc().unwrap().doc.node(NodeId(id)).unwrap().visual_bounds().unwrap();
+    assert_eq!(v["bounds"], json!([b.x0, b.y0, b.width(), b.height()]), "{v}");
 }
 
 /// A selection export reports the encoder's warnings like a whole-document export, and an empty

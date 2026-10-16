@@ -16,19 +16,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
-        cmd!("paint.setStroke", "Stroke", [], None, "same as paint.setFill, for the stroke (item?: the stroke item to set)", has_doc, |s, p| {
-            set_paint(s, p, false)
-        }),
+        cmd!(
+            "paint.setStroke",
+            "Stroke",
+            [],
+            None,
+            "{…as paint.setFill, item?: the stroke item to set} same as paint.setFill, for the stroke",
+            has_doc,
+            |s, p| { set_paint(s, p, false) }
+        ),
         cmd!(
             "paint.swap",
             "Swap Fill and Stroke",
             [],
             Some("Shift+X"),
-            "{ids?} swap the fill and stroke of the selection (type too) and of the defaults",
+            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults",
             has_doc,
             swap
         ),
@@ -37,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke",
             has_doc,
             default_paint
         ),
@@ -62,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\"} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
             has_doc,
             transparency
         ),
@@ -77,7 +83,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Invert",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with nothing selected, invert the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with nothing selected, invert the default → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.invert", "Invert", &super::colorcmds::invert)
         ),
@@ -86,7 +92,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Complement",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item as paint.invert does; with nothing selected, the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item as paint.invert does; with nothing selected, the default → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.complement", "Complement", &|c: Color| c.complement_keep_model())
         ),
@@ -95,7 +101,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Apply Last Color",
             [],
             Some(","),
-            "{stroke?: bool (default: the active proxy), ids?} apply the last solid colour used (paint.recent lastColor) to the active proxy of the selection and the default",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} apply the last solid colour used (paint.recent lastColor) to the active proxy of the selection and the default",
             has_doc,
             |s, p| {
                 let paint = Paint::solid(s.last_solid);
@@ -107,7 +113,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Apply Last Gradient",
             [],
             Some("."),
-            "{stroke?: bool (default: the active proxy), ids?} apply the last gradient used (paint.recent lastGradient), fitted to each object, to the active proxy of the selection and the default",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} apply the last gradient used (paint.recent lastGradient), fitted to each object, to the active proxy of the selection and the default",
             has_doc,
             |s, p| {
                 let paint = super::gradient::unplaced(&Paint::Gradient(Box::new(s.last_gradient.clone())));
@@ -375,13 +381,16 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint) -> Result<Value> {
 /// remember the paint.
 fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
+    let span = spans_targets(p, &paint).map_err(|e| bad(cmd, e))?;
     // Characters selected with the Type tool take the paint, not the whole type object (#1063).
     if p.get("ids").is_none()
         && p.get("item").is_none()
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
-        s.edit(if fill { "Fill Color" } else { "Stroke Color" }, |d, _| {
+        // When the type comes out as it was, the document and its undo history stay as they are.
+        let before = s.doc()?.doc.clone();
+        super::overprint::edit_counted(s, if fill { "Fill Color" } else { "Stroke Color" }, |d| {
             let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
             let (xf, lb) = (t.xf, t.local_bounds());
             vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
@@ -395,7 +404,7 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
                 }
             });
             super::typecmd::refresh_bounds(t);
-            Ok(())
+            Ok(super::appearance::count_changed(d, &before, &[id]))
         })?;
         if bool_or(p, "focus", true) {
             s.fill_active = fill;
@@ -407,6 +416,7 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let selected = item.targets(s, p)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
+    let paint = if span { placed_across(&s.doc()?.doc, &ids, paint, p, fill) } else { paint };
     // The gradient mesh point last clicked with the Mesh tool or Direct Selection: a solid fill
     // recolours just that point of its mesh.
     let mesh_point = if fill && matches!(paint, Paint::Solid { .. }) { focused_mesh_point(s) } else { None };
@@ -446,13 +456,27 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
             if n.appearance.paint_at(index, fill).is_none() {
                 n.appearance.set_paint_at(index, fill, Paint::None);
             }
-            let placed = place_paint(&paint, p, item_paint_bounds(n, index, fill));
+            if !fill {
+                restore_unpainted_stroke(&mut n.appearance, index, &paint);
+            }
+            let new_paint = keep_pattern_xf(&paint, p, n.appearance.paint_at(index, fill));
+            let placed = place_paint(&new_paint, p, item_paint_bounds(n, index, fill));
             n.appearance.set_paint_at(index, fill, placed);
             Ok(())
         },
         |d, changed| {
-            super::graph::capture_series_paints(d, changed, fill);
-            Ok(())
+            let series = super::graph::capture_series_paints(d, changed, fill);
+            let labels = super::graph::capture_label_styles(d, changed, &|st| {
+                if fill {
+                    st.fill = paint.clone();
+                } else {
+                    if !paint.is_none() {
+                        run_stroke_weight(st);
+                    }
+                    st.stroke = paint.clone();
+                }
+            });
+            Ok(series || labels)
         },
     )?;
     // Rejected edits leave the next shape's appearance and active proxy untouched.
@@ -460,6 +484,9 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     if fill {
         s.paint.fill = unplaced(&paint);
     } else {
+        if !paint.is_none() && s.paint.stroke.is_none() && s.paint.stroke_width == 0.0 {
+            s.paint.stroke_width = 1.0;
+        }
         s.paint.stroke = unplaced(&paint);
     }
     if bool_or(p, "focus", true) {
@@ -467,6 +494,52 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     }
     s.remember_paint(&paint);
     ok()
+}
+
+/// Does `p` ask for `span: "selection"` (#2127)? Only a linear or radial gradient the targets
+/// would each fit to their own bounds can span them: one with its own vector (`start`/`end`),
+/// a freeform one or a gradient swatch already has its placement.
+fn spans_targets(p: &Value, paint: &Paint) -> std::result::Result<bool, String> {
+    match p.get("span") {
+        None | Some(Value::Null) => return Ok(false),
+        Some(Value::String(v)) if v == "object" => return Ok(false),
+        Some(Value::String(v)) if v == "selection" => {}
+        Some(v) => return Err(format!("span must be \"object\" or \"selection\", got {v}")),
+    }
+    let Paint::Gradient(g) = paint else { return Err("span: \"selection\" places a gradient: give `gradient`".into()) };
+    if p.get("swatch").is_some() {
+        return Err("span: \"selection\" places a `gradient`, not a swatch".into());
+    }
+    if g.gradient.kind == vectorcraft_color::GradientKind::Freeform || g.freeform.is_some() {
+        return Err("span: \"selection\" places a linear or radial gradient, not a freeform one".into());
+    }
+    if g.geom.is_some() {
+        return Err(
+            "span: \"selection\" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)".into()
+        );
+    }
+    Ok(true)
+}
+
+/// `paint` placed once on the union of the bounds of `ids` (each one's fill box, or the box its
+/// stroke paints), at the gradient's angle and aspect: every target gets the same vector in
+/// document coordinates, so the ramp runs on across them (#2127).
+fn placed_across(d: &Document, ids: &[NodeId], paint: Paint, p: &Value, fill: bool) -> Paint {
+    let union = ids
+        .iter()
+        .filter_map(|id| d.node(*id))
+        .filter_map(|n| item_paint_bounds(n, None, fill).or_else(|| n.geometric_bounds()))
+        .filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))
+        .reduce(|a, b| a.union(b));
+    let (Some(union), Paint::Gradient(g)) = (union, &paint) else { return paint };
+    // An `aspect` places a radial gradient on the box already; otherwise fit it there.
+    match place_paint(&paint, p, Some(union)) {
+        Paint::Gradient(placed) if placed.geom.is_some() => Paint::Gradient(placed),
+        _ => {
+            let geom = vectorcraft_color::GradientGeom::fit(g.gradient.kind, union, g.angle);
+            Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..(**g).clone() }))
+        }
+    }
 }
 
 /// The mesh point the active tool has focused (its `meshPoint` option: the Mesh tool's or Direct
@@ -485,10 +558,34 @@ fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
     style.stroke = paint;
 }
 
+/// `paint` as it replaces `old`: a pattern swatch picked over a pattern keeps the placement that
+/// pattern already had, so only the pattern changes (#1970).
+pub(super) fn keep_pattern_xf(paint: &Paint, p: &Value, old: Option<&Paint>) -> Paint {
+    match (paint, old) {
+        (Paint::Pattern { pattern, xf }, Some(Paint::Pattern { xf: kept, .. })) if p.get("swatch").is_some() && *xf == Affine::IDENTITY => {
+            Paint::Pattern { pattern: pattern.clone(), xf: *kept }
+        }
+        _ => paint.clone(),
+    }
+}
+
+/// Use the existing 1 pt default when adding paint to an unpainted zero-width stroke.
+pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>, paint: &Paint) {
+    if !paint.is_none()
+        && let Some(stroke) = ap.stroke_at_mut(index)
+        && stroke.paint.is_none()
+        && stroke.width == 0.0
+    {
+        stroke.width = 1.0;
+    }
+}
+
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
-        s.edit("Swap Fill and Stroke", |d, _| {
+        // When every object comes out as it was, the document and its undo history stay as they are.
+        let before = s.doc()?.doc.clone();
+        super::overprint::edit_counted(s, "Swap Fill and Stroke", |d| {
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
                 if let NodeKind::Text(t) = &mut n.kind {
@@ -502,10 +599,14 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
                 let f = n.appearance.fill_paint();
                 let st = n.appearance.stroke_paint();
                 n.appearance.set_fill(st);
+                restore_unpainted_stroke(&mut n.appearance, None, &f);
                 n.appearance.set_stroke(f);
             }
-            Ok(())
+            Ok(super::appearance::count_changed(d, &before, &ids))
         })?;
+    }
+    if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {
+        s.paint.stroke_width = 1.0;
     }
     std::mem::swap(&mut s.paint.fill, &mut s.paint.stroke);
     ok()
@@ -514,7 +615,9 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
-        s.edit("Default Fill and Stroke", |d, _| {
+        // When every object comes out as it was, the document and its undo history stay as they are.
+        let before = s.doc()?.doc.clone();
+        super::overprint::edit_counted(s, "Default Fill and Stroke", |d| {
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
                 match &mut n.kind {
@@ -524,10 +627,10 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                             r.style.stroke = Paint::None;
                         }
                     }
-                    _ => n.appearance = Appearance::default_art(),
+                    _ => n.appearance = Appearance::default_art().into(),
                 }
             }
-            Ok(())
+            Ok(super::appearance::count_changed(d, &before, &ids))
         })?;
     }
     super::newart::reset(s);

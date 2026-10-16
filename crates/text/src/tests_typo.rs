@@ -212,6 +212,156 @@ fn area_flow_inside_circle_keeps_glyphs_inside() {
     assert!(w(l.lines.len() / 2) > w(0));
 }
 
+/// In a frame that is narrow at the top, a word that doesn't fit the top lines moves down to the
+/// first line wide enough for it (the lines above stay empty), with either composer. Only a word
+/// wider than every line is broken.
+#[test]
+fn area_flow_moves_a_word_down_to_a_line_wide_enough_for_it() {
+    let triangle = |base: f64, height: f64| {
+        let mut p = BezPath::new();
+        p.move_to((base / 2.0, 0.0));
+        p.line_to((base, height));
+        p.line_to((0.0, height));
+        p.close_path();
+        p
+    };
+    let text = "Wonderful extraordinary typesetting";
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let mut t = area_path(text, style(12.0), &triangle(200.0, 200.0), Justify::Left);
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        assert!(!l.overflow, "{composer:?}");
+        let lines: Vec<&str> = l.lines.iter().map(|li| text[li.start..li.end].trim_end()).collect();
+        // The top lines are wide enough for "Wo" but not for "Wonderful": it starts lower.
+        assert_eq!(lines.first(), Some(&"Wonderful"), "{composer:?}: {lines:?}");
+        for li in &lines {
+            assert!(li.split(' ').all(|w| text.split(' ').any(|word| word == w)), "{composer:?}: {lines:?}");
+        }
+    }
+    // No line of this triangle is as wide as the word: it is still broken, and every letter is set.
+    let word = "Supercalifragilisticexpialidocious";
+    let l = layout(db(), &area_path(word, style(12.0), &triangle(60.0, 400.0), Justify::Left));
+    assert!(!l.overflow && l.lines.len() > 1, "{:?}", line_places(&l));
+}
+
+/// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
+/// takes more than 20 s.
+fn layout_soon(t: &TextObject) -> TextLayout {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (t, text) = (t.clone(), t.plain_text());
+    std::thread::spawn(move || tx.send(layout(db(), &t)).ok());
+    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
+}
+
+/// Each line's baseline, left and right edges, and byte range.
+fn line_places(l: &TextLayout) -> Vec<(f64, f64, f64, usize, usize)> {
+    l.lines.iter().map(|li| (li.baseline, li.x0, li.x1, li.start, li.end)).collect()
+}
+
+/// A frame or text wrap shape with a coordinate beyond a billion points either way, or one that
+/// isn't finite, is left out: the frame holds no text, and the wrap shape is ignored.
+#[test]
+fn frames_and_wrap_shapes_beyond_a_billion_points_are_left_out() {
+    // A box from x0 to x1 and from 0 to `height` whose top edge has a control point at x = `far`,
+    // on the edge's own line.
+    let boxed = |x0: f64, x1: f64, height: f64, far: f64| {
+        let mut p = BezPath::new();
+        p.move_to((x0, 0.0));
+        p.curve_to((x0, 0.0), (far, 0.0), (x1, 0.0));
+        p.line_to((x1, height));
+        p.line_to((x0, height));
+        p.close_path();
+        p
+    };
+    let rectangle = layout(db(), &area("Hi there", style(12.0), Rect::new(0.0, 0.0, 100.0, 40.0), Justify::Left));
+    let within = layout_soon(&area_path("Hi there", style(12.0), &boxed(0.0, 100.0, 40.0, 1e9), Justify::Left));
+    assert_eq!(line_places(&within), line_places(&rectangle));
+    let mut beyond = [8e115, 2e9, f64::INFINITY].map(|far| boxed(0.0, 100.0, 40.0, far)).to_vec();
+    beyond.push(Rect::new(0.0, 0.0, 100.0, f64::NAN).to_path(0.1));
+    for frame in &beyond {
+        let l = layout_soon(&area_path("Hi there", style(12.0), frame, Justify::Left));
+        assert!(l.lines.is_empty() && l.glyphs.is_empty() && l.overflow, "{frame:?}");
+    }
+    // Text wrapped around the right half of a 300 by 200 frame.
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
+    let unwrapped = layout(db(), &t);
+    let mut wrapped = |path: BezPath| {
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&path), wrap: Default::default() }];
+        layout_soon(&t)
+    };
+    let half = wrapped(Rect::new(150.0, 0.0, 300.0, 200.0).to_path(0.1));
+    assert_ne!(line_places(&half), line_places(&unwrapped));
+    assert_eq!(line_places(&wrapped(boxed(150.0, 300.0, 200.0, 1e9))), line_places(&half));
+    for far in [8e115, 2e9, f64::INFINITY] {
+        assert_eq!(line_places(&wrapped(boxed(150.0, 300.0, 200.0, far))), line_places(&unwrapped), "{far}");
+    }
+    assert_eq!(line_places(&wrapped(Rect::new(150.0, 0.0, 300.0, f64::NAN).to_path(0.1))), line_places(&unwrapped));
+}
+
+/// Layout steps a line down a frame (or a row or column of one) at most 100,000 times to find room
+/// for it: in a frame taller than 100,000 leads, a step is a 100,000th of the frame's height.
+#[test]
+fn tall_frames_are_searched_for_room_in_at_most_100000_steps() {
+    // A triangle from y = -1e9 to 1e9, `base` wide at the bottom.
+    let triangle = |base: f64| {
+        let mut p = BezPath::new();
+        p.move_to((0.0, -1e9));
+        p.line_to((base / 2.0, 1e9));
+        p.line_to((-base / 2.0, 1e9));
+        p.close_path();
+        p
+    };
+    // No line fits in this triangle: it is at most 0.5 pt wide, and a line needs a span wider than
+    // 1 pt or its ascent, whichever is more. A lead of 0.5 pt type counts as 1 pt.
+    let none = layout_soon(&area_path("Hi", style(0.5), &triangle(0.5), Justify::Left));
+    assert!(none.lines.is_empty() && none.overflow);
+    // This one is wide enough for 12 pt type from about y = -7.6e8 down.
+    let some = layout_soon(&area_path("Hi", style(12.0), &triangle(100.0), Justify::Left));
+    assert!(!some.overflow && some.lines.len() == 1);
+    // At the height of the line's top, the line's left and right edges lie inside the triangle.
+    let line = &some.lines[0];
+    let half_width = (line.baseline - line.ascent + 1e9) / 2e9 * 50.0;
+    assert!(line.x0 >= -half_width - 1e-6 && line.x1 <= half_width + 1e-6, "{line:?}");
+}
+
+/// A paragraph whose Space Before puts it 1e300 pt above a triangle frame that comes to a point at
+/// its top overflows. At that height a step of one lead leaves the baseline where it is, and
+/// layout takes at most 100,000 such steps.
+#[test]
+fn a_paragraph_spaced_far_above_its_frame_overflows() {
+    let mut triangle = BezPath::new();
+    triangle.move_to((0.0, 0.0));
+    triangle.line_to((500.0, 1000.0));
+    triangle.line_to((-500.0, 1000.0));
+    triangle.close_path();
+    let mut t = area_path("Hi\nthere", style(12.0), &triangle, Justify::Left);
+    let far = vectorcraft_doc::ParaStyle { space_before: -1e300, ..Default::default() };
+    t.set_paragraph_styles(vec![t.para.clone(), far]);
+    let l = layout_soon(&t);
+    assert!(l.overflow && l.lines.len() == 1, "{:?}", line_places(&l));
+}
+
+/// Type on a path whose path has a coordinate beyond a billion points either way, or one that isn't
+/// finite, holds no text.
+#[test]
+fn type_on_a_path_beyond_a_billion_points_holds_no_text() {
+    // An S-shaped curve from (0, 0) to (3s, 0) with control points (s, s) and (2s, -s).
+    let on = |s: f64| {
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        p.curve_to((s, s), (2.0 * s, -s), (3.0 * s, 0.0));
+        let mut t = TextObject::point(Point::ZERO, "On a path", style(8.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&p), start: 0.0, end: None };
+        t
+    };
+    let within = layout_soon(&on(1e9 / 3.0));
+    assert!(!within.overflow && within.glyphs.len() == 9);
+    for s in [1e115, 1e9, f64::INFINITY] {
+        let l = layout_soon(&on(s));
+        assert!(l.glyphs.is_empty() && l.overflow, "{s}");
+    }
+}
+
 #[test]
 fn justify_all_line_widths_equal() {
     let t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 240.0, 800.0), Justify::JustifyAll);
@@ -463,6 +613,46 @@ fn inset_and_first_baseline_options() {
     assert!(cap.lines[0].baseline < base.lines[0].baseline && cap.lines[0].baseline > 5.0);
 }
 
+/// `LineInfo::first_baseline`: each line that starts a column has its baseline that far below the
+/// column's top inside the inset, for every first baseline option, with and without a minimum and
+/// an inset, in both leading models, and for lines of several sizes (each line in one size).
+#[test]
+fn lines_starting_a_column_sit_at_their_first_baseline() {
+    let paras = [
+        ("A heading in large type\n", 24.0),
+        ("Body copy in a smaller size that runs over two or three lines of a column.\n", 12.0),
+        ("A middle size\n", 18.0),
+    ];
+    let runs: Vec<TextRun> = paras.repeat(4).into_iter().map(|(text, size)| run(text, size)).collect();
+    let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let mut other_sizes = 0;
+    for model in [vectorcraft_doc::LeadingModel::RomanBaseline, vectorcraft_doc::LeadingModel::EmBoxTop] {
+        for first_baseline in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading, FirstBaseline::Fixed]
+        {
+            for (first_baseline_min, inset) in [(0.0, 0.0), (18.0, 6.0)] {
+                for height in [100.0, 120.0, 140.0] {
+                    let mut t = area(&text, style(12.0), Rect::new(0.0, 0.0, 420.0, height), Justify::Left);
+                    t.runs = runs.clone();
+                    t.para.leading_model = model;
+                    let opts = LayoutOptions { columns: 3, gutter: 10.0, first_baseline, first_baseline_min, inset, ..Default::default() };
+                    let l = layout_with(db(), &t, &opts);
+                    let starts: Vec<&LineInfo> =
+                        l.lines.iter().enumerate().filter(|(i, li)| *i == 0 || l.lines[i - 1].region != li.region).map(|(_, li)| li).collect();
+                    assert_eq!(starts.len(), 3, "{model:?} {first_baseline:?} {height}");
+                    other_sizes += starts.iter().filter(|li| li.ascent != starts[0].ascent).count();
+                    for li in starts {
+                        assert!(
+                            (li.baseline - (inset + li.first_baseline)).abs() < 1e-9,
+                            "{model:?} {first_baseline:?} {first_baseline_min} {height}: {li:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    assert!(other_sizes >= 20, "lines of another size than the first start {other_sizes} columns");
+}
+
 #[test]
 fn rows_and_columns_flow_in_order() {
     let text = COPY.repeat(2);
@@ -474,6 +664,27 @@ fn rows_and_columns_flow_in_order() {
     assert!(l.lines[..first_col2].iter().any(|li| li.baseline > 155.0), "fills the lower cell of column 1 first");
     for w in l.lines.windows(2) {
         assert!(w[1].start >= w[0].start);
+    }
+}
+
+/// Layout clamps area type's rows and columns to 100 each: 2^60 rows or columns with 100 of the
+/// other, 2^32 of each, and `usize::MAX` of each lay out as 100 rows and 100 columns.
+#[test]
+fn area_type_lays_out_in_at_most_100_rows_and_100_columns() {
+    // At 100 by 100, a cell is about 98 by 28 pt.
+    let with = |rows: usize, columns: usize| {
+        let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 10_000.0, 3_000.0), Justify::Left);
+        t.area.rows = rows;
+        t.area.columns = columns;
+        t.area.gutter = 2.0;
+        layout_soon(&t)
+    };
+    let most = with(100, 100);
+    assert_eq!(most.frames.len(), 10_000);
+    assert!(!most.overflow && most.lines.len() > 10, "{:?}", line_places(&most));
+    for (rows, columns) in [(1 << 60, 100), (100, 1 << 60), (1 << 32, 1 << 32), (usize::MAX, usize::MAX)] {
+        let l = with(rows, columns);
+        assert_eq!((&l.frames, line_places(&l)), (&most.frames, line_places(&most)), "{rows} by {columns}");
     }
 }
 

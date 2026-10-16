@@ -2,7 +2,7 @@
 //! Character/Paragraph attributes.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Composer, NodeKind};
+use vectorcraft_doc::{Composer, NodeKind, Scaling};
 use vectorcraft_geom::{Rect, Vec2};
 
 use super::*;
@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Artboard",
             ["Window", "Artboards"],
             None,
-            "{index?: n (default: the Artboard tool's artboard), art?: bool (default: the Artboard tool's moveArt option)} copy placed right of the last artboard, with copies of the art fully inside it when `art` (locked and hidden art only with prefs moveLockedWithArtboard) → {index, ids: the art's copies}",
+            "{index?: n (default: the Artboard tool's artboard), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} copy placed right of the last artboard, with copies of the art fully inside it when `art` (locked and hidden art only with prefs moveLockedWithArtboard) → {index, ids: the art's copies}",
             has_doc,
             artboard_duplicate
         ),
@@ -108,10 +108,10 @@ pub(crate) fn beside_artboards(d: &vectorcraft_doc::Document, rect: Rect) -> Vec
 fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let (i, art) = board_and_art(s, p);
     let art = artboard_art(s, i, art)?;
-    let scale_strokes = s.prefs.scale_strokes;
+    let sc = Scaling { patterns: super::object::transform_patterns(s, p, &art)?, ..Scaling::default() };
     let (index, ids) = s.edit("Duplicate Artboard", |d, _| {
         let dv = d.artboards.get(i).map(|a| beside_artboards(d, a.rect)).unwrap_or_default();
-        copy_artboard(d, i, dv, &art, scale_strokes)
+        copy_artboard(d, i, dv, &art, sc)
     })?;
     Ok(json!({"index": index, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
@@ -136,10 +136,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
             // Its guides go with it.
             let gone = d.artboards.remove(i).id;
             d.retain_guides(sel, |_, g| g.artboard != Some(gone));
-            for id in &art {
-                // Always there: none of the art is inside another of it.
-                let _ = d.remove(*id);
-            }
+            d.remove_many(&art)?;
             sel.prune(d);
             Ok(())
         })?;
@@ -152,28 +149,16 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
 }
 
 /// Add a copy of artboard `i` moved by `dv`, with copies of its guides and of its `art` (each just
-/// above its original) moved along → (the copy's index, the art's copies). Duplicate Artboards and
-/// Alt-drag.
-pub(crate) fn copy_artboard(
-    d: &mut vectorcraft_doc::Document,
-    i: usize,
-    dv: Vec2,
-    art: &[NodeId],
-    scale_strokes: bool,
-) -> Result<(usize, Vec<NodeId>)> {
+/// above its original) moved along → (the copy's index, the art's copies). When `sc.patterns`, the
+/// pattern tiles of the art's copies move with them. Duplicate Artboards and Alt-drag.
+pub(crate) fn copy_artboard(d: &mut vectorcraft_doc::Document, i: usize, dv: Vec2, art: &[NodeId], sc: Scaling) -> Result<(usize, Vec<NodeId>)> {
     let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
     let index = push_artboard_copy(d, &src, src.rect + dv);
     // Its guides come along.
     if let Some(id) = d.artboards.get(index).map(|a| a.id) {
         d.copy_artboard_guides(src.id, id, dv);
     }
-    let mut copies = Vec::with_capacity(art.len());
-    for id in art {
-        let (Some((parent, at, _)), Some(n)) = (d.position(*id), d.node(*id).cloned()) else { continue };
-        let mut c = d.reid(&n);
-        c.transform(Affine::translate(dv), scale_strokes);
-        copies.push(d.insert(parent, at + 1, c)?);
-    }
+    let copies = super::edit::copy_above(d, art, |_, _, c| c.transform(Affine::translate(dv), sc))?;
     Ok((index, copies))
 }
 
@@ -181,7 +166,7 @@ pub(crate) fn copy_artboard(
 /// (`<name> copy 2`…) when that is taken → its index.
 pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vectorcraft_doc::Artboard, rect: Rect) -> usize {
     let mut a = src.clone();
-    a.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0).saturating_add(1);
+    a.id = d.next_artboard_id();
     let taken = |name: &str| d.artboards.iter().any(|a| a.name == name);
     a.name = [src.name.clone(), format!("{} copy", src.name)]
         .into_iter()
@@ -293,52 +278,54 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         }),
     };
     let range = super::typecmd::TextRange::parse(p, C)?;
+    // The character attributes, given the baseline shift and horizontal scale in the type's own units.
+    let chars = |st: &mut vectorcraft_doc::CharStyle, baseline_shift: Option<f64>, h_scale: Option<f64>| {
+        if let Some(k) = kerning {
+            st.kerning = k;
+        }
+        if let Some(v) = baseline_shift {
+            st.baseline_shift = v;
+        }
+        if let Some(v) = h_scale {
+            st.h_scale = v;
+        }
+        if let Some(v) = num("vScale") {
+            st.v_scale = v.clamp(1.0, 10000.0);
+        }
+        if let Some(v) = num("rotation") {
+            st.rotation = ((v + 180.0).rem_euclid(360.0)) - 180.0;
+        }
+        if let Some(v) = flag("underline") {
+            st.underline = v;
+        }
+        if let Some(v) = flag("strikethrough") {
+            st.strikethrough = v;
+        }
+        if let Some(v) = flag("allCaps") {
+            st.all_caps = v;
+        }
+        if let Some(v) = position {
+            st.position = v;
+        }
+        if let Some(v) = small_caps {
+            st.small_caps = v;
+        }
+        if let Some(v) = char_align {
+            st.char_align = v;
+        }
+        if let Some(v) = digits {
+            st.digits = v;
+        }
+        if let Some(v) = flag("proportionalMetrics") {
+            st.proportional_metrics = v;
+        }
+    };
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let baseline_shift = num("baselineShift").map(|v| super::typecmd::local_type_value(t, v, (-1296.0, 1296.0), false, C)).transpose()?;
             let h_scale = num("hScale").map(|v| super::typecmd::local_type_value(t, v, (1.0, 10000.0), true, C)).transpose()?;
-            super::typecmd::style_chars(t, range, |st| {
-                if let Some(k) = kerning {
-                    st.kerning = k;
-                }
-                if let Some(v) = baseline_shift {
-                    st.baseline_shift = v;
-                }
-                if let Some(v) = h_scale {
-                    st.h_scale = v;
-                }
-                if let Some(v) = num("vScale") {
-                    st.v_scale = v.clamp(1.0, 10000.0);
-                }
-                if let Some(v) = num("rotation") {
-                    st.rotation = ((v + 180.0).rem_euclid(360.0)) - 180.0;
-                }
-                if let Some(v) = flag("underline") {
-                    st.underline = v;
-                }
-                if let Some(v) = flag("strikethrough") {
-                    st.strikethrough = v;
-                }
-                if let Some(v) = flag("allCaps") {
-                    st.all_caps = v;
-                }
-                if let Some(v) = position {
-                    st.position = v;
-                }
-                if let Some(v) = small_caps {
-                    st.small_caps = v;
-                }
-                if let Some(v) = char_align {
-                    st.char_align = v;
-                }
-                if let Some(v) = flag("proportionalMetrics") {
-                    st.proportional_metrics = v;
-                }
-                if let Some(v) = digits {
-                    st.digits = v;
-                }
-            });
+            super::typecmd::style_chars(t, range, |st| chars(st, baseline_shift, h_scale));
             let span = super::typecmd::para_span(range, t);
             t.edit_paras(span, |para| {
                 if let Some(v) = num("leftIndent") {
@@ -379,6 +366,12 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             });
             super::typecmd::refresh_bounds(t);
+        }
+        // Graph labels keep a change made to all of their text through the graph being drawn again.
+        if range.is_none() {
+            let shift = num("baselineShift").map(|v| v.clamp(-1296.0, 1296.0));
+            let scale = num("hScale").map(|v| v.clamp(1.0, 10000.0));
+            super::graph::capture_label_styles(d, &ids, &|st| chars(st, shift, scale));
         }
         Ok(())
     })?;

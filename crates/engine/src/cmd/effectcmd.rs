@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step) → {ids, index, item, grouped?}",
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?|id?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step) → {ids, index, item, grouped?}",
             has_doc,
             apply
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Effects",
             [],
             None,
-            "{} → {catalog: [{id, label, menu, params, defaults, raster, lengths: {always, absolute (while relative is false)} (distance params Scale Strokes & Effects scales)}] (installed effect plug-ins last: id plugin.<plug-in id>, menu Effect › Plug-ins), applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
+            "{ids?|id?: object ids (default: the selection), target?: \"object\"|\"contents\"} → {catalog: [{id, label, menu, params, defaults, raster, lengths: {always, absolute (while relative is false)} (distance params Scale Strokes & Effects scales)}] (installed effect plug-ins last: id plugin.<plug-in id>, menu Effect › Plug-ins), applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
             always,
             list
         ),
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Effect",
             [],
             None,
-            "{index: int (position in the effect list), item?: appearance item index|null (that fill/stroke's effects; omitted: the active item, else the object's), ids?: [..]} → {ids}",
+            "{index: int (position in the effect list), item?: appearance item index|null (that fill/stroke's effects; omitted: the active item, else the object's), ids?|id?: [..], target?: \"object\"|\"contents\"} → {ids}",
             has_doc,
             remove
         ),
@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Effect Options",
             [],
             None,
-            "{index: int, params?: {…} (merged into the current parameters), visible?: bool, item?: appearance item index|null (as effect.remove), ids?: [..]} → {ids}",
+            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place), visible?: bool, item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\"} → {ids}",
             has_doc,
             set_params
         ),
@@ -59,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; a group's or layer's own fills and strokes become objects among its members, which are expanded too. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; a group's or layer's own fills and strokes become objects among its members, which are expanded too. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids}",
             can_expand,
             expand_appearance
         ),
@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Effect",
             [],
             None,
-            "{index: int, item?: appearance item index|null (as effect.remove), ids?: [..]} insert a copy of the effect right after it → {ids}",
+            "{index: int, item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\"} insert a copy of the effect right after it → {ids}",
             has_doc,
             duplicate
         ),
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Effect",
             [],
             None,
-            "{from: int (position in the source list), to: int (its position in the destination list afterwards), fromItem?: appearance item index|null (the source list: that fill/stroke's effects, null the object's; omitted: the active item, else the object's), toItem?: item index|null (the destination list; default: the source list), copy?: bool (copy instead of move, as Alt-dragging the row), ids?: [..]} reorder an effect or move it between the object and its fills/strokes, as one undo step → {ids, index, item}",
+            "{from: int (position in the source list), to: int (its position in the destination list afterwards), fromItem?: appearance item index|null (the source list: that fill/stroke's effects, null the object's; omitted: the active item, else the object's), toItem?: item index|null (the destination list; default: the source list), copy?: bool (copy instead of move, as Alt-dragging the row), ids?|id?: [..], target?: \"object\"|\"contents\"} reorder an effect or move it between the object and its fills/strokes, as one undo step → {ids, index, item}",
             has_doc,
             move_effect
         ),
@@ -119,12 +119,17 @@ fn edit_effects(
 }
 
 fn check_revolve_count(n: &Node, cmd: &str) -> Result<()> {
-    let count = n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects())).filter(|e| e.id == effects::REVOLVE).count();
-    if count > 1 {
+    let all = || n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects()));
+    if all().filter(|e| e.id == effects::REVOLVE).count() > 1 {
         return Err(bad(cmd, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+    }
+    if all().filter(|e| effects::is_three_d(&e.id)).count() > 1 {
+        return Err(bad(cmd, ONE_3D));
     }
     Ok(())
 }
+
+const ONE_3D: &str = "An object takes one 3D effect. Edit the existing effect's options, or remove it first.";
 
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.apply";
@@ -136,6 +141,9 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     // Crop Marks take their style from the preferences when applied.
     if id == effects::CROP_MARKS && params.get("style").is_none() {
         params["style"] = json!(s.crop_mark_style().id());
+    }
+    if id == GLASS {
+        load_texture(&mut params, C)?;
     }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
@@ -149,12 +157,19 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "ids": [gid.0], "index": 0, "item": null, "grouped": true }));
     }
     let item = item_target(s, p, C)?;
-    if id == effects::REVOLVE {
-        for id in appearance_targets(s, p)? {
-            let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
-            effects::validate_revolve(n, &effect.params).map_err(|e| bad(C, e))?;
-            if effects::has_revolve(n) {
-                return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+    if effects::is_three_d(id) {
+        for target in appearance_targets(s, p)? {
+            let n = s.doc()?.doc.node(target).ok_or(EngineError::NoNode(target))?;
+            if id == effects::REVOLVE {
+                effects::validate_revolve(n, &effect.params).map_err(|e| bad(C, e))?;
+                if effects::has_revolve(n) {
+                    return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+                }
+            } else {
+                effects::validate_solid(n, id, &effect.params).map_err(|e| bad(C, e))?;
+            }
+            if effects::has_revolve(n) || effects::has_solid(n) {
+                return Err(bad(C, ONE_3D));
             }
         }
     }
@@ -268,39 +283,75 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": item.flatten() }))
 }
 
+/// The ids of the effects `effect.setParams` with `p` edits, for the check of their parameters
+/// (none when `p` doesn't say which: running it reports why).
+pub(crate) fn set_params_effects(s: &Session, p: &Value) -> Vec<String> {
+    const C: &str = "effect.setParams";
+    let (Ok(index), Ok(item), Ok(ids), Ok(st)) = (index_param(p, "index", C), item_target(s, p, C), appearance_targets(s, p), s.doc()) else {
+        return vec![];
+    };
+    let effect = |id: &NodeId| {
+        let ap = &st.doc.node(*id)?.appearance;
+        Some(ap.effects_at(item.effects_item(ap, C).ok()?)?.get(index)?.id.clone())
+    };
+    ids.iter().filter_map(effect).collect()
+}
+
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
-    let params = p.get("params").cloned().unwrap_or(Value::Null);
+    let mut params = p.get("params").cloned().unwrap_or(Value::Null);
     if !params.is_null() && !params.is_object() {
         return Err(bad(C, "`params` must be an object"));
     }
+    let warp_id = p
+        .get("warpStyle")
+        .map(|v| -> Result<String> {
+            let style = v.as_str().filter(|style| effects::WarpStyle::from_id(style).is_some()).ok_or_else(|| bad(C, "unknown Warp style"))?;
+            Ok(format!("warp.{style}"))
+        })
+        .transpose()?;
     let visible = p.get("visible").and_then(Value::as_bool);
     let item = item_target(s, p, C)?;
+    if set_params_effects(s, p).iter().any(|e| e == GLASS) {
+        load_texture(&mut params, C)?;
+    }
     for id in appearance_targets(s, p)? {
         let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
         let target = item.effects_item(&n.appearance, C)?;
-        if let Some(e) = n.appearance.effects_at(target).and_then(|fx| fx.get(index))
-            && e.id == effects::REVOLVE
+        let effect = n.appearance.effects_at(target).and_then(|fx| fx.get(index));
+        if warp_id.is_some() && effect.is_some_and(|e| e.id.strip_prefix("warp.").and_then(effects::WarpStyle::from_id).is_none()) {
+            return Err(bad(C, "warpStyle can only edit an applied Warp effect"));
+        }
+        if let Some(e) = effect
+            && effects::is_three_d(&e.id)
             && visible != Some(false)
         {
             let mut prospective = effects::merged_params(&e.id, &e.params);
-            if let (Some(cur), Some(new)) = (prospective.as_object_mut(), params.as_object()) {
-                cur.extend(new.clone());
+            if let (Some(cur), Value::Object(new)) = (prospective.as_object_mut(), effects::upgrade_params(&e.id, &params)) {
+                cur.extend(new);
             }
-            effects::validate_revolve(n, &prospective).map_err(|e| bad(C, e))?;
+            if e.id == effects::REVOLVE {
+                effects::validate_revolve(n, &prospective).map_err(|e| bad(C, e))?;
+            } else {
+                effects::validate_solid(n, &e.id, &prospective).map_err(|e| bad(C, e))?;
+            }
         }
     }
     let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), |fx| {
         let Some(e) = fx.get_mut(index) else { return false };
-        if let (Value::Object(new), cur) = (&params, &mut e.params) {
+        if let Some(id) = &warp_id {
+            e.id.clone_from(id);
+        }
+        if let (Value::Object(new), cur) = (effects::upgrade_params(&e.id, &params), &mut e.params) {
             if !cur.is_object() {
                 *cur = effects::merged_params(&e.id, &Value::Null);
             }
+            // Earlier parameters (a Perspective strength, a light by azimuth and elevation) take
+            // their current form first, so the new values replace them and the rest is kept.
+            *cur = effects::upgrade_params(&e.id, cur);
             if let Value::Object(m) = cur {
-                for (k, v) in new {
-                    m.insert(k.clone(), v.clone());
-                }
+                m.extend(new);
             }
         }
         if let Some(v) = visible {
@@ -309,6 +360,31 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         true
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
+}
+
+// ---------- Load Texture ----------
+
+/// Effect › Distort › Glass.
+const GLASS: &str = "distort.glass";
+
+/// Glass's `textureImage` in `params` as Glass stores it: an image file (`{path}`, or `{name?,
+/// dataBase64}`) is read with [`fileio::texture_image`] and picked (`texture: "loaded"`) unless
+/// `params` give a `texture`; a string must be a texture as Glass stores it.
+fn load_texture(params: &mut Value, cmd: &str) -> Result<()> {
+    let pick = params.get("texture").is_none();
+    let Some(v) = params.get_mut(effects::pixel::TEXTURE_IMAGE) else { return Ok(()) };
+    match v {
+        Value::String(s) if effects::pixel::texture(s).is_some() => {}
+        Value::Object(_) => {
+            let bytes = fileio::source(v, cmd)?.bytes;
+            *v = json!(fileio::texture_image(&bytes).map_err(|e| bad(cmd, format!("textureImage: {e}")))?);
+            if pick {
+                params["texture"] = json!(effects::pixel::LOADED);
+            }
+        }
+        _ => return Err(bad(cmd, "textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it")),
+    }
+    Ok(())
 }
 
 // ---------- Expand Appearance ----------
@@ -376,7 +452,7 @@ fn expand_pieces(d: &mut Document, m: &mut Node, all: bool, stroke_art: effects:
 /// Expand Appearance of `id` (and, recursively, of a group's or layer's members): every fill and
 /// stroke becomes an object of its own (strokes outlined, brushes as their art), geometry effects
 /// are baked, raster effects become an embedded image, and the object keeps its transparency.
-fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
+pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
     let Some(mut n) = d.node(id).cloned() else { return };
     if !expandable(&n) {
         return;
@@ -533,8 +609,179 @@ mod tests {
         assert_eq!(effects_for_test(&s, id), before);
     }
 
+    /// Extrude & Bevel, Inflate and Rotate: applied by command, saved and reopened, edited,
+    /// exported, expanded and undone; one 3D effect per object.
+    #[test]
+    fn solid_effects_apply_save_edit_export_expand_and_undo() {
+        for effect in effects::SOLIDS {
+            let (mut s, id) = session_with_rect();
+            let source = node(&s, id).path_data().unwrap().clone();
+            s.execute("effect.apply", &json!({"effect": effect, "ids": [id.0], "item": null})).unwrap();
+            let art = effects::solid_art(&node(&s, id)).unwrap();
+            assert_eq!(node(&s, id).path_data(), Some(&source), "{effect}: the source stays editable");
+            let doc = &s.doc().unwrap().doc;
+            let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+            assert_eq!(effects::solid_art(restored.node(id).unwrap()).unwrap(), art, "{effect}: reopens the same");
+            // One 3D effect per object, whichever kind.
+            for other in ["threeD.revolve", "threeD.extrude", "threeD.rotate"] {
+                assert!(s.execute("effect.apply", &json!({"effect": other, "ids": [id.0], "item": null})).is_err(), "{effect} + {other}");
+            }
+            s.execute("effect.setParams", &json!({"index": 0, "params": {"rotationY": 50, "rotationX": 10}, "ids": [id.0], "item": null})).unwrap();
+            assert_ne!(effects::solid_art(&node(&s, id)).unwrap(), art, "{effect}: options change the art");
+            assert!(s.execute("effect.setParams", &json!({"index": 0, "params": {"bevel": "nope"}, "ids": [id.0], "item": null})).is_err());
+            let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+            let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+            assert!(svg.matches("<path").count() >= 2, "{effect}: exported as vector faces");
+            s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+            assert!(matches!(node(&s, id).kind, NodeKind::Group { .. }), "{effect}");
+            assert!(!effects::has_solid(&node(&s, id)));
+            s.execute("edit.undo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(node(&s, id).appearance.effects.len(), 0, "{effect}: back to the plain rectangle");
+        }
+        // Type has no outline to extrude.
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 50, "y": 50, "text": "3D"})).unwrap();
+        let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [t["id"]], "item": null})).unwrap_err();
+        assert!(err.to_string().contains("requires a path"), "{err}");
+    }
+
+    /// Scripts from before the Perspective angle give `perspective` as a 0–100 % strength: it is
+    /// stored as the angle that shows the same view, and a later angle replaces an earlier strength.
+    #[test]
+    fn an_earlier_perspective_strength_is_set_as_its_angle() {
+        let (mut s, id) = session_with_rect();
+        s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null, "params": {"perspective": 60}})).unwrap();
+        let params = |s: &Session| node(s, id).appearance.effects[0].params.clone();
+        let angle_of = |pct: f64| effects::merged_params(effects::EXTRUDE, &json!({"perspective": pct}))["perspectiveAngle"].as_f64().unwrap();
+        let angle = angle_of(60.0);
+        assert!((angle - 30.12).abs() < 0.01, "{angle}");
+        assert!(
+            params(&s).get("perspective").is_none() && (params(&s)["perspectiveAngle"].as_f64().unwrap() - angle).abs() < 1e-12,
+            "{}",
+            params(&s)
+        );
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"perspective": 100}, "ids": [id.0], "item": null})).unwrap();
+        assert!((params(&s)["perspectiveAngle"].as_f64().unwrap() - angle_of(100.0)).abs() < 1e-12);
+        // A file of then: the strength stored; setting an angle replaces it.
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.effects[0].params =
+            json!({"depth": 50, "perspective": 60});
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"perspectiveAngle": 120}, "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(params(&s), json!({"depth": 50, "perspectiveAngle": 120}));
+    }
+
+    /// Scripts from before Rotation and Height give the light by `lightAzimuth` and
+    /// `lightElevation`: stored as the same light; a later Height keeps that light's Rotation.
+    #[test]
+    fn an_earlier_light_direction_is_set_as_rotation_and_height() {
+        let (mut s, id) = session_with_rect();
+        s.execute(
+            "effect.apply",
+            &json!({"effect": effects::ROTATE, "ids": [id.0], "item": null, "params": {"lightAzimuth": 180, "lightElevation": 0}}),
+        )
+        .unwrap();
+        let params = |s: &Session| node(s, id).appearance.effects[0].params.clone();
+        // Straight from behind the object, level with it.
+        assert!(params(&s).get("lightAzimuth").is_none() && params(&s).get("lightElevation").is_none(), "{}", params(&s));
+        assert_eq!((params(&s)["lightHeight"].as_f64().unwrap().round(), &params(&s)["lightBehind"]), (90.0, &json!(true)));
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.effects[0].params =
+            json!({"lightAzimuth": 90, "lightElevation": 0});
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"lightHeight": 60}, "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(params(&s), json!({"lightRotation": 0.0, "lightHeight": 60, "lightBehind": false}));
+    }
+
+    /// Scripts from before Scribble's separate variations give one `variation`, which is stored as the
+    /// Path Overlap and Spacing variations. An angle is stored above -180° and up to 180°.
+    #[test]
+    fn scribble_stores_an_earlier_variation_as_two_and_its_angle_within_180() {
+        let (mut s, id) = session_with_rect();
+        let p = json!({"effect": "stylize.scribble", "ids": [id.0], "item": null, "params": {"angle": 270, "variation": 2}});
+        s.execute("effect.apply", &p).unwrap();
+        let params = |s: &Session| node(s, id).appearance.effects[0].params.clone();
+        assert_eq!((params(&s)["angle"].as_f64(), params(&s).get("variation")), (Some(-90.0), None), "{}", params(&s));
+        assert_eq!((&params(&s)["overlapVariation"], &params(&s)["spacingVariation"]), (&json!(2), &json!(2)));
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"angle": -200}, "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(params(&s)["angle"].as_f64(), Some(160.0));
+        // A file of then stores its variation; setting one of the two keeps it for the other.
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.effects[0].params = json!({"variation": 3});
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"spacingVariation": 1}, "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(params(&s), json!({"overlapVariation": 3, "spacingVariation": 1}));
+    }
+
     fn effects_for_test(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
         effects::revolve_art(&node(s, id)).unwrap()
+    }
+
+    #[test]
+    fn smooth_revolve_commands_validate_save_expand_and_undo() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":300,"height":300})).unwrap();
+        let r = s.execute("path.create", &json!({"d":"M150 40 C190 60 190 140 150 160"})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect":"threeD.revolve","ids":[id.0],"item":null,"params":{"offset":20,"segments":16}})).unwrap();
+        let initial = node(&s, id);
+        let source = initial.path_data().unwrap().clone();
+        assert!(!initial.appearance.effects[0].params.as_object().unwrap().contains_key("smoothShading"));
+        assert!(initial.appearance.effects[0].params["cap"].as_bool().unwrap());
+        let mut gradients = 0;
+        effects_for_test(&s, id).walk(&mut |face| {
+            gradients += face.appearance.items.iter().filter(|item| {
+                matches!(item, vectorcraft_doc::AppearanceItem::Fill(fill) if matches!(fill.paint, vectorcraft_doc::color::Paint::Gradient(_)))
+            }).count();
+        });
+        assert!(gradients > 0, "commands use smooth vector shading by default");
+        s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"lightAzimuth":30}})).unwrap();
+        let smooth = node(&s, id);
+        assert_eq!(smooth.path_data(), Some(&source));
+        assert_ne!(effects_for_test(&s, id), effects::revolve_art(&initial).unwrap());
+        let restored = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        assert_eq!(effects::revolve_art(restored.node(id).unwrap()), Some(effects_for_test(&s, id)));
+        s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+        assert!(!effects::has_revolve(&node(&s, id)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), smooth);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), initial);
+    }
+
+    #[test]
+    fn revolve_caps_save_export_expand_and_undo_without_changing_the_source() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":300,"height":300})).unwrap();
+        let r = s.execute("path.create", &json!({"d":"M150 40 L150 160"})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let source = node(&s, id).path_data().unwrap().clone();
+        s.execute(
+            "effect.apply",
+            &json!({"effect":"threeD.revolve","ids":[id.0],"item":null,
+            "params":{"offset":30,"rotationX":-35,"segments":16,"expandVisibleOnly":false,"cap":false}}),
+        )
+        .unwrap();
+        let uncapped = node(&s, id);
+        assert_eq!(uncapped.appearance.effects[0].params["cap"], json!(false));
+        let count = |n: &vectorcraft_doc::Node| n.children().unwrap()[0].children().unwrap().len();
+        let open_count = count(&effects_for_test(&s, id));
+        s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"cap":true}})).unwrap();
+        let capped = node(&s, id);
+        let art = effects_for_test(&s, id);
+        assert_eq!(count(&art), open_count + 2, "each endpoint adds one continuous vector cap");
+        assert_eq!(capped.path_data(), Some(&source));
+        assert!(s.execute("effect.setParams", &json!({"index":0,"ids":[id.0],"item":null,"params":{"cap":"yes"}})).is_err());
+        assert_eq!(node(&s, id), capped, "a bad boolean does not mutate the document");
+        let restored = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        assert_eq!(restored.node(id).unwrap().appearance.effects[0].params["cap"], json!(true));
+        assert_eq!(effects::revolve_art(restored.node(id).unwrap()), Some(art.clone()));
+        let pdf = s.execute("document.serialize", &json!({"format":"pdf"})).unwrap();
+        assert!(vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap().starts_with(b"%PDF"));
+        s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+        assert_eq!(count(&node(&s, id)), count(&art));
+        assert!(!effects::has_revolve(&node(&s, id)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), capped);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), uncapped);
     }
 
     #[test]
@@ -579,6 +826,56 @@ mod tests {
         s.execute("edit.undo", &json!({})).unwrap();
         assert!(node(&s, id).appearance.effects.is_empty());
         assert!(s.execute("effect.apply", &json!({"effect": "nope"})).is_err());
+    }
+
+    #[test]
+    fn warp_options_style_change_preserves_slot_and_visibility() {
+        let (mut s, id) = session_with_rect();
+        for effect in ["path.offsetPath", "warp.arc", "stylize.roundCorners"] {
+            s.execute("effect.apply", &json!({"effect": effect, "item": 1})).unwrap();
+        }
+        s.execute("effect.setParams", &json!({"index": 1, "item": 1, "visible": false})).unwrap();
+        s.doc_mut().unwrap().mark_saved();
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let result = s.execute("effect.setParams", &json!({"index": 1, "item": 1, "warpStyle": "flag", "params": {"bend": 25.0}}));
+        assert!(result.is_ok(), "an applied warp can change style in place: {result:?}");
+        let old = before.node(id).unwrap().appearance.effects_at(Some(1)).unwrap();
+        let n = node(&s, id);
+        let new = n.appearance.effects_at(Some(1)).unwrap();
+        assert_eq!(new.len(), 3);
+        assert_eq!(new[0], old[0]);
+        assert_eq!(new[2], old[2]);
+        assert_eq!(new[1].id, "warp.flag");
+        assert_eq!(new[1].params["bend"], 25.0);
+        assert!(!new[1].visible);
+        assert!(n.appearance.effects.is_empty());
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+        let after = s.doc().unwrap().doc.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert!(!s.doc().unwrap().is_dirty());
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, after);
+    }
+
+    #[test]
+    fn warp_options_non_warp_target_rejection_is_atomic() {
+        let (mut s, first) = session_with_rect();
+        s.execute("effect.apply", &json!({"effect": "warp.arc", "item": null})).unwrap();
+        let second = s.execute("shape.rectangle", &json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+        s.execute("effect.apply", &json!({"effect": "distort.twist", "item": null})).unwrap();
+        s.execute("select.set", &json!({"ids": [first.0, second]})).unwrap();
+        s.doc_mut().unwrap().mark_saved();
+        let before = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        assert!(s.execute("effect.setParams", &json!({"index": 0, "item": null, "warpStyle": "flag"})).is_err());
+        let state = s.doc().unwrap();
+        assert_eq!(state.doc, before);
+        assert_eq!(state.selection, selection);
+        assert_eq!(state.history.undo.len(), undo);
+        assert!(!state.is_dirty());
     }
 
     #[test]
@@ -654,6 +951,29 @@ mod tests {
         let r = s.execute("effect.apply", &json!({"effect": "pathfinder.add"})).unwrap();
         assert!(r.get("grouped").is_none());
         assert_eq!(node(&s, a).appearance.effects.len(), 1);
+    }
+
+    #[test]
+    fn pathfinder_effect_on_a_group_with_type_cuts_the_glyphs_out() {
+        let (mut s, a) = session_with_rect();
+        let t = NodeId(s.execute("text.create", &json!({"x": 110, "y": 180, "text": "H", "size": 100})).unwrap()["id"].as_u64().unwrap());
+        let glyphs = effects::outline_text(&node(&s, t)).unwrap();
+        let b = glyphs.geometric_bounds().unwrap();
+        assert!(b.x0 > 105.0 && b.y0 > 105.0 && b.x1 < 195.0 && b.y1 < 195.0, "the type lies inside the square: {b:?}");
+        let area = |n: &vectorcraft_doc::Node| effects::member_shapes(n).iter().map(|(p, r)| vectorcraft_pathops::area(p, *r)).sum::<f64>();
+        let glyph_area = area(&glyphs);
+        s.execute("select.set", &json!({"ids": [a.0, t.0]})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect": "pathfinder.subtract"})).unwrap();
+        // Live: the renderer leaves the glyph's place in the square empty.
+        let doc = s.doc().unwrap().doc.clone();
+        let img = vectorcraft_render::Renderer::new().render(&doc, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+        let empty = (105..195).flat_map(|y| (105..195).map(move |x| (x, y))).filter(|&(x, y)| img.pixel(x, y)[3] == 0).count();
+        assert!(empty as f64 > glyph_area / 2.0, "{empty} empty pixels for a glyph area of {glyph_area}");
+        // Expanded: the group holds the square minus the glyph.
+        s.execute("effect.expandAppearance", &json!({})).unwrap();
+        let left = area(&node(&s, g));
+        assert!((left - (10_000.0 - glyph_area)).abs() < 0.5, "{left} left of the square for a glyph area of {glyph_area}");
     }
 
     #[test]

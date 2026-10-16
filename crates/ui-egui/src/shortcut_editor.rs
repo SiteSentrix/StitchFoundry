@@ -258,10 +258,18 @@ pub fn entries() -> &'static [Entry] {
             .collect();
         let mut seen = HashSet::new();
         for c in vectorcraft_engine::command_specs() {
-            if (c.menu.is_empty() && c.shortcut.is_none()) || !seen.insert(c.id) {
+            // Commands outside the menus (panel menu items) are
+            // listed when a key alone can run them; queries and aliases never are.
+            let listed = if c.menu.is_empty() {
+                c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
+            } else {
+                true
+            };
+            if !listed || !seen.insert(c.id) {
                 continue;
             }
-            v.push(Entry { key: c.id.into(), label: c.label.into(), group: c.menu.join(" › "), is_tool: false });
+            let group = if c.menu.is_empty() { id_group(c.id) } else { c.menu.join(" › ") };
+            v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false });
         }
         v.extend(crate::state::all_panels().map(|(id, label)| Entry {
             key: format!("panel:{id}"),
@@ -273,14 +281,24 @@ pub fn entries() -> &'static [Entry] {
             if !seen.insert(id) || (sc.is_empty() && !params.starts_with("{}") && !params.starts_with("{path")) {
                 continue;
             }
-            let group = id.split('.').next().map(|g| {
-                let mut c = g.chars();
-                c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
-            });
-            v.push(Entry { key: id.to_string(), label: label.to_string(), group: group.unwrap_or_default(), is_tool: false });
+            v.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false });
         }
         v
     })
+}
+
+/// The group of a command no menu holds: the first part of its id, capitalised (`edit.x` → "Edit").
+fn id_group(id: &str) -> String {
+    let mut c = id.split('.').next().unwrap_or_default().chars();
+    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+}
+
+/// Does a command's params doc (`{a?, b?} …`) say it runs with no params, as a shortcut runs it?
+fn runs_without_params(params: &str) -> bool {
+    params
+        .strip_prefix('{')
+        .and_then(|r| r.split_once('}'))
+        .is_some_and(|(fields, _)| fields.split(',').all(|f| f.trim().is_empty() || f.trim_end().ends_with('?')))
 }
 
 pub fn entry(key: &str) -> Option<&'static Entry> {
@@ -467,10 +485,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 // Its save dialog is open: the file is written when it answers.
                 None if app.file_dialog_open() => Err("cancelled".into()),
                 None => match app.services.download.as_mut() {
-                    Some(dl) => {
-                        dl("StitchFoundry Shortcuts.json", &bytes);
-                        Ok(Value::Null)
-                    }
+                    Some(dl) => dl("StitchFoundry Shortcuts.json", &bytes).map(|()| Value::Null),
                     None => Ok(v),
                 },
             }
@@ -479,9 +494,20 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             let data = if let Some(v) = p.get("data") {
                 Ok(v.clone())
             } else {
-                let path = s("path").or_else(|| crate::picks::open(app, &crate::FilePick::default()));
+                let pick = crate::FilePick { filters: vec![("Shortcut sets", crate::dialogs::shortcut_import::IMPORT_EXTS)], ..Default::default() };
+                let path = s("path").or_else(|| crate::picks::open(app, &pick));
+                // A `.kys` file is read by Import Shortcut Set, up to its reader's cap.
+                if let Some(path) = path.as_deref().filter(|p| crate::dialogs::shortcut_import::is_kys(p)) {
+                    return Some(crate::dialogs::shortcut_import::command(app, &json!({ "path": path })));
+                }
                 match (path, app.services.read.as_ref()) {
-                    (Some(path), Some(r)) => r(&path).and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string())),
+                    (Some(path), Some(r)) => match r(&path) {
+                        // A set another app saved as text opens Import Shortcut Set.
+                        Ok(b) if crate::dialogs::shortcut_import::is_text_set(&path, &b) => {
+                            return Some(crate::dialogs::shortcut_import::open(app, &path, &b));
+                        }
+                        b => b.and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string())),
+                    },
                     (None, _) => Err("cancelled".into()),
                     (_, None) => Err("no file reader".into()),
                 }
@@ -503,9 +529,13 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
     Some(r)
 }
 
-/// While recording, Escape cancels the recording instead of closing the dialog.
+/// While recording (here or in Import Shortcut Set), Escape cancels the recording instead of closing
+/// the dialog.
 pub fn is_recording(app: &VectorcraftApp) -> bool {
-    app.ui.dialog.as_ref().is_some_and(|d| d.kind == "shortcuts" && !d.str("__recording").is_empty())
+    app.ui
+        .dialog
+        .as_ref()
+        .is_some_and(|d| (d.kind == "shortcuts" || d.kind == crate::dialogs::shortcut_import::KIND) && !d.str("__recording").is_empty())
 }
 
 // ---------- dialog ----------
@@ -733,7 +763,7 @@ fn import_into_dialog(app: &mut VectorcraftApp) {
             let (o, s) = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
             (app.ui.shortcut_overrides, app.ui.shortcut_set) = saved;
             sync(&app.ui);
-            if let Some(d) = app.ui.dialog.as_mut() {
+            if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "shortcuts") {
                 d.fields.insert("overrides".into(), serde_json::to_value(&o).unwrap_or(json!({})));
                 d.fields.insert("set".into(), json!(s));
                 d.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
@@ -954,5 +984,33 @@ mod tests {
         assert!(entries().iter().any(|e| e.key == "edit.undo"));
         let mut seen = HashSet::new();
         assert!(entries().iter().all(|e| seen.insert(e.key.clone())), "duplicate entries");
+    }
+
+    #[test]
+    fn duplicate_can_be_given_a_shortcut() {
+        // Duplicate has no default chord (#1539): it must still be listed so one can be set.
+        assert_eq!(entry("edit.duplicate").map(|e| e.group.as_str()), Some("Edit"));
+        let mut ov = BTreeMap::new();
+        assign(&mut ov, "edit.duplicate", Some("Cmd+Alt+Shift+F8"), false).unwrap();
+        assert_eq!(effective_in(&ov, "edit.duplicate").as_deref(), Some("Cmd+Alt+Shift+F8"));
+    }
+
+    /// #1539: a command outside the menus that runs without params (a panel menu's Break Link to
+    /// Symbol) can be given a shortcut; one that needs params, a query or an alias can't.
+    #[test]
+    fn menuless_commands_that_run_bare_are_listed() {
+        let e = entry("symbol.breakLink").expect("listed");
+        assert_eq!((e.label.as_str(), e.group.as_str()), ("Break Link to Symbol", "Symbol"));
+        for id in ["brush.duplicate", "path.convertAnchors", "document.json", "prefs.list"] {
+            assert!(entry(id).is_none(), "{id}");
+        }
+        for (doc, bare) in
+            [("{}", true), ("{dx?, dy?} x", true), ("{id?|ids?, clip?}", true), ("{name, newName?}", false), ("{a?: {b}}", false), ("same as", false)]
+        {
+            assert_eq!(runs_without_params(doc), bare, "{doc}");
+        }
+        let mut ov = BTreeMap::new();
+        assert!(assign(&mut ov, "symbol.breakLink", Some("Cmd+Alt+Shift+F9"), true).is_ok());
+        assert_eq!(effective_in(&ov, "symbol.breakLink").as_deref(), Some("Cmd+Alt+Shift+F9"));
     }
 }

@@ -1,6 +1,7 @@
 //! Shaper compositions are groups of generated fills/strokes with transparent, editable source
 //! art retained underneath. Recipes select topology regions; source edits re-evaluate them in
 //! the same undo transaction. Rendering and exporters only see ordinary groups and paths.
+use super::pathops::Beside;
 use super::*;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc};
@@ -56,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn source_group(n: &Node) -> Option<&Node> {
-    n.shaper.as_ref()?;
+    n.extras().shaper.as_ref()?;
     n.children()?.first().map(AsRef::as_ref).filter(|g| g.name.as_deref() == Some(SOURCES))
 }
 fn sources(n: &Node) -> Vec<Arc<Node>> {
@@ -89,9 +90,13 @@ fn map_of(src: &[Arc<Node>]) -> Result<BuilderMap> {
     }
     let arrangement = po::shape_builder(&shapes, true);
     let bounded = |pieces: Vec<po::Shape>| pieces.into_iter().filter_map(|p| p.path.bounds().map(|b| (p, b))).collect();
+    // A Shaper Group's faces are what its shapes fill and what its open paths enclose: the gaps
+    // closed paths enclose are the Shape Builder's only.
+    let open = po::has_open_path(&shapes);
     let regions = arrangement
         .regions
         .into_iter()
+        .filter(|r| open || !r.sources.is_empty())
         .filter_map(|r| {
             let bounds = r.path.bounds()?;
             let path = r.path.to_bezpath();
@@ -334,7 +339,7 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
         let edit = edits.get(&i);
         let Some(source) = edit.and_then(|e| e.paint_source).or_else(|| fill_source(src, region)).and_then(|i| src.get(i)) else { continue };
         let path = po::unite_all(&indices.iter().filter_map(|i| map.regions.get(*i).map(|r| (&r.0.path, FillRule::NonZero))).collect::<Vec<_>>());
-        let style = edit.and_then(|e| e.paint.clone()).unwrap_or_else(|| source.appearance.clone());
+        let style = edit.and_then(|e| e.paint.clone()).unwrap_or_else(|| (*source.appearance).clone());
         let mut n = Node::path(d.alloc_id(), path, fill_style(style));
         n.opacity = source.opacity;
         n.blend = source.blend;
@@ -358,7 +363,7 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
             continue;
         }
         let Some(source) = src.get(piece.key as usize) else { continue };
-        let style = edge_edits.get(&i).and_then(|e| e.paint.clone()).unwrap_or_else(|| source.appearance.clone());
+        let style = edge_edits.get(&i).and_then(|e| e.paint.clone()).unwrap_or_else(|| (*source.appearance).clone());
         if style.stroke_paint().is_none() {
             continue;
         }
@@ -376,11 +381,14 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
 pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
     let mut ids = vec![];
     d.walk(|n| {
-        if n.shaper.is_some() {
+        if n.extras().shaper.is_some() {
             ids.push(n.id)
         }
     });
-    for id in ids {
+    // Groups whose source art is all gone are removed through `emptied`, which is made when the
+    // first one is found.
+    let mut emptied: Option<Beside> = None;
+    for &id in &ids {
         let Some(current) = d.node(id).cloned() else { continue };
         let Some(old) = before.node(id) else { continue };
         let src = sources(&current);
@@ -395,11 +403,11 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
             continue;
         }
         if src.is_empty() {
-            d.remove(id)?;
+            emptied.get_or_insert_with(|| Beside::replacing(d, &ids)).put(d, id, vec![])?;
             continue;
         }
         let map = map_of(&src)?;
-        let mut spec = current.shaper.as_deref().cloned().unwrap_or_default();
+        let mut spec = current.extras().shaper.as_deref().cloned().unwrap_or_default();
         let previous = sources(old);
         if previous.iter().map(|s| s.id).ne(src.iter().map(|s| s.id)) {
             // Source insertion, deletion or reordering updates the index-based recipes.
@@ -448,7 +456,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
                     for i in related {
                         let Some(selector) = face_selector(&map, &src, i) else { continue };
                         if let Some(e) = spec.faces.iter_mut().rev().find(|e| e.selector == selector) {
-                            e.paint = Some(n.appearance.clone());
+                            e.paint = Some((*n.appearance).clone());
                         } else {
                             spec.faces.push(FaceEdit {
                                 selector,
@@ -456,7 +464,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
                                 erase_edges: false,
                                 paint_source: None,
                                 merge,
-                                paint: Some(n.appearance.clone()),
+                                paint: Some((*n.appearance).clone()),
                             });
                         }
                     }
@@ -472,7 +480,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
                             && piece_point(&piece.path).is_some_and(|point| n.path_data().and_then(|p| p.nearest(point)).is_some_and(|p| p.4 < 1e-5));
                         if contained && let Some(mut e) = edge_selector(&map, &src, piece) {
                             e.erase = false;
-                            e.paint = Some(n.appearance.clone());
+                            e.paint = Some((*n.appearance).clone());
                             spec.edges.push(e);
                         }
                     }
@@ -489,12 +497,12 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
             children.push(n);
         }
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-        n.shaper = Some(Box::new(spec));
+        n.extras_mut().shaper = Some(Box::new(spec));
         if let Some(ch) = n.children_mut() {
             *ch = children;
         }
     }
-    Ok(())
+    emptied.map_or(Ok(()), |e| e.finish(d))
 }
 
 fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Result<Vec<NodeId>> {
@@ -509,7 +517,7 @@ fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Resul
             st.doc.is_editable(*id)
                 && st.doc.node(*id).is_some_and(|n| {
                     !matches!(n.kind, NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. })
-                        && (n.shaper.is_some() || b::node_outline(n).is_some())
+                        && (n.extras().shaper.is_some() || b::node_outline(n).is_some())
                 })
         })
         .collect();
@@ -578,7 +586,7 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
     let mut next_merge = 1u64;
     for id in &roots {
         let n = s.doc()?.doc.node(*id).ok_or(EngineError::NoNode(*id))?;
-        if let Some(previous) = n.shaper.as_deref() {
+        if let Some(previous) = n.extras().shaper.as_deref() {
             let offset = src.len();
             let merge_offset = next_merge;
             for mut e in previous.faces.clone() {
@@ -669,10 +677,8 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
         let id = d.alloc_id();
         let mut group = Node::group(id, children);
         group.name = Some("Shaper Group".into());
-        group.shaper = Some(Box::new(spec));
-        for id in &roots {
-            d.remove(*id)?;
-        }
+        group.extras_mut().shaper = Some(Box::new(spec));
+        d.remove_many(&roots)?;
         d.insert(parent, index.saturating_sub(earlier), group)?;
         sel.set([id]);
         Ok(id)
@@ -684,7 +690,7 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
 fn group_at(d: &Document, point: Point, construction: bool) -> Option<NodeId> {
     let mut groups = vec![];
     d.walk(|n| {
-        if n.shaper.is_some()
+        if n.extras().shaper.is_some()
             && d.is_editable(n.id)
             && (if construction { source_group(n).and_then(Node::geometric_bounds) } else { n.geometric_bounds() })
                 .is_some_and(|b| b.inflate(6.0, 6.0).contains(point))
@@ -733,7 +739,7 @@ fn target(s: &Session, p: &Value) -> Result<NodeId> {
     let id = id_param(p, "id")
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
         .ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
-    s.doc()?.doc.node(id).filter(|n| n.shaper.is_some()).ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
+    s.doc()?.doc.node(id).filter(|n| n.extras().shaper.is_some()).ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
     Ok(id)
 }
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
@@ -756,7 +762,7 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     let id = target(s, p)?;
     s.edit("Expand Shaper Group", |d, sel| {
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-        n.shaper = None;
+        n.extras_mut().shaper = None;
         n.name = None;
         if let Some(children) = n.children_mut()
             && children.first().is_some_and(|c| c.name.as_deref() == Some(SOURCES))

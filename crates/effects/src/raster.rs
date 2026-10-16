@@ -21,6 +21,9 @@ pub enum RasterFx {
         dy: f64,
         blur: f64,
         color: Color,
+        /// Darkness (0..1): the shadow is the object's own colors with this share of black added
+        /// instead of `color`; `None` when it is `color`.
+        darkness: Option<f32>,
     },
     OuterGlow {
         mode: BlendMode,
@@ -111,6 +114,9 @@ pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
                     dy: num(&p, "y", 7.0).clamp(-1e4, 1e4),
                     blur,
                     color: color_param(&p, Color::BLACK),
+                    darkness: text(&p, "shade", "color")
+                        .eq_ignore_ascii_case("darkness")
+                        .then(|| (num(&p, "darkness", 100.0) / 100.0).clamp(0.0, 1.0) as f32),
                 },
                 "stylize.outerGlow" => RasterFx::OuterGlow {
                     mode: blend_mode(text(&p, "mode", "screen")),

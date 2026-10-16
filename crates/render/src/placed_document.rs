@@ -291,7 +291,9 @@ impl Renderer {
             return;
         }
         // The art in its own coordinates, with its own resources.
-        let inner = Frame { doc: &e.doc, view: f.view * m, visible: m.inverse().transform_rect_bbox(f.visible), px: f.px / k, ..*f };
+        let symbols = e.doc.symbol_boxes().quick();
+        let visible = m.inverse().transform_rect_bbox(f.visible);
+        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, ..*f };
         let _inside = Inside::enter();
         self.draw_arc(ctx, &inner, &e.art);
     }

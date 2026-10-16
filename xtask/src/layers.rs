@@ -66,6 +66,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("sf-core", Class::Standalone),
     ("embroidery", Class::Layer(2)),
     ("sf-formats", Class::Layer(1)),
+    ("scriptcheck", Class::Standalone),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
@@ -86,6 +87,8 @@ pub const INTRA_LAYER_ORDER: &[&[&str]] = &[
     &["three-d", "effects"],
     // Embroidery stitches type from its glyph outlines.
     &["text", "embroidery"],
+    // Inflate cuts its surface's grid cells to the shape with Pathfinder's booleans.
+    &["pathops", "three-d"],
 ];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {

@@ -77,6 +77,14 @@ fn every_setting_reaches_the_document() {
 }
 
 #[test]
+fn a_length_with_a_percentage_is_a_share_of_the_value_before_it() {
+    let s = new_doc(json!({"width": "200mm*50%", "height": "100mm+25%", "units": "Millimeters"}));
+    let r = boards(&s)[0];
+    assert!((r.width() - Unit::Millimeters.to_pt(100.0)).abs() < 1e-9, "{}", r.width());
+    assert!((r.height() - Unit::Millimeters.to_pt(125.0)).abs() < 1e-9, "{}", r.height());
+}
+
+#[test]
 fn a_white_background_exports_opaque() {
     let alpha = |bg: &str| {
         let mut s = new_doc(json!({"width": 20, "height": 20, "backgroundContents": bg}));
@@ -282,4 +290,33 @@ fn rearrange_aliases_and_rejects_bad_values() {
         assert!(s.execute("artboard.rearrange", &p).is_err(), "{p}");
     }
     assert_eq!(boards(&s), before, "nothing moved");
+}
+
+/// Rearrange All Artboards with the artboards already where it puts them, or with no artboard,
+/// records no undo step: the step to redo stays, the document stays unmodified, and the reply is the
+/// same.
+#[test]
+fn rearrange_that_moves_no_artboard_records_no_undo_step() {
+    let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 3}));
+    let p = json!({"columns": 2, "spacing": 5});
+    let reply = s.execute("artboard.rearrange", &p).unwrap();
+    let placed = boards(&s);
+    // A rectangle drawn and undone leaves a step to redo, and the document is marked saved.
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let history = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+    };
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false));
+    assert_eq!(s.execute("artboard.rearrange", &p).unwrap(), reply);
+    assert_eq!((history(&s), boards(&s)), (before, placed));
+    // A file can hold no artboard.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards.clear();
+    s.doc_mut().unwrap().mark_saved();
+    let before = history(&s);
+    assert_eq!(s.execute("artboard.rearrange", &p).unwrap(), json!({"artboards": 0, "rows": 1, "columns": 1}));
+    assert_eq!(history(&s), before);
 }

@@ -15,8 +15,15 @@ pub fn parse(s: &str) -> Option<KeyboardShortcut> {
     if s.is_empty() {
         return None;
     }
-    let (mods_part, key_part) =
-        if let Some(stripped) = s.strip_suffix("++") { (stripped.trim_end_matches('+'), "+") } else { s.rsplit_once('+').unwrap_or(("", s)) };
+    // A bare `+` (the Add Anchor Point tool's key) is the key itself, not a separator with
+    // nothing on either side.
+    let (mods_part, key_part) = if s == "+" {
+        ("", "+")
+    } else if let Some(stripped) = s.strip_suffix("++") {
+        (stripped.trim_end_matches('+'), "+")
+    } else {
+        s.rsplit_once('+').unwrap_or(("", s))
+    };
     let mut m = Modifiers::NONE;
     for part in mods_part.split('+').filter(|p| !p.is_empty()) {
         match part {
@@ -123,10 +130,30 @@ pub(crate) fn paste_command(held: Modifiers) -> &'static str {
         .map_or("edit.paste", |(_, id, _)| id)
 }
 
+/// Give a copy or cut chord held with more modifiers its key back when it has a shortcut of its own:
+/// egui reports every Cmd+C and Cmd+X chord as Copy or Cut, Shift and Alt held too, so Cmd+Shift+C
+/// (Align center) copied instead (#1940).
+fn unclip_chords(i: &mut egui::InputState) {
+    if !i.events.iter().any(|e| matches!(e, egui::Event::Copy | egui::Event::Cut)) {
+        return;
+    }
+    let (held, shortcuts) = (i.modifiers, all_shortcuts());
+    for e in &mut i.events {
+        let (key, own) = match e {
+            egui::Event::Copy => (Key::C, "edit.copy"),
+            egui::Event::Cut => (Key::X, "edit.cut"),
+            _ => continue,
+        };
+        if shortcuts.iter().any(|(sc, id, _)| sc.logical_key == key && *id != own && held.matches_exact(sc.modifiers)) {
+            *e = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: held };
+        }
+    }
+}
+
 /// Keyboard pastes of something other than text. egui swallows a paste chord's key press and
 /// sends a Paste event only when the clipboard holds text, so a paste key released without its
 /// press (or a Paste event) reported was a paste of a bitmap or a PDF.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct PasteChord {
     /// Paste keys whose press was reported (typed, not pasting).
     pressed: Vec<Key>,
@@ -173,18 +200,26 @@ pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
     }
 }
 
+/// Cmd/Ctrl chords are shortcuts (Create Outlines, Bold, …): their letter is never typed into the
+/// text if a host still emits `Text` for them (#2094). Alt is left to type: Option+key on macOS
+/// and AltGr (Ctrl+Alt) on Windows keyboards type characters such as é, ø and @.
+fn is_shortcut_chord(m: egui::Modifiers) -> bool {
+    (m.command || m.ctrl) && !m.alt
+}
+
 /// Typed text and IME events, in the order they came, to the Type tool.
 fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let view = app.view_info();
     // Switching apps mid-composition needs nothing: the macOS IME keeps its marked text and goes
     // on with it when the window comes back (measured with Kotoeri), as the tool does.
+    let shortcut_mods = ctx.input(|i| is_shortcut_chord(i.modifiers));
     let events: Vec<egui::Event> =
         ctx.input(|i| i.events.iter().filter(|e| matches!(e, egui::Event::Text(_) | egui::Event::Ime(_))).cloned().collect());
     for e in events {
         // Errors are already reported by the engine's interaction (a failed preview keeps it).
         let _ = match e {
             // Keys the IME passed through come as text only when nothing is marked.
-            egui::Event::Text(t) if !app.session.tool_composing() => app.session.tool_text(&t, view),
+            egui::Event::Text(t) if !app.session.tool_composing() && !shortcut_mods => app.session.tool_text(&t, view),
             egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
                 app.ime_marked = Some(text.clone()).filter(|t| !t.is_empty());
                 app.session.tool_preedit(&text, active_range_chars, view)
@@ -246,6 +281,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if claimed || (k == Key::Enter && !busy) {
                 crate::canvas::apply_requests(app, r);
             }
+            if claimed {
+                ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
+            }
             if k == Key::Escape && !busy && !claimed {
                 // Escape leaves Presentation Mode first: it hides the menus and panels.
                 if app.ui.screen_mode == 3 {
@@ -276,11 +314,34 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if typing {
         return;
     }
+    ctx.input_mut(unclip_chords);
     // Tab is ours when no field has the keyboard (it shows and hides the panels, or goes to the
     // Type tool): left to egui, it would also move the focus on to a field, and every key after it
     // would count as typing.
     if ctx.input(|i| i.key_pressed(Key::Tab)) {
         ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+    }
+    // In Presentation Mode, ← and → go to the previous and the next artboard. Every arrow key press
+    // is removed from the input here, so no arrow key moves the selection or is sent to the tool.
+    if app.ui.screen_mode == 3 {
+        let mut steps = vec![];
+        ctx.input_mut(|i| {
+            i.events.retain(|e| match e {
+                egui::Event::Key { key: Key::ArrowLeft, pressed: true, .. } => {
+                    steps.push(false);
+                    false
+                }
+                egui::Event::Key { key: Key::ArrowRight, pressed: true, .. } => {
+                    steps.push(true);
+                    false
+                }
+                egui::Event::Key { key: Key::ArrowUp | Key::ArrowDown, pressed: true, .. } => false,
+                _ => true,
+            })
+        });
+        for next in steps {
+            presentation_step(app, next);
+        }
     }
     // Type tool editing: text, IME composition and editing keys go to the tool.
     if app.session.tool_wants_text() {
@@ -365,6 +426,16 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     ] {
         if ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
             let r = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
+            // Keyboard actions can change the Artboard tool's active board too. Keep the
+            // navigator aligned with its valid survivor, as pointer dispatch does.
+            if r.is_ok()
+                && app.session.tool_id() == "artboard"
+                && let Some(i) = app.session.tool_options()["active"].as_u64().and_then(|i| usize::try_from(i).ok())
+                && app.session.active().is_some_and(|d| i < d.doc.artboards.len())
+                && let Some(v) = app.view_mut()
+            {
+                v.artboard = i;
+            }
             crate::canvas::apply_requests(app, r);
             return;
         }
@@ -389,6 +460,38 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 crate::canvas::apply_requests(app, r);
                 return;
             }
+        }
+    }
+    // `[` and `]` the active tool takes (the Blob Brush's and the Eraser's size, the Symbolism
+    // tools' diameter, with Shift their intensity). Read as typed, so
+    // layouts where a bracket takes Option or AltGr count too; `{` and `}` are Shift's.
+    if !(m.command || m.ctrl) {
+        let typed: Vec<(String, ToolKey, bool)> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Text(t) => match t.as_str() {
+                        "[" => Some((t.clone(), ToolKey::BracketLeft, false)),
+                        "]" => Some((t.clone(), ToolKey::BracketRight, false)),
+                        "{" => Some((t.clone(), ToolKey::BracketLeft, true)),
+                        "}" => Some((t.clone(), ToolKey::BracketRight, true)),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .collect()
+        });
+        let mut taken = false;
+        for (text, key, shift) in typed {
+            if app.session.tool_claims_key(key, view) {
+                ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Text(t) if *t == text)));
+                let r = app.session.tool_key(key, Mods { shift, ..Mods::default() }, view);
+                crate::canvas::apply_requests(app, r);
+                taken = true;
+            }
+        }
+        if taken {
+            return;
         }
     }
     // Command shortcuts.
@@ -459,6 +562,21 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Go to the next artboard (`next`) or the previous one with `view.goToArtboard`, as the status bar
+/// navigator's Next and Previous buttons do, for the arrow keys and a click in Presentation Mode.
+/// On the last artboard a step forward leaves the view as it is, and so does a step back on the
+/// first.
+pub(crate) fn presentation_step(app: &mut VectorcraftApp, next: bool) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    let at = crate::panels::artboards::selected(app, n);
+    let to = if next { (at + 1 < n).then_some("next") } else { (at > 0).then_some("previous") };
+    if let Some(to) = to
+        && let Err(e) = app.run("view.goToArtboard", json!({ "index": to }))
+    {
+        app.status(e);
+    }
+}
+
 /// What a single-key shortcut reads for `text`, typed by the key at `physical`: the text itself,
 /// or, when it holds no ASCII character (a layout without Latin letters), what that key types on a
 /// US layout, so V selects the Selection tool whatever the V key types.
@@ -488,6 +606,58 @@ mod tests {
         });
         out.textures_delta.clear();
         out
+    }
+
+    #[test]
+    fn option_and_altgr_still_type_but_cmd_and_ctrl_chords_do_not() {
+        use egui::Modifiers as M;
+        assert!(is_shortcut_chord(M::COMMAND | M::SHIFT));
+        assert!(is_shortcut_chord(M::CTRL));
+        assert!(!is_shortcut_chord(M::NONE));
+        assert!(!is_shortcut_chord(M::SHIFT));
+        assert!(!is_shortcut_chord(M::ALT), "Option+key types é, ø on macOS");
+        assert!(!is_shortcut_chord(M::CTRL | M::ALT), "AltGr types @ on a German keyboard");
+    }
+
+    /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
+    /// tool's Shift+O), with the Selection tool or while the Type tool edits the text.
+    #[test]
+    fn cmd_shift_o_creates_outlines() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        assert_eq!(crate::menus::shortcut_of("type.createOutlines"), Some("Cmd+Shift+O"));
+        let open = parse("Cmd+O").unwrap();
+        let outlines = parse("Cmd+Shift+O").unwrap();
+        let pos = |want: egui::KeyboardShortcut, id: &str| super::all_shortcuts().iter().position(|(sc, i, _)| *i == id && *sc == want);
+        assert!(pos(outlines, "type.createOutlines").unwrap() < pos(open, "file.open").unwrap(), "more modifiers win so Open does not eat the chord");
+        let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+        let chord = egui::Event::Key { key: Key::O, physical_key: None, pressed: true, repeat: false, modifiers: cmd_shift };
+        let is_text = |app: &VectorcraftApp, id: u64| {
+            matches!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Text(_)))
+        };
+        let group_kids = |app: &VectorcraftApp| -> usize {
+            let id = app.session.active().unwrap().selection.objects.first().copied().unwrap();
+            match &app.session.doc().unwrap().doc.node(id).unwrap().kind {
+                vectorcraft_doc::NodeKind::Group { children, .. } => children.len(),
+                _ => 0,
+            }
+        };
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        assert!(is_text(&app, id));
+        frame(&mut app, vec![chord.clone()]);
+        assert!(!is_text(&app, id), "Selection tool: the chord outlines the text");
+        assert_eq!(group_kids(&app), 2, "H and i");
+        assert_ne!(app.session.tool_id(), "artboard", "not the Artboard tool's Shift+O");
+        assert!(app.ui.dialog.is_none(), "not File › Open");
+        // While the Type tool edits, the same chord outlines; a Text event with Cmd held must not type.
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 80, "text": "Yo"})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        assert!(app.session.tool_wants_text());
+        frame(&mut app, vec![egui::Event::ModifiersChanged(cmd_shift), chord, egui::Event::Text("o".into())]);
+        assert!(!is_text(&app, id), "Type tool: the chord outlines the text being edited");
+        assert_eq!(group_kids(&app), 2, "Yo only: the stray Text with Cmd was not typed");
+        assert!(app.ui.dialog.is_none(), "not File › Open while typing");
     }
 
     /// Cmd+Shift+B while the Type tool edits text is Type › Bold, not Hide Bounding Box (#724).
@@ -553,6 +723,40 @@ mod tests {
         assert!(!crate::menus::enabled(&app, "type.alignCenter"));
     }
 
+    /// Cmd+Alt+Q resets the tracking and kerning of the selected type (tracking 0, kerning Auto),
+    /// and of the Type tool's selected text while it edits.
+    #[test]
+    fn cmd_alt_q_resets_tracking_and_kerning() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "One Two"})).unwrap()["id"].as_u64().unwrap();
+        let spaced =
+            |app: &mut VectorcraftApp| app.session.execute("text.setRangeStyle", &json!({"id": id, "tracking": 200, "kerning": -40})).unwrap();
+        let spacing = |app: &mut VectorcraftApp| {
+            let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+            r["runs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|run| (run["text"].clone(), run["style"]["tracking"].clone(), run["style"]["kerning"].clone()))
+                .collect::<Vec<_>>()
+        };
+        let chord =
+            egui::Event::Key { key: Key::Q, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND | Modifiers::ALT };
+        spaced(&mut app);
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        frame(&mut app, vec![chord.clone()]);
+        assert_eq!(spacing(&mut app), [(json!("One Two"), json!(0.0), json!(null))]);
+        // While the Type tool edits: only its selection.
+        spaced(&mut app);
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 4, "end": 7}));
+        assert!(app.session.tool_wants_text());
+        frame(&mut app, vec![chord]);
+        assert_eq!(spacing(&mut app), [(json!("One "), json!(200.0), json!(-40.0)), (json!("Two"), json!(0.0), json!(null))]);
+    }
+
     /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
     /// keyboard focus on to a field: the keys after it (a tool letter, the next letter typed) still
     /// work.
@@ -593,6 +797,68 @@ mod tests {
         run(&mut app, vec![egui::Event::Text("b".into())]);
         let doc = app.session.execute("document.inspect", &json!({})).unwrap();
         assert_eq!(doc["layers"][0]["children"][0]["name"], "a\tb");
+    }
+
+    /// Shift+Tab shows and hides the panels and leaves the toolbar and the Control bar as they are,
+    /// while Tab hides all three. Hiding the panels closes a panel popped out of the icon column.
+    /// In a focused field neither key shows or hides anything.
+    #[test]
+    fn shift_tab_hides_the_panels_but_not_the_toolbar_or_the_control_bar() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0));
+        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        };
+        let press = |modifiers| egui::Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers };
+        let shown = |app: &VectorcraftApp| (app.ui.dock, app.ui.toolbar, app.ui.control_bar);
+        app.ui.control_bar = true;
+        for _ in 0..3 {
+            run(&mut app, vec![]);
+        }
+        assert_eq!(shown(&app), (true, true, true));
+        app.run("window.panel", json!({"panel": "color"})).unwrap();
+        run(&mut app, vec![press(Modifiers::SHIFT)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (false, true, true), "Shift+Tab hid the panels only");
+        assert_eq!(app.ui.open_panel, None, "and the panel popped out of the icon column");
+        run(&mut app, vec![press(Modifiers::SHIFT)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (true, true, true), "a second Shift+Tab shows them again");
+        app.run("window.panel", json!({"panel": "color"})).unwrap();
+        run(&mut app, vec![press(Modifiers::NONE)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (false, false, false), "Tab hides the toolbar and the Control bar too");
+        assert_eq!(app.ui.open_panel, None);
+        run(&mut app, vec![press(Modifiers::NONE)]);
+        run(&mut app, vec![]);
+        assert_eq!(shown(&app), (true, true, true));
+        // A field of the Color panel has the keyboard focus: Shift+Tab and Tab do not show or hide anything.
+        app.run("window.panel", json!({"panel": "color"})).unwrap();
+        for _ in 0..3 {
+            run(&mut app, vec![]);
+        }
+        let fields: Vec<(egui::Id, egui::Rect)> = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.sense.senses_click()).map(|w| (w.id, w.rect)).collect()
+        });
+        let (id, rect) =
+            fields.into_iter().find(|&(id, _)| egui::TextEdit::load_state(&ctx, id).is_some()).unwrap_or_else(|| panic!("no field on screen"));
+        let click =
+            |pressed| egui::Event::PointerButton { pos: rect.center(), button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        run(&mut app, vec![egui::Event::PointerMoved(rect.center()), click(true)]);
+        run(&mut app, vec![click(false)]);
+        assert!(ctx.memory(|m| m.has_focus(id)), "the field has the keyboard");
+        for modifiers in [Modifiers::SHIFT, Modifiers::NONE] {
+            run(&mut app, vec![press(modifiers)]);
+            run(&mut app, vec![]);
+            assert_eq!(shown(&app), (true, true, true), "{modifiers:?}");
+            assert_eq!(app.ui.open_panel.as_deref(), Some("color"), "{modifiers:?}");
+        }
     }
 
     #[test]
@@ -699,6 +965,33 @@ mod tests {
         assert_eq!(kind(&app), None, "another tool has its own Enter");
     }
 
+    /// #1661: typed `[` and `]` reach the tool that takes them: the Blob Brush's and the Eraser's
+    /// size (Option or AltGr brackets too), the stroke weight left as it is; other tools leave them
+    /// alone.
+    #[test]
+    fn brackets_size_the_blob_brush_and_the_eraser() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("stroke.set", &json!({"weight": 3})).unwrap();
+        let size = |app: &mut VectorcraftApp| app.session.tool_options()["size"].as_f64().unwrap();
+        let text = |t: &str| egui::Event::Text(t.into());
+        for tool in ["blobBrush", "eraser"] {
+            app.select_tool(tool);
+            let before = size(&mut app);
+            frame(&mut app, vec![text("]")]);
+            frame(&mut app, vec![text("]")]);
+            assert_eq!(size(&mut app), before + 2.0, "{tool}");
+            // Option-8 types `[` on a Turkish Mac keyboard.
+            let option_8 = egui::Event::Key { key: Key::Num8, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::ALT };
+            frame(&mut app, vec![option_8, text("[")]);
+            assert_eq!(size(&mut app), before + 1.0, "{tool}: a bracket typed with Option");
+        }
+        assert_eq!(app.session.paint.stroke_width, 3.0, "the stroke weight stays");
+        app.select_tool("rectangle");
+        frame(&mut app, vec![text("[")]);
+        assert_eq!(app.session.paint.stroke_width, 3.0);
+    }
+
     #[test]
     fn comma_and_period_reapply_the_last_colour_and_gradient() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -782,6 +1075,23 @@ mod tests {
         let before = zoom(&mut app);
         frame(&mut app, vec![press(Key::Minus, Modifiers::COMMAND)]);
         assert!(zoom(&mut app) < before, "Cmd+- zooms out");
+    }
+
+    /// `+` selects the Add Anchor Point tool, as `-` selects Delete Anchor Point (#2142): typed as
+    /// Shift+`=` on a US layout, or by a layout's own `+` key or the numpad's.
+    #[test]
+    fn plus_selects_the_add_anchor_point_tool() {
+        assert_eq!(parse("+"), parse("="), "a bare `+` is the `=` key");
+        assert_eq!(crate::shortcut_editor::tool_for_key("+"), Some("addAnchor"));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        for m in [Modifiers::SHIFT, Modifiers::NONE] {
+            app.select_tool("selection");
+            frame(&mut app, vec![egui::Event::ModifiersChanged(m), egui::Event::Text("+".into())]);
+            assert_eq!(app.session.tool_id(), "addAnchor", "`+` with {m:?}");
+        }
+        frame(&mut app, vec![egui::Event::ModifiersChanged(Modifiers::NONE), egui::Event::Text("-".into())]);
+        assert_eq!(app.session.tool_id(), "deleteAnchor");
     }
 
     #[test]

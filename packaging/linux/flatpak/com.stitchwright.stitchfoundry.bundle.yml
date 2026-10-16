@@ -32,7 +32,11 @@ finish-args:
   # user generates a design). It also makes the optional --control server, which listens on
   # 127.0.0.1, reachable by agents on the host, as in the other desktop builds.
   - --share=network
-  # Deliberately not granted: home/host filesystem access.
+  # Font managers (FontBase and others) activate fonts into ~/.fonts, which Flatpak does not open
+  # to a sandbox: it exposes /usr/share/fonts and ~/.local/share/fonts, and nothing else. Without
+  # this the font list holds none of the activated families, while native apps see them.
+  - --filesystem=~/.fonts:ro
+  # Deliberately not granted: home/host filesystem access beyond the read-only folders above.
 modules:
   - name: vectorcraft
     buildsystem: simple

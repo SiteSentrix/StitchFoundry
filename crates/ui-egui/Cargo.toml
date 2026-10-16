@@ -34,6 +34,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is
+# MIT OR Apache-2.0 and already in the build through eframe.
+web-time = "1"
+
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 vectorcraft-testkit = { workspace = true }

@@ -80,12 +80,92 @@ fn shown_alignment(justify: Justify, rtl: bool) -> Justify {
     }
 }
 
-/// The seven alignment buttons, `size` points square, the one of `para`'s alignment on (the
-/// Paragraph panel's and the Properties panel's).
+/// Add the displayed alignments touched by the byte range (all paragraphs without a range).
+/// Walk forward through run fragments so paragraph lookup never rescans an earlier prefix.
+/// Only Auto needs paragraph text; borrow a fragment until style runs split it.
+fn collect_text_alignment(text: &vectorcraft_doc::TextObject, range: Option<(usize, usize)>, shared: &mut Option<Justify>) -> bool {
+    use std::borrow::Cow;
+    let (a, b) = range.map_or((0, usize::MAX), |(a, b)| (a.min(b), a.max(b)));
+    let mut record = |index, plain: &str, start, end| {
+        if end < a || start > b {
+            return true;
+        }
+        let para = text.para_at(index);
+        let rtl = para.justify == Justify::Auto && vectorcraft_text::paragraph_is_rtl(plain, para.direction);
+        let value = shown_alignment(para.justify, rtl);
+        if shared.is_some_and(|old| old != value) {
+            return false;
+        }
+        *shared = Some(value);
+        true
+    };
+    let (mut index, mut start, mut end) = (0, 0, 0);
+    let mut plain = Cow::Borrowed("");
+    for run in &text.runs {
+        let mut rest = run.text.as_str();
+        while !rest.is_empty() {
+            let span = vectorcraft_text::edit::paragraph_at(rest, 0);
+            let part = rest.get(span.clone()).unwrap_or_default();
+            let para = text.para_at(index);
+            if para.justify == Justify::Auto && !part.is_empty() {
+                if plain.is_empty() {
+                    plain = Cow::Borrowed(part);
+                } else {
+                    plain.to_mut().push_str(part);
+                }
+            }
+            end += part.len();
+            if span.end == rest.len() {
+                break; // The same paragraph can continue in the next style run.
+            }
+            if !record(index, &plain, start, end) {
+                return false;
+            }
+            // Like TextObject::paragraphs_in, a range ending at the next paragraph's start
+            // includes that paragraph; the newline itself belongs to the preceding one.
+            end += 1;
+            start = end;
+            index += 1;
+            if start > b {
+                return true;
+            }
+            plain = Cow::Borrowed("");
+            rest = rest.get(span.end + 1..).unwrap_or_default();
+        }
+    }
+    record(index, &plain, start, end) // Includes empty text and the paragraph after a final newline.
+}
+
+/// None means differing displayed alignments, following the other mixed-value controls.
+fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Justify> {
+    let default = Some(shown_alignment(fallback.justify, fallback.direction == Some(ParaDirection::RightToLeft)));
+    let Some(st) = app.session.active() else { return default };
+    let mut shared = None;
+    if let Some((id, a, b)) = super::character::text_editing(app)
+        && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
+    {
+        return if collect_text_alignment(text, Some((a, b)), &mut shared) { shared.or(default) } else { None };
+    }
+    fn collect(node: &vectorcraft_doc::Node, shared: &mut Option<Justify>) -> bool {
+        if let NodeKind::Text(text) = &node.kind {
+            return collect_text_alignment(text, None, shared);
+        }
+        node.children().is_none_or(|children| children.iter().all(|child| collect(child, shared)))
+    }
+    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        if !collect(node, &mut shared) {
+            return None;
+        }
+    }
+    shared.or(default)
+}
+
+/// The seven alignment buttons shared by Paragraph and Properties; no button is selected
+/// when the paragraphs they act on have differing displayed alignments.
 pub fn alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32) {
-    let shown = shown_alignment(para.justify, resolved_rtl(app, para));
+    let shown = selected_alignment(app, para);
     for (j, icon, tip, id) in ALIGNMENTS {
-        if widgets::icon_button(ui, icon, tip, shown == j, size).clicked() {
+        if widgets::icon_button(ui, icon, tip, shown == Some(j), size).clicked() {
             para_cmd(app, "text.setStyle", json!({"justify": id}));
         }
     }
@@ -252,6 +332,191 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+
+    fn alignment_row(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) -> egui::Rect {
+        let para = text_style(app).map_or_else(ParaStyle::default, |(_, p)| p);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            alignment_buttons(app, ui, &para, size);
+        })
+        .response
+        .rect
+    }
+
+    // Inspect the actual selected wells, including the shared Properties-size buttons.
+    fn alignment_frame(ctx: &egui::Context, app: &mut VectorcraftApp, size: f32) -> (Vec<Justify>, egui::Pos2) {
+        let mut row = egui::Rect::NOTHING;
+        let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| row = alignment_row(app, ui, size));
+        frame.textures_delta.clear();
+        fn wells(shape: &egui::Shape, color: egui::Color32, size: f32, out: &mut Vec<egui::Pos2>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| wells(s, color, size, out)),
+                egui::Shape::Rect(r) if r.fill == color && r.rect.size() == vec2(size, size) => out.push(r.rect.center()),
+                _ => {}
+            }
+        }
+        let centers: [egui::Pos2; 7] = std::array::from_fn(|i| row.min + vec2(size / 2.0 + i as f32 * (size + 3.0), size / 2.0));
+        let mut active = Vec::new();
+        for shape in &frame.shapes {
+            wells(&shape.shape, Tokens::get(ctx).tool_active, size, &mut active);
+        }
+        let selected = active
+            .iter()
+            .map(|pos| {
+                let index = centers.iter().position(|center| center.distance(*pos) < 0.1).expect("alignment well");
+                ALIGNMENTS[index].0
+            })
+            .collect();
+        (selected, centers[1])
+    }
+
+    fn editing_text(text: &str) -> (VectorcraftApp, Value) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": text})).unwrap()["id"].clone();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        assert!(super::super::character::text_editing(&app).is_some());
+        (app, id)
+    }
+
+    fn select_range(app: &mut VectorcraftApp, start: usize, end: usize) {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+    }
+
+    #[test]
+    fn paragraph_mixed_alignment_click_center_and_undo() {
+        let (mut app, id) = editing_text("é\nאב\n終");
+        app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
+        app.run("text.setStyle", json!({"id": id, "start": 3, "end": 7, "justify": "right"})).unwrap();
+        app.run("text.setStyle", json!({"id": id, "start": 8, "end": 11, "justify": "justifyAll"})).unwrap();
+        app.run("text.setFormat", json!({"id": id, "start": 3, "end": 7, "leftIndent": 17, "spaceAfter": 9})).unwrap();
+        select_range(&mut app, 0, 7);
+        let before = app.session.active().unwrap().doc.clone();
+        let history = app.session.active().unwrap().history.undo.len();
+        let ctx = egui::Context::default();
+        let (selected, center) = alignment_frame(&ctx, &mut app, 28.0);
+        assert!(selected.is_empty(), "mixed paragraphs must not light one alignment: {selected:?}");
+        super::super::tests_appearance::click(&ctx, &mut app, center, |app, ui| {
+            alignment_row(app, ui, 28.0);
+        });
+        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Center]);
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        assert_eq!(
+            (text.para_at(0).justify, text.para_at(1).justify, text.para_at(2).justify),
+            (Justify::Center, Justify::Center, Justify::JustifyAll)
+        );
+        let NodeKind::Text(old) = &before.node(node.id).unwrap().kind else { panic!("text") };
+        for i in 0..3 {
+            let mut expected = old.para_at(i).clone();
+            if i < 2 {
+                expected.justify = Justify::Center;
+            }
+            assert_eq!(text.para_at(i), &expected, "other paragraph fields stay unchanged");
+        }
+        assert_eq!(text.runs, old.runs);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc, before);
+        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty());
+    }
+
+    #[test]
+    fn paragraph_mixed_alignment_caret_unicode_boundaries_and_uniform_controls() {
+        let (mut app, id) = editing_text("é\nאב\n");
+        app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
+        app.run("text.setStyle", json!({"id": id, "start": 3, "end": 7, "justify": "right"})).unwrap();
+        app.run("text.setStyle", json!({"id": id, "start": 8, "end": 8, "justify": "justifyAll"})).unwrap();
+        let ctx = egui::Context::default();
+        for (start, end, expected) in [
+            (0, 2, vec![Justify::Left]),
+            (2, 2, vec![Justify::Left]), // newline belongs to the preceding paragraph
+            (3, 3, vec![Justify::Right]),
+            (4, 6, vec![Justify::Right]),          // byte offsets inside multi-byte characters
+            (0, 3, vec![]),                        // ending at the next paragraph's start touches both
+            (7, 0, vec![]),                        // reversed selection
+            (8, 8, vec![Justify::JustifyAll]),     // empty trailing paragraph
+            (100, 100, vec![Justify::JustifyAll]), // existing selection clamping
+        ] {
+            select_range(&mut app, start, end);
+            assert_eq!(alignment_frame(&ctx, &mut app, 24.0).0, expected, "range {start}..{end}");
+        }
+        for (expected, _, _, key) in ALIGNMENTS {
+            app.run("text.setStyle", json!({"id": id, "justify": key})).unwrap();
+            app.session.set_tool_option("selectAll", &json!(true));
+            assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [expected]);
+        }
+    }
+
+    #[test]
+    fn paragraph_mixed_alignment_auto_direction_and_split_runs() {
+        let (mut app, id) = editing_text("é\nאב");
+        // Character formatting splits the RTL paragraph across runs.
+        app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 5, "size": 24})).unwrap();
+        app.session.set_tool_option("selectAll", &json!(true));
+        let ctx = egui::Context::default();
+        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "Auto resolves separately per paragraph");
+        select_range(&mut app, 3, 7);
+        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Right]);
+        app.run("text.setFormat", json!({"id": id, "start": 3, "end": 7, "direction": "leftToRight"})).unwrap();
+        app.session.set_tool_option("selectAll", &json!(true));
+        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left]);
+        app.run("text.setStyle", json!({"id": id, "start": 0, "end": 2, "justify": "left"})).unwrap();
+        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "explicit Left and resolved Auto agree");
+        app.run("text.setFormat", json!({"id": id, "start": 0, "end": 2, "direction": "rightToLeft"})).unwrap();
+        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "explicit alignment ignores direction");
+    }
+
+    #[test]
+    fn paragraph_mixed_alignment_explicit_rtl_and_empty_controls() {
+        let (mut app, id) = editing_text("Latin\nאב\n\n");
+        app.run("text.setStyle", json!({"id": id, "justify": "auto"})).unwrap();
+        app.run("text.setFormat", json!({"id": id, "direction": "rightToLeft"})).unwrap();
+        // Auto with an explicit direction still needs the real, possibly split, paragraph text.
+        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "size": 24})).unwrap();
+        let ctx = egui::Context::default();
+        for (start, end, expected) in [
+            (0, 5, Justify::Right),  // nonempty Latin with explicit RTL
+            (6, 10, Justify::Right), // nonempty Hebrew with explicit RTL
+            (11, 11, Justify::Left), // existing resolver's empty paragraph behavior
+            (12, 12, Justify::Left), // empty trailing paragraph
+        ] {
+            select_range(&mut app, start, end);
+            assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [expected], "explicit RTL range {start}..{end}");
+        }
+        app.run("text.setStyle", json!({"id": id, "start": 0, "end": 5, "justify": "left"})).unwrap();
+        select_range(&mut app, 0, 10);
+        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "explicit Left and Auto/RTL differ");
+        let (mut empty, id) = editing_text("");
+        empty.run("text.setStyle", json!({"id": id, "justify": "auto"})).unwrap();
+        empty.run("text.setFormat", json!({"id": id, "direction": "rightToLeft"})).unwrap();
+        assert_eq!(alignment_frame(&egui::Context::default(), &mut empty, 28.0).0, [Justify::Left]);
+    }
+
+    #[test]
+    fn paragraph_mixed_alignment_object_group_and_no_text_controls() {
+        let (mut app, id) = editing_text("A\nB");
+        app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
+        app.run("text.setStyle", json!({"id": id, "start": 2, "end": 3, "justify": "right"})).unwrap();
+        app.session.set_tool_option("stopEditing", &json!(true));
+        let ctx = egui::Context::default();
+        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "whole object covers every paragraph");
+        app.run("object.group", json!({})).unwrap();
+        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "group descendant has mixed paragraphs");
+        app.run("text.setStyle", json!({"justify": "center"})).unwrap();
+        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Center]);
+        let group = app.session.active().unwrap().selection.objects.clone();
+        let other = app.run("text.create", json!({"x": 20, "y": 100, "text": "C"})).unwrap()["id"].clone();
+        let mut ids: Vec<Value> = group.iter().map(|id| json!(id.0)).collect();
+        ids.push(other);
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "different selected objects");
+        app.run("select.set", json!({"ids": []})).unwrap();
+        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "no-text default stays unchanged");
+        let (mut empty, _) = editing_text("");
+        assert_eq!(alignment_frame(&egui::Context::default(), &mut empty, 28.0).0, [Justify::Left]);
+    }
 
     /// New Hebrew type aligns to the start of its direction (Align Right shows), an explicit
     /// alignment stays as chosen, and Paragraph Direction (with the Indic options) sets the

@@ -1,5 +1,7 @@
 # Releasing VectorCraft
 
+> **Last updated:** 2026-10-12 · **Change:** minor (RPM runtime capabilities and metadata checks, #1275)
+
 Every push to the `release` branch runs `.github/workflows/release.yml`. The workflow builds
 installers for macOS, Windows, Linux (including Flatpak bundles and a RISC-V tarball) and FreeBSD, plus the web build, and creates or updates a
 **draft** GitHub Release named `VectorCraft v<version>`. Nobody sees a draft until a maintainer
@@ -165,6 +167,23 @@ glibc 2.35 or newer: Ubuntu 22.04+, Debian 12+, Fedora 36+ and RHEL 10. Moving t
 image raises that floor, so do it deliberately. After packaging, the job prints the `.deb`'s
 metadata and contents, runs `ldd` on the binary and runs each AppImage with `--version`.
 
+**RPM dependencies.** The x86_64 and aarch64 RPMs require 64-bit shared-library
+capabilities rather than distribution-specific package names: `libc`, libm's `GLIBC_2.35`,
+`libgcc_s`, `libxkbcommon`, and either Vulkan or EGL. Windowing and GPU
+libraries are loaded at runtime, so `ldd` alone does not list every requirement.
+The glibc capability enforces the same floor as the `.deb`; a distribution with
+an older glibc is not supported by these binaries. It names libm, whose `hypot` and `hypotf`
+are the binaries' GLIBC_2.35 symbols: RHEL 9's glibc 2.34 provides `libc.so.6(GLIBC_2.35)`
+through backports, so a libc capability let it install binaries that can't start. Weak
+recommendations still use package names and do not block installation.
+
+Before publishing a Linux release:
+
+- [ ] Check `rpm -qp --requires` on both architectures for the runtime capabilities
+  above, including the Vulkan/EGL alternative and glibc floor.
+- [ ] Install and start the package on the target RPM distributions. Synthetic
+  provider tests verify metadata resolution, not a real desktop installation.
+
 **RISC-V.** The `linux-riscv64` job cross-compiles `riscv64gc-unknown-linux-gnu` on `ubuntu-24.04`
 against riscv64 libraries from ports.ubuntu.com (so the floor there is glibc 2.39) and runs
 `package.sh --formats tar` with `CROSS_ARCH`, `CROSS_TARGET`, `CROSS_COMPILE` and
@@ -220,3 +239,10 @@ warning, never a failed build.
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | notarization (`APPLE_PASSWORD` is an app-specific password) |
 | `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | Windows signing with a `.pfx` |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_CERT_PROFILE` | Windows signing with Azure Trusted Signing |
+
+## Revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-14 | minor | RPM glibc floor names libm's `GLIBC_2.35`: RHEL 9's glibc 2.34 provides libc's through backports |
+| 2026-10-12 | minor | RPM dependencies use 64-bit runtime capabilities and enforce glibc 2.35 (#1275); real distro install/start-up checks remain pending |

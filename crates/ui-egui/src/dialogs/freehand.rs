@@ -2,8 +2,8 @@
 //! Eraser): the options each tool keeps, which last across tool switches and are saved with the
 //! preferences. OK sets them with `tool.setOption {tool, values}`.
 //!
-//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush and Smooth), `fill` (Pencil and
-//! Paintbrush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and
+//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush and Smooth), `fill` and `keepSelected`
+//! (Pencil and Paintbrush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and
 //! Paintbrush) and `size` (points; Blob Brush and Eraser).
 
 use serde_json::{Map, Value, json};
@@ -23,7 +23,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_wid
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 5] = ["fidelity", "size", "fill", "closeWithin", "editWithin"];
+const KEYS: [&str; 6] = ["fidelity", "size", "fill", "keepSelected", "closeWithin", "editWithin"];
 
 /// Width of the label column: wide enough for the tolerances' labels when there are any.
 fn label_w(d: &Dialog) -> f32 {
@@ -98,6 +98,9 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     if d.fields.contains_key("fill") {
         check(ui, d, "fill", tl!("Fill new strokes"));
+    }
+    if d.fields.contains_key("keepSelected") {
+        check(ui, d, "keepSelected", tl!("Keep selected"));
         ui.add_space(6.0);
     }
     if d.fields.contains_key("closeWithin") {
@@ -170,7 +173,7 @@ mod tests {
         app.run("tool.options", json!({"tool": "smooth"})).unwrap();
         let text = painted(&mut app);
         assert!(text.contains("Smooth Tool Options") && text.contains("Fidelity:"), "{text}");
-        assert!(!text.contains("Fill new strokes") && !text.contains("Size:"), "{text}");
+        assert!(!text.contains("Fill new strokes") && !text.contains("Keep selected") && !text.contains("Size:"), "{text}");
         for tool in ["blobBrush", "eraser"] {
             app.run("tool.options", json!({"tool": tool})).unwrap();
             let text = painted(&mut app);
@@ -206,6 +209,45 @@ mod tests {
         super::super::confirm(&mut app).unwrap();
         let smooth = anchors(&mut app, 200.0);
         assert!(smooth < precise, "{smooth} anchors at fidelity 12, {precise} at the default");
+    }
+
+    #[test]
+    fn the_new_path_is_selected_only_with_keep_selected_on() {
+        let mut app = app();
+        // A stroke of `tool` along height `y0`; the ids selected afterwards and the new path's id.
+        let stroke = |app: &mut VectorcraftApp, tool: &str, y0: f64| {
+            app.select_tool(tool);
+            let view = app.view_info();
+            let pointer = |kind, x| vectorcraft_tools::PointerEvent::new(kind, x, y0);
+            crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Down, 20.0), view);
+            for x in [60.0, 100.0, 140.0] {
+                crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Drag, x), view);
+            }
+            crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Up, 180.0), view);
+            let st = app.session.doc().unwrap();
+            (st.selection.objects.clone(), st.doc.layers[0].children().unwrap().last().unwrap().id)
+        };
+        for tool in ["pencil", "paintbrush"] {
+            app.run("select.set", json!({"ids": []})).unwrap();
+            // On by default: the new path is selected.
+            app.run("tool.options", json!({"tool": tool})).unwrap();
+            assert!(painted(&mut app).contains("Keep selected"), "{tool}");
+            let d = app.ui.dialog.as_mut().unwrap();
+            assert!(d.bool("keepSelected"), "{tool}");
+            super::super::confirm(&mut app).unwrap();
+            let (selected, id) = stroke(&mut app, tool, 100.0);
+            assert_eq!(selected, vec![id], "{tool}");
+            // Off: the next stroke leaves the selection as it was.
+            app.run("tool.options", json!({"tool": tool})).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert("keepSelected".into(), json!(false));
+            super::super::confirm(&mut app).unwrap();
+            // It lasts while another tool is chosen.
+            app.select_tool("selection");
+            assert_eq!(app.session.tool_options_of(tool)["keepSelected"].as_bool(), Some(false), "{tool}");
+            let (selected, new) = stroke(&mut app, tool, 200.0);
+            assert_ne!(new, id, "{tool} drew a new path");
+            assert_eq!(selected, vec![id], "{tool}");
+        }
     }
 
     #[test]

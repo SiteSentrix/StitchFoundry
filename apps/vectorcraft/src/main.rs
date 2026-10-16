@@ -1,12 +1,13 @@
 //! VectorCraft desktop app.
 //!
 //! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>] [--automation-write-root <dir>]]
-//! [--in-window-menus] [files…]`
+//! [--in-window-menus] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
 //!
 //! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
 //! macOS instead of the macOS menu bar (`mac_menu`).
 //!
-//! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
+//! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`; a port from 1 to 65535, or the app doesn't
+//! start) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
 //! See `vectorcraft_ui_egui::control` for the methods. `--automation-read-root` and
 //! `--automation-write-root` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`) confine the
@@ -35,6 +36,8 @@ mod mac_fonts;
 #[cfg(target_os = "macos")]
 mod mac_menu;
 #[cfg(target_os = "macos")]
+mod mac_screen_color;
+#[cfg(target_os = "macos")]
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
@@ -43,6 +46,7 @@ mod printing;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 mod system_fonts;
 mod window;
+mod window_frame;
 mod xwayland;
 
 use vectorcraft_engine::Session;
@@ -60,6 +64,8 @@ struct App {
     graphics_lost: bool,
     /// Frames the UI has run (see [`end_before_teardown`]).
     frames: u64,
+    /// Keeps the custom title bar's window borderless (Windows, #1758).
+    window_frame: Option<window_frame::WindowFrameFn>,
 }
 
 impl eframe::App for App {
@@ -70,6 +76,11 @@ impl eframe::App for App {
         file_access::unconfined(|| self.logic_frame(ctx, frame));
     }
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        // winit gives the window its caption back when it changes the window's flags (maximize,
+        // restore, …): take it off again before the frame is laid out (#1758).
+        if let Some(window_frame) = self.window_frame.as_mut() {
+            window_frame();
+        }
         #[cfg(target_os = "macos")]
         if self.app.services.native_menu.is_some() {
             mac_menu::raw_input_hook(raw);
@@ -85,6 +96,11 @@ impl eframe::App for App {
             self.app.titlebar_inset = inset.unwrap_or(mac_window::DEFAULT_INSET);
         }
         file_access::unconfined(|| self.app.ui(ui));
+        // Preferences are written when confirmed, not only at exit: a session ended any other way
+        // (the system shutting down, the process ended or crashing) used to lose them (#1747).
+        if self.app.take_prefs_changed() {
+            file_access::unconfined(|| save_prefs(&self.app));
+        }
         // Not while a file dialog's sheet has the keyboard: its name field's composition would go.
         #[cfg(target_os = "macos")]
         if !self.app.file_dialog_open() && self.app.take_ime_discard() {
@@ -307,10 +323,17 @@ dialog_settings!(rfd::FileDialog, rfd::AsyncFileDialog);
 fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
     let pick = match request {
         PickRequest::Open(pick) | PickRequest::Save(pick) => pick,
-        PickRequest::OpenMany => return fileio::place_filters().fold(d.title("Place"), |d, (name, exts)| d.filter(name, exts)),
+        PickRequest::OpenMany => {
+            return fileio::place_filters().fold(d.title(vectorcraft_ui_egui::i18n::t("Place")), |d, (name, exts)| {
+                d.filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts)
+            });
+        }
         PickRequest::Folder => return d,
     };
-    let d = pick.filters.iter().fold(d, |d, (name, exts)| d.filter(name, exts));
+    let d = pick
+        .filters
+        .iter()
+        .fold(d, |d, (name, exts)| d.filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts));
     let d = match &pick.folder {
         Some(folder) => d.folder(folder),
         None => d,
@@ -465,6 +488,8 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
             Box::pin(async move { picked.await.unwrap_or_default().iter().map(path).collect() })
         }
         PickRequest::Save(_) => {
+            // Nothing is added to the sheet once rfd has begun it: an accessory view set then made
+            // recent macOS versions dismiss the sheet at once, so nothing could be saved (#1800).
             let picked = dialog.save_file();
             Box::pin(async move { picked.await.iter().map(path).collect() })
         }
@@ -480,7 +505,11 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
 
 /// The host's services; `ui` is woken when a file dialog answers.
 fn services(parent: Parent, ui: egui::Context) -> Services {
+    use winit::raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+    let wayland = parent.as_ref().and_then(|w| w.window_handle().ok()).is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Wayland(_)));
     let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
+    #[cfg(target_os = "macos")]
+    let sampled_ui = ui.clone();
     Services {
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
         pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
@@ -489,10 +518,15 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
         // dialogs run the window's events while they are open.
         start_pick: cfg!(unix).then(|| Box::new(move |request: PickRequest| start_pick(request, &p5, &ui)) as vectorcraft_ui_egui::picks::StartPick),
         dialogs_are_sheets: cfg!(target_os = "macos"),
+        wayland,
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(write_file)),
         // Background Save and Export write from a worker thread.
         write_shared: Some(std::sync::Arc::new(write_file)),
+        // Native saves stream into the file as they are encoded.
+        stream_shared: Some(std::sync::Arc::new(|p: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
+            fileio::write_file_with(p, fill).map_err(|e| e.to_string())
+        })),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
         system_clipboard: Some(clipboard::system_clipboard()),
         // Linux checks whether Paste has something to take on a background thread: an X11 clipboard
@@ -507,6 +541,9 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
         // Links panel: Edit Original; Package: Show Package. Relink to Folder and Package pick folders.
         open_file: Some(Box::new(open_file)),
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
+        // Sample Color from Screen: the system's color sampler.
+        #[cfg(target_os = "macos")]
+        screen_color: Some(mac_screen_color::sampler(sampled_ui)),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
         // Embroidery › Design from Prompt: the request to the AI service, and the API key kept in a
@@ -595,10 +632,30 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     }
 }
 
+/// `stitchfoundry --help`. Headless work (convert, run, MCP) is `stitchfoundry-cli`'s.
+const USAGE: &str = "\
+Usage: stitchfoundry [options] [files…]
+
+Opens the StitchFoundry desktop app with the given files.
+
+Options:
+  --control <port>               Start the localhost JSON-lines control server on <port>
+                                 (or VECTORCRAFT_CONTROL_PORT)
+  --automation-read-root <dir>   Confine the files control requests read to <dir>
+  --automation-write-root <dir>  Confine the files control requests write to <dir>
+  --in-window-menus              Keep the menus inside the window on macOS
+                                 (or VECTORCRAFT_IN_WINDOW_MENUS=1)
+  --version                      Print the version and exit
+  -h, --help                     Print this help and exit
+
+Without a window (converting, scripting, the MCP server), use stitchfoundry-cli:
+  stitchfoundry-cli --help
+";
+
 fn main() -> std::process::ExitCode {
     // Validate roots before logging, font scans, preferences or the window: a missing value
     // must not clear an environment root and start the control channel without confinement.
-    let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
+    let mut control = automation_args::ControlArg::default();
     let root_env = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
     let mut roots_args =
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
@@ -606,7 +663,7 @@ fn main() -> std::process::ExitCode {
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
-        match roots_args.consume(&a, &mut args) {
+        match roots_args.consume(&a, &mut args).and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) }) {
             Ok(true) => continue,
             Ok(false) => {}
             Err(e) => {
@@ -615,16 +672,34 @@ fn main() -> std::process::ExitCode {
             }
         }
         match a.as_str() {
-            "--control" => control_port = args.next().and_then(|p| p.parse().ok()),
             "--in-window-menus" => in_window_menus = true,
             "--version" => {
                 println!("stitchfoundry {}", env!("CARGO_PKG_VERSION"));
+                return std::process::ExitCode::SUCCESS;
+            }
+            // Before anything starts, like `--version`: from a terminal or an agent's shell the app
+            // used to open (or hang without a display) instead (#2110).
+            "--help" | "-h" => {
+                // Not `print!`, which panics when standard output is closed (`| head -0`):
+                // there is nothing left to tell then.
+                let _ = std::io::Write::write_all(&mut std::io::stdout(), USAGE.as_bytes());
                 return std::process::ExitCode::SUCCESS;
             }
             _ => files.push(a),
         }
     }
     let automation_args::AutomationArgs { read_root, write_root, .. } = roots_args;
+    // After the arguments: `--control` and `--version` win over a bad environment value.
+    let control_port = match control.port {
+        Some(port) => Some(port),
+        None => match automation_args::env_control_port(std::env::var_os("VECTORCRAFT_CONTROL_PORT")) {
+            Ok(port) => port,
+            Err(e) => {
+                eprintln!("vectorcraft: {e}");
+                return std::process::ExitCode::FAILURE;
+            }
+        },
+    };
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
@@ -693,6 +768,16 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(feature = "wgpu")]
     let startup = std::sync::Arc::new(gpu::Startup::default());
+    // A driver that crashes the process while the window starts leaves this start recorded in the
+    // log folder; the next start leaves that adapter out (#2243). Runs without preferences, which
+    // write no log file, don't record their starts.
+    #[cfg(feature = "wgpu")]
+    let left_out = match log_dir().filter(|_| prefs_enabled()) {
+        Some(dir) => startup.track(&dir, gpu_pref, gpu::explicit_choice()),
+        None => gpu::LeftOut::default(),
+    };
+    #[cfg(feature = "wgpu")]
+    let crash = left_out.crash.clone();
     let custom_titlebar = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
@@ -722,18 +807,29 @@ fn main() -> std::process::ExitCode {
         options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-            create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, startup.clone()));
+            create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, left_out.adapters.clone(), startup.clone()));
             // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
             // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
             // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
-            create.instance_descriptor.backends = gpu::backends(create.instance_descriptor.backends, std::env::var_os("WGPU_BACKEND").is_some());
+            create.instance_descriptor.backends =
+                left_out.backends(gpu::backends(create.instance_descriptor.backends, std::env::var_os("WGPU_BACKEND").is_some()));
             // DX12 shaders compile with FXC, part of Windows: wgpu's default loads whichever
             // dxcompiler.dll the search path finds, and one without its dxil.dll fails every shader,
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
             create.instance_descriptor.backend_options.dx12.shader_compiler =
                 eframe::wgpu::Dx12Compiler::from_env().unwrap_or(eframe::wgpu::Dx12Compiler::Fxc);
+            // The window's surface may be as large as the adapter allows, not eframe's fixed
+            // 8192 px: a window stretched over several monitors, or grown by a display scale
+            // change, otherwise fails to configure its surface and the app closes (#1459).
+            let device = create.device_descriptor.clone();
+            create.device_descriptor = std::sync::Arc::new(move |adapter: &eframe::wgpu::Adapter| {
+                let mut descriptor = device(adapter);
+                let limit = &mut descriptor.required_limits.max_texture_dimension_2d;
+                *limit = gpu::surface_limit(*limit, adapter.limits().max_texture_dimension_2d);
+                descriptor
+            });
         }
         options
     };
@@ -793,6 +889,15 @@ fn main() -> std::process::ExitCode {
                         app.status(format!(
                             "The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}{hint}"
                         ));
+                    } else if let Some(crash) = &crash {
+                        app.status(match crash {
+                            gpu::Crash::Adapter { name, .. } => format!(
+                                "The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set"
+                            ),
+                            gpu::Crash::Listing => format!(
+                                "The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set"
+                            ),
+                        });
                     }
                     app.graphics_adapter = Some(summary);
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
@@ -827,7 +932,9 @@ fn main() -> std::process::ExitCode {
                 // The first frame is due from now (`gpu::watch_first_frame`).
                 #[cfg(feature = "wgpu")]
                 created.ready();
-                Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0 }))
+                // The content and the pointer stay aligned on Windows (#1758).
+                let window_frame = window_frame::service(cc, custom_titlebar);
+                Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0, window_frame }))
             }),
         )
     });

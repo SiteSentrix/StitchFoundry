@@ -26,7 +26,7 @@ fn node(s: &Session, id: NodeId) -> Node {
 
 fn spec(s: &Session, id: NodeId) -> BlendSpec {
     match node(s, id).kind {
-        NodeKind::Blend { spec, .. } => spec,
+        NodeKind::Blend { spec, .. } => *spec,
         _ => panic!("not a blend"),
     }
 }

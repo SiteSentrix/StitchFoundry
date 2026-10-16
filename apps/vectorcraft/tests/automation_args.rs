@@ -9,12 +9,17 @@ const BIN: &str = env!("CARGO_BIN_EXE_stitchfoundry");
 /// Invalid roots must exit before desktop initialization on every platform, including a CI
 /// machine with no display. A regression must fail rather than hang with a window open.
 fn rejects(args: &[&str], message: &str) {
+    rejects_with_env(args, &[], message);
+}
+
+fn rejects_with_env(args: &[&str], env: &[(&str, &str)], message: &str) {
     let mut child = Command::new(BIN)
         .args(args)
         .env_remove("VECTORCRAFT_CONTROL_PORT")
         .env_remove("VECTORCRAFT_AUTOMATION_READ_ROOT")
         .env_remove("VECTORCRAFT_AUTOMATION_WRITE_ROOT")
         .env("VECTORCRAFT_NO_PREFS", "1")
+        .envs(env.iter().copied())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -67,4 +72,25 @@ fn explicit_dash_folder_does_not_consume_version() {
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("stitchfoundry {}\n", env!("CARGO_PKG_VERSION")));
     assert!(out.stderr.is_empty());
+}
+
+/// `--control` without a port no longer starts the app without a control server, and the
+/// argument after it isn't reinterpreted (#1373).
+#[test]
+fn control_without_a_valid_port_fails_before_startup() {
+    let need = "--control needs a port number from 1 to 65535";
+    rejects(&["--control", "--automation-read-root", ".", "--automation-write-root", "."], &format!("{need}, not `--automation-read-root`"));
+    rejects(&["--control"], need);
+    rejects(&["--control", "abc"], &format!("{need}, not `abc`"));
+    rejects(&["--control=0"], &format!("{need}, not `0`"));
+    rejects(&["--control="], &format!("{need}, not ``"));
+    rejects(&["--control", "7979", "--control", "7980"], "--control given twice");
+    rejects_with_env(&[], &[("VECTORCRAFT_CONTROL_PORT", "abc")], "VECTORCRAFT_CONTROL_PORT needs a port number from 1 to 65535, not `abc`");
+}
+
+#[test]
+fn version_wins_over_a_bad_control_port_variable() {
+    let out = Command::new(BIN).arg("--version").env("VECTORCRAFT_CONTROL_PORT", "abc").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
 }

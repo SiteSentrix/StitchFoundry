@@ -179,7 +179,7 @@ fn image_node(s: &mut Session) -> NodeId {
             link: None,
             placement: Default::default(),
         };
-        d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(im)))?;
+        d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
         sel.set([id]);
         Ok(id)
     })

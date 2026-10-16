@@ -734,7 +734,9 @@ impl PathAlign {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AreaOptions {
+    #[serde(deserialize_with = "de_rows_or_columns")]
     pub rows: usize,
+    #[serde(deserialize_with = "de_rows_or_columns")]
     pub columns: usize,
     /// Gutter between rows/columns in points.
     pub gutter: f64,
@@ -763,6 +765,18 @@ impl Default for AreaOptions {
             fit: AreaFit::None,
         }
     }
+}
+
+impl AreaOptions {
+    /// The most rows, and the most columns, area type can have.
+    pub const MAX_ROWS_COLUMNS: usize = 100;
+}
+
+/// [`AreaOptions::rows`] or [`AreaOptions::columns`], read as a `u64` and clamped to
+/// 1..=[`AreaOptions::MAX_ROWS_COLUMNS`].
+fn de_rows_or_columns<'de, D: serde::Deserializer<'de>>(d: D) -> Result<usize, D::Error> {
+    let n = usize::try_from(u64::deserialize(d)?).unwrap_or(usize::MAX);
+    Ok(n.clamp(1, AreaOptions::MAX_ROWS_COLUMNS))
 }
 
 /// How area type and its frame fit each other. Serialized as `"none"`, `"autoHeight"` or

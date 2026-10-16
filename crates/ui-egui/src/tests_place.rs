@@ -141,8 +141,9 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
     }
 }
 
-/// Swatch libraries and color books, graphic style libraries, Libraries panel files, presets and
-/// plug-ins open as File → Open opens them, dropped with or without a position, on the canvas too.
+/// Swatch libraries and color books, graphic style libraries, Libraries panel files, presets,
+/// plug-ins and scripts open as File → Open opens them, dropped with or without a position, on the
+/// canvas too.
 #[test]
 fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let mut app = app();
@@ -150,7 +151,7 @@ fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let rect = laid_out(&mut app, &ctx);
     let on_canvas = rect.center() + vec2(60.0, -40.0);
     let libraries = ["a.vcswatches", "a.gpl", "a.ase", "a.acb", "a.vcstyles", "a.vclibrary"];
-    let presets_and_plugins = ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.wasm"];
+    let presets_and_plugins = ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.wasm", "a.jsx", "a.jsxinc", "a.jsxbin"];
     for name in libraries.into_iter().chain(presets_and_plugins) {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
         assert_eq!(app.drop_target(name, Some(on_canvas), true), DropTarget::Open, "{name} on the canvas");
@@ -175,6 +176,24 @@ fn a_dropped_swatch_library_opens_in_the_library_panel() {
     assert_eq!(app.ui.recent_files.first(), Some(&gpl), "added to Open Recent Files as File → Open adds it");
 }
 
+/// A script dropped on the window while a document is open shows its check, as File → Open shows
+/// it, and the document is left as it was.
+#[test]
+fn a_dropped_script_shows_its_check() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let path = temp_file("dropped.jsx", b"#target acme\napp.executeMenuCommand('acmecopyall');\n");
+    frame(&mut app, &ctx, vec![], &[&path], false);
+    let d = app.ui.dialog.as_ref().expect("the check is shown");
+    assert_eq!(d.kind, crate::dialogs::script_check::KIND, "{}", app.ui.status);
+    assert_eq!(
+        (d.fields["report"]["name"].as_str(), d.fields["report"]["needs"].clone()),
+        (Some("dropped.jsx"), json!(["language", "menuCommands"]))
+    );
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
+}
+
 /// A Libraries panel file dropped on the window while a document is open is added to the
 /// Libraries panel as a new library, as File → Open adds it.
 #[test]
@@ -189,6 +208,26 @@ fn a_dropped_libraries_panel_file_is_added_as_a_new_library() {
     let lib = app.session.execute("library.get", &json!({})).unwrap();
     let colors: Vec<&str> = lib["colors"].as_array().unwrap().iter().filter_map(|c| c["name"].as_str()).collect();
     assert_eq!((lib["name"].as_str(), colors), (Some("Dropped"), vec!["Red"]));
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
+}
+
+/// A shortcut set dropped on the window while a document is open opens Import Shortcut Set, as
+/// File → Open opens it: from its path (desktop) and from its bytes dropped on the canvas (web).
+#[test]
+fn a_dropped_shortcut_set_opens_import_shortcut_set() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let rect = laid_out(&mut app, &ctx);
+    let set = "/Menus {\n /Acme\\ Undo { /Modifiers 11 /Key 902 }\n}\n";
+    let path = temp_file("dropped.kys", set.as_bytes());
+    frame(&mut app, &ctx, vec![], &[&path], false);
+    let kind = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.kind.clone());
+    assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::shortcut_import::KIND), "{}", app.ui.status);
+    app.ui.dialog = None;
+    let target = app.drop_target("sent.kys", Some(rect.center()), false);
+    assert_eq!(target, DropTarget::Open);
+    crate::place::drop_files(&mut app, vec![(target, ("sent.kys".into(), None, set.as_bytes().to_vec()))]);
+    assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::shortcut_import::KIND), "{}", app.ui.status);
     assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
 }
 
@@ -453,6 +492,44 @@ fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     use crate::tests_removeanchors::{at, click_control, control_frame};
     let p = at(&control_frame(app, ctx, vec![]), label);
     click_control(app, ctx, p);
+}
+
+/// The Control bar's file name opens the link menu: Replace… puts the picked file in the image's
+/// place (an embedded image becomes linked) with the new file's own aspect ratio, fitted inside the
+/// old bounds; Placement Options… opens its dialog.
+#[test]
+fn the_control_bars_file_name_relinks_the_image() {
+    use crate::tests_removeanchors::{click_control, control_frame};
+    // Menu items are drawn after the space a check mark takes.
+    let item = |app: &mut VectorcraftApp, ctx: &egui::Context, label: &str| {
+        let texts = control_frame(app, ctx, vec![]);
+        texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let mut app = app();
+    let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
+    app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap();
+    let before = selected_image(&app).geometric_bounds().unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    click_label(&mut app, &ctx, "red.png");
+    for s in ["Replace…", "Go To Link", "Edit Original", "Update Link", "Placement Options…"] {
+        item(&mut app, &ctx, s);
+    }
+    let other = temp_file("blue.png", &png(60, 30, 72.0));
+    let picked = other.clone();
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    let p = item(&mut app, &ctx, "Replace…");
+    click_control(&mut app, &ctx, p);
+    let image = selected_image(&app);
+    let NodeKind::Image(im) = &image.kind else { panic!("an image") };
+    assert!(im.link.as_ref().is_some_and(|l| l.name() == "blue.png"), "relinked to the picked file");
+    let after = image.geometric_bounds().unwrap();
+    assert!((after.width() - before.width()).abs() < 1e-6 && (after.height() - before.height() / 2.0).abs() < 1e-6, "2:1, fitted: {after:?}");
+    assert!((after.center() - before.center()).hypot() < 1e-6, "centred where the old image was");
+    click_label(&mut app, &ctx, "blue.png");
+    let p = item(&mut app, &ctx, "Placement Options…");
+    click_control(&mut app, &ctx, p);
+    assert!(app.ui.dialog.is_some(), "Placement Options opens");
 }
 
 #[test]

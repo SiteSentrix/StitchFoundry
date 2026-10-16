@@ -126,6 +126,18 @@ fn every_version_declares_its_acadver_and_is_well_formed() {
 }
 
 #[test]
+fn r12_viewport_has_no_duplicate_group_codes() {
+    let d = shapes_doc();
+    let out = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
+    let vport = table(&out, "VPORT").into_iter().find(|o| kind(o) == "VPORT").expect("VPORT table record");
+    let codes: Vec<i32> = vport.iter().map(|pair| pair.0).collect();
+    let unique: std::collections::HashSet<_> = codes.iter().collect();
+    assert_eq!(unique.len(), codes.len(), "R12 VPORT record has duplicate group codes: {vport:?}");
+    let z = vport.iter().find(|pair| pair.0 == 36).map(|pair| pair.1.trim().parse::<f64>().unwrap());
+    assert_eq!(z, Some(1.0), "the view direction looks down the z axis");
+}
+
+#[test]
 fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     let d = shapes_doc();
     let out = export(&d, &opts(&d)).unwrap();
@@ -155,6 +167,7 @@ fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     // The ellipse: four cubics through clamped knots.
     let spline = &e[3];
     assert_eq!((get(spline, 71), get(spline, 73)), (Some("3"), Some("13")));
+    assert_eq!(get(spline, 70), Some("9"), "closed planar spline (#1299): 1 = closed, 8 = planar");
     assert_eq!(all(spline, 40), [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0]);
     // R14 has lightweight polylines but no lineweights: the stroke is a polyline width.
     let r14 = export(&d, &DxfOptions { version: DxfVersion::R14, ..opts(&d) }).unwrap();
@@ -172,6 +185,60 @@ fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     assert_eq!(k.iter().filter(|k| *k == "POLYLINE").count(), 3);
     assert!(k.iter().filter(|k| *k == "VERTEX").count() > 20, "the ellipse is flattened");
     assert!(r12.warnings.iter().any(|w| w.contains("R12 has no fills")), "{:?}", r12.warnings);
+}
+
+#[test]
+fn spline_closed_flags_follow_path_intent_across_versions_without_changing_geometry() {
+    let cases = [(true, true), (true, false), (false, false), (false, true)];
+    let make_doc = |keep_closure: bool| {
+        doc_with(|d| {
+            cases
+                .iter()
+                .map(|&(closed, returns)| {
+                    let start = Point::new(20.0, 20.0);
+                    let mut b = kurbo::BezPath::new();
+                    b.move_to(start);
+                    b.curve_to((80.0, 0.0), (80.0, 80.0), (20.0, 80.0));
+                    if returns {
+                        b.curve_to((0.0, 80.0), (0.0, 20.0), (20.0, 20.0));
+                    }
+                    if closed {
+                        if keep_closure {
+                            b.close_path();
+                        } else if !returns {
+                            // The open reference has the same final straight segment.
+                            b.line_to(start);
+                        }
+                    }
+                    path(d, PathData::from_bezpath(&b), Paint::None, Paint::solid(Color::rgb(0.0, 0.0, 0.0)), 2.0)
+                })
+                .collect()
+        })
+    };
+    let closed = make_doc(true);
+    let open = make_doc(false);
+    for version in DxfVersion::ALL {
+        let out = export(&closed, &DxfOptions { version, ..opts(&closed) }).unwrap();
+        let actual = entities(&out);
+        if version == DxfVersion::R12 {
+            let polys: Vec<_> = actual.iter().filter(|e| kind(e) == "POLYLINE").collect();
+            assert_eq!(polys.len(), cases.len());
+            for (poly, &(closed, _)) in polys.iter().zip(&cases) {
+                assert_eq!(get(poly, 70), Some(if closed { "1" } else { "0" }));
+            }
+            assert!(!actual.iter().any(|e| kind(e) == "SPLINE"));
+            continue;
+        }
+        let reference = entities(&export(&open, &DxfOptions { version, ..opts(&open) }).unwrap());
+        assert_eq!(actual.len(), cases.len());
+        for ((spline, reference), &(closed, _)) in actual.iter().zip(&reference).zip(&cases) {
+            assert_eq!(kind(spline), "SPLINE");
+            assert_eq!(get(spline, 70), Some(if closed { "9" } else { "8" }), "{version:?}");
+            let mut normalized = spline.clone();
+            normalized.iter_mut().filter(|p| p.0 == 70).for_each(|p| p.1 = "8".into());
+            assert_eq!(&normalized, reference, "all other entity properties, knots and controls: {version:?}");
+        }
+    }
 }
 
 #[test]
@@ -354,7 +421,7 @@ fn images_link_png_or_jpeg_files() {
             link: None,
             placement: Default::default(),
         };
-        vec![Node::new(d.alloc_id(), NodeKind::Image(im))]
+        vec![Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
     });
     d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
     let out = export(&d, &opts(&d)).unwrap();
@@ -386,4 +453,15 @@ fn crop_leaves_out_art_outside_the_region() {
     let o = DxfOptions { region: Rect::new(115.0, 0.0, 200.0, 100.0), crop: true, ..opts(&d) };
     assert_eq!(kinds(&export(&d, &o).unwrap()), ["SPLINE"]);
     assert_eq!(kinds(&export(&d, &DxfOptions { crop: false, ..o }).unwrap()).len(), 4);
+}
+
+#[test]
+fn crop_keeps_an_instance_whose_art_reaches_the_region() {
+    // The symbol's red rectangle, (100, 50) to (140, 90), drawn from (-50, -50): on the artboard,
+    // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
+    let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 50.0, 140.0, 90.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    let o = DxfOptions { crop: true, ..opts(&d) };
+    assert!(!kinds(&export(&d, &o).unwrap()).is_empty());
 }

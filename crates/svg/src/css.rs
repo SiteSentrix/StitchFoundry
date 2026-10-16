@@ -312,7 +312,8 @@ impl Rules<'_> {
         if !n.visible {
             return;
         }
-        let plain_group = n.name.is_none() && transparency(n).is_empty() && !n.appearance.effects.iter().any(|e| e.visible) && n.mask.is_none();
+        let plain_group =
+            n.name.is_none() && transparency(n).is_empty() && !n.appearance.effects.iter().any(|e| e.visible) && n.extras().mask.is_none();
         match &n.kind {
             NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => {}
             NodeKind::Layer { children, clip: false, .. } => children.iter().for_each(|c| self.object(c)),
@@ -394,7 +395,7 @@ impl Rules<'_> {
         let mut radius = None;
         let text = match &n.kind {
             NodeKind::Path { path, live, .. } => {
-                match corners(path, live.as_ref()) {
+                match corners(path, live.as_deref()) {
                     Some(Corners::Square) => {}
                     Some(Corners::Round(r)) => radius = Some(r.iter().map(|r| self.len(*r)).collect::<Vec<_>>().join(" ")),
                     Some(Corners::Ellipse) => radius = Some("50%".into()),
@@ -420,7 +421,7 @@ impl Rules<'_> {
         }
         art.props.extend(radius.map(|r| ("border-radius", r)));
         self.effects(n, text, &mut art);
-        if n.mask.as_ref().is_some_and(|m| !m.disabled) {
+        if n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
             art.unsupported("an opacity mask");
         }
         art
@@ -569,7 +570,8 @@ impl Rules<'_> {
         }
     }
 
-    /// Shadows and glows as `box-shadow` (type: `text-shadow`), a Gaussian blur as `filter`.
+    /// Shadows and glows as `box-shadow` (type: `text-shadow`), a Gaussian blur as `filter`. A drop
+    /// shadow with Darkness is left out and the art marked unsupported.
     fn effects(&mut self, n: &Node, text: bool, art: &mut Art) {
         let fx = &n.appearance.effects;
         if fx.iter().any(|e| e.visible && !vectorcraft_effects::is_raster(&e.id)) {
@@ -579,6 +581,7 @@ impl Rules<'_> {
         let mut filter = None;
         for f in vectorcraft_effects::raster_effects(fx) {
             match f {
+                RasterFx::DropShadow { darkness: Some(_), .. } => art.unsupported("drop shadows with Darkness"),
                 RasterFx::DropShadow { opacity, dx, dy, blur, color, .. } => {
                     shadows.push(format!("{} {} {} {}", self.len(dx), self.len(dy), self.len(blur), color_css(&color, opacity)))
                 }

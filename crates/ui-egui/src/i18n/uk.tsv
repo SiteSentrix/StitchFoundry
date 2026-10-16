@@ -56,6 +56,10 @@
 	Draft	Чорнове
 	Good	Гарне
 	Best	Найкраще
+	Mode	Режим
+	Blur Mode	Режим розмиття
+	Edge Only	Лише краї
+	Overlay Edge	Накладання країв
 	  — missing	  — відсутній
 	 to search every command	 для пошуку будь-якої команди
 	(closest)	(найближчий)
@@ -214,7 +218,6 @@
 	Art	Малюнок
 	Art using a deleted global swatch keeps its colour.	Графіка з видаленим глобальним зразком зберігає свій колір.
 	Artboard Options	Параметри монтажної області
-	Artboard Options: edit with the Artboard tool	Параметри монтажної області: редагуються інструментом «Монтажна область»
 	Artboard Options…	Параметри монтажної області…
 	Artboard Tool	Інструмент «Монтажна область»
 	Artboard {number}	Монтажна область {number}
@@ -237,6 +240,7 @@
 	Author Title:	Посада автора:
 	Author:	Автор:
 	Auto	Авто
+	Auto Color	Автоколір
 	Automatic	Автоматично
 	Auto Size New Area Type	Автоматично підганяти розмір нового тексту в області
 	Auto Spell Check	Автоматична перевірка орфографії
@@ -358,6 +362,59 @@
 	Character Style Options	Параметри стилю символу
 	Character Styles	Стилі символів
 	Check Links	Перевірити зв’язки
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Перевірити сценарій
+	Check Script…	Перевірити сценарій…
+	Copy Report	Копіювати звіт
+	StitchFoundry read this script without running it.	StitchFoundry прочитав цей сценарій, не запускаючи його.
+	Needs nothing beyond plain JavaScript	Потрібен лише звичайний JavaScript
+	Needs the script language's own objects or directives	Потрібні власні об’єкти або директиви мови сценаріїв
+	Needs the document model	Потрібна модель документа
+	Needs files	Потрібні файли
+	Needs menu commands	Потрібні команди меню
+	Needs dialogs	Потрібні діалогові вікна
+	Needs features only the reference app has	Потрібні функції, які має лише еталонна програма
+	Outside the document	Поза документом
+	Writes, moves or deletes files	Записує, переміщує або видаляє файли
+	Opens files in other apps	Відкриває файли в інших програмах
+	Opens network connections	Відкриває мережеві з’єднання
+	Loads native code	Завантажує нативний код
+	Sends messages to other apps	Надсилає повідомлення іншим програмам
+	Reads or sets environment variables	Читає або задає змінні середовища
+	Runs code the checker can't read	Виконує код, який перевірка не може прочитати
+	Changes the reference app's preferences	Змінює налаштування еталонної програми
+	Menu commands	Команди меню
+	Names the script builds as it runs: {count}	Імена, які сценарій складає під час виконання: {count}
+	Document model	Модель документа
+	Object types: {names}	Типи об’єктів: {names}
+	Directives	Директиви
+	Includes	Підключені файли
+	Checked	Перевірено
+	Not followed: outside the script's folder	Пропущено: поза папкою сценарію
+	Includes itself	Підключає сам себе
+	Not read	Не прочитано
+	Not read: a limit was reached	Не прочитано: досягнуто межі
+	Compiled or not text	Скомпільований або не текст
+	Problems	Проблеми
+	String not closed	Рядок не закрито
+	Comment not closed	Коментар не закрито
+	Regular expression not closed	Регулярний вираз не закрито
+	Template literal not closed	Шаблонний рядок не закрито
+	XML literal not closed	XML-літерал не закрито
+	Bracket never closed	Дужку не закрито
+	Closing bracket with no opening one	Закривна дужка без відкривної
+	Syntax newer than ES3	Синтаксис, новіший за ES3
+	Unknown directive	Невідома директива
+	Not valid UTF-8: unreadable bytes were replaced	Недійсний UTF-8: нечитабельні байти замінено
+	Mixed line endings	Змішані кінці рядків
+	Nesting too deep to follow	Надто глибока вкладеність
+	line {line}	рядок {line}
+	lines {lines}	рядки {lines}
+	{file}, line {line}	{file}, рядок {line}
+	Compiled script: ask its author for the .jsx file	Скомпільований сценарій: попросіть в автора файл .jsx
+	Too large to check	Завеликий для перевірки
+	Not a script for the reference app	Це не сценарій для еталонної програми
+	Some lists were cut short at their limit.	Деякі списки обрізано на межі.
 	Check Spelling…	Перевірити орфографію…
 	Choose a folder	Виберіть папку
 	Choose…	Вибрати…
@@ -420,6 +477,7 @@
 	Color bars	Кольорові смуги
 	Color blindness – Deuteranopia-type	Дальтонізм - дейтеранопія
 	Color blindness – Protanopia-type	Дальтонізм - протанопія
+	Color blindness – Tritanopia-type	Дальтонізм - тританопія
 	Color Burn	Затемнення основи
 	Color conversion:	Перетворення кольору:
 	Color Dodge	Освітлення основи
@@ -588,6 +646,7 @@
 	Cyan	Блакитний
 	Dark	Темний
 	Darken	Затемнення
+	Darkness	Темність
 	dash	штрих
 	Dash Pattern	Шаблон штрихів
 	Dashed	Штриховий
@@ -703,6 +762,8 @@
 	Do Not Move	Не переміщати
 	Do you want to save the changes you made to “{name}”?	Зберегти зміни, внесені до «{name}»?
 	Can't open “{name}”.	Не вдається відкрити «{name}».
+	Can't save “{name}”.	Не вдається зберегти «{name}».
+	Can't export “{name}”.	Не вдається експортувати «{name}».
 	Document	Документ
 	Document Color Mode	Колірний режим документа
 	Document Info	Відомості про документ
@@ -938,6 +999,9 @@
 	Export…	Експорт…
 	Extrude & Bevel…	Видавлювання та фаска…
 	Eyedropper	Піпетка
+	Sample Color from Screen	Взяти колір з екрана
+	This system has no screen color sampler	У цій системі немає засобу вибору кольору з екрана
+	The active document changed while the screen color sampler was open	Активний документ змінився, поки був відкритий засіб вибору кольору з екрана
 	Eyedropper Applies:	Піпетка застосовує:
 	Eyedropper Options	Параметри піпетки
 	Eyedropper Picks Up:	Піпетка бере:
@@ -969,6 +1033,7 @@
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів
 	Fill and Stroke	Заливка та обведення
 	Fill new strokes	Заповнювати нові обведення
+	Keep selected	Залишати вибраним
 	Fill Color	Колір заливки
 	Fill New Type Objects With Placeholder Text	Заповнювати нові текстові об’єкти текстом-заповнювачем
 	Fill Rule	Правило заливки
@@ -992,6 +1057,7 @@
 	Fit Headline	Підігнати заголовок
 	Decrease Font Size	Зменшити розмір шрифту
 	Increase Font Size	Збільшити розмір шрифту
+	Reset Tracking and Kerning	Скинути трекінг і кернінг
 	Spacing	Інтервал
 	Step Type	Підганяти текст кроками
 	Fit in View	Вписати у вигляд
@@ -1109,12 +1175,31 @@
 	Graph	Діаграма
 	Graph Data	Дані діаграми
 	Graph Type	Тип діаграми
+	Graph Design	Дизайн діаграми
+	Graph Marker	Маркер діаграми
+	New Design	Новий дизайн
+	Delete Design	Видалити дизайн
+	Paste Design	Вставити дизайн
+	Select Unused	Вибрати невикористані
+	Import Data…	Імпорт даних…
+	Transpose	Транспонувати
+	Switch x/y	Поміняти x/y
+	Number of Decimals:	Кількість десяткових знаків:
+	Column Width:	Ширина стовпця:
+	No Legend	Без легенди
+	Standard Legend	Стандартна легенда
+	Legends in Wedges	Легенди в секторах
+	Ratio	Пропорційно
+	Even	Однаково
+	Stacked	Стосом
 	Graphic Style	Графічний стиль
 	Graphic Style Libraries	Бібліотеки графічних стилів
 	Graphic Style Libraries Menu	Меню "Бібліотеки графічних стилів"
 	Graphic Style Library	Бібліотека графічних стилів
 	Graphic Style Options	Параметри графічного стилю
 	Graphic Style Options…	Параметри графічного стилю…
+	Symbol Options	Параметри символу
+	Symbol Options…	Параметри символу…
 	Graphic Styles	Графічні стилі
 	Graphic Styles Options	Параметри графічних стилів
 	Graphics	Графіка
@@ -1173,6 +1258,7 @@
 	Hide Print Tiling	Приховати розбиття для друку
 	Hide Rulers	Приховати лінійки
 	Hide Slices	Приховати фрагменти
+	Hide Template	Приховати шаблон
 	Hide Text Threads	Приховати зв’язки тексту
 	Hide Thumbnail	Приховати мініатюру
 	Hide Thumbnails	Приховати мініатюри
@@ -1215,6 +1301,9 @@
 	Identify Objects By	Визначати об’єкти по
 	Ignore	Ігнорувати
 	Ignore Artboards (all the art as one page)	Ігнорувати монтажні області (весь малюнок як одна сторінка)
+	Auto Grouping	Автогрупування
+	Enhanced	Покращений
+	Ignore Color	Ігнорувати колір
 	Ignore White	Ігнорувати білий
 	Palette:	Палітра:
 	Limited	Обмежена
@@ -1275,6 +1364,8 @@
 	Internal CSS	Внутрішній CSS
 	Internet Standard RGB (sRGB)	Стандартний інтернет-RGB (sRGB)
 	Intersect	Перетин
+	Intertwine	Переплетення
+	Arrange Intertwine Area	Упорядкувати ділянку переплетення
 	Inverse	Обернене
 	Invert	Інвертувати
 	Invert Colors	Інвертувати кольори
@@ -1305,6 +1396,44 @@
 	Keyboard Shortcut Conflicts	Конфлікти поєднань клавіш
 	Keyboard Shortcut Set	Набір клавіш
 	Keyboard Shortcuts…	Поєднання клавіш…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Імпорт набору сполучень клавіш
+	Import Shortcut Set…	Імпортувати набір сполучень клавіш…
+	Each entry of the file is matched to a StitchFoundry tool, command or panel. Check the matches and answer what is left.	Кожен запис файлу зіставляється з інструментом, командою або панеллю StitchFoundry. Перевірте зіставлення й дайте відповідь на решту.
+	Keys	Клавіші
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Файл записує клавіші та модифікатори як коди. Перевірте запропоновані значення й укажіть коди, які ще невідомі.
+	Click, then press the key this code stands for (Esc cancels)	Клацніть, потім натисніть клавішу, яку позначає цей код (Esc скасовує)
+	Press a key…	Натисніть клавішу…
+	from your earlier imports	з ваших попередніх імпортів
+	from the format's public description	за загальнодоступним описом формату
+	not known yet	ще невідомо
+	Shortcuts	Сполучення клавіш
+	Shortcut	Сполучення клавіш
+	In the File	У файлі
+	In StitchFoundry	У StitchFoundry
+	Needs Attention Only	Лише ті, що потребують уваги
+	Ready	Готово
+	Needs a choice	Потрібен вибір
+	Needs a key	Потрібна клавіша
+	No equivalent	Немає відповідника
+	Tools take a single key (optionally with Shift)	Інструментам призначається одна клавіша (можна із Shift)
+	A later row takes this shortcut	Це сполучення забирає рядок нижче
+	Same item as a later row	Той самий елемент, що й у рядку нижче
+	Start from StitchFoundry Defaults	Почати зі значень StitchFoundry за промовчанням
+	Add to the Current Shortcuts	Додати до поточних сполучень клавіш
+	Remember My Choices	Запам’ятати мій вибір
+	{ready} of {total} ready	Готово: {ready} з {total}
+	The file is too large to read in full, so only its first part is listed.	Файл завеликий, щоб прочитати його повністю, тому показано лише його першу частину.
+	Report copied	Звіт скопійовано
+	Line {line}	Рядок {line}
+	Line {line}: {name}: {status}	Рядок {line}: {name}: {status}
+	Imported. Press OK to keep the imported set.	Імпортовано. Натисніть «ОК», щоб зберегти імпортований набір.
+	Read Shortcut Set File	Прочитати файл набору сполучень клавіш
+	Import Matches	Зіставлення імпорту
+	Remember Import Matches	Запам’ятати зіставлення імпорту
+	Forget Import Matches	Забути зіставлення імпорту
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	збігається з {n} сполученням за промовчанням|збігається з {n} сполученнями за промовчанням|збігається з {n} сполученнями за промовчанням
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	не прочитано {n} частину файлу|не прочитано {n} частини файлу|не прочитано {n} частин файлу
 	Keywords:	Ключові слова:
 	Knife	Ніж
 	Knockout Group	Група з вирізуванням
@@ -1349,6 +1478,20 @@
 	Left:	Зліва:
 	Legacy Macintosh RGB (Gamma 1.8)	Застарілий Macintosh RGB (гама 1.8)
 	Legacy vector clipboard	Застарілий векторний буфер обміну
+	Legacy (version 7)	Застарілий (версія 7)
+	Transparent Images:	Прозорі зображення:
+	Flatten	Об’єднати
+	Omit	Пропустити
+	Legacy .ai Options	Параметри застарілого .ai
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Застарілий файл .ai містить одну монтажну область: кожна позначена монтажна область зберігається в окремий файл.
+	{count} of {total} artboards	{count} з {total} монтажних областей
+	Check an artboard to save.	Позначте монтажну область для збереження.
+	Hidden Objects:	Приховані об’єкти:
+	Hidden Layer	Прихований шар
+	Make Visible	Зробити видимими
+	Text:	Текст:
+	Editable	Редагований
+	PDF-compatible	Сумісний із PDF
 	Legacy vector clipboard (no transparency)	Застарілий векторний буфер обміну (без прозорості)
 	Less	Менше
 	Letter	Letter
@@ -1872,6 +2015,7 @@
 	Panel menu	Меню панелі
 	Panel Options…	Параметри панелі…
 	Panels	Панелі
+	Panels Except Tools and Control	Панелі, крім інструментів і панелі керування
 	Paragraph	Абзац
 	Paragraph Style	Стиль абзацу
 	Paragraph Style Options	Параметри стилю абзацу
@@ -1895,6 +2039,7 @@
 	Pathfinder Options…	Параметри обробки контурів…
 	Pathfinders:	Обробка контурів:
 	Paths	Контури
+	Path Length	Довжина контурів
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Контури: {paths} Опорні точки: {anchors} Кольори: {colors}
 	Pattern	Візерунок
 	Pattern Editing	Редагування візерунка
@@ -2129,6 +2274,9 @@
 	Rectangle: Sunshine	Прямокутник: Сонце
 	Rectangle…	Прямокутник…
 	Rectangular Grid	Прямокутна сітка
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	Горизонтальні розділювачі:
+	Vertical Dividers:	Вертикальні розділювачі:
 	Rectangular Grid Tool	Інструмент «Прямокутна сітка»
 	Red	Червоний
 	Redefine Character Style	Перевизначити стиль символу
@@ -2192,6 +2340,13 @@
 	Relinked {n} image(s); not in that folder: {}	Відновлено зв’язок із зображеннями: {n}; немає в цій папці: {}
 	Relinked {} image(s)	Відновлено зв’язок із зображеннями: {}
 	Relink…	Відновити зв’язок…
+	Find Linked Files	Знайти пов’язані файли
+	Find Linked Files in Folder…	Знайти пов’язані файли в папці…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Виберіть для кожного пов’язаного файлу файл, з яким потрібно відновити зв’язок. Спершу йдуть файли з розміром і вмістом, збереженими разом зі зв’язком.
+	Same file	Той самий файл
+	Same size	Той самий розмір
+	Don't Relink	Не відновлювати зв’язок
+	Copy into the document's folder	Копіювати в папку документа
 	Reload Plug-ins	Перезавантажити модулі
 	Remove	Прибрати
 	Remove Anchor Points	Забрати опорні точки
@@ -2240,6 +2395,7 @@
 	Reset Panel	Скинути панель
 	Reset Preferences	Скинути налаштування
 	Reset Profiles	Скинути профілі
+	Rotate View	Повернути вид
 	Reset Rotate View	Скинути поворот виду
 	Reset the rows to the artwork's colors	Скинути рядки до кольорів малюнка
 	Reset to Default	Скинути до значень за замовчуванням
@@ -2439,6 +2595,17 @@
 	Scripts	Сценарії
 	Search	Пошук
 	Search All	Шукати скрізь
+	Filter	Фільтр
+	Clear All	Очистити все
+	By Object	За об’єктами
+	By Layer	За шарами
+	Images	Зображення
+	Groups	Групи
+	Linked Files	Пов’язані файли
+	Locked	Заблоковані
+	Hidden	Приховані
+	Filter Layers Panel Rows	Фільтрувати рядки панелі «Шари»
+@msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
 	Search commands and tools	Пошук команд та інструментів
 	Search commands and tools…	Пошук команд та інструментів…
 	Search Commands…	Пошук команд…
@@ -2459,6 +2626,7 @@
 	Select an image to see its Link Info.	Виберіть зображення, щоб побачити зв’язок.
 	Select an image to trace	Виберіть зображення для трасування
 	Select Anchors	Виділити опорні точки
+	Select Segments	Виділити сегменти
 	Select Appearance Item	Виділити елемент оформлення
 	Select Art	Виділити малюнок
 	Select art and choose Object › Pattern › Make.	Виділіть малюнок та виберіть «Об’єкт › Візерунок › Створити».
@@ -2504,7 +2672,6 @@
 	Set base color to the current color	Зробити поточний колір базовим
 	Set Bounds	Задати межі
 	Set Current Layer	Зробити шар поточним
-	Set Key Object	Задати ключовий об’єкт
 	Set Keyboard Shortcut	Задати клавіші
 	Set Mesh Point Color	Задати колір точки сітки
 	Set Preference	Задати налаштування
@@ -2576,6 +2743,7 @@
 	Show Modified	Показати змінені
 	Show Note	Показати примітку
 	Show Options	Показати параметри
+	Color Panel Options	Параметри панелі «Колір»
 	Show Package	Показати пакет
 	Show Panel	Показати панель
 	Show Pattern Swatches	Показати зразки візерунків
@@ -2588,6 +2756,7 @@
 	Show Slices	Показати фрагменти
 	Show Swatch Bounds	Показати межі зразка
 	Show Swatch Kinds	Показати типи зразків
+	Show Template	Показати шаблон
 	Show Text Threads	Показати зв’язки тексту
 	Show The Home Screen When No Documents Are Open	Показувати початковий екран, коли документи не відкриті
 	Show Thumbnail	Показати мініатюру
@@ -2669,6 +2838,7 @@ effect	Points	Точки
 	Snap to Glyph	Прив’язати до гліфу
 	Snap to Grid	Прив’язати до сітки
 	Snap to Pixel	Прив’язати до пікселя
+	Precise Cursors	Точні курсори
 	Snap to Point	Прив’язати до точки
 	Snapping Tolerance	Допуск прив’язки
 	Social Square Post 1080×1080	Квадратний пост для соцмереж 1080×1080
@@ -2694,6 +2864,8 @@ effect	Points	Точки
 	Spiral Tool	Інструмент «Спіраль»
 	Split Freeform Line	Розділити довільну лінію
 	Split Into Grid	Розділити на сітку
+	Total:	Усього:
+	Add Guides	Додати напрямні
 	Split Into Grid…	Розділити на сітку…
 	Split Path	Розділити контур
 	spot	плашковий
@@ -3092,6 +3264,7 @@ effect	Points	Точки
 	Vertical %	По вертикалі, %
 	Vertical Align Bottom	Вирівняти по нижньому краю по вертикалі
 	Vertical Align Center	Вирівняти по центру по вертикалі
+	Horizontal & Vertical Align Center	Вирівняти по центру по горизонталі й вертикалі
 	Vertical Align Top	Вирівняти по верхньому краю по вертикалі
 	Vertical Area Type Tool	Інструмент «Вертикальний текст в області»
 	Vertical Distribute Bottom	Розподілити по нижньому краю по вертикалі
@@ -3179,6 +3352,7 @@ effect	Points	Точки
 	{warning}: click to correct to the closest color ({hex})	{warning}: натисніть , щоб виправити найближчий колір ({hex})
 	“{file}” is protected by a password.	"{file}" захищений паролем.
 	● Recording	● Запис
+imageTrace	Outline	Контур
 @plural	{n} item|{n} items	{n} елемент|{n} елементи|{n} елементів
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Таблиця кольорів ({n} колір)|Таблиця кольорів ({n} кольори)|Таблиця кольорів ({n} кольорів)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Видалити цей графічний стиль ({n})?|Видалити ці графічні стилі ({n})?|Видалити ці графічні стилі ({n})?
@@ -3251,6 +3425,7 @@ effect	Points	Точки
 	 to set spacing and orientation	 для завдання інтервалу та орієнтації
 	:	:
 	Isolate Selected Group	Ізолювати обрану групу
+	Isolate Selected Object	Ізолювати обраний об’єкт
 	Release Clipping Mask	Звільнити відсічну маску
 	Make Compound Path	Створити складений контур
 	Release Compound Path	Звільнити складений контур
@@ -3326,6 +3501,9 @@ axis	Both	Обидві
 @msg	its page has text, and its layers have no text objects to put it in	на його сторінці є текст, а на шарах немає текстових об’єктів, куди його помістити
 @msg	its type is to come in as outlines, which only its page has	його текст має прийти у вигляді контурів, а вони є лише на його сторінці
 @msg	the art on them differs from the page's in {_1}% of it	зображення на шарах відрізняється від зображення на сторінці на {_1} % площі
+@msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	зображення на шарах відрізняється від зображення на сторінці на {_1} % площі: проте шари взято з його даних для редагування
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	шари файлу не прочитано ({_1}): він відкривається як його сторінка, на одному шарі
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	шари файлу не прочитано з його даних для редагування ({_1}): їх взято з його PDF-частини
 @msg	`to` must be "corner" or "smooth"	`to` має бути "corner" або "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Файли BMP бувають RGB або у відтінках сірого: colorModel rgb або gray
 @msg	Blend colors: select at least three objects with filled colours	Змішування кольорів: виберіть не менше трьох об’єктів із кольоровими заливками
@@ -3333,6 +3511,7 @@ axis	Both	Обидві
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
 @msg	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
+@msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
@@ -3368,6 +3547,7 @@ axis	Both	Обидві
 @msg	No saved selections (Select → Save Selection…)	Немає збережених виділень (Виділення → Зберегти виділення…)
 @msg	No saved views (View → New View…)	Немає збережених видів (Перегляд → Новий вид…)
 @msg	Offset Path: select paths	Зміщення контуру: виділіть контури
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Зміщення контуру: після зміщення від виділених контурів нічого не лишається (зміщення всередину більше за самі фігури)
 @msg	Opened with {_1} note(s): {_2}	Відкрито із примітками ({_1}) : {_2}
 @msg	Opened {url}	Відкрито {url}
 @msg	Outline Stroke: no stroked paths selected	Обведення контуру: не виділено контури з обведенням
@@ -3394,6 +3574,7 @@ axis	Both	Обидві
 @msg	Split Into Grid: select paths large enough for the grid	Поділ на сітку: виділіть контури, досить великі для сітки
 @msg	Targa files are RGB: colorModel rgb	Файли Targa є RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обтікання текстом: виділіть об’єкт обтікання
+@msg	This shortcut file is in a form StitchFoundry can't read.	Цей файл сполучень клавіш записано у форматі, який StitchFoundry не може прочитати.
 @msg	`aspect` must be a number (%)	`aspect` має бути числом (%)
 @msg	`at` must be [x, y]	`at` має бути [x, y]
 @msg	`color` must be a colour	`color` має бути кольором
@@ -3420,6 +3601,7 @@ axis	Both	Обидві
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})
 @msg	`{key}` must be one of {_1}	`{key}` має бути одним з: {_1}
 @msg	`{key}` must be true or false	`{key}` має бути true або false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я
@@ -3465,6 +3647,9 @@ axis	Both	Обидві
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
+@msg	the Color Picker is not open	палітра кольорів не відкрита
+@msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
+@msg	this system has no screen color sampler	у цій системі немає засобу вибору кольору з екрана
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
 @msg	bad page tree	неприпустиме дерево сторінок
 @msg	bad shortcut	неприпустиме поєднання клавіш
@@ -3621,6 +3806,7 @@ axis	Both	Обидві
 @msg	not a DXF drawing	не є кресленням DXF
 @msg	not a VectorCraft file: {0}	не є файлом VectorCraft: {0}
 @msg	not a graphic style library (format `{_1}`)	не є бібліотекою графічних стилів (формат `{_1}`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	це не набір сполучень клавіш: текст не починається з імені зі скісною рискою та відкривної фігурної дужки
 @msg	not a stored central record	не є збереженим центральним записом
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
@@ -3640,6 +3826,7 @@ axis	Both	Обидві
 @msg	nothing to wrap	нічого обтікати
 @msg	object {0} cannot have children	об’єкт {0} не може мати нащадків
 @msg	object {id} is not a path	об’єкт {id} не є контуром
+@msg	object {id} is not a selected top-level object	об’єкт {id} не є виділеним об’єктом верхнього рівня
 @msg	page size {w} × {h}	розмір сторінки {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	сторінка {0} не існує (в PDF{1})
 @msg	paste unavailable	вставка недоступна
@@ -3667,6 +3854,8 @@ axis	Both	Обидві
 @msg	recovery copy `{file}`: {e}	копія відновлення `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	дозволи мають бути від 1 до 2400 ppi
 @msg	result would exceed the canvas (coordinates out of range)	результат перевищив би полотно (координати поза діапазоном)
+@msg	objects can't be nested more than 32 deep	об’єкти не можна вкладати глибше ніж на 32 рівні
+@msg	the SVG's elements are nested more than {0} deep	елементи SVG вкладено глибше ніж на {0} рівнів
 @msg	scale must be a number from {_1} to {_2}, not {_3}	масштаб має бути числом від {_1} до {_2}, а не {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	масштаб має бути числом від {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	виділіть (або вкажіть як об’єкт) об’єкти, оформлення яких не є основним
@@ -3676,6 +3865,7 @@ axis	Both	Обидві
 @msg	select a gradient mesh	виділіть градієнтну сітку
 @msg	select a linked image: an embedded one has no file	виділіть пов’язане зображення: у вбудованого немає файлу
 @msg	select a repeat	виділіть повтор
+@msg	select an Intertwine group	виділіть групу переплетення
 @msg	select a stroke with a variable width	виділіть обведення зі змінною шириною
 @msg	select a symbol instance	виділіть екземпляр символу
 @msg	select an Image Trace object	виділіть об’єкт трасування зображення
@@ -3766,7 +3956,7 @@ axis	Both	Обидві
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript цього файлу неможливо прочитати ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	цей формат містить одну монтажну область: експортуйте кілька як PDF або за допомогою document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	це креслення DWG, яке неможливо прочитати: збережіть його з CAD як ASCII DXF і відкрийте його
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	це файл PostScript (.ai, збережений у старому форматі або без сумісності з PDF, або файл EPS), який поки неможливо відкрити: збережіть його як PDF, .ai із сумісністю з PDF або SVG
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	це файл PostScript (.ai, збережений у старому форматі або без сумісності з PDF, або файл EPS), а не PDF: Файл › Відкрити та Файл › Розмістити читають його як EPS
 @msg	this is not a PostScript file	це не файл PostScript
 @msg	tool shortcuts must be a single key (optionally with Shift)	поєднання інструментів має бути однією клавішею (необов’язково з Shift)
 @msg	truncated	усічено
@@ -3816,6 +4006,7 @@ axis	Both	Обидві
 @msg	{name}: no such recovery entry	{name}: такого запису відновлення немає
 @msg	{path} can't be found: relink it first	{path} не знайдено: спочатку відновіть зв’язок
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: тут немає файлової системи (передайте dataBase64 для відкриття; опустіть шлях, щоб отримати dataBase64)
+@msg	{path}: not a file	{path}: не файл
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не вдалося помістити {name}: {e}
@@ -3841,6 +4032,11 @@ axis	Both	Обидві
 @msg	Sent to {_1}	Відправлено до {_1}
 @msg	{_1} files	{_1} файлів
 @msg	The graphics were lost and have been restarted	Графіка була втрачена та перезапущена
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Графічний процесор, обраний першим, не зміг показати вікно, тому StitchFoundry запустився знову на {summary}
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Попередній запуск StitchFoundry завершився на {name} до появи вікна, тому StitchFoundry запустився на {summary}. Щоб знову спробувати цей графічний процесор, змініть Налаштування › Продуктивність › Графічний процесор або запустіть застосунок із заданою змінною WGPU_BACKEND
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Попередній запуск StitchFoundry завершився під час переліку графічних процесорів, тому StitchFoundry запустився на {summary} лише з OpenGL. Щоб знову спробувати інші графічні інтерфейси, змініть Налаштування › Продуктивність › Графічний процесор або запустіть застосунок із заданою змінною WGPU_BACKEND
+@msg	Loading StitchFoundry…	Завантаження StitchFoundry…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry не вдалося запустити: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Потрібен браузер із WebGPU або WebGL2.
 @msg	The graphics were lost and couldn't be restarted.	Графіку було втрачено, і її не вдалося перезапустити.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Ваші незбережені зміни зберігаються у цьому браузері: перезавантажте сторінку, щоб повернути їх.
@@ -3867,6 +4063,8 @@ axis	Both	Обидві
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	об’єкти з кількома заливками або обведеннями, ефектами або пензлями імпортовані в намальованому вигляді ({_1}): їх оформлення поки що не можна редагувати
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градієнт «{name}» не визначено у файлі: замість нього використовується суцільний колір
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
+@msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
+@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в області в рамках, занизьких для рядка шрифту, яким він показується, отримав вищі рамки ({_1}): інакше його не було б видно
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})
 @msg	No fonts are missing in this document	У цьому документі немає відсутніх шрифтів
@@ -3884,6 +4082,9 @@ axis	Both	Обидві
 @msg	larger than 256 MB	більше 256 МБ
 @msg	the files come to more than 1 GB: add fewer at a time	файли займають понад 1 ГБ: додавайте менше за раз
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
+@msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
+@msg	No linked files to look for	Немає пов’язаних файлів для пошуку
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Відновлено зв’язок із зображеннями: {n}; не вдалося відновити зв’язок із {name}: {reason}
 	Services	Служби
 	Zoom	Масштаб
 	Bring All to Front	Усі вікна на передній план
@@ -4006,6 +4207,9 @@ axis	Both	Обидві
 	Blocks	Блоки
 	Frosted	Матове
 	Tiny Lens	Дрібні лінзи
+	Loaded Texture	Завантажена текстура
+	Load Texture…	Завантажити текстуру…
+	Texture Image	Зображення текстури
 	Rename Data Set	Перейменувати набір даних
 	Rename Variable	Перейменувати змінну
 	Variable Options	Параметри змінної
@@ -4047,9 +4251,6 @@ axis	Both	Обидві
 	Rotation Y	Обертання Y
 	Rotation Z	Обертання Z
 	Shading	Затінення
-	Direction	Напрямок
-	Elevation	Висота
-	Ambient	Навколишнє освітлення
 	Segments	Сегменти
 	Show axis	Показати вісь
 	Reset all	Скинути все
@@ -4114,9 +4315,6 @@ lighting	Light	Світло
 @msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	використовує `{at}`, яке не знає читач PostScript у StitchFoundry
 @msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	використовує `{at}`, яке не знає читач PostScript у StitchFoundry, у {procs}
 @msg	not a StitchFoundry shortcut set (missing `overrides`)	не є набором поєднань клавіш StitchFoundry (відсутнє `overrides`)
-@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Графічний процесор, обраний першим, не зміг показати вікно, тому StitchFoundry запустився знову на {summary}
-@msg	Loading StitchFoundry…	Завантаження StitchFoundry…
-@msg	StitchFoundry failed to start: {e}	StitchFoundry не вдалося запустити: {e}
 @msg	it has {_1}, which StitchFoundry doesn't read from it yet	у них є {_1}, які StitchFoundry поки не читає
 @msg	an image StitchFoundry can't read was left out	зображення, яке StitchFoundry не може прочитати, пропущено
 @msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry не шукає в папках інших програм і системи: {path}
@@ -4186,7 +4384,6 @@ lighting	Light	Світло
 	Fits the hoop	Вміщується в п’яльця
 	Give objects a stitch type in the Embroidery panel.	Призначте об’єктам тип стібка на панелі «Вишивка».
 	Gradient to	Градієнт до
-	Hidden	Не показувати
 	Hide Digitizing Widget	Приховати віджет оцифрування
 	Hoop	П’яльця
 	Inclination Tool	Інструмент «Лінії нахилу»
@@ -4505,7 +4702,7 @@ machine	Stop	Зупинка
 	Hand stitch	Ручний стібок
 	Gap	Проміжок
 	Jagged edges	Рвані краї
-	Both sides	Обидві сторони
+	Both sides	З обох боків
 	Side 1	Сторона 1
 	Side 2	Сторона 2
 	Jag depth	Глибина зубців
@@ -4528,7 +4725,6 @@ machine	Stop	Зупинка
 
 # Embroidery (StitchFoundry): spacing profiles and blends
 	Spacing profile	Профіль інтервалу
-	Even	Рівномірний
 	Accordion	Гармошка
 	Fade out	Згасання
 	Fade in	Поява
@@ -4571,7 +4767,7 @@ machine	Stop	Зупинка
 	Bean Ring	Кільце потрійною строчкою
 	Hexagons	Шестикутники
 	Chevrons	Шеврони
-	Ogee	Огіви
+	Ogee	Гусик
 	Basket weave	Плетінка
 	Stars	Зірки
 	Hearts	Серця
@@ -4669,7 +4865,7 @@ machine	Stop	Зупинка
 	Monogram	Монограма
 	Load an embroidery font (Embroidery Lettering) to make monograms.	Завантажте шрифт для вишивки (Вишиті написи), щоб створювати монограми.
 	Initials	Ініціали
-	Classic	Класична
+	Classic	Класичний
 	In a line	У рядок
 	Scallops	Фестони
 	Border	Рамка
@@ -4753,7 +4949,6 @@ machine	Stop	Зупинка
 @msg	the machine file didn't encode	не вдалося закодувати файл для машини
 	Worksheet	Робочий аркуш
 	Outline Around	Контур навколо
-	Stacked	Стовпчиком
 	Oval	Овал
 	Octagon	Восьмикутник
 	Shield	Щит
@@ -5161,8 +5356,8 @@ machine	Stop	Зупинка
 	Make a Design…	Створити візерунок…
 	Make a Design, Step by Step	Створити візерунок крок за кроком
 	Step by step: words, a shape, appliqué, a picture or a sample	Крок за кроком: слова, фігура, аплікація, картинка або зразок
-	Step	Крок
-	Back	Назад
+	Step	Сходинка
+	Back	Ззаду
 	What would you like to make?	Що ви хочете зробити?
 	A name or some words	Ім’я або кілька слів
 	For towels, bags, pillows and gifts	Для рушників, сумок, подушок і подарунків
@@ -5380,3 +5575,149 @@ machine	Stop	Зупинка
 	Top thread (m)	Верхня нитка (м)
 	Width (mm)	Ширина (мм)
 	same	те саме
+	Ruler Origin	Початок координат лінійок
+	Reset Ruler Origin	Скинути початок координат лінійок
+	Artistic	Художні
+	Film Grain…	Зернистість плівки…
+	Highlight Area	Область світлих тонів
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	стислий файл розпаковується в обсяг більший, ніж читає StitchFoundry ({_1} МБ документа, {_2} МБ на зображення)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	документ завеликий для збереження зі стиском ({0}): збережіть його з вимкненим параметром «Використовувати стиск»
+@msg	the file stopped being read (please report this bug)	читання файлу перервалося (будь ласка, повідомте про цю помилку)
+	Concentric Dividers:	Концентричні розділювачі:
+	Radial Dividers:	Радіальні розділювачі:
+	Skew:	Скіс:
+	Inside	Усередині
+	Outside	Зовні
+	Use Outside Rectangle As Frame	Використовувати зовнішній прямокутник як рамку
+	Create Compound Path From Ellipses	Створити складений контур з еліпсів
+	Fill Grid	Залити сітку
+	Select two or more objects, or a group	Виділіть два або більше об’єктів чи групу
+	Cove	Викружка
+	Depth	Глибина
+	Front	Спереду
+	Isometric Bottom	Ізометрія знизу
+	Isometric Left	Ізометрія ліворуч
+	Isometric Right	Ізометрія праворуч
+	Isometric Top	Ізометрія згори
+	Off-Axis Back	Під кутом ззаду
+	Off-Axis Bottom	Під кутом знизу
+	Off-Axis Front	Під кутом спереду
+	Off-Axis Left	Під кутом ліворуч
+	Off-Axis Right	Під кутом праворуч
+	Off-Axis Top	Під кутом згори
+	Reset all 3D settings to their defaults.	Скинути всі параметри 3D до типових значень.
+	Taper	Звуження
+	Twist	Закручування
+	Volume	Об'єм
+3d	Cap	Торці
+3d	Solid	Суцільний
+3d	Hollow	Порожнистий
+3d	Bevel	Фаска
+3d	Rounded	Заокруглений
+3d	Space	Інтервал
+	Bevel Shape	Форма фаски
+	Bevel Inside	Фаска всередину
+	Bevel both sides	Фаска з обох боків
+	Presets	Набори
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Об'єкт може мати лише один 3D-ефект. Змініть параметри наявного ефекту або спершу вилучіть його.
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}: поки що потрібен контур або складений контур. Спершу перетворіть текст, зображення та групи на контури.
+@msg	{label} requires a shape with at least two anchors	{label}: потрібна фігура щонайменше з двома опорними точками
+@msg	The shape is too complex for a 3D effect	Фігура надто складна для 3D-ефекту
+@msg	The 3D surface is too complex; simplify the shape	3D-поверхня надто складна; спростіть фігуру
+	Transform Objects	Трансформувати об’єкти
+@msg	unknown parameter `{key}`; did you mean `{near}`?	невідомий параметр `{key}`; можливо, ви мали на увазі `{near}`?
+@msg	unknown parameter `{key}`; the command takes no parameters	невідомий параметр `{key}`; команда не має параметрів
+@msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
+	Load EPS into Clipboard	Завантажити EPS у буфер обміну
+@msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
+@msg	the image can't be read as a texture	зображення не вдається прочитати як текстуру
+	Basic	Базовий
+	Fill and Stroke Controls	Елементи керування заливкою та обведенням
+	Coloring Controls	Елементи керування кольором
+	Draw Mode Controls	Елементи керування режимом малювання
+	Screen Mode Controls	Елементи керування режимом екрана
+	Drawer menu	Меню шухляди
+	Toolbar: Show Controls	Панель інструментів: Показати елементи керування
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control має бути fillStroke, coloring, drawMode або screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	невідомий елемент керування `{name}`: fillStroke, coloring, drawMode або screenMode
+@msg	give a fraction `t` from 0 to 1	вкажіть значення `t` від 0 до 1
+@msg	give the path `id`	вкажіть `id` контуру
+@msg	invalid stroke widths	неприпустимі значення ширини обведення
+@msg	object has no weighted stroke	об’єкт не має обведення з допустимою додатною товщиною
+	Single Corner Radius	Єдиний радіус кутів
+	Top Left:	Вгорі ліворуч:
+	Top Right:	Вгорі праворуч:
+	Bottom Left:	Внизу ліворуч:
+	Bottom Right:	Внизу праворуч:
+	Softness	М'якість
+	Ambient Light	Навколишнє світло
+	Light behind the object	Світло позаду об'єкта
+	Registration:	Реєстрація:
+	Dimension	Розмір
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Креслення : реальний розмір — при 1:10 1 одиниця на сторінці підписується як 10.
+	Preview (1 inch on the page)	Попередній перегляд (1 дюйм на сторінці)
+	Set as Default	Встановити за замовчуванням
+	 out from a highlighted edge to place its dimension  |  	 назовні від підсвіченого краю, щоб розмістити його розмір  |  
+	 cancels  |  Double-click the tool for options	 скасовує  |  Подвійне клацання по інструменту відкриває параметри
+	Linear	Лінійний
+	Angular	Кутовий
+	Away from the Line	Далі від лінії
+	Between Line and Object	Між лінією та об'єктом
+	Drag out from a segment, or click two points, then click to place.	Перетягніть назовні від сегмента або клацніть дві точки, потім клацніть, щоб розмістити.
+	Drag out from a corner, or click two straight lines, then click to place.	Перетягніть назовні від кута або клацніть дві прямі лінії, потім клацніть, щоб розмістити.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Перетягніть від кола або дуги назовні — радіус, усередину — діаметр.
+@msg	Choose a circle or a perfect arc	Виберіть коло або правильну дугу
+@msg	Choose a precision from 0 to 6	Виберіть точність від 0 до 6
+	Create Dimension	Створити розмір
+	Dimension Tool	Інструмент «Розмір»
+	Dimension Tool Options	Параметри інструмента «Розмір»
+	Display	Відображення
+	Font Family:	Сімейство шрифтів:
+	Font Style:	Накреслення:
+	Precision:	Точність:
+	Update Dimensions	Оновити розміри
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	Для кута потрібні два прямі сегменти
+@msg	Choose two different points	Виберіть дві різні точки
+@msg	Choose two non-parallel straight segments	Виберіть два непаралельні прямі сегменти
+@msg	Choose two nonzero angle arms	Виберіть дві сторони кута ненульової довжини
+@msg	Dimension point is outside the canvas	Точка розміру знаходиться за межами полотна
+@msg	Dimension size is outside its supported range	Розмір виходить за підтримувані межі
+@msg	First measured segment no longer exists	Перший виміряний сегмент більше не існує
+@msg	Invalid dimension distance	Неприпустима відстань розміру
+@msg	Invalid dimension font name	Неприпустима назва шрифту розміру
+@msg	Invalid drawing scale	Неприпустимий масштаб креслення
+@msg	Invalid real scale	Неприпустимий реальний масштаб
+@msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
+@msg	Measured segment no longer exists	Виміряний сегмент більше не існує
+@msg	Non-finite dimension	Розмір не є скінченним числом
+@msg	Scale must be drawing:real, for example 1:10	Масштаб має бути у вигляді креслення:реальність, наприклад 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Співвідношення масштабу має бути від 1:1000000 до 1000000:1
+@msg	Second measured segment no longer exists	Другий виміряний сегмент більше не існує
+@msg	Unknown dimension mode	Невідомий режим розміру
+@msg	Unknown dimension option {k}	Невідомий параметр розміру {k}
+@msg	Unknown dimension style	Невідомий стиль розміру
+@msg	Unknown unit	Невідома одиниця
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закриває круглі торці відкритих профілів. За неповного обертання бічні зрізи залишаються відкритими.
+	Distance	Відстань
+@msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" розміщує лінійний або радіальний градієнт, а не довільний
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
+	Make Image Dynamic	Зробити зображення динамічним
+	Import Data Sets…	Імпортувати набори даних…
+	Export Data Sets…	Експортувати набори даних…
+	Make Graph Dynamic	Зробити діаграму динамічною
+	Batch…	Пакетна обробка…
+	Source Folder:	Вихідна папка:
+	Destination Folder:	Папка призначення:
+	Overrides	Перевизначення
+	Uses every data set of the open document.	Використовує кожен набір даних відкритого документа.
+@msg	Batch: {count} processed	Пакетна обробка: оброблено {count}
+@msg	Batch: {count} processed, {failed} failed	Пакетна обробка: оброблено {count}, з помилкою {failed}
+@msg	choose a destination folder	виберіть папку призначення
+@msg	choose a source folder	виберіть вихідну папку
+@msg	open a document with data sets	відкрийте документ із наборами даних
+@msg	the action has no steps	у дії немає кроків

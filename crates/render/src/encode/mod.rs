@@ -15,7 +15,7 @@ pub mod tga;
 pub mod tiff;
 pub mod web;
 
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind, SymbolBoxes};
 use vectorcraft_geom::Rect;
 
 use crate::{AntiAlias, RenderOptions, Rendered, Renderer, fx};
@@ -60,6 +60,9 @@ pub struct RasterExportOptions {
     pub tga: tga::TgaOptions,
     /// PSD colour model, layers and profile.
     pub psd: psd::PsdOptions,
+    /// Appearance of Black › Printing / Exporting › Output All Blacks as Rich Black: pure CMYK
+    /// black (K alone at 100%) becomes RGB black in RGB raster exports (document values unchanged).
+    pub rich_black: bool,
 }
 
 impl Default for RasterExportOptions {
@@ -76,6 +79,7 @@ impl Default for RasterExportOptions {
             bmp: bmp::BmpOptions::default(),
             tga: tga::TgaOptions::default(),
             psd: psd::PsdOptions::default(),
+            rich_black: false,
         }
     }
 }
@@ -99,6 +103,7 @@ impl RasterExportOptions {
             precise: true,
             // Shapes meeting edge to edge leave no seam (#983).
             supersample: true,
+            rich_black: self.rich_black,
             ..Default::default()
         }
     }
@@ -186,22 +191,26 @@ pub(crate) fn webp(img: &Rendered) -> Result<Vec<u8>, String> {
 }
 
 /// Bounds of the art an export draws: visible objects off template layers (guides left out),
-/// with their strokes and live effects. `None` when nothing would be drawn.
+/// with their strokes and live effects, symbol instances measured by their art. `None` when
+/// nothing would be drawn.
 pub fn art_bounds(doc: &Document) -> Option<Rect> {
-    doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, drawn_bounds(l)))
+    let symbols = doc.symbol_boxes();
+    doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, drawn_bounds(&symbols, l)))
 }
 
-fn drawn_bounds(n: &Node) -> Option<Rect> {
+fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if !n.visible {
         return None;
     }
     match &n.kind {
         NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => None,
         NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
-            children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, drawn_bounds(c)))
+            children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, drawn_bounds(symbols, c)))
         }
-        _ if fx::has_fx(n) => fx::visual_bounds(n),
-        _ => n.visual_bounds(),
+        _ if fx::has_fx(n) => fx::visual_bounds(symbols, n),
+        // An instance's box takes in its art, the effects in the art and its own effects.
+        NodeKind::SymbolInstance { .. } => fx::cull_bounds(symbols, n),
+        _ => n.visual_bounds_with(symbols),
     }
 }
 

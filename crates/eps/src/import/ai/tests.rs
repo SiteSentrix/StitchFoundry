@@ -9,6 +9,11 @@ use vectorcraft_doc::{AppearanceItem, ColorMode, Document, Knockout, LayerColor,
 
 use super::*;
 
+/// [`super::read`] as an EPS reads it.
+fn read(data: &[u8]) -> Result<Structure, String> {
+    super::read(data, true)
+}
+
 /// Editing data: header comments (crop marks 0 0 200 100), then `body`.
 fn stream(body: &str) -> String {
     format!(
@@ -197,6 +202,44 @@ fn patterns_are_pattern_swatches_and_fill_with_them() {
     assert!(s.warnings.is_empty(), "{:?}", s.warnings);
 }
 
+/// Where a definition draws its tile doesn't move the fill: the tile's lower left is the pattern's
+/// origin, so the same dots drawn at 30..38 × 40..48 tile as they do at 0..8 × 0..8.
+#[test]
+fn a_pattern_tiles_from_its_lower_left_wherever_its_definition_drew_it() {
+    let moved = DOTS
+        .replace("(Dots) 0 0 8 8", "(Dots) 30 40 38 48")
+        .replace("%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L", "%_30 48 m\n%_38 48 L\n%_38 40 L\n%_30 40 L\n%_30 48 L")
+        .replace("%_4 4 m\n%_4 4 L", "%_34 44 m\n%_34 44 L");
+    let body = format!("{moved}{}", layer(&format!("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0))));
+    let s = read_ok(&body);
+    assert_eq!(s.doc.pattern("Dots").unwrap().tile, Rect::new(30.0, -48.0, 38.0, -40.0));
+    let Paint::Pattern { xf, .. } = fill(&art(&s.doc)[0]) else { panic!() };
+    assert_eq!(xf * Point::ZERO, Point::new(0.0, 92.0));
+}
+
+/// A gradient in a pattern's definition is placed by an `Xm` written y down about the canvas point of
+/// art space's origin (here 7941, 7941: the canvas's centre less the template box's): its ramp from
+/// (10, 0) up to (10, 20) in the pattern's space is `0 -20 20 0 -7931 7941 Xm`.
+#[test]
+fn a_gradient_in_a_patterns_definition_is_placed_from_the_canvas() {
+    let defs =
+        "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let tile = rect_path(0.0, 0.0, 20.0, 20.0).replace('\n', "\n%_");
+    let pattern = format!(
+        "%AI3_BeginPattern: (Shade)\n(Shade) 0 0 20 20\n%_0 A\n%_0 Xw\n%_0 Ae\n%_u\n%_Bb\n%_1 (G) 0 0 90 1 1 0 0 1 0 0 1 Bg\n\
+         %_0 -20 20 0 -7931 7941 Xm\n%_{tile}f\n%_0 BB\n%_U\nE\n%AI3_EndPattern\n"
+    );
+    let file = stream(&format!("{defs}{pattern}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))))
+        .replace("%%EndComments", "%AI3_TemplateBox: 250.5 -250.5 250.5 -250.5\n%%EndComments");
+    let doc = read(file.as_bytes()).unwrap().doc;
+    let def = doc.pattern("Shade").unwrap();
+    let shaded = &def.art[0].children().unwrap()[0];
+    let Paint::Gradient(g) = fill(shaded) else { panic!("{:?}", fill(shaded)) };
+    let geom = g.geom.unwrap();
+    // The pattern's space is y down.
+    assert!(geom.start.distance(Point::new(10.0, 0.0)) < 1e-9 && geom.end.distance(Point::new(10.0, -20.0)) < 1e-9, "{geom:?}");
+}
+
 /// A pattern whose definition it can't read whole isn't kept: a fill with it is something the file
 /// has that isn't read, where it shows. Its definition costs nothing else.
 #[test]
@@ -238,10 +281,79 @@ fn compound_paths_and_clipping() {
     // The clipping path goes first.
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
     assert!(matches!(children[1].kind, NodeKind::Path { clipping: false, .. }));
+    // A clipping path with a fill paints it too, under the art it clips; without one, nothing.
+    let filled = format!("0 Ae\nq\n{RED}{}f\n0 0 1 0 0 0 1 Xa\n{}W\nf\nQ\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0));
+    let doc = read_ok(&layer(&filled)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    let kinds: Vec<_> = children.iter().map(|c| (matches!(c.kind, NodeKind::Path { clipping: true, .. }), fill(c).color())).collect();
+    assert_eq!(kinds, [(true, None), (false, Some(Color::rgb(0.0, 0.0, 1.0))), (false, Some(Color::rgb(1.0, 0.0, 0.0)))]);
     // A clipping path in a layer clips the layer.
     let doc = read_ok(&layer(&format!("{}f\n{}W\nn\n", rect_path(0.0, 0.0, 9.0, 9.0), rect_path(0.0, 0.0, 5.0, 5.0)))).doc;
     let NodeKind::Layer { clip, children, .. } = &doc.layers[0].kind else { panic!() };
     assert!(*clip && matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+}
+
+/// A clipping group's clipping path can sit alone in a group of its own, after the art it clips (`q … u <path> W n U
+/// … Q`): it still clips the clipping group.
+#[test]
+fn a_clipping_path_alone_in_a_group_clips_its_clipping_group() {
+    let body = format!("0 Ae\nq\n{RED}{}f\n0 Ae\nu\n{}h\nW\nn\nU\nQ\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0));
+    let doc = read_ok(&layer(&body)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    assert_eq!(children.len(), 2, "{children:?}");
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
+/// #1410: a compound path shows its last path's paint, and paths grouped in it stay its paths.
+#[test]
+fn compound_path_takes_its_last_paths_paint() {
+    let paths = format!("0 g\n{}f\n{RED}{}f\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(10.0, 10.0, 20.0, 20.0));
+    let bodies = [
+        format!("0 Ae\n*u\n{paths}*U\n"),
+        // The paths in a group.
+        format!("0 Ae\n*u\n0 Ae\nu\n{paths}U\n*U\n"),
+        // The last path unpainted.
+        format!("*u\n{paths}{}n\n*U\n", rect_path(1.0, 1.0, 2.0, 2.0)),
+    ];
+    for body in bodies {
+        let a = art(&read_ok(&layer(&body)).doc);
+        let NodeKind::Compound { children, .. } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        assert!(children.len() >= 2 && children.iter().all(|c| matches!(c.kind, NodeKind::Path { .. })), "{body}");
+        assert_eq!(fill(&a[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "{body}");
+    }
+}
+
+#[test]
+fn a_group_whose_state_has_no_transparency_takes_the_current_one() {
+    // GUARDS: a group's own state block keeps the last `Xy`, as the PDF part draws it; a drawn look's group stays opaque.
+    let art_ = format!(
+        "{RED}0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n0 0 Xd\n6 () XW\n0 1 0 0 0 Xy\n0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n9 () XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(20.0, 0.0, 30.0, 10.0)
+    );
+    let doc = read_ok(&layer(&art_)).doc;
+    let a = art(&doc);
+    assert_eq!((a[0].opacity, a[0].children().unwrap()[0].opacity), (0.5, 0.5));
+    assert_eq!((a[1].opacity, a[1].children().unwrap()[0].opacity), (1.0, 0.5));
+}
+
+#[test]
+fn a_layer_keeps_its_own_transparency() {
+    // Illustrator writes a layer's own opacity, blend and knockout after its art, before `LB`
+    // (`Xy`, `Xd`, then `n () XW`); they belong to the layer, not to its last object (#2003).
+    let art_ = format!("{RED}{}f\n0 0.35 0 2 0 Xy\n0 0 Xd\n7 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&art_)).doc;
+    let l = &doc.layers[0];
+    assert_eq!((l.opacity, l.blend), (0.35, BlendMode::Normal), "the layer's own state");
+    assert_eq!((l.isolate, l.knockout), (false, Knockout::Neutral));
+    // The art inside keeps its own state.
+    assert_eq!(art(&doc)[0].opacity, 1.0);
+    // A layer whose last object is a group keeps that group's state apart from the layer's.
+    let art_ = format!("0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n0 0 Xd\n6 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&art_)).doc;
+    assert_eq!(doc.layers[0].opacity, 1.0, "no layer state written: the layer stays opaque");
+    assert_eq!(art(&doc)[0].opacity, 0.5, "the group's own state");
 }
 
 #[test]
@@ -266,9 +378,13 @@ fn gradients() {
     let defs = "%AI5_BeginGradient: (G)\n(G) 1 2 Bd\n[\n<00FF>\n0\n0 0 0 0 1 0 0 2 1 6 %_BS\n\
                 %_0 0 0 0 1 0 0 2 1 6 40 0 Bs\n%_0 0 0 0 0 0 1 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
     let art_ = format!(
-        "{RED}{}Bb\n0 0 0 0 Bh\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n50 0 0 -50 100 50 Bm\nf\n0 BB\n{}f\n",
+        "{RED}{}Bb\n0 0 0 0 Bh\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n50 0 0 -50 100 50 Bm\nf\n0 BB\n{}f\n\
+         Bb\n2 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 0 0 0 0 0 1 Xa\n{}f\n\
+         {}Bb\n-20 -10 144 0.77 Bh\n1 (G) -0.1 0.4 0 1.35 1 0 0 -1 0 16384 1 Bg\n50 0 0 -50 100 50 Bm\nf\n0 BB\n",
         rect_path(50.0, 0.0, 150.0, 100.0),
         rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(20.0, 0.0, 30.0, 10.0),
+        rect_path(50.0, 0.0, 150.0, 100.0),
     );
     let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
     let a = art(&doc);
@@ -281,6 +397,109 @@ fn gradients() {
     assert_eq!((geom.start, geom.end), (Point::new(100.0, 50.0), Point::new(150.0, 50.0)));
     // The gradient was the one object's.
     assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+    // A gradient instance that paints nothing doesn't stick to the next object, which sets its colour.
+    assert_eq!(fill(&a[2]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    // A radial gradient is its matrix's unit circle whatever `Bg`'s origin and length, and its
+    // highlight an offset from the centre in art space.
+    let Paint::Gradient(g) = fill(&a[3]) else { panic!("{:?}", fill(&a[3])) };
+    let geom = g.geom.unwrap();
+    assert_eq!((geom.start, geom.end), (Point::new(100.0, 50.0), Point::new(150.0, 50.0)));
+    let focal = geom.focal.unwrap();
+    assert!((focal - Point::new(80.0, 60.0)).hypot() < 1e-6, "{focal:?}");
+    // A linear gradient with a stop in the middle: `Xm` places its whole ramp, a `Bm` each of its
+    // two parts. The object's own note of its gradient after it paints nothing.
+    let defs = "(L) 0 3 Bd\n%_1 0 50 100 Bs\n%_0.5 0 50 40 Bs\n%_0 0 50 0 Bs\nBD\n";
+    let art_ = format!(
+        "{RED}{}Bb\n1 (L) 0 0 -90 1 1 0 0 1 0 0 1 Bg\n0 -100 -100 0 150 100 Xm\n0 -9000 -100 0 150 9100 Bc\n0 -40 -100 0 150 100 Bm\n\
+         0 -60 -100 0 150 60 Bm\n0 -9000 -100 0 150 0 Bc\nf\n0 BB\n0 1 Xd\nBb\n2 (L) 0 0 -90 1 1 0 0 1 0 0 1 Bg\n0 BB\n6 () XW\n{}f\n",
+        rect_path(50.0, 0.0, 150.0, 100.0),
+        rect_path(0.0, 0.0, 10.0, 10.0),
+    );
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let a = art(&doc);
+    let Paint::Gradient(g) = fill(&a[0]) else { panic!("{:?}", fill(&a[0])) };
+    assert_eq!(g.gradient.stops.len(), 3);
+    // Art space has y up from the crop marks' bottom.
+    let geom = g.geom.unwrap();
+    assert!(geom.start.distance(Point::new(150.0, 0.0)) < 1e-9 && geom.end.distance(Point::new(150.0, 100.0)) < 1e-9, "{geom:?}");
+    assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "the note after the object isn't the next path's paint");
+}
+
+#[test]
+fn a_compound_path_holding_its_drawn_look_paints_its_paths_apart() {
+    // GUARDS: made one compound path, the look's paths take a single fill and the inner one punches a hole.
+    let art_ = format!(
+        "0 Ae\n*u\n0 Ae\nu\n{RED}{}f\n0 0 0 0 0 0 1 Xa\n{}f\nU\n9 () XW\n*U\n",
+        rect_path(0.0, 0.0, 20.0, 20.0),
+        rect_path(5.0, 5.0, 15.0, 15.0)
+    );
+    let a = art(&read_ok(&layer(&art_)).doc);
+    fn leaves(n: &Node, out: &mut Vec<Paint>) {
+        match n.children() {
+            Some(children) if !matches!(n.kind, NodeKind::Compound { .. }) => children.iter().for_each(|c| leaves(c, out)),
+            _ => out.push(fill(n)),
+        }
+    }
+    let mut painted = vec![];
+    a.iter().for_each(|n| leaves(n, &mut painted));
+    let fills: Vec<_> = painted.iter().map(Paint::color).collect();
+    assert_eq!(fills, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{a:#?}");
+}
+
+#[test]
+fn gradients_through_a_skewed_matrix() {
+    // GUARDS: a sheared `Xm` leaves the matrix's columns oblique. A linear ramp runs along the
+    // normal to its isolines, not along its first column; a radial's ellipse is the one the unit
+    // circle maps to, set by the principal axes.
+    let defs = |name: &str, kind: u8| {
+        format!(
+            "%AI5_BeginGradient: ({name})\n({name}) {kind} 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n"
+        )
+    };
+    let instance = |name: &str| format!("Bb\n1 ({name}) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 10 10 100 50 Xm\nf\n0 BB\n");
+    let art_ = format!("{}{}{}{}", rect_path(0.0, 0.0, 200.0, 100.0), instance("Lin"), rect_path(0.0, 0.0, 200.0, 100.0), instance("Rad"));
+    let doc = read_ok(&format!("{}{}{}", defs("Lin", 0), defs("Rad", 1), layer(&art_))).doc;
+    let a = art(&doc);
+    let Paint::Gradient(g) = fill(&a[0]) else { panic!("{:?}", fill(&a[0])) };
+    let geom = g.geom.unwrap();
+    assert!((geom.start - Point::new(100.0, 50.0)).hypot() < 1e-9 && (geom.end - Point::new(105.0, 55.0)).hypot() < 1e-9, "{geom:?}");
+    let Paint::Gradient(g) = fill(&a[1]) else { panic!("{:?}", fill(&a[1])) };
+    let geom = g.geom.unwrap();
+    let golden = (1.0 + 5f64.sqrt()) / 2.0;
+    assert!((geom.start.distance(geom.end) - 10.0 * golden).abs() < 1e-9, "{geom:?}");
+    assert!((geom.aspect - 1.0 / golden.powi(2)).abs() < 1e-9, "{geom:?}");
+}
+
+#[test]
+fn stops_sharing_a_ramp_point_keep_their_order() {
+    // GUARDS: stops come last first, so a sort alone puts the two at 100 the wrong way round and
+    // the ramp blends towards the colour meant only for past its end.
+    let defs = "%AI5_BeginGradient: (S)\n(S) 0 3 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\n\
+                %_0 0 0 0 0 1 0 2 1 6 50 100 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 0 Bs\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("{}Bb\n1 (S) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 0 10 100 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 200.0, 100.0));
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+    let colors: Vec<_> = g.gradient.stops.iter().map(|s| s.color).collect();
+    assert_eq!(colors, [Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0), Color::rgb(1.0, 0.0, 0.0)]);
+}
+
+#[test]
+fn stops_listed_upwards_keep_the_midpoint_of_the_one_that_starts_the_ramp() {
+    // GUARDS: reversing a list that runs upwards swaps two stops at 0, and the ramp to 100 takes the
+    // midpoint of the zero-length part between them.
+    let defs = "%AI5_BeginGradient: (U)\n(U) 0 3 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 1 1 2 1 6 50 0 Bs\n\
+                %_0 0 0 0 1 1 1 2 1 6 87 0 Bs\n%_0 0 0 0 0 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("{}Bb\n1 (U) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 0 10 100 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 200.0, 100.0));
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+    let midpoints: Vec<_> = g.gradient.stops.iter().map(|s| s.midpoint).collect();
+    assert_eq!(midpoints, [0.5, 0.87, 0.5]);
+}
+
+#[test]
+fn per_anchor_data_reads() {
+    let art_ = format!("{RED}{}f\n(00800080) Xt 0 XD\n%_(00004000) Xt 1 XD\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    assert_eq!(art(&read_ok(&layer(&art_)).doc).len(), 1);
 }
 
 #[test]
@@ -343,11 +562,53 @@ fn image(matrix: &str, (w, h): (u32, u32), (space, kind, alpha): (&str, u32, u32
     out
 }
 
+/// An effect that rasterizes (a blur) leaves its drawn look as one image, then the object itself on
+/// `%_` lines: the image stands for the object, as for a drawn look that's a group.
+#[test]
+fn a_drawn_look_that_is_an_image_stands_for_its_object() {
+    let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3);
+    let object = format!("%_0 Ae\r\n%_u\r\n%_{}f\r\n%_U\r\n1 (Blurred) XW\r\n", rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\r\n%_"));
+    let at = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap() + 3;
+    data.splice(at..at, object.into_bytes());
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Image(_)), "{:?}", a[0].kind);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+}
+
 fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
     let blob = doc.images.get(&im.key).unwrap();
     (image::load_from_memory(&blob.bytes).unwrap().to_rgba8(), im.xf)
+}
+
+/// A 1-bit image's row holds each pixel's channels in turn, one bit each, padded to whole bytes;
+/// a set bit is the channel at full strength.
+#[test]
+fn one_bit_images_read_each_channel() {
+    let one_bit = |src: Vec<u8>, kind: u32| {
+        let text = String::from_utf8(src).unwrap();
+        text.replacen(&format!(" 8 {kind} 0 0 1 0 "), &format!(" 1 {kind} 0 0 0 0 "), 1).into_bytes()
+    };
+    // 3 × 2 RGB in hex: red, green, blue (100 010 001), then white, black, yellow (111 000 110).
+    let doc = read(&one_bit(image("[ 1 0 0 1 0 100 ]", (3, 2), ("DeviceRGB", 3, 0), b"8880e300", 11), 3)).unwrap().doc;
+    let img = pixels(&doc).0;
+    let row = |y: u32| (0..3).map(|x| img.get_pixel(x, y).0).collect::<Vec<_>>();
+    assert_eq!(row(0), [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]]);
+    assert_eq!(row(1), [[255, 255, 255, 255], [0, 0, 0, 255], [255, 255, 0, 255]]);
+    // 2 × 1 CMYK: cyan, then black (1000 0001).
+    let doc = read(&one_bit(image("[ 1 0 0 1 0 100 ]", (2, 1), ("DeviceCMYK", 4, 0), b"81", 5), 4)).unwrap().doc;
+    let img = pixels(&doc).0;
+    for (x, ink) in [[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]].into_iter().enumerate() {
+        let [r, g, b, _] = Color::cmyk(ink[0], ink[1], ink[2], ink[3]).to_rgba8(1.0);
+        assert_eq!(img.get_pixel(x as u32, 0).0, [r, g, b, 255], "pixel {x}");
+    }
+    // 3 × 1 gray: a bit a pixel (101).
+    let doc = read(&one_bit(image("[ 1 0 0 1 0 100 ]", (3, 1), ("DeviceGray", 1, 0), b"a0", 5), 1)).unwrap().doc;
+    let img = pixels(&doc).0;
+    assert_eq!((0..3).map(|x| img.get_pixel(x, 0).0[0]).collect::<Vec<_>>(), [255, 0, 255]);
 }
 
 #[test]
@@ -371,6 +632,119 @@ fn images_with_alpha_channels() {
     assert!(art(&r.doc).is_empty() && r.warnings.iter().any(|w| w.contains("cut short")));
 }
 
+/// CMYK images keep their ink amounts, as the file's PDF part keeps them, and an alpha channel
+/// becomes their opacity mask: a grayscale image over the image.
+#[test]
+fn cmyk_images_keep_their_ink_amounts() {
+    // 3 × 1: cyan, 100% black, then a mix.
+    let inks = [255, 0, 0, 0, 0, 0, 0, 255, 12, 34, 56, 78];
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 0), &inks, 14)).unwrap().doc;
+    let a = art(&doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let blob = &doc.images[&im.key];
+    assert!(blob.is_cmyk(), "{}", blob.mime);
+    assert_eq!(blob.cmyk().map(|i| (i.width, i.height, i.data)), Some((3, 1, inks.to_vec())));
+    assert!(a[0].extras().mask.is_none(), "no alpha channel, no mask");
+    // The same samples with an alpha channel.
+    let data = [&inks[..], &[255, 128, 0]].concat();
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 1), &data, 17)).unwrap().doc;
+    let a = art(&doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(doc.images[&im.key].cmyk().map(|i| i.data), Some(inks.to_vec()), "the inks are the same");
+    let m = a[0].extras().mask.clone().expect("the alpha channel is an opacity mask");
+    assert!(m.clip);
+    let NodeKind::Image(mi) = &m.art.kind else { panic!("{:?}", m.art.kind) };
+    assert_eq!((mi.width, mi.height, mi.xf), (3, 1, im.xf), "the mask covers the image");
+    let gray = image::load_from_memory(&doc.images[&mi.key].bytes).unwrap().to_luma8();
+    assert_eq!(gray.into_raw(), [255, 128, 0]);
+    // An alpha channel that hides nothing adds no mask.
+    let data = [&inks[..], &[255; 3]].concat();
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 1), &data, 17)).unwrap().doc;
+    let a = art(&doc);
+    assert!(a[0].extras().mask.is_none());
+    // Hex samples, and a four-channel image whose space the data doesn't name.
+    let hex: String = inks.iter().map(|b| format!("{b:02x}")).collect();
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (3, 1), ("Other", 4, 0), hex.as_bytes(), 26)).unwrap();
+    let doc = read(text.replacen("8 4 0 0 1 0 4 4 0 0", "8 4 0 0 0 0 4 4 0 0", 1).as_bytes()).unwrap().doc;
+    let NodeKind::Image(im) = &art(&doc)[0].kind else { panic!() };
+    assert_eq!(doc.images[&im.key].cmyk().map(|i| i.data), Some(inks.to_vec()));
+}
+
+/// Editing data with one layer (showing or not) holding a placed file: its matrix, the file at
+/// `path` in the box 10 20 14 22, and `preview` (what its preview section holds), then `after`.
+fn placed(visible: bool, matrix: &str, path: &str, preview: Option<&[u8]>, after: &str) -> Vec<u8> {
+    let text = stream(&layer("@@").replacen("1 1 1 1", if visible { "1 1 1 1" } else { "0 1 1 1" }, 1));
+    let (head, tail) = text.split_once("@@").unwrap();
+    let mut s = format!(
+        "{head}%AI5_BeginPlace\r%%FileType: 1\r{matrix} 10 20 14 22 4 4 0\r({path})`\r%%IncludeFile:{path}\r\
+         %AI17_Begin_Content_if_version_gt:24 12\r%AI28_BeginPlacedRelativePath\r()\r%AI28_EndPlacedRelativePath\r%AI17_Alternate_Content\r%AI17_End_Versioned_Content\r\
+         %AI17_Begin_Content_if_version_gt:24 5\r"
+    )
+    .into_bytes();
+    if let Some(p) = preview {
+        s.extend_from_slice(b"%AI26_BeginPlacedObjectPreview\r");
+        s.extend_from_slice(p);
+        s.extend_from_slice(b"\r%AI26_EndPlacedObjectPreview\r");
+    }
+    s.extend_from_slice(format!("%AI17_End_Versioned_Content\r~\r%AI5_EndPlace\r{after}{tail}").as_bytes());
+    s
+}
+
+#[test]
+fn placed_files_are_linked_images_showing_their_preview() {
+    // A 2×1 preview (premultiplied ARGB, a padded row) of a file of 4×2 pixels.
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let name = "%_/ArtDictionary :\r%_(Photo) /String (AIArtName) ,\r%_;\r";
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/pics/photo.png", Some(&preview), name)).unwrap();
+    let a = art(&r.doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!((im.link.as_ref().map(|l| l.path.as_str()), im.width, im.height), (Some("/pics/photo.png"), 2, 1));
+    assert_eq!(a[0].name.as_deref(), Some("Photo"));
+    assert!(r.doc.images[&im.key].is_proxy(), "the preview is what a missing link shows");
+    let (img, xf) = pixels(&r.doc);
+    assert_eq!((img.get_pixel(0, 0).0, img.get_pixel(1, 0).0), ([255, 0, 0, 255], [0, 127, 0, 128]));
+    // Without a template box the pixels start at the box's corner, the first row the top one:
+    // (10, 20) is at (50, 100) in art space, the page's top.
+    assert_eq!((xf * Point::ZERO, xf * Point::new(2.0, 1.0)), (Point::new(50.0, 0.0), Point::new(70.0, 10.0)));
+    assert!(r.warnings.iter().any(|w| w.contains("low-resolution preview")), "{:?}", r.warnings);
+    // With a template box, the pixels start at the canvas point of art space's origin (8091.5,
+    // 8241.5 here), wherever the box is.
+    let mut data = placed(true, "[5 0 0 -5 -40407.5 41307.5]", "a.png", Some(&preview), "");
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginLayer").unwrap();
+    data.splice(at..at, *b"%AI3_TemplateBox: 100 50 100 50\n");
+    let xf = pixels(&read(&data).unwrap().doc).1;
+    assert_eq!((xf * Point::ZERO, xf * Point::new(2.0, 1.0)), (Point::new(50.0, 0.0), Point::new(70.0, 10.0)));
+    // Turned a quarter: the box's rows run along x.
+    let r = read(&placed(true, "[0 5 5 0 0 0]", "a.png", Some(&preview), "")).unwrap();
+    let xf = pixels(&r.doc).1;
+    assert_eq!((xf * Point::ZERO, xf * Point::new(2.0, 1.0)), (Point::new(100.0, 50.0), Point::new(110.0, 30.0)));
+
+    // Without a preview it can read (none, cut short, not 32 bits, absurd sizes), without a path or
+    // a matrix, the file isn't read from its editing data.
+    let cut = &preview[..preview.len() - 6];
+    let huge = b"70000 70000 280000 32 17 \0\0\0\0";
+    let overflow = b"1 2 18446744073709551615 32 17 \0\0\0\0\0\0\0\0";
+    for (matrix, path, preview) in [
+        ("[5 0 0 -5 0 200]", "a.png", None),
+        ("[5 0 0 -5 0 200]", "a.png", Some(cut)),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&b"2 1 2 8 17 \0\0"[..])),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&huge[..])),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&overflow[..])),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&b"2 1"[..])),
+        ("[5 0 0 -5 0 200]", "", Some(&preview[..])),
+        ("[0 0 0 0 0 0]", "a.png", Some(&preview[..])),
+        ("[1 2 3]", "a.png", Some(&preview[..])),
+    ] {
+        let e = read(&placed(true, matrix, path, preview, "")).unwrap_err();
+        assert!(e.contains("placed files"), "{matrix} {path} {preview:?}: {e}");
+    }
+    // On a layer that doesn't show, such a file is left out of it.
+    let r = read(&placed(false, "[5 0 0 -5 0 200]", "a.png", None, "")).unwrap();
+    assert!(r.hidden_unread.contains("placed files") && art(&r.doc).is_empty());
+    // `~` ends nothing else.
+    assert!(read(stream(&layer("~\n")).as_bytes()).unwrap_err().contains("`~`"));
+}
+
 #[test]
 fn text_objects_are_slots_named_after_their_story() {
     let words = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n3 /StoryIndex ,\n;\n%_/ArtDictionary :\n%_/XMLUID : (Title) ; (AI10_ArtUID) ,\n%_;\n";
@@ -384,6 +758,20 @@ fn text_objects_are_slots_named_after_their_story() {
     let r = read_ok(&layer(&format!("/AI11Text :\n0 /StoryIndex ,\n;\n{}{}", commented(0), commented(1))));
     let stories: Vec<_> = art(&r.doc).iter().map(|n| slot_of(n.name.as_deref())).collect();
     assert_eq!(stories, [Some(Some(0)), Some(Some(1))]);
+    // A text object with an appearance: its drawn look (a group whose type is a story of the
+    // undo-free text document, which counts its own), then the object on `%_` lines, which is
+    // the type.
+    let look = "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nU\n0 0 Xd\n6 () XW\n";
+    let own: String = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n7 /StoryIndex ,\n;\n".lines().map(|l| format!("%_{l}\n")).collect();
+    let plain = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n";
+    let r = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n{plain}")));
+    let stories: Vec<_> = art(&r.doc).iter().map(|n| slot_of(n.name.as_deref())).collect();
+    assert_eq!(stories, [Some(Some(7)), Some(Some(0))], "the look's story 0 isn't the text document's");
+    // What else the look draws stays, under the type.
+    let look = look.replace("U\n", &format!("{RED}{}f\nU\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n")));
+    let a = art(&r.doc);
+    assert_eq!((a.len(), a[0].children().map(Vec::len), slot_of(a[1].name.as_deref())), (2, Some(1), Some(Some(7))));
 }
 
 #[test]
@@ -394,6 +782,14 @@ fn what_it_doesnt_read_is_an_error_where_it_shows() {
     assert!(e.contains("pattern fills"), "{e}");
     let e = read(stream(&layer("/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")).as_bytes()).unwrap_err();
     assert!(e.contains("symbols"), "{e}");
+    // An opacity mask (#2004): drawing the layer's art whole would show what the mask hides, so
+    // the mask is named and the file is read from its PDF part instead.
+    let mask = "%_/ArtDictionary :\n%_/XMLUID : (M) ; (AI10_ArtUID) ,\n%_/Mask :\n%_1 /Bool (Linked) ,\n%_0 /Bool (Disabled) ,\n%_X=\n\
+                %_0 0 0 1 k\n%_0 0 m\n%_5 0 L\n%_5 5 L\n%_0 5 L\n%_0 0 L\n%_f\n%_X+\n%_ (Art) ,\n%_1 /Bool (Clipping) ,\n%_0 /Bool (Inverted) ,\n%_; (AI9_Mask) ,\n%_;\n";
+    let e = read(stream(&layer(mask)).as_bytes()).unwrap_err();
+    assert!(e.contains("opacity masks"), "{e}");
+    // A mask that is disabled changes nothing: the art reads.
+    read_ok(&layer(&mask.replace("%_0 /Bool (Disabled)", "%_1 /Bool (Disabled)")));
     // On a layer that doesn't show, it is left out of it.
     let hidden = "%AI5_BeginLayer\n0 1 1 1 0 0 0 1 255 79 79 0 50 0 Lb\n(Off) Ln\n1 2 frobnicate\n(J) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\nLB\n%AI5_EndLayer--\n";
     let r = read_ok(hidden);
@@ -478,8 +874,8 @@ fn ascii85_comment_lines(bytes: &[u8]) -> String {
 /// `/Bounds` in a space measured from `/Origin` with y down, then `/RTransform`. Two squares at
 /// 1..5 × 2..8 of a 10-point page, blue below red: bounds (1, 2)–(5, 8) → from the origin
 /// (10, 20), y down, (11, 18)–(15, 12) → twice that plus (100, 50): x 122..130, y 74..86 in art
-/// space, which is y 14..26 in the document (crop marks 100 high). The space has y down, so the
-/// PDF's bottom (blue) is the top of the box.
+/// space, which is y 14..26 in the document (crop marks 100 high). That placement mirrors (`2 0 0 2`
+/// with the origin's flip), so the PDF's bottom (blue) is the top of the box.
 #[test]
 fn non_native_art_is_drawn_from_its_pdf_fitted_to_its_bounds() {
     let pdf = tiny_pdf(10.0, "0 0 1 rg 1 2 4 3 re f 1 0 0 rg 1 5 4 3 re f");
@@ -514,6 +910,34 @@ fn non_native_art_is_drawn_from_its_pdf_fitted_to_its_bounds() {
     // Its ids are this document's.
     assert_ne!(group.id, paths[0].id);
     assert_ne!(paths[0].id, paths[1].id);
+}
+
+/// The usual placement, `/RTransform` `1 0 0 -1 …`, doesn't mirror (with the origin's flip its
+/// determinant is positive), so the art shows upright, as the file's own PDF part draws it: the
+/// PDF's top (red) at the top. Bounds
+/// (1, 2)–(5, 8) from the origin (10, 20), y down, → (11, 18)–(15, 12) → x 111..115, y 32..38 in
+/// art space, y 62..68 in the document (crop marks 100 high).
+#[test]
+fn non_native_art_placed_without_a_mirror_stays_upright() {
+    let pdf = tiny_pdf(10.0, "0 0 1 rg 1 2 4 3 re f 1 0 0 rg 1 5 4 3 re f");
+    let foreign = format!(
+        "q\n/ForeignObject :\n1 /Version ,\n1 0 0 -1 100 50  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n{};\n0 0 Xd\n6 () XW\n0 Ae\n{}h\nW\nn\nQ\n",
+        ascii85_comment_lines(&pdf),
+        rect_path(110.0, 30.0, 116.0, 40.0)
+    );
+    let s = read_ok(&layer(&foreign));
+    assert!(s.warnings.is_empty(), "{:?}", s.warnings);
+    let objects = art(&s.doc);
+    let NodeKind::Group { children, clip: true } = &objects[0].kind else { panic!("{:?}", objects[0].kind) };
+    let group = &children[1];
+    let bounds = group.geometric_bounds().unwrap();
+    for (got, want) in [(bounds.x0, 111.0), (bounds.y0, 62.0), (bounds.x1, 115.0), (bounds.y1, 68.0)] {
+        assert!((got - want).abs() < 1e-6, "{bounds:?}");
+    }
+    let paths = group.children().unwrap();
+    let (blue, red) = (paths[0].geometric_bounds().unwrap(), paths[1].geometric_bounds().unwrap());
+    assert!((red.y0 - 62.0).abs() < 1e-6 && (red.y1 - 65.0).abs() < 1e-6, "red {red:?}");
+    assert!((blue.y0 - 65.0).abs() < 1e-6 && (blue.y1 - 68.0).abs() < 1e-6, "blue {blue:?}");
 }
 
 #[test]
@@ -612,4 +1036,159 @@ fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
     let started = std::time::Instant::now();
     let _ = read(stream(&layer(&body)).as_bytes());
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+}
+
+#[test]
+fn artboards_after_what_stops_the_reading() {
+    let board = |name: &str, x: i32| {
+        format!(
+            "%_/Dictionary :\n%_/FillStyle : 0 1 0 0 0 Xy\n%_/Def ; \n%_ (EachArtboardColor) ,\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_({name}) /UnicodeString (Name) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x + 100
+        )
+    };
+    let array = format!("%_/Array :\n{}{}%_; (ArtboardArray) ,\n", board("one", 0), board("two", 200));
+    // Art in the document's own data that the reader can't follow comes before the artboards.
+    let data = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n%_/Dictionary :\nLB\n{array}%_; /NotRecorded ,\n%_;\n");
+    let boards: Vec<_> = super::artboards(data.as_bytes()).into_iter().map(|(n, r)| (n, r.x0)).collect();
+    assert_eq!(boards, [("one".to_string(), 0.0), ("two".to_string(), 200.0)]);
+}
+
+#[test]
+fn a_compound_clipping_path_with_a_fill_paints_once_under_its_clip() {
+    // GUARDS: the painted copies of a compound's clipping subpaths went into the compound itself,
+    // doubling each subpath, so under even-odd the clip cancelled to nothing.
+    let art_ = format!(
+        "0 Ae\nq\n{RED}{}f\n1 XR\n*u\n0 0 0 0 0 0 1 Xa\n{}W\nf\n{}W\nf\n*U\nQ\n",
+        rect_path(0.0, 0.0, 100.0, 100.0),
+        rect_path(10.0, 10.0, 40.0, 40.0),
+        rect_path(50.0, 10.0, 80.0, 40.0),
+    );
+    let doc = read_ok(&layer(&art_)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    assert_eq!(children.len(), 3, "{children:#?}");
+    let NodeKind::Compound { children: clip, rule } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    assert_eq!(*rule, vectorcraft_geom::FillRule::EvenOdd);
+    assert_eq!(clip.len(), 2);
+    assert!(clip.iter().all(|c| matches!(c.kind, NodeKind::Path { clipping: true, .. })));
+    let NodeKind::Compound { children: painted, .. } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert_eq!((painted.len(), fill(&children[1]).color()), (2, Some(Color::rgb(0.0, 0.0, 1.0))));
+    assert_eq!(fill(&children[2]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
+#[test]
+fn a_radial_gradient_without_xm_is_its_bm_circle_else_its_bg_circle() {
+    // GUARDS: files write `Bg` as the unit circle and place the radial with `Bm`; reading `Bg` alone collapses it.
+    let defs =
+        "%AI5_BeginGradient: (R)\n(R) 1 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let geom = |instance: &str| {
+        let doc = read_ok(&format!("{defs}{}", layer(&format!("{}Bb\n10 0 0 0.5 Bh\n{instance}f\n0 BB\n", rect_path(0.0, 0.0, 200.0, 100.0))))).doc;
+        let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+        g.geom.unwrap()
+    };
+    let placed = geom("1 (R) 0 0 0 1 1 0 0 1 0 0 Bg\n50 0 0 -50 100 50 Bm\n");
+    assert_eq!((placed.start, placed.end, placed.focal), (Point::new(100.0, 50.0), Point::new(150.0, 50.0), Some(Point::new(110.0, 50.0))));
+    let own = geom("1 (R) 60 50 0 20 1 0 0 1 0 0 Bg\n");
+    assert_eq!((own.start, own.end, own.focal), (Point::new(60.0, 50.0), Point::new(80.0, 50.0), Some(Point::new(70.0, 50.0))));
+}
+
+/// Two art styles: `Blue`, a blue fill and a drop shadow; `Lit`, the object's gradient and an outer glow.
+const ART_STYLES: &str = "%AI9_BeginArtStyles\n\
+    /KnownStyle :\n(Blue) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+    /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+    /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n3 /Real (horz) ,\n4 /Real (vert) ,\n; /Dict ;\n /Part ,\n;\n\
+    /KnownStyle :\n(Lit) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n1 (G) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+    /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+    /BasicFilter :\n(Adobe Outer Glow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n0.5 /Real (opac) ,\n2 /Real (blur) ,\n; /Dict ;\n /Part ,\n;\n\
+    %AI9_EndArtStyles\n";
+
+#[test]
+fn an_object_with_a_style_this_reads_comes_in_as_itself() {
+    let defs =
+        "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!(
+        "0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_1 (G) 0 0 0 1 1 0 0 1 0 0 Bg\n%_10 0 0 10 5 5 Xm\n%_{hidden_rect}f\n%_0 BB\n1 (Lit) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0)
+    );
+    let r = read_ok(&format!("{ART_STYLES}{defs}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    assert!(matches!(fill(&a[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("G")));
+    let effects: Vec<_> = a[0].appearance.effects.iter().map(|e| (e.id.as_str(), e.params["opacity"].as_f64())).collect();
+    assert_eq!(effects, [("stylize.outerGlow", Some(50.0))]);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
+    // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
+    let r = read_ok(&format!("%%BeginProlog\n%\n%%EndProlog\n{}", layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)))));
+    assert_eq!(art(&r.doc).len(), 1);
+}
+
+#[test]
+fn a_styled_object_inside_a_drawn_look_survives_it() {
+    // GUARDS: an adopted styled object was read on `%_` lines; while its id stayed among those, the
+    // enclosing look's strip removed it.
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!(
+        "0 Ae\nu\n0 Ae\nu\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (Blue) XW\nU\n%_0 Ae\n%_u\n%_{hidden_rect}f\n%_U\n1 (Outer) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0)
+    );
+    let r = read_ok(&format!("{ART_STYLES}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let inner = a[0].children().unwrap();
+    assert_eq!(inner.len(), 1, "{inner:#?}");
+    assert_eq!(fill(&inner[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let shadow = &inner[0].appearance.effects[0];
+    assert_eq!((shadow.id.as_str(), shadow.params["x"].as_f64(), shadow.params["y"].as_f64()), ("stylize.dropShadow", Some(3.0), Some(4.0)));
+}
+
+/// A styled object read in place of its drawn look keeps the transparency written on the look (the
+/// object's own, after the look's group ends): here 60 % in Multiply.
+#[test]
+fn a_styled_object_keeps_the_transparency_written_on_its_look() {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    // The object on `%_` lines sets its own paths' transparency back to normal, as files do.
+    let art_ =
+        format!("0 Ae\nu\n{RED}{}f\nU\n1 0.6 0 2 0 Xy\n6 () XW\n%_0 1 0 0 0 Xy\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{ART_STYLES}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!((a[0].opacity, a[0].blend), (0.6, BlendMode::Multiply));
+}
+
+#[test]
+fn a_gradient_mesh_reads_as_a_patch() {
+    let corner = |rgb: &str, x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| {
+        format!("%_[{rgb} 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1)
+    };
+    let mesh = |space: &str| {
+        format!(
+            "/Mesh X!\n%_({space}) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n/End X!\n",
+            corner("1 0 0", 0, 0, (0, 10), (10, 0)),
+            corner("0 1 0", 0, 40, (10, 40), (0, 30)),
+            corner("0 0 1", 40, 40, (40, 30), (30, 40)),
+            corner("1 1 1", 40, 0, (30, 0), (40, 10)),
+        )
+    };
+    let doc = read_ok(&layer(&mesh("DeviceRGB"))).doc;
+    let NodeKind::Mesh(m) = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    let colors: Vec<_> = m.points.iter().map(|p| p.color).collect();
+    assert_eq!(colors, [Color::rgb(1.0, 0.0, 0.0), Color::rgb(1.0, 1.0, 1.0), Color::rgb(0.0, 1.0, 0.0), Color::rgb(0.0, 0.0, 1.0)]);
+    use vectorcraft_doc::live::{H_DOWN, H_RIGHT};
+    let first = &m.points[0];
+    assert_eq!(
+        (first.p, first.handles[H_DOWN], first.handles[H_RIGHT]),
+        (Point::new(0.0, 100.0), kurbo::Vec2::new(0.0, -10.0), kurbo::Vec2::new(10.0, 0.0))
+    );
+    let e = read(stream(&layer(&mesh("Separation"))).as_bytes()).unwrap_err();
+    assert!(e.contains("gradient meshes"), "{e}");
 }

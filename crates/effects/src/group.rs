@@ -46,7 +46,9 @@ pub fn has_pathfinder(n: &Node) -> bool {
         && n.appearance.effects.iter().any(|e| e.visible && is_pathfinder(&e.id))
 }
 
-/// Converts objects that aren't paths (e.g. text) to an outline path node, if possible.
+/// Converts objects that aren't paths (e.g. text) to outline art, if possible. The paths and
+/// compound paths in that art, at every depth of its groups, take part in the Pathfinder operation
+/// with the object's opacity and blend mode.
 pub type OutlineHook<'a> = &'a dyn Fn(&Node) -> Option<Node>;
 
 fn leaves(n: &Node, hook: Option<OutlineHook>, out: &mut Vec<Node>) {
@@ -61,8 +63,14 @@ fn leaves(n: &Node, hook: Option<OutlineHook>, out: &mut Vec<Node>) {
             }
         }
         _ => {
-            if let Some(p) = hook.and_then(|h| h(n)) {
-                out.push(p);
+            // Every path of the outline art, at any depth, takes the object's opacity and blend
+            // mode.
+            if let Some(art) = hook.and_then(|h| h(n)) {
+                let first = out.len();
+                leaves(&art, None, out);
+                for l in out.iter_mut().skip(first) {
+                    (l.opacity, l.blend) = (n.opacity, n.blend);
+                }
             }
         }
     }
@@ -281,9 +289,9 @@ pub fn evaluate_container(n: &Node) -> Option<Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vectorcraft_color::{Color, Paint};
-    use vectorcraft_doc::{Effect, NodeId};
-    use vectorcraft_geom::{Rect, shapes};
+    use vectorcraft_color::{BlendMode, Color, Paint};
+    use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
+    use vectorcraft_geom::{Point, Rect, shapes};
 
     fn sq(id: u64, x: f64, color: Color) -> Arc<Node> {
         Arc::new(Node::path(
@@ -319,6 +327,71 @@ mod tests {
         assert_eq!(div.len(), 3);
     }
 
+    /// Returns an "H" in blue type at 100 pt on a baseline at y = 80, with its stems on either
+    /// side of x = 100.
+    fn type_h() -> Node {
+        let style = CharStyle { size: 100.0, fill: Paint::solid(Color::rgb(0.0, 0.0, 1.0)), ..CharStyle::default() };
+        Node::new(NodeId(2), NodeKind::Text(Box::new(TextObject::point(Point::new(70.0, 80.0), "H", style))))
+    }
+
+    /// Returns a group with `effect` that holds a red 100 x 100 square and `front` in front of it.
+    fn square_and(front: Option<Node>, effect: &str) -> Node {
+        let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+        let square = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), red);
+        let mut g = Node::group(NodeId(10), [Some(square), front].into_iter().flatten().map(Arc::new).collect());
+        g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({}), visible: true });
+        g
+    }
+
+    /// Returns the Pathfinder results of `g`, with type outlined as the renderer outlines it.
+    fn results(g: &Node) -> Vec<Arc<Node>> {
+        pathfinder_children(g, crate::text_outliner()).unwrap()
+    }
+
+    #[test]
+    fn type_changes_the_result_of_every_pathfinder_effect() {
+        let glyphs = crate::outline_text(&type_h()).unwrap();
+        let b = glyphs.geometric_bounds().unwrap();
+        assert!(b.x0 < 100.0 && b.x1 > 100.0 && b.y0 > 0.0 && b.y1 < 100.0, "{b:?}");
+        // `measure` gives the number of results and their total area.
+        let measure = |front: Option<Node>, effect: &str| {
+            let r = results(&square_and(front, effect));
+            (r.len(), r.iter().map(|n| area(n)).sum::<f64>())
+        };
+        let unchanged: Vec<_> = PATHFINDER_EFFECTS
+            .iter()
+            .map(|(id, label, _)| (label, measure(Some(type_h()), id), measure(None, id)))
+            .filter(|(_, with, without)| with.0 == without.0 && (with.1 - without.1).abs() <= 1.0)
+            .collect();
+        assert!(unchanged.is_empty(), "(label, with the type, without): {unchanged:?}");
+        // The shape modes take the glyph's whole area: the part inside the square and the part outside.
+        let glyph_area: f64 = glyphs.children().unwrap().iter().map(|n| area(n)).sum();
+        let with_type = |id: &str| measure(Some(type_h()), id).1;
+        assert!((with_type("pathfinder.add") - with_type("pathfinder.subtract") - glyph_area).abs() < 0.5, "{glyph_area}");
+        assert!((with_type("pathfinder.intersect") + with_type("pathfinder.minusBack") - glyph_area).abs() < 0.5, "{glyph_area}");
+        // Outline art nested one group deeper takes part as well.
+        let nested: OutlineHook = &|n: &Node| crate::outline_text(n).map(|g| Node::group(n.id, vec![Arc::new(g)]));
+        let sub = pathfinder_children(&square_and(Some(type_h()), "pathfinder.subtract"), Some(nested)).unwrap();
+        assert!((sub.iter().map(|n| area(n)).sum::<f64>() - with_type("pathfinder.subtract")).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pieces_of_type_keep_its_paint_opacity_and_blend_mode() {
+        let mut t = type_h();
+        (t.opacity, t.blend) = (0.5, BlendMode::Multiply);
+        let look = |p: &Arc<Node>| (p.appearance.fill_paint(), p.opacity, p.blend);
+        let square = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0, BlendMode::Normal);
+        let glyph = (Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 0.5, BlendMode::Multiply);
+        let looks: Vec<_> = results(&square_and(Some(t.clone()), "pathfinder.divide")).iter().map(look).collect();
+        assert!(looks.contains(&square) && looks.contains(&glyph) && looks.iter().all(|l| *l == square || *l == glyph), "{looks:?}");
+        // In the shape modes a group with the type in front is one shape, styled like the type.
+        let green = Appearance::basic(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
+        let behind = Node::path(NodeId(3), shapes::rectangle(Rect::new(50.0, 50.0, 150.0, 150.0)), green);
+        let both = Node::group(NodeId(4), vec![Arc::new(behind), Arc::new(t)]);
+        let added: Vec<_> = results(&square_and(Some(both), "pathfinder.add")).iter().map(look).collect();
+        assert_eq!(added, [glyph]);
+    }
+
     #[test]
     fn a_random_transform_on_a_group_moves_its_members_together() {
         let mut g = group_with("distort.transform");
@@ -330,11 +403,71 @@ mod tests {
         assert!((b.0 - a.0 - 5.0).abs() < 1e-9 && (b.1 - a.1).abs() < 1e-9, "{a:?} {b:?}");
     }
 
+    /// What [`evaluate_container`] makes of black 40 pt type "IIII" (id 3), changed by `style`,
+    /// in a group with a square and Offset Path 0, which leaves every path as it is.
+    fn type_in_group(style: impl FnOnce(&mut Node)) -> Node {
+        let ts = vectorcraft_doc::CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(5.0, 60.0), "IIII", ts);
+        let mut t = Node::new(NodeId(3), NodeKind::Text(Box::new(text)));
+        style(&mut t);
+        let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::BLACK), Arc::new(t)]);
+        g.appearance.effects.push(Effect { id: "path.offsetPath".into(), params: serde_json::json!({"offset": 0}), visible: true });
+        let art = evaluate_container(&g).unwrap();
+        (*art.children().unwrap()[1]).clone()
+    }
+
+    #[test]
+    fn type_in_a_group_keeps_its_look_when_the_groups_geometry_effects_outline_it() {
+        use vectorcraft_color::BlendMode;
+        let art = type_in_group(|t| (t.opacity, t.blend) = (0.5, BlendMode::Multiply));
+        assert!(art.id == NodeId(3) && !matches!(art.kind, NodeKind::Text(_)), "{art:?}");
+        assert_eq!((art.opacity, art.blend), (0.5, BlendMode::Multiply));
+        // Its opacity mask, its own shadow, its knockout shape option and its visibility stay.
+        let mask_art = Node::path(NodeId(4), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default());
+        let mask = vectorcraft_doc::OpacityMask::new(mask_art, true);
+        assert_eq!(type_in_group(|t| t.extras_mut().mask = Some(Box::new(mask.clone()))).extras().mask.as_deref(), Some(&mask));
+        let shadow = Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({}), visible: true };
+        assert_eq!(type_in_group(|t| t.appearance.effects.push(shadow.clone())).appearance.effects, vec![shadow]);
+        assert!(type_in_group(|t| t.knockout_shape = true).knockout_shape);
+        assert!(!type_in_group(|t| t.visible = false).visible);
+        // Its own Transform moves its outlines 30 pt before the group's effect reshapes them.
+        let x0 = |n: Node| n.geometric_bounds().unwrap().x0;
+        let transform = Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true };
+        let moved = x0(type_in_group(|t| t.appearance.effects.push(transform)));
+        assert!((moved - x0(type_in_group(|_| {})) - 30.0).abs() < 1e-6, "{moved}");
+    }
+
     #[test]
     fn hidden_effect_or_plain_group_is_untouched() {
         let mut g = group_with("pathfinder.add");
         g.appearance.effects[0].visible = false;
         assert!(pathfinder_children(&g, None).is_none());
         assert!(!has_pathfinder(&sq(1, 0.0, Color::BLACK)));
+    }
+
+    #[test]
+    fn a_transform_on_a_group_moves_the_gradients_of_its_type_and_not_those_placed_on_its_paths() {
+        use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+        let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let ramp = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+        // The type's characters fit the gradient to its layout; the square has it placed across itself.
+        let style = vectorcraft_doc::CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(ramp.clone())), ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(5.0, 60.0), "IIII", style);
+        let t = Arc::new(Node::new(NodeId(3), NodeKind::Text(Box::new(text))));
+        let geom = GradientGeom { start: (0.0, 5.0).into(), end: (10.0, 5.0).into(), aspect: 1.0, focal: None };
+        let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+        let square = Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(placed, Paint::None, 0.0)));
+        let start = |n: &Node| match n.appearance.fill_paint() {
+            Paint::Gradient(g) => g.geom.unwrap().start.x,
+            p => panic!("a gradient: {p:?}"),
+        };
+        let before = start(&crate::outline_text(&t).unwrap().children().unwrap()[0]);
+        let mut g = Node::group(NodeId(10), vec![square, t]);
+        g.appearance.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true });
+        let art = evaluate_container(&g).unwrap();
+        let members = art.children().unwrap();
+        let after = start(&members[1].children().unwrap()[0]);
+        assert!((after - before - 30.0).abs() < 1e-6, "the type's gradient starts at {before}, then {after}");
+        assert_eq!(start(&members[0]), 0.0, "the square's gradient stays where it was placed");
     }
 }

@@ -7,6 +7,7 @@
 //! Shortcuts, Workspaces, Find Font) draw their own window.
 
 mod about;
+pub mod action_batch;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
@@ -19,6 +20,7 @@ pub mod compare;
 pub mod confirm;
 pub mod corners;
 mod design_prompt;
+pub mod dimension;
 mod document_setup;
 pub mod dxf_import;
 pub mod dxf_options;
@@ -31,13 +33,17 @@ mod export_as;
 mod export_for_screens;
 pub mod eyedropper;
 pub mod file_info;
+pub mod find_links;
 pub mod flare_options;
 pub mod flatten;
 pub mod flattener_presets;
 pub mod font_library;
 mod form;
+pub(crate) mod free_distort;
 pub mod freehand;
 mod gradient_stop;
+pub mod graph_data;
+pub mod graph_design;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod help;
@@ -55,7 +61,7 @@ mod new_document;
 pub mod new_swatch;
 pub mod office_export;
 pub mod package;
-mod path_ops;
+pub(crate) mod path_ops;
 pub mod pdf_presets;
 pub mod perspective_grid;
 pub mod perspective_options;
@@ -81,12 +87,15 @@ pub(crate) mod save_options;
 mod save_pdf;
 pub mod save_style_library;
 pub mod save_swatch_library;
+pub mod script_check;
 mod shapes;
+pub mod shortcut_import;
 pub mod slices;
 pub mod spot_colors;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
+pub mod symbol_options;
 pub mod symbolism_options;
 mod text_export;
 pub mod text_import;
@@ -96,6 +105,7 @@ mod tools;
 mod transform;
 pub mod transform_each;
 pub mod variables;
+mod warp_effect;
 pub mod width_point;
 
 use serde_json::{Value, json};
@@ -103,10 +113,12 @@ use serde_json::{Value, json};
 pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
+pub(crate) use effect::{FILM_GRAIN_FIELDS, SHADES};
 pub use export_as::open as open_export_as;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, formats as screen_formats, open_assets as open_export_for_screens_assets, saved_rows as screen_saved_rows,
+    KIND as EXPORT_FOR_SCREENS, formats as screen_formats, open_assets as open_export_for_screens_assets, saved_options as screen_saved_options,
+    saved_rows as screen_saved_rows,
 };
 pub(crate) use new_document::preset_name;
 pub use new_document::{open as open_new_document, preset_card};
@@ -146,6 +158,8 @@ pub(crate) struct DialogSpec {
     /// The OK button's label when it depends on the app (Export for Screens' "Download" on the
     /// web); `ok` when none. Only with an `ok`.
     pub ok_label: Option<fn(&VectorcraftApp) -> &'static str>,
+    /// Can OK (or Enter) apply the dialog as it is? None: always. The body says why not.
+    pub ok_enabled: Option<fn(&VectorcraftApp, &Dialog) -> bool>,
 }
 
 impl DialogSpec {
@@ -167,6 +181,7 @@ impl DialogSpec {
         max_width: None,
         preview: false,
         ok_label: None,
+        ok_enabled: None,
     };
 
     /// A dialog that draws its own window and confirms through its module.
@@ -210,8 +225,9 @@ macro_rules! registry {
 }
 
 registry! {
+    DimensionOptions: [dimension::KIND] => dimension::SPEC,
     NewDocument: [new_document::KIND] => new_document::SPEC,
-    Shape: ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] => shapes::SPEC,
+    Shape: ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment", "rectangularGrid", "polarGrid"] => shapes::SPEC,
     Transform: ["move", "rotate", "scale", "reflect", "shear"] => transform::SPEC,
     PathOp: ["average", "offsetPath", "simplify", "splitIntoGrid"] => path_ops::SPEC,
     DocumentSetup: ["documentSetup"] => document_setup::SPEC,
@@ -231,6 +247,9 @@ registry! {
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
+    GraphData: [graph_data::KIND] => graph_data::SPEC,
+    GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
+    GraphMarker: [graph_design::MARKER] => graph_design::MARKER_SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
@@ -261,6 +280,7 @@ registry! {
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
     MissingLinks: [missing_links::KIND] => missing_links::SPEC,
     MissingFonts: [missing_fonts::KIND] => missing_fonts::SPEC,
+    FindLinks: [find_links::KIND] => find_links::SPEC,
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
@@ -270,6 +290,7 @@ registry! {
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
     Package: [package::KIND] => package::SPEC,
+    ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
@@ -282,12 +303,14 @@ registry! {
     PrintPreset: [print::PRESET_KIND] => print::PRESET_SPEC,
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
+    ScriptCheck: [script_check::KIND] => script_check::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
+    SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     SymbolismOptions: [symbolism_options::KIND] => symbolism_options::SPEC,
     PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
@@ -299,6 +322,7 @@ registry! {
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     DesignFromPrompt: [crate::embroidery::prompt::KIND] => design_prompt::SPEC,
+    ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
 
 /// The button labels the shared dialog frame can show (OK, discard and the fixed Cancel/Close),
@@ -327,16 +351,28 @@ fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogRes
     r
 }
 
-/// Close the open dialog as Cancel does, rolling back a live preview (`ui.dialog.cancel`).
+/// The field of a dialog opened over another (Import Shortcut Set over Keyboard Shortcuts) that
+/// holds the dialog under it, which Cancel and Escape show again.
+pub(crate) const PARENT: &str = "__parent";
+
+/// The dialog `d` was opened over, as it was.
+pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
+    d.fields.get(PARENT).and_then(|v| serde::Deserialize::deserialize(v).ok())
+}
+
+/// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was
+/// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
-    match app.ui.dialog.take() {
-        Some(d) if spec(&d.kind).preview => {
+    if let Some(d) = app.ui.dialog.take() {
+        if spec(&d.kind).preview {
             let _ = app.session.cancel_interaction();
         }
         // Design from Prompt stops waiting for the drawing on its way.
-        Some(d) if d.kind == crate::embroidery::prompt::KIND => crate::embroidery::prompt::cancel(app),
-        _ => {}
+        if d.kind == crate::embroidery::prompt::KIND {
+            crate::embroidery::prompt::cancel(app);
+        }
+        app.ui.dialog = parent(&d);
     }
     settle(app);
 }
@@ -352,13 +388,19 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 }
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
-/// for its turn again, the search a Missing Fonts dialog started stops once that dialog is gone,
-/// and with no dialog open the next document's Missing Fonts dialog opens (one dialog at a time).
+/// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
+/// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
+/// (one dialog at a time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
+    find_links::stop_when_closed(app);
     missing_fonts::open_next(app);
 }
+
+/// The field of a dialog that a save panel opened (its format's options): Enter doesn't confirm it
+/// until Enter has been let go.
+pub(crate) const AFTER_PANEL: &str = "__afterPanel";
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
@@ -369,6 +411,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     compare::show(app, ctx);
     crate::guide::show(app, ctx);
     settle(app);
+    confirm::show_waiting(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and
     // its first field is to take the keyboard focus (`focus_id`, until a field takes it).
     let (shown_id, focus_id) = (egui::Id::new("dialog-shown"), egui::Id::new("dialog-focus-pending"));
@@ -391,13 +434,26 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         m.get_temp::<bool>(focus_id).unwrap_or(false)
     });
+    // Not in the frame of a click (the one on the menu item that opened it): egui takes the focus
+    // from a field the click missed, so the field takes it a frame later (#1367).
+    let clicked = ctx.input(|i| i.pointer.any_click());
+    if focus_first && clicked {
+        ctx.request_repaint();
+    }
+    let focus_first = focus_first && !clicked;
     let spec = spec(&d.kind);
     if let Some(window) = spec.window {
         return window(app, ctx);
     }
     let mut ok = false;
+    let mut ok_enabled = true;
     let mut cancel = false;
     let mut discard = false;
+    // Opened as a save panel closed: the Enter that closed it isn't this dialog's, until it is let go.
+    let after_panel = d.bool(AFTER_PANEL);
+    if after_panel && !ctx.input(|i| i.key_down(egui::Key::Enter) || i.key_pressed(egui::Key::Enter)) {
+        d.fields.remove(AFTER_PANEL);
+    }
     let heading = (spec.heading)(&d);
     let revolves = revolve_gizmo::active(&d);
     if revolves {
@@ -413,8 +469,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
         modal::heading(ui, &heading);
         ui.add_space(12.0);
-        // Just opened: its first field takes the keyboard focus, as in the reference app (type a
-        // value, press Enter). Only the body's fields can take it.
+        // Just opened: its first enabled field takes the keyboard focus, as in the reference app
+        // (type a value, press Enter). Only the body's fields can take it.
         if focus_first {
             ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
         }
@@ -428,9 +484,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // right-to-left layout would otherwise take all the room left in the window, so the
         // window could never shrink to its content.
         let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ok_enabled = spec.ok_enabled.is_none_or(|f| f(app, &d));
         ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
-                && widgets::primary_button(ui, label).clicked()
+                && widgets::primary_button_enabled(ui, label, ok_enabled).clicked()
             {
                 ok = true;
             }
@@ -444,7 +501,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
-    if spec.ok.is_some() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    if spec.ok.is_some() && ok_enabled && !after_panel && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
         ok = true;
     }
     if discard {
@@ -491,6 +548,8 @@ mod tests_import_pdf;
 mod tests_package;
 #[cfg(test)]
 mod tests_raster_formats;
+#[cfg(test)]
+mod tests_svg_options_range;
 
 #[cfg(test)]
 mod tests_dxf;
@@ -531,3 +590,12 @@ mod tests_perspective;
 
 #[cfg(test)]
 mod tests_modal;
+
+#[cfg(test)]
+mod tests_rectangular_grid;
+
+#[cfg(test)]
+mod tests_shortcut_import;
+
+#[cfg(test)]
+mod tests_warp;

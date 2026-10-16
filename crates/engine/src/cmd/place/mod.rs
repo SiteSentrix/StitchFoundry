@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name+dataBase64, link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside, aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the art's bounds) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it) and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a StitchFoundry document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the art's bounds) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it) and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
             has_doc,
             place
         ),
@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Placed File Info",
             [],
             None,
-            "{path | name+dataBase64, page?, crop?, password?, thumbnail?: px} what file.place would place, without placing it → {name, format, width, height (pt at 100%), pixelWidth?, pixelHeight?, ppi?: [x, y], colorMode?: RGB|Grayscale|CMYK (raster images), warnings, thumbnailBase64?: PNG of at most `thumbnail` (≤ 512) px on its longer side}",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes), page?, crop?, password?, thumbnail?: px, link?: bool, dxf?: {…} (both as file.place)} what file.place would place, without placing it → {name, format, width, height (pt at 100%), pixelWidth?, pixelHeight?, ppi?: [x, y], colorMode?: RGB|Grayscale|CMYK (raster images), warnings, thumbnailBase64?: PNG of at most `thumbnail` (≤ 512) px on its longer side}",
             always,
             info
         ),
@@ -183,7 +183,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
         let (sx, sy) = pt_per_px(img.ppi);
         let natural = Rect::new(0.0, 0.0, img.width as f64 * sx, img.height as f64 * sy);
         let link = src.path.map(|path| super::links::link_info(path, &src.bytes));
-        return Ok(Loaded { name, format, art: Art::Image(img), natural, warnings: vec![], link, board: None });
+        let warnings = fileio::too_large_note(&img.blob.bytes).into_iter().collect();
+        return Ok(Loaded { name, format, art: Art::Image(img), natural, warnings, link, board: None });
     }
     let anchored = format.id == "dxf" && (opts.dxf.fit || !opts.dxf.center);
     let (mut doc, warnings) = match format.id {
@@ -221,7 +222,7 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
         // default, as Illustrator places one, it is its art's bounds.
         let framed = matches!(format.id, "svg" | "svgz") && crop && p.get("crop").is_some();
         let frame = doc.artboards.first().map(|a| a.rect).filter(|_| framed);
-        (art_of(layers.iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten())), frame)
+        (art_of(layer_art(&layers)), frame)
     } else {
         // The page placed is a PDF import's only one.
         let index = if pdf { 0 } else { page - 1 };
@@ -239,7 +240,16 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
 /// The placeable art of `layers` that lies on `board`.
 fn on_artboard(layers: &[Arc<Node>], board: Rect) -> Vec<Node> {
     let on_board = |c: &&Arc<Node>| c.visual_bounds().is_some_and(|b| b.intersect(board).area() > 0.0 || board.contains(b.origin()));
-    art_of(layers.iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten()).filter(on_board))
+    art_of(layer_art(layers).filter(on_board))
+}
+
+/// The objects of the placeable `layers`, a clipping layer as itself: its objects alone would lose
+/// their clip, and its clipping path would come in as a loose path.
+fn layer_art(layers: &[Arc<Node>]) -> impl Iterator<Item = &Arc<Node>> {
+    layers.iter().filter(|l| placeable(l)).flat_map(|l| match &l.kind {
+        NodeKind::Layer { clip: true, .. } => std::slice::from_ref(l),
+        _ => l.children().map_or(&[][..], Vec::as_slice),
+    })
 }
 
 /// A clipping path of rectangle `r`, with id `id`.
@@ -256,14 +266,15 @@ fn placeable(l: &Node) -> bool {
     l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })
 }
 
-/// The placeable art among `nodes`: guides left out, visible sublayers as groups.
+/// The placeable art among `nodes`: guides left out, visible sublayers as groups (clip groups for
+/// clipping layers).
 fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
     nodes
         .filter_map(|c| match &c.kind {
             NodeKind::Path { guide: true, .. } => None,
-            NodeKind::Layer { children, .. } => placeable(c).then(|| {
+            NodeKind::Layer { children, clip, .. } => placeable(c).then(|| {
                 let mut g = (**c).clone();
-                g.kind = NodeKind::Group { children: art_of(children.iter()).into_iter().map(Arc::new).collect(), clip: false };
+                g.kind = NodeKind::Group { children: art_of(children.iter()).into_iter().map(Arc::new).collect(), clip: *clip };
                 g
             }),
             _ => Some((**c).clone()),
@@ -285,7 +296,7 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
                 link,
                 placement: Default::default(),
             };
-            Node::new(d.alloc_id(), NodeKind::Image(im))
+            Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))
         }
         Art::Text(t) => Node::new(d.alloc_id(), NodeKind::Text(Box::new(text::area_text(t, l.natural)))),
         Art::Document(s, link, bounding) => document::node(d, &s, link, bounding),
@@ -303,7 +314,7 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
 }
 
 /// `node` moved and scaled by `m` as a whole: strokes, effects and pattern tiles go along.
-fn transformed(mut node: Node, m: Affine) -> Node {
+pub(crate) fn transformed(mut node: Node, m: Affine) -> Node {
     node.transform(m, Scaling { strokes: true, effects: Some(vectorcraft_render::effects::scale_effect), ..Default::default() });
     adopt::each_mut(&mut node, &mut |n| vectorcraft_doc::pattern::transform_pattern_paints(n, m));
     node

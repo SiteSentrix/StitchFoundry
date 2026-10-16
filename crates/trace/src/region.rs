@@ -4,8 +4,9 @@
 use vectorcraft_geom::PathData;
 
 use crate::contour::trace_mask;
-use crate::fit::{self, FitOptions};
+use crate::fit;
 use crate::quantize::TRANSPARENT;
+use crate::subpixel::Crack;
 use crate::{Raster, TraceParams, centerline};
 
 /// A picked region: which pixels (row-major, the raster's size), how many, and their mean colour.
@@ -63,9 +64,15 @@ pub fn pick(img: &Raster, x: u32, y: u32, tolerance: u8) -> Option<Region> {
 }
 
 /// How picked regions are fitted: smooth, keeping corners, as a detailed trace would.
-fn options() -> FitOptions {
-    let p = TraceParams { paths: 80.0, corners: 60.0, ..TraceParams::default() };
-    FitOptions { polygon_tol: p.polygon_tolerance(), fit_tol: p.fit_tolerance(), corner_angle: p.corner_angle(), snap_lines: p.snap_curves_to_lines }
+fn style() -> crate::logo::Style {
+    TraceParams { paths: 80.0, corners: 60.0, ..TraceParams::default() }.outline_style()
+}
+
+/// Fits one loop of `mask`: its edges on the pixel cracks (a mask has no tones to place them
+/// between pixels), and no junctions (one region against the rest).
+fn fit_mask_loop(l: &crate::contour::Loop, mask: &[bool], w: usize, h: usize, style: &crate::logo::Style) -> Option<vectorcraft_geom::SubPath> {
+    let across = |c: Crack| (0.0, c.at(1).and_then(|i| mask.get(i)).map_or(1, |&m| u32::from(!m)));
+    fit::fit_loop(l, w, h, &across, &|_, _| None, style).map(|(sp, _)| sp)
 }
 
 /// The outline of `mask` (`w` × `h`) in pixel space: its largest piece's outer edge and, with
@@ -74,13 +81,13 @@ pub fn outline(mask: &[bool], w: usize, h: usize, holes: bool, min_hole: usize) 
     if mask.len() != w.checked_mul(h)? {
         return None;
     }
-    let o = options();
+    let o = style();
     let comp = trace_mask(mask, w, h).into_iter().max_by_key(|c| c.pixels)?;
-    let mut subs = vec![fit::fit_loop(&comp.outer, &o)?];
+    let mut subs = vec![fit_mask_loop(&comp.outer, mask, w, h, &o)?];
     if holes {
         for hole in &comp.holes {
             if usize::try_from(hole.area2.unsigned_abs() / 2).unwrap_or(usize::MAX) >= min_hole {
-                subs.extend(fit::fit_loop(hole, &o));
+                subs.extend(fit_mask_loop(hole, mask, w, h, &o));
             }
         }
     }
@@ -94,7 +101,11 @@ pub fn centre_lines(mask: &[bool], w: usize, h: usize) -> Vec<(PathData, f64)> {
     }
     let labels: Vec<u16> = mask.iter().map(|m| if *m { 0 } else { TRANSPARENT }).collect();
     let widest = (w.max(h) as f64) * 2.0;
-    let (_, lines) = centerline::lines(&labels, 0, w, h, widest, &options());
+    // the lines are read against the mask drawn black on white
+    let (Ok(wu), Ok(hu)) = (u32::try_from(w), u32::try_from(h)) else { return Vec::new() };
+    let img =
+        Raster::from_fn(wu, hu, |x, y| if mask.get(y as usize * w + x as usize) == Some(&true) { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+    let (_, lines) = centerline::lines(&labels, 0, w, h, widest, &img, [0.0; 3], &style());
     lines.into_iter().map(|l| (l.path, l.width)).collect()
 }
 

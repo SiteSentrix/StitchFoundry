@@ -13,11 +13,16 @@ struct Harness {
 
 impl Harness {
     fn new(screen: Vec2) -> Self {
+        Self::with("M150 40 L180 60 L180 140 L150 160", REVOLVE, screen)
+    }
+
+    /// The dialog of 3D effect `effect` on a path drawn from SVG path data `d`.
+    fn with(d: &str, effect: &str, screen: Vec2) -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width":300,"height":300})).unwrap();
-        app.run("path.create", json!({"d":"M150 40 L180 60 L180 140 L150 160"})).unwrap();
+        app.run("path.create", json!({"d": d})).unwrap();
         app.run("paint.setFill", json!({"color":"#338ad6"})).unwrap();
-        app.run("effect.dialog", json!({"effect":REVOLVE,"item":null})).unwrap();
+        app.run("effect.dialog", json!({"effect":effect,"item":null})).unwrap();
         let ctx = egui::Context::default();
         theme::install_fonts(&ctx);
         theme::apply(&ctx, Default::default());
@@ -86,7 +91,8 @@ fn values_labels_sliders_and_reset_dots_change_the_live_effect_in_one_undo_step(
     h.settle();
     assert!(!h.rect("Advanced").is_negative(), "Advanced is visible without scrolling in a normal window");
     let panel = h.ctx.memory(|m| m.area_rect(Id::new(("dialog", "effect")).with("revolve"))).unwrap();
-    assert!(panel.width() < 420.0 && panel.height() < 540.0, "compact controls: {panel:?}");
+    // Cap adds one 28-point row to the shared dialog's previous 540-point bound.
+    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact controls with Cap: {panel:?}");
     let label = h.rect("Rotation X");
     h.drag(pos2(label.left() + LABEL_W + 6.0 + VALUE_W / 2.0, label.center().y), vec2(40.0, 0.0));
     assert!(h.value("rotationX") > 0.0, "the value itself drags");
@@ -147,18 +153,66 @@ fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
     h.settle();
     h.click(h.rect("Lighting").center());
     assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "light");
-    for label in ["Shading", "Direction", "Elevation", "Intensity", "Ambient"] {
+    for label in ["Shading", "Intensity", "Height", "Softness", "Ambient Light", "Light behind the object"] {
         assert!(Rect::from_min_size(Pos2::ZERO, h.screen).contains_rect(h.rect(label)));
     }
     let panel = h.ctx.memory(|m| m.area_rect(Id::new(("dialog", "effect")).with("revolve"))).unwrap();
     assert!(panel.width() < 420.0 && panel.height() < 460.0, "compact lighting controls: {panel:?}");
-    h.drag(h.rect("Direction").center(), vec2(24.0, 0.0));
-    assert_ne!(h.value("lightAzimuth"), -45.0);
-    h.click(h.response(("revolve-reset", "lightAzimuth")).center());
-    assert_eq!(h.value("lightAzimuth"), -45.0);
+    h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
+    assert_ne!(h.value("lightHeight"), 30.0);
+    h.click(h.response(("revolve-reset", "lightHeight")).center());
+    assert_eq!(h.value("lightHeight"), 30.0);
     h.click(h.rect("Rotation").center());
     assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "rotation");
     assert!(!h.rect("Rotation X").is_negative());
+}
+
+#[test]
+fn automatic_smooth_shading_previews_saves_and_respects_cancel_and_one_step_undo() {
+    for confirm in [false, true] {
+        let mut h = Harness::new(vec2(1280.0, 900.0));
+        let before = h.app.session.doc().unwrap().doc.clone();
+        h.settle();
+        h.click(h.rect("Lighting").center());
+        assert!(!h.texts.iter().any(|(text, _)| text == "Smooth shading"));
+        assert!(!h.app.ui.dialog.as_ref().unwrap().fields.contains_key("smoothShading"));
+        let art = |h: &Harness| {
+            let state = h.app.session.doc().unwrap();
+            vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
+        };
+        let gradients = |n: &vectorcraft_doc::Node| {
+            let mut count = 0;
+            n.walk(&mut |face| {
+                count += face.appearance.items.iter().filter(|item| {
+                    matches!(item, vectorcraft_doc::AppearanceItem::Fill(fill) if matches!(fill.paint, vectorcraft_doc::color::Paint::Gradient(_)))
+                }).count();
+            });
+            count
+        };
+        assert!(gradients(&art(&h)) > 0, "default rendering uses vector gradients");
+        h.click(h.rect("Shading").center());
+        assert_eq!(gradients(&art(&h)), 0, "Shading still controls all lighting");
+        h.click(h.response(("revolve-reset", "shade")).center());
+        assert!(gradients(&art(&h)) > 0);
+        h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
+        h.settle();
+        assert_eq!(h.app.session.doc().unwrap().doc, before);
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+        h.settle();
+        if confirm {
+            dialogs::confirm(&mut h.app).unwrap();
+            let state = h.app.session.doc().unwrap();
+            let node = state.doc.node(state.selection.objects[0]).unwrap();
+            let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
+            assert!(!node.appearance.effects[0].params.as_object().unwrap().contains_key("smoothShading"));
+            assert_eq!(vectorcraft_effects::revolve_art(loaded.node(node.id).unwrap()), vectorcraft_effects::revolve_art(node));
+            h.app.run("edit.undo", json!({})).unwrap();
+        } else {
+            dialogs::cancel(&mut h.app);
+        }
+        assert_eq!(h.app.session.doc().unwrap().doc, before);
+    }
 }
 
 #[test]
@@ -198,4 +252,97 @@ fn advanced_visibility_option_is_saved_resettable_and_leaves_preview_geometry_co
     let state = h.app.session.doc().unwrap();
     let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
     assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["expandVisibleOnly"], json!(true));
+}
+
+/// Extrude & Bevel, Inflate and Rotate open the same compact controls, with their own options, the
+/// Position presets and the artboard gizmo turning about the centre of the art.
+#[test]
+fn the_other_3d_effects_show_their_options_and_position_presets() {
+    use vectorcraft_effects::{EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS};
+    let square = "M100 100 L200 100 L200 200 L100 200 Z";
+    for (effect, own) in [
+        (EXTRUDE, &["Depth", "Twist", "Taper", "Cap", "Bevel", "Bevel Shape", "Space", "Bevel Inside", "Bevel both sides"][..]),
+        (INFLATE, &["Depth", "Twist", "Taper", "Cap", "Volume", "Both sides"][..]),
+        (ROTATE, &[][..]),
+    ] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.settle();
+        // Extrude & Bevel and Inflate open on their Object tab; Rotate on Rotation.
+        for text in own.iter() {
+            h.rect(text);
+        }
+        if !own.is_empty() {
+            h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+            h.settle();
+        }
+        for text in ["Presets", "Rotation X", "Perspective"] {
+            h.rect(text);
+        }
+        // The defaults are the Off-Axis Front position, shown by name.
+        h.rect("Off-Axis Front");
+        assert!(!h.texts.iter().any(|(t, _)| t == "Revolve angle"), "{effect}: Revolve's own options stay out");
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        assert!(dialogs::revolve_gizmo::active(d), "{effect}: the gizmo is on");
+        // A preset's angles show its name; other angles are Custom.
+        let [x, y, z] = ROTATION_PRESETS[14].1;
+        let d = h.app.ui.dialog.as_mut().unwrap();
+        d.fields.extend([("rotationX".into(), json!(x)), ("rotationY".into(), json!(y)), ("rotationZ".into(), json!(z))]);
+        h.settle();
+        h.rect("Isometric Top");
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("rotationZ".into(), json!(12.5));
+        h.settle();
+        h.rect("Custom");
+    }
+}
+
+#[test]
+fn extrude_bevel_options_enable_with_a_bevel_shape() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
+    h.settle();
+    let width = h.response(("revolve-reset", "bevelWidth"));
+    assert!(!h.ctx.read_response(Id::new(("revolve-reset", "bevelWidth"))).unwrap().enabled(), "no bevel: its sizes are off");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("bevel".into(), json!("rounded"));
+    h.settle();
+    assert!(h.ctx.read_response(Id::new(("revolve-reset", "bevelWidth"))).unwrap().enabled());
+    assert_eq!(h.response(("revolve-reset", "bevelWidth")), width);
+}
+
+#[test]
+fn cap_checkbox_previews_resets_and_respects_cancel_and_one_step_undo() {
+    for confirm in [false, true] {
+        let mut h = Harness::new(vec2(1280.0, 1000.0));
+        let before = h.app.session.doc().unwrap().doc.clone();
+        let dialog = h.app.ui.dialog.as_mut().unwrap();
+        dialog.fields.insert("offset".into(), json!(20));
+        dialog.fields.insert("rotationX".into(), json!(-35));
+        h.settle();
+        let art = |h: &Harness| {
+            let state = h.app.session.doc().unwrap();
+            vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
+        };
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"), "Cap starts on");
+        let capped = art(&h);
+        h.click(h.rect("Cap").center());
+        assert!(!h.app.ui.dialog.as_ref().unwrap().bool("cap"));
+        assert_ne!(art(&h), capped);
+        h.click(h.response(("revolve-reset", "cap")).center());
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"));
+        assert_eq!(art(&h), capped);
+        h.click(h.rect("Cap").center());
+        h.click(h.response("revolve-reset-all").center());
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"));
+        h.click(h.rect("Cap").center());
+        if confirm {
+            dialogs::confirm(&mut h.app).unwrap();
+            let state = h.app.session.doc().unwrap();
+            assert_eq!(state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["cap"], json!(false));
+            let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
+            assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["cap"], json!(false));
+            h.app.run("edit.undo", json!({})).unwrap();
+        } else {
+            dialogs::cancel(&mut h.app);
+        }
+        assert_eq!(h.app.session.doc().unwrap().doc, before);
+        assert!(!h.app.session.in_interaction());
+    }
 }

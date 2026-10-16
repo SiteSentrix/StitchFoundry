@@ -79,7 +79,7 @@ fn add_laydown(s: &mut Session, p: &Value) -> Result<Value> {
         let kind =
             NodeKind::Path { path: PathData::new(subpaths), rule: vectorcraft_geom::FillRule::EvenOdd, live: None, clipping: false, guide: false };
         let mut n = Node::new(id, kind);
-        n.appearance = Appearance::basic(Paint::solid(color), Paint::None, 0.0);
+        n.appearance = Appearance::basic(Paint::solid(color), Paint::None, 0.0).into();
         n.name = Some("Laydown".into());
         n.embroidery = Some(Box::new(e));
         d.insert(parent, index, n)?;

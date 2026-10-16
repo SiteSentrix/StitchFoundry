@@ -197,6 +197,48 @@ fn artboard_tool_cut_removes_the_artboard_and_its_art() {
     assert_eq!((d.artboards.len(), d.node(r).is_some()), (2, true), "the cut is one undo step");
 }
 
+/// A copy of an artboard whose id is the largest there is (only a hand-made file has one, #1718)
+/// takes an id that no other artboard has, as a new artboard does, whether Duplicate Artboards, the
+/// Artboard tool's Alt-drag (`artboard.move` with `copy`) or Paste makes it. Deleting either
+/// artboard then leaves the other's guides.
+#[test]
+fn copied_artboards_take_a_free_id_and_keep_their_own_guides() {
+    let mut got = vec![];
+    for (cmd, p) in [
+        ("artboard.duplicate", json!({"index": 0})),
+        ("artboard.move", json!({"index": 0, "dx": 0, "dy": 900, "copy": true})),
+        ("edit.paste", json!({})),
+    ] {
+        let mut s = Session::new();
+        let mut d = vectorcraft_doc::Document::new(800.0, 600.0);
+        d.artboards[0].id = u32::MAX;
+        s.add_document(d, None);
+        s.execute("guide.add", &json!({"vertical": true, "pos": 100, "artboard": 0})).unwrap();
+        if cmd == "edit.paste" {
+            s.execute("artboard.copy", &json!({"index": 0})).unwrap();
+        }
+        s.execute(cmd, &p).unwrap();
+        // Each pass deletes one artboard (the copy, then the original), adds the artboard ids of
+        // the remaining guides to `kept`, and undoes the delete.
+        let mut kept = vec![];
+        for i in [1, 0] {
+            s.execute("artboard.delete", &json!({"index": i})).unwrap();
+            kept.push(s.doc().unwrap().doc.guides.iter().map(|g| g.artboard).collect::<Vec<_>>());
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        got.push((cmd, s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect::<Vec<_>>(), kept));
+    }
+    let max = Some(u32::MAX);
+    assert_eq!(
+        got,
+        [
+            ("artboard.duplicate", vec![u32::MAX, 1], vec![vec![max], vec![Some(1)]]),
+            ("artboard.move", vec![u32::MAX, 1], vec![vec![max], vec![Some(1)]]),
+            ("edit.paste", vec![u32::MAX, 1], vec![vec![max], vec![]]),
+        ]
+    );
+}
+
 #[test]
 fn swatch_groups_duplicate_sort() {
     let mut s = session();

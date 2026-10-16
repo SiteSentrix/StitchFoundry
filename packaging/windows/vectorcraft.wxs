@@ -50,6 +50,7 @@
 
     <Feature Id="Main" Title="StitchFoundry" Level="1">
       <ComponentGroupRef Id="VectorcraftFiles" />
+      <ComponentGroupRef Id="PdfDocumentation" />
       <ComponentRef Id="DesktopShortcut" />
     </Feature>
 
@@ -108,6 +109,9 @@
   </Package>
 
   <Fragment>
+    <ComponentGroup Id="PdfDocumentation" Directory="INSTALLFOLDER">
+      <Files Include="$(var.DocsDir)\**" />
+    </ComponentGroup>
     <ComponentGroup Id="VectorcraftFiles" Directory="INSTALLFOLDER">
       <Component Id="VectorcraftApp" Guid="4C957E70-848A-478D-95BF-4394D7E225FF">
         <File Id="VectorcraftExe" Source="$(var.BinDir)\stitchfoundry.exe" KeyPath="yes">

@@ -111,3 +111,22 @@ fn raster_effects_print_as_images() {
     let (bytes, _) = print(&mut s, json!({}));
     assert!(String::from_utf8_lossy(&bytes).contains("/Image"));
 }
+
+#[test]
+fn type_in_a_missing_family_warns_as_pdf_export_does() {
+    let (mut s, _) = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap()["id"].clone();
+    let fallback = |v: &Value| -> Vec<String> {
+        v["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("fallback font")).map(str::to_string).collect()
+    };
+    let export = fallback(&s.execute("document.exportPdf", &json!({})).unwrap());
+    assert!(export.first().is_some_and(|w| w.contains("Nonexistent Sans Probe")), "{export:?}");
+    let (_, v) = print(&mut s, json!({}));
+    assert_eq!(fallback(&v), export);
+    // Type printed as an image (a raster effect, Print as Bitmap) is drawn in the fallback font too.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    for settings in [json!({}), json!({"advanced": {"printAsBitmap": true}})] {
+        let (_, v) = print(&mut s, json!({ "settings": settings }));
+        assert_eq!(fallback(&v), export, "{settings}");
+    }
+}

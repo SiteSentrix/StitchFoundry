@@ -294,7 +294,7 @@ fn graphic_style_links_follow_the_style_into_the_document() {
     s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#ffcc00"})).unwrap();
     sel(&mut s, &[a]);
     s.execute("graphicStyle.new", &json!({"name": "Sun"})).unwrap();
-    let src_id = node(&s, a).graphic_style.unwrap();
+    let src_id = node(&s, a).extras().graphic_style.unwrap();
     copy(&mut s, &[a]);
     assert_eq!(s.clipboard.graphic_styles.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Sun"]);
 
@@ -307,17 +307,17 @@ fn graphic_style_links_follow_the_style_into_the_document() {
     let v = s.execute("edit.paste", &json!({})).unwrap();
     assert_eq!(renamed(&v), [("graphicStyle".to_string(), "Sun".to_string(), "Sun 2".to_string())]);
     let d = doc(&s);
-    let linked_to = d.graphic_style_by_id(node(&s, ids_of(&v)[0]).graphic_style.unwrap()).unwrap().clone();
+    let linked_to = d.graphic_style_by_id(node(&s, ids_of(&v)[0]).extras().graphic_style.unwrap()).unwrap().clone();
     assert_eq!(linked_to.name, "Sun 2");
     assert_eq!(linked_to.appearance.fill_paint(), Paint::solid(hex("#ffcc00")));
     assert!(d.graphic_styles.iter().filter(|g| g.id == linked_to.id).count() == 1, "a fresh id");
     // Pasting again finds the same style.
     let v = s.execute("edit.paste", &json!({})).unwrap();
-    assert_eq!((v["added"].as_u64(), node(&s, ids_of(&v)[0]).graphic_style), (Some(0), Some(linked_to.id)));
+    assert_eq!((v["added"].as_u64(), node(&s, ids_of(&v)[0]).extras().graphic_style), (Some(0), Some(linked_to.id)));
     // Back in the source document the link is kept as it was.
     s.execute("document.activate", &json!({"index": 0})).unwrap();
     let v = s.execute("edit.paste", &json!({})).unwrap();
-    assert_eq!(node(&s, ids_of(&v)[0]).graphic_style, Some(src_id));
+    assert_eq!(node(&s, ids_of(&v)[0]).extras().graphic_style, Some(src_id));
 }
 
 #[test]
@@ -568,6 +568,20 @@ fn in_place_pastes_go_onto_the_artboard_named() {
         // An artboard that isn't there: where they were.
         let ids = ids_of(&s.execute(cmd, &json!({"artboard": 9})).unwrap());
         assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[0].x0 + 10.0, boards[0].y0 + 15.0), "{cmd} on no artboard");
+    }
+}
+
+/// Art copied from beside the artboards goes back where it was, whichever artboard is active (#1924).
+#[test]
+fn in_place_pastes_of_art_off_the_artboards_stay_where_it_was() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let r = rect(&mut s, boards[0].x0 - 100.0, boards[0].y0 + 15.0, 20.0, 20.0);
+    copy(&mut s, &[r]);
+    for cmd in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let ids = ids_of(&s.execute(cmd, &json!({"artboard": 1})).unwrap());
+        assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[0].x0 - 100.0, boards[0].y0 + 15.0), "{cmd}");
     }
 }
 

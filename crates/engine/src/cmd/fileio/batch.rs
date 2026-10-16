@@ -13,14 +13,22 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     // What an error rolls back besides the documents: session-level state a step may change
     // (paint defaults, drawing mode, clipboard, the Untitled-N count).
     let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter);
-    let (start, active): (Vec<u64>, _) = (s.docs.iter().map(|d| d.uid).collect(), s.active);
+    // A drag or typing still in progress is a step of its own, as before Undo: the batch's steps
+    // would otherwise run inside it and take its baseline as theirs (#1697).
+    if s.active().is_some() {
+        super::super::edit::settle_interaction(s)?;
+    }
+    // The documents as they are now, whole: what a failed step brings back. Their art, history,
+    // file, format and saved state share their data with the open ones until a step changes them.
+    let start = s.docs.clone();
+    let active = s.active;
     s.batch_stash = Some(vec![]);
     let r = run_steps(s, &label, artboard, &mut cmds);
     let stash = s.batch_stash.take().unwrap_or_default();
     let results = match r {
         Ok(results) => results,
         Err(e) => {
-            roll_back(s, &start, stash);
+            roll_back(s, start, &stash);
             s.active = active;
             (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter) = saved;
             s.pending_paint = None;
@@ -47,7 +55,8 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
 /// starts (one for all the steps in that document), so a step may open, switch or close documents.
 /// A step that acts on the active artboard ([`crate::ON_ACTIVE_ARTBOARD`]) and names none gets
 /// `artboard`, as the Artboards panel shows it in the document the step runs in: past that
-/// document's last artboard, the last one.
+/// document's last artboard, the last one. A step that resizes the active artboard
+/// ([`crate::FIT_ACTIVE_ARTBOARD`]) and names no `index` gets that artboard as its `index`.
 fn run_steps(s: &mut Session, label: &str, artboard: Option<u64>, cmds: &mut [Value]) -> Result<Vec<Value>> {
     let mut results = Vec::with_capacity(cmds.len());
     for c in cmds {
@@ -59,13 +68,18 @@ fn run_steps(s: &mut Session, label: &str, artboard: Option<u64>, cmds: &mut [Va
             s.begin_interaction(label)?;
         }
         let mut params = c.get("params").cloned().unwrap_or(json!({}));
+        let key = if crate::ON_ACTIVE_ARTBOARD.contains(&id.as_str()) {
+            Some("artboard")
+        } else {
+            crate::FIT_ACTIVE_ARTBOARD.contains(&id.as_str()).then_some("index")
+        };
         if let Some(a) = artboard
-            && crate::ON_ACTIVE_ARTBOARD.contains(&id.as_str())
-            && params.get("artboard").is_none()
+            && let Some(key) = key
+            && params.get(key).is_none()
             && let Some(last) = s.active().and_then(|d| d.doc.artboards.len().checked_sub(1))
             && let Some(o) = params.as_object_mut()
         {
-            o.insert("artboard".into(), json!(usize::try_from(a).map_or(last, |a| a.min(last))));
+            o.insert(key.into(), json!(usize::try_from(a).map_or(last, |a| a.min(last))));
         }
         let (v, noted) =
             s.execute_step(&id, &params).map_err(|e| EngineError::Other(format!("batch step {} (`{id}`) failed: {e}", results.len())))?;
@@ -81,22 +95,17 @@ fn run_steps(s: &mut Session, label: &str, artboard: Option<u64>, cmds: &mut [Va
     Ok(results)
 }
 
-/// The documents as they were before the batch (`start`: their uids in order): the ones it opened
-/// close, the ones it closed or replaced (`stash`) come back, and each one's interaction is undone.
-fn roll_back(s: &mut Session, start: &[u64], mut stash: Vec<DocState>) {
-    let mut open = std::mem::take(&mut s.docs);
-    for &uid in start {
-        // The newest revision the document reached, so the restored one redraws.
-        let newest = open.iter().chain(&stash).filter(|d| d.uid == uid).map(|d| d.revision).max().unwrap_or_default();
-        // Its state before the batch: the first one a step closed or replaced, else the open one.
-        let st = match stash.iter().position(|d| d.uid == uid) {
-            Some(i) => Some(stash.remove(i)),
-            None => open.iter().position(|d| d.uid == uid).map(|i| open.remove(i)),
-        };
-        if let Some(mut st) = st {
-            st.undo_interaction();
-            st.revision = newest.saturating_add(1);
-            s.docs.push(st);
-        }
+/// The documents as they were before the batch (`start`), whatever the steps did to them: opened
+/// ones close, closed or replaced ones (`stash`) come back, and each has its art, selection,
+/// history, file, format and saved state again (#1697: undoing the batch's interaction alone left
+/// a Save As step's new file and an Undo step's history in place). Files the steps wrote stay
+/// written.
+fn roll_back(s: &mut Session, start: Vec<DocState>, stash: &[DocState]) {
+    let open = std::mem::take(&mut s.docs);
+    s.docs = start;
+    for st in &mut s.docs {
+        // Past the newest revision the document reached, so the restored one redraws.
+        let newest = open.iter().chain(stash).filter(|d| d.uid == st.uid).map(|d| d.revision).max().unwrap_or(st.revision);
+        st.revision = newest.saturating_add(1);
     }
 }

@@ -194,6 +194,35 @@ fn colour_blindness_proofs() {
     assert_eq!(ProofTarget::parse(&ProofTarget::Cmyk("X".into()).id()), Some(ProofTarget::Cmyk("X".into())));
 }
 
+/// The expected colors were computed separately with NumPy from the same published inputs (linear
+/// sRGB to XYZ from IEC 61966-2-1, Smith & Pokorny's XYZ to LMS, Judd-Vos XYZ at 485 nm and 660 nm),
+/// following Brettel, Viénot & Mollon (1997) with the display's white as the neutral axis.
+#[test]
+fn tritanopia_proof_follows_brettel_1997() {
+    let c = cms();
+    let t = ProofSetup { target: ProofTarget::Tritanopia, ..Default::default() };
+    assert_eq!(ProofTarget::parse("tritanopia"), Some(ProofTarget::Tritanopia));
+    assert_eq!(ProofTarget::Tritanopia.id(), "tritanopia");
+    for g in [0.0, 0.25, 0.5, 0.75, 1.0] {
+        let out = c.proof_srgb([g; 3], &t);
+        assert!(out.iter().all(|v| (v - g).abs() < 1e-4), "gray {g} stays gray: {out:?}");
+    }
+    let cases = [
+        // The 660 nm half-plane.
+        ([1.0, 0.0, 0.0], [1.0, 0.0, 0.299_231]),
+        ([1.0, 0.0, 1.0], [0.934_206, 0.388_351, 0.467_178]),
+        ([0.9, 0.6, 0.1], [0.926_825, 0.557_667, 0.599_649]),
+        // The 485 nm half-plane.
+        ([0.0, 0.0, 1.0], [0.0, 0.377_268, 0.519_933]),
+        ([0.0, 1.0, 0.0], [0.480_503, 0.920_568, 1.0]),
+        ([0.2, 0.4, 0.8], [0.0, 0.464_73, 0.563_516]),
+    ];
+    for (rgb, want) in cases {
+        let got = c.proof_srgb(rgb, &t);
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-3), "{rgb:?}: {got:?}, expected {want:?}");
+    }
+}
+
 #[test]
 fn bad_icc_rejected() {
     assert!(matches!(register_icc(b"not a profile", None), Err(CmsError::BadProfile(_))));

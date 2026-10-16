@@ -90,7 +90,7 @@ fn combine(s: &mut Session, p: &Value) -> Result<Value> {
         for mut piece in pieces {
             let pn = Arc::make_mut(&mut piece);
             pn.embroidery = None;
-            pn.appearance = Appearance::default();
+            pn.appearance = Appearance::default().into();
             ch.push(piece);
         }
         sel.set([cid]);

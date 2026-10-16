@@ -43,7 +43,7 @@ fn image_bytes(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
 fn image_of(s: &Session) -> vectorcraft_doc::ImageObject {
     let doc = &s.doc().unwrap().doc;
     match &doc.layers[0].children().unwrap()[0].kind {
-        NodeKind::Image(im) => im.clone(),
+        NodeKind::Image(im) => (**im).clone(),
         other => panic!("expected an image, got {other:?}"),
     }
 }
@@ -159,9 +159,10 @@ fn open_exts_cover_every_readable_format() {
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        7 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF and print presets, plug-ins"
+        9 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch libraries, libraries, flattener, PDF and print presets, shortcut sets, scripts, plug-ins"
     );
+    assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
 }
 
@@ -233,6 +234,36 @@ fn formats_query_lists_readers_writers_and_options() {
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
     assert_eq!(png["options"]["scale"]["default"], 1);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
+}
+
+/// The format ids `command`'s params text lists for `format` (`a|b (default)|c (…)`, up to the
+/// first comma), sorted.
+fn listed_formats(command: &str) -> Vec<String> {
+    let params = crate::cmd::find_command(command).unwrap().params;
+    let (_, rest) = params.split_once("format?: ").unwrap_or_else(|| panic!("{command} lists no formats"));
+    let list = rest.split(',').next().unwrap_or_default();
+    let mut ids: Vec<String> = list.split('|').filter_map(|f| f.split_whitespace().next()).map(str::to_string).collect();
+    ids.sort();
+    ids
+}
+
+/// The params texts of the commands that take any writable format list exactly the formats each
+/// command writes (.ai among them).
+#[test]
+fn export_params_list_every_format_the_command_writes() {
+    let mut s = session(100.0, 80.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    for command in ["document.serialize", "document.export", "document.exportSelection"] {
+        let mut refused = vec![];
+        let mut written: Vec<String> = FORMATS
+            .iter()
+            .filter(|f| s.execute(command, &json!({"format": f.id})).map_err(|e| refused.push(format!("{}: {e}", f.id))).is_ok())
+            .map(|f| f.id.to_string())
+            .collect();
+        written.sort();
+        assert_eq!(listed_formats(command), written, "{command}; refused: {refused:?}");
+    }
 }
 
 #[test]
@@ -411,4 +442,118 @@ fn new_files_never_replace_a_file() {
     assert!(e.starts_with(&format!("{path}: ")), "{e}");
     assert_eq!(std::fs::read(&path).unwrap(), b"first");
     let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn a_native_save_streams_the_bytes_the_encoder_makes() {
+    let d = tmp_dir("stream");
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    for (name, compress) in [("a.vectorcraft", false), ("b.vectorcraft", true), ("c.vctemplate", true)] {
+        let path = d.join(name).to_string_lossy().to_string();
+        let p = json!({"path": path, "compress": compress});
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        let written = std::fs::read(&path).unwrap();
+        assert_eq!(r["bytes"], written.len(), "{r}");
+        let plan = save_plan(&s, SaveMode::Copy, &p).unwrap();
+        let job = save_job(&mut s, plan).unwrap();
+        assert!(job.streams());
+        assert_eq!(written, job.encode().unwrap().files[0].1, "{name}");
+        assert_eq!(vectorcraft_format::load(&written).unwrap().template, name.ends_with("vctemplate"));
+    }
+    // A writer that fails: the save fails with its error.
+    let plan = save_plan(&s, SaveMode::Copy, &json!({"path": "/x/y.vectorcraft"})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let e = job
+        .write_streamed(&mut |_, fill| {
+            fill(&mut std::io::sink()).unwrap();
+            Err(EngineError::Other("disk full".into()))
+        })
+        .unwrap_err();
+    assert_eq!(e.to_string(), "disk full");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A native save whose file write fails partway (a full disk) leaves the file as it was, and no
+/// temporary file behind.
+#[test]
+fn a_save_that_fails_while_streaming_leaves_the_file_as_it_was() {
+    /// Takes `left` bytes, then fails as a full disk does.
+    struct FailAfter<'a> {
+        inner: &'a mut dyn std::io::Write,
+        left: usize,
+    }
+    impl std::io::Write for FailAfter<'_> {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            if self.left == 0 {
+                return Err(std::io::Error::other("disk full"));
+            }
+            let n = b.len().min(self.left);
+            self.left -= n;
+            self.inner.write(&b[..n])
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.inner.flush()
+        }
+    }
+    let d = tmp_dir("stream-fail");
+    let mut s = session(2000.0, 2000.0, 1);
+    // Enough objects that the file is written in several pieces, the failure in the middle.
+    for i in 0..1500 {
+        s.execute("shape.rectangle", &json!({"x": i % 100 * 20, "y": i / 100 * 20, "width": 10, "height": 10})).unwrap();
+    }
+    for compress in [false, true] {
+        let path = d.join("a.vectorcraft").to_string_lossy().to_string();
+        s.execute("file.saveCopy", &json!({"path": path, "compress": compress})).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        let plan = save_plan(&s, SaveMode::Copy, &json!({"path": path, "compress": compress})).unwrap();
+        let job = save_job(&mut s, plan).unwrap();
+        let e = job.write_streamed(&mut |p, fill| super::write_file_with(p, &mut |w| fill(&mut FailAfter { inner: w, left: 10_000 }))).unwrap_err();
+        assert!(e.to_string().contains("disk full") || e.to_string().contains("couldn't be encoded"), "{e}");
+        assert_eq!(std::fs::read(&path).unwrap(), before, "compress: {compress}");
+        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no temporary file is left");
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A save that fails leaves File Info's dates and the saved state alone; one that works stamps them.
+#[test]
+fn a_failed_save_does_not_stamp_the_documents_dates() {
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let before = s.doc().unwrap().doc.metadata.clone();
+    let dirty = s.doc().unwrap().is_dirty();
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/y.vectorcraft", "modified": 12345})).unwrap();
+    let e = save_with(&mut s, plan, |_, _| Err(EngineError::Other("disk full".into()))).unwrap_err();
+    assert_eq!(e.to_string(), "disk full");
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata, before);
+    assert_eq!(st.is_dirty(), dirty);
+    // Options the encoder refuses: the same.
+    assert!(s.execute("file.saveAs", &json!({"path": "/x/y.vectorcraft", "version": 99, "modified": 12345})).is_err());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata, before);
+    assert_eq!(st.is_dirty(), dirty);
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/y.vectorcraft", "modified": 12345})).unwrap();
+    save_with(&mut s, plan, |_, _| Ok(())).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata.modified, Some(12345));
+    assert!(!st.is_dirty());
+    // Edited while the file is written (Background Save): the dates go on once it is, and the
+    // edit keeps the document modified.
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/z.vectorcraft", "modified": 777})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let uid = s.doc().unwrap().uid;
+    assert_eq!(s.doc().unwrap().doc.metadata.modified, Some(12345));
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    job.write(|_, _| Ok(())).unwrap();
+    job.complete(&mut s, uid);
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata.modified, Some(777));
+    assert_eq!(st.path.as_deref(), Some("/x/z.vectorcraft"));
+    assert!(st.is_dirty());
+    // Undoing the edit is back at what the file holds.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty());
 }

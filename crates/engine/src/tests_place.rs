@@ -375,3 +375,20 @@ fn an_svg_placed_with_crop_is_framed_by_its_viewbox() {
         assert!(near(path_bounds(&s, &r["ids"][0]), Rect::new(120.0, 100.0, 280.0, 300.0)), "{r}");
     }
 }
+
+/// An SVG whose top-level group is clipped is placed as one clip group: the clip is kept, and its
+/// clipping path is not left behind as a loose path.
+#[test]
+fn a_clipped_top_level_group_stays_clipped() {
+    let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">
+  <defs><clipPath id="c"><path d="M0 0 L200 0 L200 100 L0 100 Z"/></clipPath></defs>
+  <g id="Layer_1" clip-path="url(#c)"><path d="M100 -20 L250 -20 L250 40 L100 40 Z" fill="#f00"/></g>
+</svg>"##;
+    let mut s = session();
+    let r = place(&mut s, "c.svg", svg, json!({"link": false}));
+    assert_eq!((r["width"].as_f64().unwrap(), r["height"].as_f64().unwrap()), (200.0, 100.0), "{r}");
+    let placed = node(&s, &r["ids"][0]);
+    let NodeKind::Group { children, clip: false } = &placed.kind else { panic!("{:?}", placed.kind) };
+    let [inner] = children.as_slice() else { panic!("one object: {children:?}") };
+    assert!(matches!(&inner.kind, NodeKind::Group { children, clip: true } if children.len() == 2), "{:?}", inner.kind);
+}

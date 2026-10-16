@@ -43,6 +43,50 @@ fn upright_marks_stand_and_letters_lie_on_their_side() {
     assert!(vl.width() > vl.height(), "a tall l lies across the column");
 }
 
+/// Unicode Vertical_Orientation Tu: without a vertical alternate, fullwidth !/? stay upright.
+/// Tr controls (a bracket and the long vowel mark) still rotate when they have no alternate.
+#[test]
+fn fullwidth_punctuation_stays_upright_without_vertical_alternates() {
+    check_fullwidth_punctuation(false);
+}
+
+#[test]
+fn fullwidth_punctuation_keeps_vertical_alternates_upright() {
+    check_fullwidth_punctuation(true);
+}
+
+fn check_fullwidth_punctuation(alternates: bool) {
+    use crate::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, vertical_punctuation_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(vertical_punctuation_font(alternates).unwrap());
+    let style = CharStyle { font_family: VERTICAL_PUNCTUATION_FAMILY.into(), size: 20.0, ..CharStyle::default() };
+    let face = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").unwrap();
+    for (ch, nominal, alternate) in [('！', '!', 'I'), ('？', '?', 'J'), ('「', 'L', 'L'), ('ー', '-', '-')] {
+        let upright = matches!(ch, '！' | '？');
+        let expected = if alternates { alternate } else { nominal };
+        let h = layout(&db, &TextObject::point(Point::ZERO, &expected.to_string(), style.clone()));
+        for area in [false, true] {
+            let mut t = vertical_styled(&ch.to_string(), style.clone());
+            if area {
+                t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1)) };
+            }
+            let v = layout(&db, &t);
+            assert_eq!(v.glyphs.len(), 1, "{ch} area {area}");
+            assert!(!v.overflow);
+            let g = &v.glyphs[0];
+            assert_eq!(g.font_id, face.id());
+            assert_eq!(g.gid, face.glyph_for(expected), "{ch}: the expected nominal or vert glyph");
+            let reference = if upright { h.glyphs[0].xf } else { Affine::rotate(std::f64::consts::FRAC_PI_2) * h.glyphs[0].xf };
+            for (actual, expected) in g.xf.as_coeffs().iter().zip(reference.as_coeffs().iter()).take(4) {
+                assert!((actual - expected).abs() < 1e-9, "{ch} area {area}, alternates {alternates}: {:?} vs {reference:?}", g.xf);
+            }
+        }
+        // Vertical substitutions must not change horizontal type.
+        let h = layout(&db, &TextObject::point(Point::ZERO, &ch.to_string(), style.clone()));
+        assert_eq!(h.glyphs[0].gid, face.glyph_for(nominal));
+    }
+}
+
 #[test]
 fn caret_and_selection_turn_with_the_columns() {
     let l = layout(FontDb::global(), &vertical("§§§"));
@@ -581,4 +625,38 @@ fn proportional_metrics_set_upright_glyphs_on_their_proportional_heights() {
     // Punctuation `vpal` leaves full height: set flush at the paragraph's start, as before.
     let (half, none) = (lay("〘あ〙", "Shippori Mincho", true, Mojikumi::LineEndHalf), lay("〘あ〙", "Shippori Mincho", true, Mojikumi::None));
     assert!((none.glyphs[0].advance - 20.0).abs() < 0.01 && (half.glyphs[0].advance - 10.0).abs() < 0.01, "{:?}", adv(&half));
+}
+
+/// Proportional Metrics turns on the kerning that goes with it (#966): `vkrn` and `vapk` in
+/// vertical type with `vpal`, `apkn` with `palt`, only while the style's kerning is automatic.
+/// Without Proportional Metrics vertical type isn't kerned, as before. Needs craft-fonts' Noto Sans
+/// CJK SC, which has `vpal` and `vkrn` (skipped without it; it isn't a document font, so it's loaded
+/// here).
+#[test]
+fn proportional_metrics_kern_the_glyphs_they_respace() {
+    let tags = |v: Vec<harfrust::Feature>| v.iter().map(|f| (f.tag.to_be_bytes(), f.value)).collect::<Vec<_>>();
+    let st = |pm: bool, kerning: Option<f64>| CharStyle { size: 20.0, proportional_metrics: pm, kerning, ..CharStyle::default() };
+    let h = crate::OtFeatures::default();
+    assert!(tags(h.resolve(&st(true, None))).contains(&(*b"apkn", 1)));
+    assert!(tags(h.resolve(&st(true, Some(0.0)))).contains(&(*b"apkn", 0)), "manual kerning: none");
+    assert!(!tags(h.resolve_fixed_width(&st(true, None))).iter().any(|(t, _)| t == b"apkn" || t == b"palt"));
+    let v = crate::OtFeatures { vertical: true, ..Default::default() };
+    let with = tags(v.resolve_vertical(&st(true, None), true, true));
+    assert!(with.contains(&(*b"vpal", 1)) && with.contains(&(*b"vkrn", 1)) && with.contains(&(*b"vapk", 1)), "{with:?}");
+    assert!(tags(v.resolve_vertical(&st(true, Some(0.0)), true, true)).contains(&(*b"vkrn", 0)), "manual kerning: none");
+    assert!(tags(v.resolve_vertical(&st(true, None), false, false)).contains(&(*b"vkrn", 0)));
+
+    let Some(noto) = crate::CRAFT_FONTS.iter().find(|f| f.family == "Noto Sans CJK SC") else {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    };
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(noto.bytes.to_vec());
+    let lay = |pm: bool, kerning: Option<f64>| {
+        let s = CharStyle { font_family: "Noto Sans CJK SC".into(), ..st(pm, kerning) };
+        layout(&db, &vertical_styled("「カタカナ」とトップ、ヤッホー。", s)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>()
+    };
+    let (auto, manual) = (lay(true, None), lay(true, Some(0.0)));
+    assert!(auto.iter().zip(&manual).any(|(a, b)| (a - b).abs() > 0.01), "kerned: {auto:?} {manual:?}");
+    assert!(lay(false, None).iter().all(|a| (a - 20.0).abs() < 0.01), "off: an em each, as before");
 }

@@ -203,10 +203,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let drag: Option<usize> = pstate(ui.ctx(), "tabs-drag");
+    // The stop within 5 px of `x`.
+    let hit_at = |x: f32| stops.iter().position(|s| (to_x(s.position) - x).abs() <= 5.0);
+    // egui reports the drag only once the pointer is a few pixels from the press, past the hit
+    // tolerance, so hit-test where the button went down (#1458).
     if resp.drag_started()
-        && let Some(pos) = resp.interact_pointer_pos()
+        && let Some(pos) = ui.input(|i| i.pointer.press_origin()).or(resp.interact_pointer_pos())
     {
-        let hit = stops.iter().position(|s| (to_x(s.position) - pos.x).abs() <= 5.0);
+        let hit = hit_at(pos.x);
         set_pstate(ui.ctx(), "tabs-drag", hit);
         if let Some(i) = hit {
             set_pstate(ui.ctx(), "tabs-sel", i);
@@ -229,7 +233,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     } else if resp.clicked()
         && let Some(pos) = resp.interact_pointer_pos()
     {
-        match stops.iter().position(|s| (to_x(s.position) - pos.x).abs() <= 5.0) {
+        match hit_at(pos.x) {
             Some(i) => set_pstate(ui.ctx(), "tabs-sel", i),
             None => {
                 let position = to_pt(pos.x);
@@ -357,6 +361,52 @@ mod tests {
             let got = if label == "Leader:" { s.leader } else { s.align_on.to_string() };
             assert_eq!(got, want, "{label}");
         }
+    }
+
+    /// #1458: a stop moves when the drag starts on it, even though egui only reports the drag once
+    /// the pointer is past its threshold (farther from the press than the 5 px hit tolerance).
+    #[test]
+    fn dragging_a_stop_moves_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}]})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 400.0));
+        // One frame with `events` → where the ruler's inch labels (9 pt) are painted.
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Text(t) if t.galley.job.sections.first().is_some_and(|s| s.format.font_id.size == 9.0) => {
+                        Some((t.galley.text().to_string(), t.pos))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let labels = frame(&mut app, vec![]);
+        let at = |label: &str| labels.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {labels:?}")).1;
+        // A label sits 2 px right of its tick: 0 and 1 inch give the ruler's scale.
+        let (zero, inch) = (at("0"), at("1"));
+        let to_x = |pt: f32| zero.x - 2.0 + pt * (inch.x - zero.x) / 72.0;
+        let y = zero.y + 15.0;
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        // Press 3 px right of the stop, then drag right; egui starts the drag 6+ px from the press.
+        let press = egui::pos2(to_x(50.0) + 3.0, y);
+        frame(&mut app, vec![egui::Event::PointerMoved(press), button(press, true)]);
+        for dx in [9.0, 20.0, 40.0] {
+            frame(&mut app, vec![egui::Event::PointerMoved(press + vec2(dx, 0.0))]);
+        }
+        let end = press + vec2(40.0, 0.0);
+        frame(&mut app, vec![button(end, false)]);
+        frame(&mut app, vec![]);
+        let stops = current(&app).unwrap().1;
+        assert_eq!(stops.len(), 1);
+        let moved_to = to_x(stops[0].position as f32);
+        assert!((moved_to - end.x).abs() < 1.0, "stop at {moved_to}, released at {}", end.x);
     }
 
     /// Position Panel Above Text floats the panel over the text, its ruler's 0 on the frame's left

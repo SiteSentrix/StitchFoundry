@@ -45,6 +45,23 @@ impl View {
     }
 }
 
+/// The status bar's angle menu and View › Rotate View list these preset view angles, each as
+/// (label, degrees clockwise on screen).
+pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
+    ("0°", 0.0),
+    ("15°", 15.0),
+    ("30°", 30.0),
+    ("45°", 45.0),
+    ("60°", 60.0),
+    ("90°", 90.0),
+    ("180°", 180.0),
+    ("-15°", -15.0),
+    ("-30°", -30.0),
+    ("-45°", -45.0),
+    ("-60°", -60.0),
+    ("-90°", -90.0),
+];
+
 /// Illustrator's preset zoom stops, in percent.
 pub const ZOOM_STOPS: [f64; 26] = [
     3.13, 4.17, 6.25, 8.33, 12.5, 16.67, 25.0, 33.33, 50.0, 66.67, 100.0, 150.0, 200.0, 300.0, 400.0, 600.0, 800.0, 1200.0, 1600.0, 2400.0, 3200.0,
@@ -240,6 +257,9 @@ pub struct ViewFlags {
     pub gradient_annotator: bool,
     /// Type → Show Hidden Characters.
     pub hidden_chars: bool,
+    /// View → Hide/Show Template: template layers drawn (dimmed) or left out of the canvas.
+    #[serde(default = "yes")]
+    pub templates: bool,
 }
 
 impl Default for ViewFlags {
@@ -262,6 +282,7 @@ impl Default for ViewFlags {
             text_threads: true,
             gradient_annotator: true,
             hidden_chars: false,
+            templates: true,
         }
     }
 }
@@ -338,6 +359,10 @@ pub struct UiState {
     /// The Basic and Advanced toolbars as Edit Toolbar left them (none: as they ship).
     #[serde(default)]
     pub toolbar_edits: ToolbarEdits,
+    /// The controls under the toolbar's tools that the All Tools drawer's Show section shows
+    /// (`toolbar.show`).
+    #[serde(default)]
+    pub toolbar_show: ToolbarShow,
     /// Edit Toolbar's All Tools drawer is open beside the toolbar (`window.editToolbar`).
     #[serde(skip)]
     pub tools_drawer: bool,
@@ -363,6 +388,14 @@ pub struct UiState {
     pub dock: bool,
     pub view: ViewFlags,
     pub dialog: Option<Dialog>,
+    /// Messages to show in a dialog once the open one is closed (`dialogs::confirm::tell`), in
+    /// the order they came.
+    #[serde(skip)]
+    pub told: Vec<Dialog>,
+    /// A control request is being answered: its caller gets what fails as its reply, so no
+    /// dialog says it too (`io::report_write_error`).
+    #[serde(skip)]
+    pub answering_control: bool,
     /// Toolbar group whose flyout is open.
     pub flyout: Option<usize>,
     /// Last tool shown for each toolbar group (flyout selection sticks).
@@ -433,6 +466,18 @@ pub struct UiState {
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
     pub color_guide_limit: String,
+    /// Align panel: the Align To choice, Selection or Artboard, which Object → Align and the align
+    /// buttons follow ([`crate::panels::align::with_align_to`]).
+    #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
+    pub align_to: crate::panels::align::AlignTo,
+    /// Color panel: the mode picked last from its menu (`None`: never picked), in which the panel
+    /// shows the defaults for new art ([`crate::panels::color::deserialize_mode`]).
+    #[serde(default, deserialize_with = "crate::panels::color::deserialize_mode")]
+    pub color_mode: Option<crate::panels::color::Mode>,
+    /// Color panel: Hide Options, which leaves just the proxy and the spectrum (`ui.colorPanel`,
+    /// [`crate::panels::color::deserialize_hide_options`]).
+    #[serde(default, deserialize_with = "crate::panels::color::deserialize_hide_options")]
+    pub color_hide_options: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
@@ -455,6 +500,10 @@ pub struct UiState {
     /// dialog is gone.
     #[serde(skip)]
     pub dialog_search: Option<u64>,
+    /// The search the Find Linked Files dialog started (`links.findFiles`'s `id`), stopped once the
+    /// dialog is gone.
+    #[serde(skip)]
+    pub links_search: Option<u64>,
     /// The DXF Options chosen last (`document.exportDxf` options; null: never used).
     #[serde(default)]
     pub dxf_options: Value,
@@ -477,9 +526,17 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
+    /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
+    /// Search All text does.
+    #[serde(skip)]
+    pub layers_filter: crate::panels::layers::Filter,
     /// The Image Trace panel's Advanced section is open (as it was last left).
     #[serde(default = "yes")]
     pub image_trace_advanced: bool,
+    /// Glyphs panel preview step, kept with the other panel choices. `0` is the default 30 pt
+    /// cell; `1`..=`7` is a step from smallest to largest (`crates/ui-egui/src/panels/glyphs.rs`).
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub glyphs_preview: u8,
     /// The desktop window's size, position and maximized state, saved when the app quits and
     /// restored at the next launch (the desktop host reads and writes it; none on the web).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -517,6 +574,57 @@ pub struct ToolbarCategory {
     pub name: Option<String>,
     #[serde(default)]
     pub slots: Vec<Vec<String>>,
+}
+
+/// The controls under the toolbar's tools, each shown or hidden from the All Tools drawer's Show
+/// section: Fill and Stroke (the proxy), Coloring (Color, Gradient, None), Draw Mode and Screen
+/// Mode. All shown as it ships.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolbarShow {
+    #[serde(default = "yes")]
+    pub fill_stroke: bool,
+    #[serde(default = "yes")]
+    pub coloring: bool,
+    #[serde(default = "yes")]
+    pub draw_mode: bool,
+    #[serde(default = "yes")]
+    pub screen_mode: bool,
+}
+
+impl Default for ToolbarShow {
+    fn default() -> Self {
+        Self { fill_stroke: true, coloring: true, draw_mode: true, screen_mode: true }
+    }
+}
+
+impl ToolbarShow {
+    /// The controls as (`toolbar.show` name, label, icon), in the Show section's order.
+    pub const CONTROLS: [(&'static str, &'static str, &'static str); 4] = [
+        ("fillStroke", "Fill and Stroke Controls", "dc-stroke"),
+        ("coloring", "Coloring Controls", "dc-gradient"),
+        ("drawMode", "Draw Mode Controls", "dc-draw-normal"),
+        ("screenMode", "Screen Mode Controls", "dc-screen-mode"),
+    ];
+
+    /// The flag of the control named `name`.
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut bool> {
+        match name {
+            "fillStroke" => Some(&mut self.fill_stroke),
+            "coloring" => Some(&mut self.coloring),
+            "drawMode" => Some(&mut self.draw_mode),
+            "screenMode" => Some(&mut self.screen_mode),
+            _ => None,
+        }
+    }
+
+    pub fn get(self, name: &str) -> bool {
+        let mut s = self;
+        s.get_mut(name).is_some_and(|on| *on)
+    }
+
+    pub fn json(self) -> serde_json::Value {
+        serde_json::json!({"fillStroke": self.fill_stroke, "coloring": self.coloring, "drawMode": self.draw_mode, "screenMode": self.screen_mode})
+    }
 }
 
 /// The toolbars Edit Toolbar changed: each one is `None` while it is as it ships.
@@ -676,6 +784,7 @@ impl Default for UiState {
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             toolbar_edits: ToolbarEdits::default(),
+            toolbar_show: ToolbarShow::default(),
             tools_drawer: false,
             floating_panels: vec![],
             docking: None,
@@ -687,6 +796,8 @@ impl Default for UiState {
             dock: true,
             view: ViewFlags::default(),
             dialog: None,
+            told: vec![],
+            answering_control: false,
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             status: String::new(),
@@ -713,19 +824,25 @@ impl Default for UiState {
             library_panel: None,
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
+            align_to: Default::default(),
+            color_mode: None,
+            color_hide_options: false,
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,
             pending_fonts: vec![],
             fonts_dialog: None,
             dialog_search: None,
+            links_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
             dxf_import: Value::Null,
             home: None,
             layers_panel: Default::default(),
+            layers_filter: Default::default(),
             image_trace_advanced: true,
+            glyphs_preview: 0,
             window: None,
         }
     }
@@ -733,6 +850,10 @@ impl Default for UiState {
 
 fn yes() -> bool {
     true
+}
+
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
 }
 
 fn default_shortcut_set() -> String {

@@ -83,6 +83,15 @@ fn help_lists_readable_formats() {
     assert!(out.contains("Readable formats: .stitchfoundry") && out.contains(".ait") && out.contains(".webp"), "{out}");
 }
 
+#[test]
+fn help_lists_perf_deep() {
+    let out = ok(&["--help"]);
+    assert!(
+        out.contains("vectorcraft-cli perf [--paths N] [--deep]") && out.contains("--deep also times") && out.contains("with the peak so far on"),
+        "{out}"
+    );
+}
+
 /// `info` reports the import warnings: an EPS read only up to an error names it.
 #[test]
 fn info_reports_why_an_eps_read_partly() {
@@ -92,4 +101,74 @@ fn info_reports_why_an_eps_read_partly() {
     let w = v["warnings"][0].as_str().unwrap_or_default();
     assert!(w.contains("`frobnicate`"), "{v}");
     assert_eq!(v["kinds"]["Path"], 1, "{v}");
+}
+
+/// #1604: convert reports what reading the input left out (here a missing linked image) as
+/// importWarnings, next to the export's own warnings.
+#[test]
+fn convert_reports_import_warnings() {
+    let svg = tmp("missing-link.svg");
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><image width="40" height="40" href="nowhere-to-be-found.png"/></svg>"#,
+    )
+    .unwrap();
+    let png = tmp("missing-link.png");
+    let out: Value = serde_json::from_str(ok(&["convert", &svg, &png]).trim()).unwrap();
+    let w = out["importWarnings"].as_array().unwrap_or_else(|| panic!("{out}"));
+    assert!(w.iter().any(|w| w.as_str().unwrap().contains("nowhere-to-be-found.png")), "{out}");
+}
+
+#[test]
+fn convert_writes_legacy_ai_with_its_options() {
+    // Two artboards, a shown rectangle and a hidden one.
+    let src = tmp("legacy.vectorcraft");
+    ok(&[
+        "run",
+        "--cmd",
+        "file.new",
+        "--params",
+        r#"{"width":120,"height":80,"artboards":2}"#,
+        "--cmd",
+        "shape.rectangle",
+        "--params",
+        r#"{"x":10,"y":10,"width":20,"height":10}"#,
+        "--cmd",
+        "shape.rectangle",
+        "--params",
+        r#"{"x":40,"y":10,"width":20,"height":10}"#,
+        "--cmd",
+        "object.hide",
+        "--export",
+        &src,
+    ]);
+    // One file per artboard, named after it; hidden objects in a hidden layer by default.
+    let out = tmp("legacy.ai");
+    let r: Value = serde_json::from_str(&ok(&["convert", &src, &out, "--ai-version", "7"])).unwrap();
+    let files: Vec<&str> = r["files"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert_eq!(files.len(), 2, "{r}");
+    assert!(files.iter().all(|f| std::fs::read(f).unwrap().starts_with(b"%!PS-Adobe-3.0")), "{r}");
+    assert!(r["warnings"].to_string().contains("hidden layer"), "{r}");
+    // One artboard is the file itself; the hidden rectangle left out.
+    let one = tmp("legacy-one.ai");
+    let r: Value = serde_json::from_str(&ok(&[
+        "convert",
+        &src,
+        &one,
+        "--ai-version",
+        "7",
+        "--range",
+        "1",
+        "--hidden-objects",
+        "omit",
+        "--transparent-images",
+        "omit",
+    ]))
+    .unwrap();
+    assert!(r["warnings"].to_string().contains("hidden objects are left out"), "{r}");
+    assert!(std::fs::read(&one).unwrap().starts_with(b"%!PS-Adobe-3.0"));
+    // A value the engine doesn't take is an error.
+    let bad = Command::new(BIN).args(["convert", &src, &tmp("bad.ai"), "--ai-version", "7", "--hidden-objects", "behind"]).output().unwrap();
+    assert!(!bad.status.success());
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("hiddenObjects"), "{}", String::from_utf8_lossy(&bad.stderr));
 }

@@ -86,3 +86,21 @@ fn a_file_still_being_written_is_tried_again() {
     assert_eq!(look(&mut s)["updated"], json!([id.0]));
     assert_eq!(colour(&s), BLUE);
 }
+
+#[test]
+fn a_change_during_a_drag_waits_for_the_drag_to_end() {
+    let dir = Folder::new("watch-drag");
+    let path = dir.file("art.png");
+    std::fs::write(&path, png(40, 40, RED)).unwrap();
+    let mut s = session();
+    s.prefs.update_links = "automatically".into();
+    let id = place(&mut s, &path);
+    look(&mut s);
+    s.begin_interaction("Move").unwrap();
+    save(&path, &png(40, 40, BLUE));
+    // The preview would throw the update away, so it is not applied (nor its stamp kept).
+    assert_eq!(look(&mut s), json!({"updated": [], "ask": [], "modified": []}));
+    s.cancel_interaction().unwrap();
+    assert_eq!(look(&mut s)["updated"], json!([id.0]));
+    assert_eq!(colour(&s), BLUE);
+}

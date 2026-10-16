@@ -34,7 +34,7 @@ const MAX_DEPTH: usize = 64;
 /// Most values read.
 const MAX_VALUES: usize = 4_000_000;
 /// The centre of the app's canvas, in the units of its text document.
-const CANVAS_CENTRE: f64 = 8191.5;
+pub(super) const CANVAS_CENTRE: f64 = 8191.5;
 
 /// A value of the text document.
 #[derive(Debug, Clone, PartialEq)]
@@ -583,7 +583,7 @@ impl Story {
     /// Roughly where the story's type lies on the document: its frame's box, or round its lines
     /// for point type (what the page draws of it lies there).
     pub(super) fn region(&self, template: (f64, f64), to_doc: Affine) -> Option<Rect> {
-        let size = self.runs.iter().map(|(_, s)| s.size).fold(0.0, f64::max);
+        let size = self.runs.iter().map(|(_, s)| s.size).fold(0.0, f64::max) * art_scale(to_doc);
         let bounds = |segments: &[[f64; 8]]| path_of(segments, template, to_doc).bounds();
         let r = match self.frames.first()? {
             FrameKind::Area(s) => bounds(s)?,
@@ -634,6 +634,9 @@ impl Story {
         if text.trim().is_empty() && !threaded {
             return None;
         }
+        // The text document measures in the art's units too: the document's scale carries its
+        // sizes and spacings onto the page (a Large Canvas copy is written at 1:10; #2031).
+        let scale = scale * art_scale(to_doc);
         let leading = self.line_leading(scale);
         let chars: Vec<char> = text.chars().collect();
         let mut runs = vec![];
@@ -664,6 +667,14 @@ impl Story {
         t.kind = kind;
         t.xf = xf;
         Some(Node::new(id, NodeKind::Text(Box::new(t))))
+    }
+
+    /// Area type that the file lays lines out in, in a frame too short for its first line as it is
+    /// laid out here: a font that isn't available shows in the fallback font, whose lines may be
+    /// taller, and type that doesn't fit its frame isn't drawn. The frame is made taller, from its
+    /// top, by what the first line needs (`vectorcraft_text::fit_first_line`). Whether it was.
+    pub(super) fn fit_first_line(&self, t: &mut TextObject) -> bool {
+        !self.lines.is_empty() && vectorcraft_text::fit_first_line(vectorcraft_text::FontDb::global(), t)
     }
 
     /// The leading the file's own line positions imply: the distance from one line to the next, less
@@ -768,6 +779,13 @@ fn char_style(s: &Style, scale: f64, leading: Option<f64>) -> CharStyle {
     }
 }
 
+/// How many document points one unit of the art is: `to_doc`'s scale, which carries the art's
+/// lengths onto the document (10 for a Large Canvas copy written at 1:10; see `ai::read`).
+fn art_scale(to_doc: Affine) -> f64 {
+    let [a, b, ..] = to_doc.as_coeffs();
+    (a * a + b * b).sqrt().max(1e-9)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,6 +862,22 @@ mod tests {
         assert!((s.line_leading(0.5).unwrap() - 7.0).abs() < 1e-9);
     }
 
+    /// #2031: a Large Canvas editing copy measures its text document in its art's units, a tenth
+    /// of the page's: the story's size and leading reach the page through `to_doc`'s scale.
+    #[test]
+    fn a_story_in_a_scaled_art_space_keeps_its_size_and_leading() {
+        let s = story("one\rtwo\r", &[0.0, 20.0], &Para::default());
+        // A copy written at 1:10 (see `ai::read::ensure_space`): its art's units reach the
+        // document, 100 points to the page, through `to_doc`'s scale.
+        let to_doc = Affine::scale(10.0) * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 100.0]);
+        let t = match s.node(NodeId(1), 0, (0.0, 0.0), to_doc).unwrap().kind {
+            NodeKind::Text(t) => t,
+            _ => panic!("not text"),
+        };
+        assert_eq!(t.runs[0].style.size, 130.0, "13 pt at the page's scale");
+        assert_eq!(t.runs[0].style.leading, Some(200.0), "a 20-unit line pitch at the page's scale");
+    }
+
     #[test]
     fn leading_between_lines_of_a_paragraph_is_their_distance() {
         // A line break inside a paragraph has no paragraph spacing between its lines.
@@ -859,5 +893,31 @@ mod tests {
         assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
         // One line has no distance to read.
         assert_eq!(story("one\r", &[0.0], &Para::default()).line_leading(1.0), None);
+    }
+
+    #[test]
+    fn a_frame_too_short_for_its_first_line_is_made_taller() {
+        // A heading in a frame as tall as its size: a line of the font it shows in here is taller.
+        let s = story("Heading\r", &[0.0], &Para::default());
+        let area = |height: f64| {
+            let mut t = TextObject::point(Point::ZERO, "Heading", CharStyle { size: 13.0, ..CharStyle::default() });
+            t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 210.0, 20.0 + height)) };
+            t
+        };
+        let height =
+            |t: &TextObject| if let TextKind::Area { frame } = &t.kind { frame.bounds().map(|b| (b.x0, b.y0, b.x1, b.height())) } else { None };
+        let lines = |t: &TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines.len();
+        let mut t = area(13.0);
+        assert_eq!(lines(&t), 0, "nothing of it shows");
+        assert!(s.fit_first_line(&mut t));
+        let (x0, y0, x1, h) = height(&t).unwrap();
+        assert!((x0, y0, x1) == (10.0, 20.0, 210.0) && h > 13.0 && h < 26.0, "taller from its top: {h}");
+        assert_eq!(lines(&t), 1);
+        // A frame that holds the line stays as it is; so does one the file lays no line out in
+        // (its type is overset in the file too).
+        let mut t = area(40.0);
+        assert!(!s.fit_first_line(&mut t) && height(&t).unwrap().3 == 40.0);
+        let mut t = area(13.0);
+        assert!(!story("Heading\r", &[], &Para::default()).fit_first_line(&mut t) && height(&t).unwrap().3 == 13.0);
     }
 }

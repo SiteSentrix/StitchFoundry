@@ -1,5 +1,6 @@
 //! PDF text in installed fonts imports as live type (one point type object per line).
 
+use craft_pdf::write::backend as krilla;
 use krilla::geom::{Point as KPoint, Transform};
 use krilla::page::PageSettings;
 use krilla::text::{Font, TextDirection};
@@ -265,6 +266,8 @@ fn a_single_upright_glyph_comes_in_as_vertical_type_and_takes_no_horizontal_glyp
         h_scale: 100.0,
         fill: Some(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0))),
         stroke: None,
+        overprint_fill: false,
+        overprint_stroke: false,
     };
     let at = |x: f64, y: f64| Placement { origin: Point::new(x, y), dir: Vec2::new(1.0, 0.0), size: 20.0, h_scale: 100.0, slant: 0.0 };
     let mut line = TextLine::new(at(100.0, 100.0), 1.0);
@@ -288,6 +291,8 @@ fn letter_spaced_vertical_type_keeps_its_characters_together() {
         h_scale: 100.0,
         fill: Some(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0))),
         stroke: None,
+        overprint_fill: false,
+        overprint_stroke: false,
     };
     // Glyphs set down a column 1.5 em apart (tracking 500): no spaces come in between them.
     let at = |y: f64| Placement { origin: Point::new(100.0, y), dir: Vec2::new(1.0, 0.0), size: 20.0, h_scale: 100.0, slant: 0.0 };

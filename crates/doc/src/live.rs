@@ -318,8 +318,10 @@ impl WarpStyle {
     }
 }
 
-/// The warp map on normalised coordinates: `b` = bend (-1..1), `dh`/`dv` = distortion (-1..1).
-pub fn warp_point(style: WarpStyle, b: f64, dh: f64, dv: f64, x: f64, y: f64) -> (f64, f64) {
+/// The warp map on normalised coordinates: `b` = bend (-1..1), `dh`/`dv` = distortion (-1..1);
+/// `aspect` is the box's half-height over its half-width along the warp (Arc bends in real
+/// proportions).
+pub fn warp_point(style: WarpStyle, b: f64, dh: f64, dv: f64, aspect: f64, x: f64, y: f64) -> (f64, f64) {
     use WarpStyle::*;
     let t = (y + 1.0) / 2.0; // 0 at top, 1 at bottom
     let par = 1.0 - x * x; // parabola: 1 at centre, 0 at sides
@@ -328,14 +330,18 @@ pub fn warp_point(style: WarpStyle, b: f64, dh: f64, dv: f64, x: f64, y: f64) ->
             if b.abs() < 1e-6 {
                 (x, y)
             } else {
-                // Bend the centre line into a circular arc of equal length (sweep = |b|·180°).
+                // Bend the centre line into a circular arc of equal length (sweep = |b|·180°), in
+                // the box's real proportions (lengths in half-widths, so y counts `aspect` each):
+                // the edges are concentric arcs, and one that would pass the centre stops there
+                // instead of folding over (#1578).
+                let k = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
                 let sweep = b.abs() * PI;
                 let r0 = 2.0 / sweep;
-                let yy = if b > 0.0 { y } else { -y };
+                let yy = if b > 0.0 { y } else { -y } * k;
                 let a = x / r0;
-                let r = r0 - yy;
+                let r = (r0 - yy).max(0.0);
                 let (s, c) = a.sin_cos();
-                let (nx, ny) = (r * s, r0 - r * c);
+                let (nx, ny) = (r * s, (r0 - r * c) / k);
                 (nx, if b > 0.0 { ny } else { -ny })
             }
         }
@@ -1122,9 +1128,9 @@ fn surface_of<'a>(kind: &'a EnvelopeKind, src: Rect, frame: Affine) -> Box<dyn F
             Box::new(move |u: f64, v: f64| {
                 let (x, y) = (2.0 * u - 1.0, 2.0 * v - 1.0);
                 let (x2, y2) = if horizontal {
-                    warp_point(st, b, dh, dv, x, y)
+                    warp_point(st, b, dh, dv, hh / hw.max(1e-9), x, y)
                 } else {
-                    let (a, b2) = warp_point(st, b, dh, dv, y, x);
+                    let (a, b2) = warp_point(st, b, dh, dv, hw / hh.max(1e-9), y, x);
                     (b2, a)
                 };
                 frame * Point::new(c.x + x2 * hw, c.y + y2 * hh)
@@ -1222,7 +1228,7 @@ pub fn envelope_of(doc: &crate::Document, id: NodeId) -> Option<&Node> {
 /// edit (its points and handles).
 pub fn envelope_overlay(n: &Node) -> Option<(PathData, Option<GradientMesh>)> {
     let NodeKind::Envelope { kind, .. } = &n.kind else { return None };
-    match kind {
+    match &**kind {
         EnvelopeKind::Mesh { rows, cols, points, handles } => {
             let grid = envelope_grid(*rows, *cols, points, handles)?;
             Some((grid.lines(), Some(grid)))
@@ -1270,7 +1276,7 @@ impl<'a> EnvelopeMap<'a> {
     /// The map of envelope node `n` (`None` for other nodes).
     pub fn of(n: &'a Node) -> Option<Self> {
         match &n.kind {
-            NodeKind::Envelope { content, kind, frame, .. } => Self::new(content, kind, *frame),
+            NodeKind::Envelope { content, kind, frame, .. } => Self::new(content, kind, **frame),
             _ => None,
         }
     }
@@ -1388,7 +1394,7 @@ fn carry_look(from: &Node, mut to: Node) -> Node {
     to.isolate = from.isolate;
     to.knockout = from.knockout;
     to.knockout_shape = from.knockout_shape;
-    to.mask = from.mask.clone();
+    to.extras_mut().mask = from.extras().mask.clone();
     to.appearance.effects = from.appearance.effects.clone();
     to
 }
@@ -1417,7 +1423,7 @@ fn map_node(n: &Node, w: &Warper) -> Node {
     {
         out.appearance.warp_linear_gradients(b, &|p| affine_near(w.f, p, w.eps));
     }
-    if let Some(m) = &mut out.mask {
+    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()) {
         m.art = Arc::new(map_node(&m.art, w));
     }
     match &mut out.kind {
@@ -1431,7 +1437,7 @@ fn map_node(n: &Node, w: &Warper) -> Node {
             }
         }
         NodeKind::Mesh(m) => m.map(w.f),
-        NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
+        NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {
             if let Some(d) = &deeper {
                 return map_node(&expanded_group_hooks(n, w.hooks), d);
             }
@@ -1494,7 +1500,7 @@ fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
                 if let NodeKind::Path { clipping, .. } = &mut clip.kind {
                     *clipping = true;
                 }
-                let image = Node::new(n.id, NodeKind::Image(ImageObject { xf, ..im.clone() }));
+                let image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
                 pieces.push(Arc::new(Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })));
             }
         }
@@ -1523,17 +1529,18 @@ fn pattern_art(n: &Node, tiles: PatternTiles) -> Option<Node> {
         _ => None,
     };
     let plain = |items: Vec<AppearanceItem>| {
-        Arc::new(Node {
-            appearance: Appearance { items, ..Default::default() },
+        let mut p = Node {
+            appearance: Appearance { items, ..Default::default() }.into(),
             opacity: 1.0,
             blend: Default::default(),
             isolate: false,
             knockout: Default::default(),
             knockout_shape: false,
-            mask: None,
             name: None,
             ..n.clone()
-        })
+        };
+        p.extras_mut().mask = None;
+        Arc::new(p)
     };
     let mut pieces = vec![];
     let mut rest = vec![];
@@ -1560,7 +1567,7 @@ fn pattern_art(n: &Node, tiles: PatternTiles) -> Option<Node> {
     }
     Some(Node {
         kind: NodeKind::Group { children: pieces, clip: false },
-        appearance: Appearance { effects: n.appearance.effects.clone(), ..Default::default() },
+        appearance: Appearance { effects: n.appearance.effects.clone(), ..Default::default() }.into(),
         ..n.clone()
     })
 }
@@ -1609,7 +1616,15 @@ pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine
 
 /// Is this one of the live kinds?
 pub fn is_live(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_))
+    matches!(
+        n.kind,
+        NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. }
+    )
 }
 
 /// Mesh tessellation as filled quad paths (no stroke), `n`×`n` per patch.
@@ -1640,10 +1655,11 @@ pub fn expand_live_with(n: &Node, outline: Outliner) -> Vec<Node> {
 pub fn expand_live_hooks(n: &Node, hooks: Hooks) -> Vec<Node> {
     match &n.kind {
         NodeKind::Blend { children, spec } => blend_expand(children, spec),
-        NodeKind::Envelope { content, kind, fidelity, options, frame, .. } => expand_envelope(content, kind, *fidelity, *options, *frame, hooks),
+        NodeKind::Envelope { content, kind, fidelity, options, frame, .. } => expand_envelope(content, kind, *fidelity, *options, **frame, hooks),
         NodeKind::Mesh(m) => mesh_quad_nodes(m, 8),
         NodeKind::Repeat(r) => r.expand(),
         NodeKind::PlacedDocument(p) => p.art(n),
+        NodeKind::Intertwine { children } => crate::intertwine::expand(children),
         _ => vec![n.clone()],
     }
 }
@@ -1669,7 +1685,7 @@ pub fn expanded_group_hooks(n: &Node, hooks: Hooks) -> Node {
         g.knockout = crate::Knockout::Off;
     }
     g.knockout_shape = n.knockout_shape;
-    g.mask = n.mask.clone();
+    g.extras_mut().mask = n.extras().mask.clone();
     g
 }
 
@@ -1698,11 +1714,23 @@ pub fn subtree_has_live(n: &Node) -> bool {
     any
 }
 
-/// Largest stroke outset in a subtree (for visual bounds of envelopes).
-pub(crate) fn max_outset(nodes: &[Arc<Node>]) -> f64 {
+/// Largest stroke outset in a subtree (for visual bounds of envelopes). With `symbols`, the
+/// outsets in the art of the symbols its instances show count too
+/// ([`crate::symbols::ArtBox::reach`]), grown by [`crate::SymbolBoxes::brush_pad`]. In boxes made
+/// by [`crate::SymbolBoxes::without_art_strokes`], the outsets in the art do not count, and the pad
+/// does.
+pub(crate) fn max_outset(nodes: &[Arc<Node>], symbols: Option<&crate::SymbolBoxes>) -> f64 {
     let mut o = 0.0f64;
     for n in nodes {
-        n.walk(&mut |c| o = o.max(c.appearance.outset()));
+        n.walk(&mut |c| {
+            o = o.max(c.appearance.outset());
+            if let (Some(s), NodeKind::SymbolInstance { symbol, .. }) = (symbols, &c.kind)
+                && let Some(art) = s.art(symbol)
+            {
+                let reach = if s.art_strokes() { art.reach } else { 0.0 };
+                o = o.max(reach + s.brush_pad(symbol));
+            }
+        });
     }
     o
 }
@@ -1710,6 +1738,31 @@ pub(crate) fn max_outset(nodes: &[Arc<Node>]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1578: Arc bends in the box's real proportions. In half-width units (y scaled by the
+    /// aspect), the top and bottom edges are concentric circles about the bend's centre, at their
+    /// real distance from the centre line; an inner edge that would pass the centre stops there.
+    #[test]
+    fn arc_warp_is_round_in_real_proportions() {
+        for (aspect, b) in [(0.25, 0.1), (0.25, 0.5), (0.25, 1.0), (1.0, 0.5), (2.0, 0.3)] {
+            let r0 = 2.0 / (b * PI);
+            for (y, r) in [(-1.0, r0 + aspect), (1.0, (r0 - aspect).max(0.0))] {
+                for i in 0..=10 {
+                    let x = -1.0 + 0.2 * f64::from(i);
+                    let (nx, ny) = warp_point(WarpStyle::Arc, b, 0.0, 0.0, aspect, x, y);
+                    let d = nx.hypot(ny * aspect - r0);
+                    assert!((d - r).abs() < 1e-9, "aspect {aspect}, bend {b}, y {y}, x {x}: {d} vs {r}");
+                }
+            }
+        }
+        // At 100 % on a square the inner edge meets at the centre instead of folding over.
+        let (nx, _) = warp_point(WarpStyle::Arc, 1.0, 0.0, 0.0, 1.0, 0.8, 1.0);
+        assert!(nx.abs() < 1e-12);
+        // A square bent less than that is what it always was.
+        let (nx, ny) = warp_point(WarpStyle::Arc, 0.5, 0.0, 0.0, 1.0, 0.5, 0.25);
+        let (r0, a) = (4.0 / PI, 0.5 / (4.0 / PI));
+        assert!((nx - (r0 - 0.25) * a.sin()).abs() < 1e-12 && (ny - (r0 - (r0 - 0.25) * a.cos())).abs() < 1e-12);
+    }
     use vectorcraft_geom::shapes;
 
     fn rect_node(x: f64, y: f64, w: f64, h: f64, c: Color) -> Arc<Node> {
