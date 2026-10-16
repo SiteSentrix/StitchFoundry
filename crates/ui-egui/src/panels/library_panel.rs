@@ -520,7 +520,7 @@ mod tests {
         let app = app();
         let ids: Vec<Value> = crate::menus::menu_entries(&app)
             .into_iter()
-            .filter(|e| e.path == ["Window", "Swatch Libraries"] && e.command.as_deref() == Some("window.swatchLibrary"))
+            .filter(|e| e.path == ["Window", "Libraries", "Swatch Libraries"] && e.command.as_deref() == Some("window.swatchLibrary"))
             .map(|e| e.params["library"].clone())
             .collect();
         let all = vectorcraft_engine::cmd::swatchlib::libraries(&app.session);
@@ -529,7 +529,7 @@ mod tests {
         assert_eq!(ids, SWATCH_IDS.map(|i| json!(i)));
         let gradients: Vec<Value> = crate::menus::menu_entries(&app)
             .into_iter()
-            .filter(|e| e.path == ["Window", "Swatch Libraries", "Gradients"])
+            .filter(|e| e.path == ["Window", "Libraries", "Swatch Libraries", "Gradients"])
             .map(|e| e.params["library"].clone())
             .collect();
         assert!(gradients.len() >= 5);
@@ -547,7 +547,7 @@ mod tests {
         let user_items = |app: &VectorcraftApp| -> Vec<(String, String)> {
             crate::menus::menu_entries(app)
                 .into_iter()
-                .filter(|e| e.path == ["Window", "Swatch Libraries", "User Defined"])
+                .filter(|e| e.path == ["Window", "Libraries", "Swatch Libraries", "User Defined"])
                 .map(|e| (e.label, e.command.unwrap_or_default()))
                 .collect()
         };

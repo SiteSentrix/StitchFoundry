@@ -106,19 +106,34 @@ fn quilting_items() -> Vec<Item> {
 /// Embroidery: digitizing, stitch types, stitch direction and the stitch order.
 fn embroidery_menu() -> Vec<Item> {
     let ty = |label: &'static str, ty: &'static str| cp(label, "embroidery.set", json!({ "type": ty }));
+    let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id }));
+    // The everyday steps first, then the stitching of the selection, then the whole design; the
+    // rest is grouped in submenus so the menu fits on a laptop screen.
     vec![
         c("Make a Design…", "ui.makeDesign"),
-        c("My Machine…", "ui.myMachine"),
-        c("Save for My Machine", "ui.saveForMyMachine"),
-        Sep,
         c("Add Words…", "ui.addWords"),
-        c("Digitizing Widget", "ui.embroideryWidget"),
+        c("Save for My Machine", "ui.saveForMyMachine"),
+        c("My Machine…", "ui.myMachine"),
         Sep,
-        c("Convert Artwork to Embroidery", "embroidery.convert"),
-        c("Auto-Digitize Image", "embroidery.autoDigitize"),
-        c("Design from Prompt…", "ui.designFromPrompt"),
-        c("Redraw Image with Claude…", "ui.redrawImage"),
-        Sep,
+        sub(
+            "Create",
+            vec![
+                c("Convert Artwork to Embroidery", "embroidery.convert"),
+                c("Auto-Digitize Image", "embroidery.autoDigitize"),
+                c("Design from Prompt…", "ui.designFromPrompt"),
+                c("Redraw Image with Claude…", "ui.redrawImage"),
+                Sep,
+                c("Digitizing Widget", "ui.embroideryWidget"),
+                sub(
+                    "Cross Stitch",
+                    vec![
+                        c("New Cross-Stitch Pattern…", "embroidery.crossStitch.new"),
+                        c("Cross Stitch from Image…", "embroidery.crossStitch.fromImage"),
+                    ],
+                ),
+                cp("Lettering Kiosk", "embroidery.kiosk", json!({ "on": true })),
+            ],
+        ),
         sub(
             "Stitch Type",
             vec![
@@ -149,103 +164,152 @@ fn embroidery_menu() -> Vec<Item> {
                 ty("No Stitches", "none"),
             ],
         ),
-        c("Auto Direction", "embroidery.autoDirection"),
-        c("Clear Inclination Lines", "embroidery.clearGuides"),
-        c("Carve Split Lines", "embroidery.carveSplits"),
-        c("Contour Split Lines", "embroidery.contourSplits"),
-        sub("Carve Stamp", Stamp::ALL.into_iter().map(|s| cp(s.label(), "embroidery.carveStamp", json!({ "stamp": s.id() }))).collect()),
-        c("Clear Split Lines", "embroidery.clearSplits"),
-        c("Fill Along Lines", "embroidery.fillAlongLines"),
-        c("Clear Flow Lines", "embroidery.clearFlowLines"),
         sub(
-            "Place Motif",
-            ["Wave", "Scallop", "Diamond", "Cross", "Feather", "Heart", "Star", "Leaf", "Loop", "Zigzag", "E-stitch"]
-                .into_iter()
-                .map(|m| cp(m, "embroidery.placeMotif", json!({ "motif": m.to_lowercase() })))
-                .collect(),
-        ),
-        c("Make Motif", "embroidery.motif.make"),
-        sub("Embroidery Fonts", vec![c("New Embroidery Font", "embroidery.fontDoc.new"), c("Save Embroidery Font…", "ui.saveEmbroideryFont")]),
-        sub(
-            "Place Ring",
+            "Stitch Direction",
             vec![
-                cp("Satin Ring", "embroidery.placeRing", json!({ "stitch": "satin" })),
-                cp("Filled Ring", "embroidery.placeRing", json!({ "stitch": "fill" })),
-                cp("Bean Ring", "embroidery.placeRing", json!({ "stitch": "bean" })),
+                c("Auto Direction", "embroidery.autoDirection"),
+                c("Reverse Stitch Direction", "embroidery.reverse"),
+                c("Swap Satin Sides", "embroidery.swapSides"),
+                c("Convert to Satin Column", "embroidery.toColumn"),
+                c("Clear Inclination Lines", "embroidery.clearGuides"),
+                Sep,
+                c("Fill Along Lines", "embroidery.fillAlongLines"),
+                c("Clear Flow Lines", "embroidery.clearFlowLines"),
             ],
         ),
-        c("Reverse Stitch Direction", "embroidery.reverse"),
-        c("Swap Satin Sides", "embroidery.swapSides"),
-        c("Convert to Satin Column", "embroidery.toColumn"),
-        c("Make Properties Current", "embroidery.makeCurrent"),
-        Sep,
-        c("Remove Holes", "embroidery.removeHoles"),
-        c("Fill Holes", "embroidery.fillHoles"),
-        c("Add Laydown", "embroidery.addLaydown"),
         sub(
-            "Add Outline",
+            "Split Lines",
             vec![
-                cp("Satin Outline", "embroidery.addOutline", json!({ "stitch": "satin" })),
-                cp("Bean Outline", "embroidery.addOutline", json!({ "stitch": "bean" })),
-                cp("Rectangle Border", "embroidery.addOutline", json!({ "shape": "rectangle", "offset": 4 })),
-                cp("Oval Border", "embroidery.addOutline", json!({ "shape": "oval", "offset": 2 })),
-                cp("Rounded Border", "embroidery.addOutline", json!({ "shape": "rounded", "offset": 4 })),
-                cp(
-                    "Motif Border",
-                    "embroidery.addOutline",
-                    json!({ "shape": "rounded", "offset": 4, "stitch": "motif", "motif": "scallop", "width": 3 }),
+                c("Carve Split Lines", "embroidery.carveSplits"),
+                c("Contour Split Lines", "embroidery.contourSplits"),
+                sub("Carve Stamp", Stamp::ALL.into_iter().map(|s| cp(s.label(), "embroidery.carveStamp", json!({ "stamp": s.id() }))).collect()),
+                c("Clear Split Lines", "embroidery.clearSplits"),
+            ],
+        ),
+        sub(
+            "Motifs",
+            vec![
+                sub(
+                    "Place Motif",
+                    ["Wave", "Scallop", "Diamond", "Cross", "Feather", "Heart", "Star", "Leaf", "Loop", "Zigzag", "E-stitch"]
+                        .into_iter()
+                        .map(|m| cp(m, "embroidery.placeMotif", json!({ "motif": m.to_lowercase() })))
+                        .collect(),
+                ),
+                c("Make Motif", "embroidery.motif.make"),
+                sub(
+                    "Place Ring",
+                    vec![
+                        cp("Satin Ring", "embroidery.placeRing", json!({ "stitch": "satin" })),
+                        cp("Filled Ring", "embroidery.placeRing", json!({ "stitch": "fill" })),
+                        cp("Bean Ring", "embroidery.placeRing", json!({ "stitch": "bean" })),
+                    ],
                 ),
             ],
         ),
         sub(
-            "Add Buttonholes",
+            "Add to Design",
             vec![
-                cp("Straight Buttonhole", "embroidery.addButtonholes", json!({ "style": "straight" })),
-                cp("Rounded Buttonhole", "embroidery.addButtonholes", json!({ "style": "rounded" })),
-                cp("Keyhole Buttonhole", "embroidery.addButtonholes", json!({ "style": "keyhole" })),
+                sub(
+                    "Add Outline",
+                    vec![
+                        cp("Satin Outline", "embroidery.addOutline", json!({ "stitch": "satin" })),
+                        cp("Bean Outline", "embroidery.addOutline", json!({ "stitch": "bean" })),
+                        cp("Rectangle Border", "embroidery.addOutline", json!({ "shape": "rectangle", "offset": 4 })),
+                        cp("Oval Border", "embroidery.addOutline", json!({ "shape": "oval", "offset": 2 })),
+                        cp("Rounded Border", "embroidery.addOutline", json!({ "shape": "rounded", "offset": 4 })),
+                        cp(
+                            "Motif Border",
+                            "embroidery.addOutline",
+                            json!({ "shape": "rounded", "offset": 4, "stitch": "motif", "motif": "scallop", "width": 3 }),
+                        ),
+                    ],
+                ),
+                c("Add Laydown", "embroidery.addLaydown"),
+                sub(
+                    "Add Buttonholes",
+                    vec![
+                        cp("Straight Buttonhole", "embroidery.addButtonholes", json!({ "style": "straight" })),
+                        cp("Rounded Buttonhole", "embroidery.addButtonholes", json!({ "style": "rounded" })),
+                        cp("Keyhole Buttonhole", "embroidery.addButtonholes", json!({ "style": "keyhole" })),
+                    ],
+                ),
+                Sep,
+                cp("Echo Quilting", "embroidery.outlineAround", json!({ "kind": "echo" })),
+                cp("Background Quilting", "embroidery.outlineAround", json!({ "kind": "stipple" })),
+            ],
+        ),
+        sub(
+            "Shape",
+            vec![
+                c("Remove Holes", "embroidery.removeHoles"),
+                c("Fill Holes", "embroidery.fillHoles"),
+                c("Automatic Knife", "embroidery.knife"),
+                Sep,
+                c("Branch", "embroidery.branch"),
+                c("Redwork", "embroidery.redwork"),
+                c("Break Apart", "embroidery.breakApart"),
             ],
         ),
         Sep,
-        c("Sort by Thread Color", "embroidery.sortByColor"),
-        c("Match Threads to Chart", "embroidery.matchThreads"),
-        c("Merge Colours", "embroidery.colors.merge"),
-        c("Auto Sequence", "embroidery.autoSequence"),
-        c("Branch", "embroidery.branch"),
-        c("Redwork", "embroidery.redwork"),
-        c("Break Apart", "embroidery.breakApart"),
-        c("Automatic Knife", "embroidery.knife"),
-        cp("Echo Quilting", "embroidery.outlineAround", json!({ "kind": "echo" })),
-        cp("Background Quilting", "embroidery.outlineAround", json!({ "kind": "stipple" })),
         sub(
-            "Cross Stitch",
-            vec![c("New Cross-Stitch Pattern…", "embroidery.crossStitch.new"), c("Cross Stitch from Image…", "embroidery.crossStitch.fromImage")],
-        ),
-        sub(
-            "Chenille",
+            "Colors and Order",
             vec![
-                cp("Chain", "embroidery.chenille.set", json!({ "stitch": "chain" })),
-                cp("Moss", "embroidery.chenille.set", json!({ "stitch": "moss" })),
-                cp("Lockstitch", "embroidery.chenille.set", json!({ "stitch": "none" })),
-                Sep,
-                c("Compound Chenille…", "embroidery.chenille.compound"),
+                c("Sort by Thread Color", "embroidery.sortByColor"),
+                c("Match Threads to Chart", "embroidery.matchThreads"),
+                c("Merge Colours", "embroidery.colors.merge"),
+                c("Auto Sequence", "embroidery.autoSequence"),
             ],
         ),
-        sub("Longarm Quilting", quilting_items()),
         c("Check Design", "ui.embroideryCheck"),
         c("Density Map", "ui.embroideryDensity"),
-        Sep,
-        c("Freeze Stitches", "embroidery.freeze"),
-        c("Regenerate Stitches", "embroidery.regenerate"),
-        Sep,
-        sub("Export Machine File", machine_file_items()),
-        cp("Lettering Kiosk", "embroidery.kiosk", json!({ "on": true })),
-        c("Get Embroidery Fonts…", "ui.fontLibrary"),
         c("Compare Designs…", "ui.compareDesigns"),
+        sub(
+            "Stitches",
+            vec![
+                c("Make Properties Current", "embroidery.makeCurrent"),
+                Sep,
+                c("Freeze Stitches", "embroidery.freeze"),
+                c("Regenerate Stitches", "embroidery.regenerate"),
+            ],
+        ),
         Sep,
-        cp("Embroidery", "window.panel", json!({ "panel": "embroidery" })),
-        cp("Stitch Sequence", "window.panel", json!({ "panel": "stitchSequence" })),
-        cp("Stitch List", "window.panel", json!({ "panel": "stitchList" })),
-        cp("Embroidery Styles", "window.panel", json!({ "panel": "embroideryStyles" })),
+        sub(
+            "Special Machines",
+            vec![
+                sub(
+                    "Chenille",
+                    vec![
+                        cp("Chain", "embroidery.chenille.set", json!({ "stitch": "chain" })),
+                        cp("Moss", "embroidery.chenille.set", json!({ "stitch": "moss" })),
+                        cp("Lockstitch", "embroidery.chenille.set", json!({ "stitch": "none" })),
+                        Sep,
+                        c("Compound Chenille…", "embroidery.chenille.compound"),
+                    ],
+                ),
+                sub("Longarm Quilting", quilting_items()),
+            ],
+        ),
+        sub(
+            "Embroidery Fonts",
+            vec![
+                c("Get Embroidery Fonts…", "ui.fontLibrary"),
+                Sep,
+                c("New Embroidery Font", "embroidery.fontDoc.new"),
+                c("Save Embroidery Font…", "ui.saveEmbroideryFont"),
+            ],
+        ),
+        sub("Export Machine File", machine_file_items()),
+        Sep,
+        sub(
+            "Panels",
+            vec![
+                panel("Embroidery", "embroidery"),
+                panel("Stitch Sequence", "stitchSequence"),
+                panel("Stitch List", "stitchList"),
+                panel("Embroidery Styles", "embroideryStyles"),
+            ],
+        ),
     ]
 }
 
@@ -2351,21 +2415,42 @@ impl Row<'_> {
     }
 }
 
+/// Whether `it` shows something a person can pick (separators and headers don't).
+fn shows(app: &VectorcraftApp, it: &Item) -> bool {
+    match it {
+        Item::Sep | Item::Header(_) | Item::Todo(..) => false,
+        Item::Sub(_, children) => children.iter().any(|c| shows(app, c)),
+        Item::Cmd(..) => entry(app, it).is_some(),
+    }
+}
+
+/// `items` as the menus show them: the items left out dropped, and no separator first, last or
+/// beside another.
+pub fn entries<'a>(app: &VectorcraftApp, items: &'a [Item]) -> Vec<Entry<'a>> {
+    let mut out: Vec<Entry<'a>> = Vec::new();
+    for e in items.iter().filter_map(|it| entry(app, it)) {
+        if matches!(e, Entry::Sep) && out.last().is_none_or(|l| matches!(l, Entry::Sep)) {
+            continue;
+        }
+        out.push(e);
+    }
+    if out.last().is_some_and(|l| matches!(l, Entry::Sep)) {
+        out.pop();
+    }
+    out
+}
+
 /// Item `it` as the menus show it now, or `None` while they leave it out ([`shown_state`]).
 pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
     use crate::i18n::t;
     Some(match it {
         Item::Sep => Entry::Sep,
         Item::Header(h) => Entry::Header(t(h)),
-        Item::Sub(label, children) => Entry::Sub(t(label), children),
-        Item::Todo(label, sc) => Entry::Item(Row {
-            command: None,
-            source: label,
-            label: t(label).into(),
-            shortcut: Some(*sc).filter(|s| !s.is_empty()),
-            enabled: false,
-            checked: None,
-        }),
+        // a submenu with nothing to show is left out
+        Item::Sub(label, children) if children.iter().any(|c| shows(app, c)) => Entry::Sub(t(label), children),
+        Item::Sub(..) => return None,
+        // StitchFoundry leaves out what isn't made yet: the menus show only what works
+        Item::Todo(..) => return None,
         Item::Cmd(label, id, p) => {
             let (enabled, checked) = shown_state(app, id, p)?;
             Entry::Item(Row {
@@ -3183,52 +3268,50 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Everything", "window.experience", json!({"level": "all"})),
                     ],
                 ),
-                Sep,
-                c("Control", "window.control"),
-                c("Contextual Task Bar", "window.taskBar"),
-                c("Tools", "window.toolbar"),
                 sub(
                     "Toolbars",
                     vec![
+                        c("Tools", "window.toolbar"),
+                        c("Control", "window.control"),
+                        c("Contextual Task Bar", "window.taskBar"),
+                        Sep,
                         c("Advanced", "window.toolbarAdvanced"),
                         c("All Tools, Ungrouped", "window.toolbarUngrouped"),
                         c("Double Column", "window.toolbarColumns"),
                     ],
                 ),
                 Sep,
-                panel("Actions", "actions"),
+                // StitchFoundry: the embroidery panels first, then the everyday ones; the rest by kind
+                panel("Embroidery", "embroidery"),
+                panel("Stitch Sequence", "stitchSequence"),
+                panel("Stitch List", "stitchList"),
+                panel("Embroidery Styles", "embroideryStyles"),
+                Sep,
+                panel("Layers", "layers"),
+                panel("Properties", "properties"),
+                panel("Swatches", "swatches"),
+                panel("Color", "color"),
+                panel("Stroke", "stroke"),
                 panel("Align", "align"),
+                panel("Transform", "transform"),
+                panel("Pathfinder", "pathfinder"),
                 panel("Appearance", "appearance"),
                 panel("Artboards", "artboards"),
-                panel("Asset Export", crate::panels::asset_export::ID),
-                panel("Attributes", "attributes"),
-                panel("Brushes", "brushes"),
-                panel("Color", "color"),
-                panel("Color Guide", "colorGuide"),
-                panel("Color Themes", "colorThemes"),
-                panel("CSS Properties", crate::panels::css_properties::ID),
-                panel("Document Info", "docInfo"),
-                panel("Flattener Preview", crate::panels::flattener_preview::ID),
-                panel("Gradient", "gradient"),
-                panel("Graphic Styles", "graphicStyles"),
                 panel("History", "history"),
-                panel("Image Trace", "imageTrace"),
-                panel("Info", "info"),
-                panel("Layers", "layers"),
-                panel("Libraries", "libraries"),
-                panel("Links", crate::panels::links::ID),
-                panel("Magic Wand", "magicWand"),
-                panel("Navigator", "navigator"),
-                panel("Pathfinder", "pathfinder"),
-                panel("Pattern Options", "patternOptions"),
-                panel("Properties", "properties"),
-                panel("Separations Preview", "separations"),
-                panel("Stroke", "stroke"),
-                todo("SVG Interactivity"),
-                panel("Swatches", "swatches"),
-                panel("Symbols", "symbols"),
-                panel("Transform", "transform"),
-                panel("Transparency", "transparency"),
+                Sep,
+                sub(
+                    "Paint",
+                    vec![
+                        panel("Brushes", "brushes"),
+                        panel("Color Guide", "colorGuide"),
+                        panel("Color Themes", "colorThemes"),
+                        panel("Gradient", "gradient"),
+                        panel("Graphic Styles", "graphicStyles"),
+                        panel("Pattern Options", "patternOptions"),
+                        panel("Symbols", "symbols"),
+                        panel("Transparency", "transparency"),
+                    ],
+                ),
                 sub(
                     "Type",
                     vec![
@@ -3241,12 +3324,39 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         panel("Tabs", "tabs"),
                     ],
                 ),
-                panel("Variables", crate::panels::variables::ID),
-                Sep,
-                sub("Brush Libraries", library_placeholders()),
-                sub("Graphic Style Libraries", crate::panels::graphic_styles::window_menu()),
-                sub("Swatch Libraries", crate::panels::swatches::window_menu()),
-                sub("Symbol Libraries", library_placeholders()),
+                sub("Images", vec![panel("Image Trace", "imageTrace"), panel("Magic Wand", "magicWand"), panel("Links", crate::panels::links::ID)]),
+                sub(
+                    "Document",
+                    vec![
+                        panel("Info", "info"),
+                        panel("Document Info", "docInfo"),
+                        panel("Navigator", "navigator"),
+                        panel("Attributes", "attributes"),
+                        panel("Variables", crate::panels::variables::ID),
+                        panel("Actions", "actions"),
+                    ],
+                ),
+                sub(
+                    "Print and Export",
+                    vec![
+                        panel("Separations Preview", "separations"),
+                        panel("Flattener Preview", crate::panels::flattener_preview::ID),
+                        panel("Asset Export", crate::panels::asset_export::ID),
+                        panel("CSS Properties", crate::panels::css_properties::ID),
+                        todo("SVG Interactivity"),
+                    ],
+                ),
+                sub(
+                    "Libraries",
+                    vec![
+                        panel("Libraries", "libraries"),
+                        Sep,
+                        sub("Brush Libraries", library_placeholders()),
+                        sub("Graphic Style Libraries", crate::panels::graphic_styles::window_menu()),
+                        sub("Swatch Libraries", crate::panels::swatches::window_menu()),
+                        sub("Symbol Libraries", library_placeholders()),
+                    ],
+                ),
             ],
         ),
         (
@@ -3547,7 +3657,7 @@ fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &
 /// room for one).
 fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks: bool, clicked: &mut Option<(String, Value)>) {
     let t = Tokens::get(ui.ctx());
-    for e in items.iter().filter_map(|it| entry(app, it)) {
+    for e in entries(app, items) {
         match e {
             Entry::Sep => {
                 ui.separator();
@@ -4825,7 +4935,8 @@ mod tests {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let tree = menu_tree();
-        let (_, window) = tree.iter().find(|(t, _)| *t == "Window").unwrap();
+        // (the longest menu: StitchFoundry's Window menu groups its panels and fits)
+        let (_, window) = tree.iter().find(|(t, _)| *t == "Object").unwrap();
         let id = egui::Id::new("test-long-menu");
         let rect = |height: f32| {
             let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
@@ -4842,7 +4953,7 @@ mod tests {
             ctx.memory(|m| m.area_rect(id)).unwrap()
         };
         let short = rect(600.0);
-        assert!(short.bottom() <= 600.0, "Window menu ends at {} in a 600 pt window", short.bottom());
+        assert!(short.bottom() <= 600.0, "Object menu ends at {} in a 600 pt window", short.bottom());
         // With room to spare it shows whole, taller than the short window allowed.
         let tall = rect(3000.0);
         assert!(tall.height() > short.height() + 100.0, "{} vs {}", tall.height(), short.height());

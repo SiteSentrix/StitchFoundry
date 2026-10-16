@@ -138,7 +138,7 @@ The GitHub repositories StitchFoundry takes code, data or fonts from:
 | [storytold/craft-fonts](https://github.com/storytold/craft-fonts) | the Japanese fonts | optional build input (release builds), never copied here; OFL |
 | [adobe-fonts/source-sans](https://github.com/adobe-fonts/source-sans), [rsms/inter](https://github.com/rsms/inter), [JetBrains/JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) | the interface fonts | copies in `assets/fonts` (from VectorCraft); OFL, listed in [ASSETS.md](ASSETS.md) |
 | [EmbroidePy/pyembroidery](https://github.com/EmbroidePy/pyembroidery) | the Brother PEC and Janome JEF thread colour tables | copied once (version 1.5.1); MIT, notice in [NOTICE](NOTICE) |
-| [Stitchwright/stitchfoundry-fonts](https://github.com/Stitchwright/stitchfoundry-fonts) | embroidery fonts | downloaded in the app (Embroidery › Get Embroidery Fonts…), not in this repository |
+| [Stitchwright/stitchfoundry-fonts](https://github.com/Stitchwright/stitchfoundry-fonts) | embroidery fonts | downloaded in the app (Embroidery › Embroidery Fonts › Get Embroidery Fonts…), not in this repository |
 | [inkstitch/embroidery-fonts](https://github.com/inkstitch/embroidery-fonts) | embroidery fonts in Ink/Stitch's format | downloaded in the app, not in this repository; each font keeps its own licence |
 
 Ink/Stitch itself is only a reference from its public documentation: none of its (GPL) code is used.

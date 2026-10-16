@@ -42,7 +42,7 @@ in hand, with a search; its **Tips** tab (Help › Tips) has short hints, the to
 guide is the same text as this file (`help.topics`, `help.topic`, `help.forTool`).
 
 1. Draw shapes, place a logo, or type text.
-2. Select them and choose **Embroidery › Convert Artwork to Embroidery**. Filled areas become
+2. Select them and choose **Embroidery › Create › Convert Artwork to Embroidery**. Filled areas become
    satin (if no part is thicker than 7 mm) or tatami fill, and strokes become satin lines, bean
    runs or runs, depending on their width. To pick a type yourself, use **Embroidery › Stitch Type**
    or the **Embroidery** panel.
@@ -183,7 +183,7 @@ of the design's motifs for any design. The motif lists show My Motifs after the 
 applying one adds it to the design. `embroidery.motif.library` lists them and
 `embroidery.motif.forget {name}` takes one out; they are kept with the preferences, and
 resetting the preferences keeps them.
-**Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
+**Embroidery › Motifs › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art. The **Motif tool** (in the
 Embroidery tool group) places one wherever you click, or drag across the canvas for one as long as
 the drag and turned its way; pick the motif, built-in or one of the design's, in the Embroidery
@@ -195,14 +195,14 @@ tenth less, so it stays inside) and *Motif length* times as long, turning with t
 rungs. On a tapered or calligraphic line the motifs grow and shrink with it (a graded motif
 column). Motifs stand upright along a column drawn left to right, as on a motif run.
 
-**Rings:** **Embroidery › Place Ring** places a 20 mm ring, 3 mm wide, in the middle of the
+**Rings:** **Embroidery › Motifs › Place Ring** places a 20 mm ring, 3 mm wide, in the middle of the
 artboard: a **Satin Ring** (a satin border round a circle), a **Filled Ring** (a fill between two
 circles) or a **Bean Ring** (a bean run round a circle). It is an ordinary circle afterwards:
 move, scale and reshape it. `embroidery.placeRing` takes the `stitch`, the `diameter`, the
 ring's `width` and where it goes (`at`).
 
 **Your own motifs:** draw a motif as a path, left to right the way it should sew along a
-left-to-right line, select it and choose **Embroidery › Make Motif**. An open path runs from its
+left-to-right line, select it and choose **Embroidery › Motifs › Make Motif**. An open path runs from its
 first point to its last, so the motif starts and ends on the line between them; a closed shape
 (or a path ending near where it starts) lies on the middle of its height and is sewn once round
 from its left side, then on round to its right side. The motif keeps the drawn proportions and
@@ -255,10 +255,10 @@ the line; tiny jogs stay with the stretch before), grouped by needle so each nee
 stretches in one go (`embroidery.cutwork {needles?: 1-4, stitch?}`).
 
 **Routing satins:** to sew several satin columns as one path without trims, the way Ink/Stitch's
-auto-route does, select them and use **Embroidery › Branch** (see Stitch Sequence below): it picks the
+auto-route does, select them and use **Embroidery › Shape › Branch** (see Stitch Sequence below): it picks the
 order and carries the thread from one to the next under the ones still to come.
 
-**Outlines and borders:** **Embroidery › Add Outline** sews an outline round the selected
+**Outlines and borders:** **Embroidery › Add to Design › Add Outline** sews an outline round the selected
 stitched shapes, lines and type, after them and in the top one's thread: a **Satin Outline** or
 **Bean Outline** following them 1 mm out, or a **Rectangle**, **Oval**, **Rounded** or **Motif
 Border** framing them. A line is outlined round the band its stitches cover (a satin line as wide
@@ -272,7 +272,7 @@ motif. Selecting the source object shows every copy's stitches. Stitched objects
 envelope (Object › Envelope Distort) are sewn bent through it, like the art; their inclination
 lines and start and stop beads don't bend with them.
 
-**Laydown:** **Embroidery › Add Laydown** puts an open tatami (rows 2.5 mm apart, at 45°, no
+**Laydown:** **Embroidery › Add to Design › Add Laydown** puts an open tatami (rows 2.5 mm apart, at 45°, no
 underlay, travel along its outline) under the selected stitched shapes and type, 1.5 mm beyond
 them, sewn first in the bottom one's thread. On towels, fleece and knits it flattens the pile so
 the design sits on top instead of sinking in. Lines get no laydown. The command's `margin`,
@@ -352,7 +352,7 @@ Editing:
   joins. A fill honours both: its underlay runs out from the start and back to it, then the top
   stitching begins at the start and sews towards the stop, the piece of the shape that can end
   nearest the stop sewn last, so it finishes there instead of travelling back over sewn rows.
-- **Embroidery › Auto Direction** places the automatic lines again; **Embroidery › Clear
+- **Embroidery › Stitch Direction › Auto Direction** places the automatic lines again; **Embroidery › Clear
   Inclination Lines** goes back to the automatic direction.
 - Inclination lines, beads and fill angles move, rotate, scale and mirror with their object.
 - A click selects a stitched object where its stitches are, not only on its art: inside a fill,
@@ -375,7 +375,7 @@ open paths you can edit node by node, meeting at a point where its ends were rou
 its stitches turned stays as inclination lines. The satin settings carry over (from a satin fill,
 its satin column settings).
 
-**Holes:** **Embroidery › Remove Holes** deletes the holes of the selected shapes (all of them, or
+**Holes:** **Embroidery › Shape › Remove Holes** deletes the holes of the selected shapes (all of them, or
 with the `maxArea` parameter only small ones, handy after tracing). **Fill Holes** adds an object
 in each hole, sewn right after its shape, so a hole can be sewn in another thread. To add a hole,
 draw a shape over a stitched object, select both and choose **Minus Front** (Window ›
@@ -397,18 +397,18 @@ the fill: an embossed texture without another thread.
   next line, broken up only where the gap is longer than a long stitch, so the pattern reads
   clearly. The pattern stays put on the page while the shape changes.
 - **Split lines** (drawn splits, carving stamps, flexi splits): draw paths over a tatami fill,
-  select them with the fill and choose **Embroidery › Carve Split Lines**. The fill keeps its usual
+  select them with the fill and choose **Embroidery › Split Lines › Carve Split Lines**. The fill keeps its usual
   stitching and gains a needle point where each row crosses a line. A closed path presses in its
   whole outline, like a carving stamp (a star, a heart, a letter's outline); open paths draw
   lines. The paths are used up unless the command's `keep` parameter is on. When every selected
   object is a tatami fill, the front-most one is the stamp for the others.
   With the `repeat` parameter (mm), each line is copied that far apart across the whole fill:
   draw one wave across a shape for wavy lines all over it (flexi splits).
-- **Contour split lines:** **Embroidery › Contour Split Lines** gives the selected tatami fills
+- **Contour split lines:** **Embroidery › Split Lines › Contour Split Lines** gives the selected tatami fills
   split lines that follow their outlines: each outline, holes too, repeated inward every 4 mm
   (`embroidery.contourSplits {spacing}`) until the shape runs out, so the fill shows rings along
   its edge.
-- **Carving stamps:** **Embroidery › Carve Stamp** presses a stamp from the library into the
+- **Carving stamps:** **Embroidery › Split Lines › Carve Stamp** presses a stamp from the library into the
   selected tatami fills, in the middle of each and 60% as wide as its smaller side: star, heart,
   flower, leaf (with its veins), spiral, sun, moon, snowflake, paw print, swirl, shell,
   butterfly, clover, feather, rings and diamond, all drawn for StitchFoundry. The stamp becomes
@@ -416,7 +416,7 @@ the fill: an embossed texture without another thread.
   `embroidery.stamps` lists the library).
 - Split lines show dashed on the selected fill, move, turn and
   scale with it, and stay its own: **Make Properties Current** and styles leave them out.
-  **Embroidery › Clear Split Lines** (or the button in the panel) takes them out again.
+  **Embroidery › Split Lines › Clear Split Lines** (or the button in the panel) takes them out again.
 - **Embossed turning satin:** a satin fill that turns (two inclination lines or more) takes a
   texture too. The pattern is laid along the column, its length along the column's middle and
   its width across it, so it bends with the turning; each satin stitch gets a needle point where
@@ -426,7 +426,7 @@ the fill: an embossed texture without another thread.
   turning tatami and underlay ignore them, and a textured tatami shape doesn't turn along long
   thin shapes on its own.
 - **Flow lines** (Florentine and liquid effects): draw one or two lines across or beside a
-  tatami fill, select them with it and choose **Embroidery › Fill Along Lines**. With one line,
+  tatami fill, select them with it and choose **Embroidery › Stitch Direction › Fill Along Lines**. With one line,
   every row is a copy of it moved across the fill, so the stitches follow its curve; with two,
   the rows change shape evenly from the first line to the second, so they can fan out, narrow
   or swing round. Draw the two the same way round and keep them clear of each other; rows
@@ -434,7 +434,7 @@ the fill: an embossed texture without another thread.
   pair that would stretch the shape out of all proportion leaves the rows straight. Textures
   and split lines follow the rows; underlay stays straight. Flow lines show dashed on the
   selected fill, move with it, and take precedence over inclination lines;
-  **Embroidery › Clear Flow Lines** (or the button in the panel) gives straight rows back.
+  **Embroidery › Stitch Direction › Clear Flow Lines** (or the button in the panel) gives straight rows back.
 
 ## The digitizing widget and brush
 
@@ -506,7 +506,7 @@ first, under the design, to press a towel's or fleece's pile flat; **emboss** (`
 fills a rectangle or circle (`shape`) reaching `extend` (5 mm) beyond the design with light
 tatami, leaving the design's area out, so the design stands up from a stitched background.
 
-Two quilting kinds (Embroidery › Echo Quilting and Background Quilting): **echo**
+Two quilting kinds (Embroidery › Add to Design › Echo Quilting and Background Quilting): **echo**
 (`kind: echo`) sews `count` (3) running-stitch outlines round the art, the first `gap` (2 mm) from
 it and each `spacing` (3 mm) further out, the way a quilter echoes an appliqué; **stipple**
 (`kind: stipple`) fills a rectangle or circle (`shape`, `extend`) round the art with a meander,
@@ -527,7 +527,7 @@ fill to sew behind them).
 A cross-stitch pattern is drawn square by square on a grid, the way counted cross stitch is
 charted, and sews as X stitches that sit exactly in their squares.
 
-- **Embroidery › Cross Stitch › New Cross-Stitch Pattern…** (`embroidery.crossStitch.new {cols?,
+- **Embroidery › Create › Cross Stitch › New Cross-Stitch Pattern…** (`embroidery.crossStitch.new {cols?,
   rows?, cell?, style?, at?}`) puts an empty grid on the page: 40 × 40 squares of 2.5 mm unless
   you ask for others (1 to 300 squares a side, 1 to 10 mm a square). Its thin grey lines show
   where the squares are and are never sewn.
@@ -536,7 +536,7 @@ charted, and sews as X stitches that sit exactly in their squares.
   a block of 1 to 9 squares across. A square has one colour: painting it again changes it. A
   whole stroke is one step, so Undo takes it back. The Embroidery panel shows the tool's colour
   (the pattern's colours are one click away), Erase and Brush.
-- **Embroidery › Cross Stitch › Cross Stitch from Image…** (`embroidery.crossStitch.fromImage
+- **Embroidery › Create › Cross Stitch › Cross Stitch from Image…** (`embroidery.crossStitch.fromImage
   {cols?, colors?, cell?, style?, background?}`) turns the selected picture into a pattern over it:
   60 squares across and 8 colours unless you choose, each colour matched to a thread of the
   design's chart, stray single squares tidied, and the colour round the edges (the background)
@@ -779,7 +779,7 @@ design's notes say how to mark and hoop. Patterns and wording are our own.
 ## Chenille
 
 For chenille machines, which sew thick yarn without a bobbin thread, any stitched object can be
-chain or moss (Embroidery › Chenille › Chain, Moss or Lockstitch, or the Embroidery panel's **Chenille** row;
+chain or moss (Embroidery › Special Machines › Chenille › Chain, Moss or Lockstitch, or the Embroidery panel's **Chenille** row;
 `embroidery.chenille.set {stitch: chain|moss|none, height?, pattern?}`):
 
 - **Chain** sews link-like loops on top: outlines, borders, monograms and light fills. The
@@ -788,7 +788,7 @@ chain or moss (Embroidery › Chenille › Chain, Moss or Lockstitch, or the Emb
   pattern: a fill becomes a motif fill and a run a motif run in that pattern. Satin can't be moss.
 - **Needle height** (1 to 9, the machine's own levels): lower for chain and outlines (3 unless
   set), higher for moss fills (6).
-- **Compound Chenille…** (Embroidery › Chenille, or the panel with a fill selected;
+- **Compound Chenille…** (Embroidery › Special Machines › Chenille, or the panel with a fill selected;
   `embroidery.chenille.compound {before?, after?, offset?, pattern?, height?, borderHeight?}`)
   makes the shape a moss fill with chain borders sewn before it and after it (1 each unless set, up
   to 3), following its outline inward `offset` apart (1.5 mm). The borders tie the moss in, as
@@ -807,7 +807,7 @@ https://docs.wilcom.com/embroiderystudio/e4/en/MainHelp/Chenille/chenille_output
 ## Longarm quilting
 
 Computerized longarm quilting machines sew one unbroken line across the quilt: they can't trim
-and jump the way an embroidery machine does. **Embroidery › Longarm Quilting** makes and checks
+and jump the way an embroidery machine does. **Embroidery › Special Machines › Longarm Quilting** makes and checks
 such lines, drawn as ordinary lines (a stroke, no fill), and writes them for the quilting
 software that runs the machine:
 
@@ -963,7 +963,7 @@ worksheet (`kind: template`), and a basting run round the design from the design
 
 ## The lettering kiosk
 
-**Embroidery › Lettering Kiosk** (`embroidery.kiosk {on: true}`) turns the app into a simple
+**Embroidery › Create › Lettering Kiosk** (`embroidery.kiosk {on: true}`) turns the app into a simple
 screen for counter staff: one panel and the design, nothing else (no menus, panels or
 keyboard shortcuts). They pick a template (a name
 tape, a cap front, a left chest…), type the name, pick a font and a thread, and **Make Design**
@@ -1217,7 +1217,7 @@ for satin becomes tatami.
 
 ## Auto-Digitize
 
-Select a placed image and choose **Embroidery › Auto-Digitize Image** (or use the Embroidery panel
+Select a placed image and choose **Embroidery › Create › Auto-Digitize Image** (or use the Embroidery panel
 when an image is selected). The panel's **Thread colors** slider (2 to 32) shows at once what that
 many colours look like: a small preview of the image reduced the way Auto-Digitize reduces it
 (the background it leaves out shown as a light checker), the thread each colour becomes (hover a
@@ -1272,7 +1272,7 @@ to sew it over the image as ordinary objects you can edit:
 ## Design from Prompt
 
 Describe a design in words and Claude, Anthropic's AI model, draws artwork for it, which
-StitchFoundry then digitizes. Choose **Embroidery › Design from Prompt…** (or the button in the
+StitchFoundry then digitizes. Choose **Embroidery › Create › Design from Prompt…** (or the button in the
 Embroidery panel), describe the design ("a cartoon fox head, orange and white"), and set its size
 (the longest side, in mm: 90% of the hoop's shorter side by default, else 100 mm) and the most
 thread colours it may use. **Generate** sends the request, and the dialog shows how long Claude
@@ -1308,7 +1308,7 @@ agent that draws can hand its own SVG to `embroidery.placeArt`, which does the r
 
 ## Redraw Image with Claude
 
-Select a placed logo or image and choose **Embroidery › Redraw Image with Claude…** (or **Redraw
+Select a placed logo or image and choose **Embroidery › Create › Redraw Image with Claude…** (or **Redraw
 with Claude…** in the Embroidery panel, next to Auto-Digitize). Claude redraws it as clean
 flat-colour art in the same dialog as Design from Prompt, with the same API key: it keeps the
 image's composition, shapes, lettering and colours, leaves out its background (unless it is part
@@ -1420,7 +1420,7 @@ in Check settings). `embroidery.densityMap {cell?}` returns the layers cell by c
 With nothing selected, the Embroidery panel shows **Properties for New Objects**: pick a stitch
 type and set its density, underlay, pull compensation and the rest. Objects you then give that
 stitch type (with the Stitch Type list or Convert Artwork to Embroidery) take them. With
-an object selected, **Make Current** (also Embroidery › Make Properties Current) makes its
+an object selected, **Make Current** (also Embroidery › Stitches › Make Properties Current) makes its
 properties the ones new objects of its type take. **Reset to Defaults** goes back to the built-in
 values. These are saved with the design, so a template carries them to new designs. **Save as
 Default** keeps them for every design (with the app's preferences): a pull compensation of 0.7,
@@ -1478,11 +1478,11 @@ go. The **player** redraws the design stitch by stitch, as the machine will sew 
 buttons step back and forth by stitch, object, colour, trim or machine function, selecting the
 object reached.
 
-**Embroidery › Auto Sequence** reorders the stitched objects of each layer or group for the
+**Embroidery › Colors and Order › Auto Sequence** reorders the stitched objects of each layer or group for the
 fewest colour changes and then the shortest way from one object to the next, keeping objects
 that overlap in their stacking order (the one on top is still sewn last).
 
-**Embroidery › Branch** sews two or more selected objects as one path, without trims: they
+**Embroidery › Shape › Branch** sews two or more selected objects as one path, without trims: they
 become a *branch* group. The objects are sewn closest-first (overlapping ones in stacking
 order), each ends where the objects still to sew cover it, and the thread runs to the next one
 as small running stitches routed inside those later objects, so it is sewn over and hidden.
@@ -1490,7 +1490,7 @@ Where nothing covers the way, the thread is trimmed as usual. **Break Apart** tu
 back into separate objects; on a stitched path or compound path made of separate parts it
 makes one object per part, each with the same stitching (a hole stays with its part).
 
-**Embroidery › Add Buttonholes** places a straight, rounded or keyhole buttonhole (15 mm slit,
+**Embroidery › Add to Design › Add Buttonholes** places a straight, rounded or keyhole buttonhole (15 mm slit,
 4 mm wide) in the middle of the artboard: satin columns bordering a slit that is cut open after
 sewing (0.6 mm is left open for the cut). Each buttonhole is a group of ordinary stitched paths,
 sewn in order: a run round it to hold the fabric, one side, the far end (a bartack, a satin end
@@ -1500,13 +1500,13 @@ turn and resize it like any art. `embroidery.addButtonholes` places a string of 
 of them in the middle of the artboard: style, length, width, how many, how far apart (middle to
 middle) and an angle, the row running square to the slits.
 
-**Embroidery › Automatic Knife** cuts the selected stitched shapes round their holes and where
+**Embroidery › Shape › Automatic Knife** cuts the selected stitched shapes round their holes and where
 they branch (at sharp inside corners, like the arms of a T) into simpler pieces, each its own
 object with the same stitching and its own automatic direction, a single angle or turning;
 the pieces overlap by 0.3 mm along the cuts (`overlap`) and become a branch group, sewn as one
 path. Edit each piece's direction like any object's; Break Apart separates the group.
 
-**Embroidery › Redwork** sews the selected line art (paths, compound paths and type) the way
+**Embroidery › Shape › Redwork** sews the selected line art (paths, compound paths and type) the way
 hand redwork is sewn: as one line that starts and ends at the same point, so there is one tie-in
 and one tie-off. Every line is sewn once in the run style (*Single*, *Triple*, *Backstitch* or
 *Stem stitch*); to get from one line to the next the needle retraces lines already sewn as a
@@ -1614,7 +1614,7 @@ group per glyph, saved with the design. The lettering's group remembers what it 
 how big and where: `embroidery.lettering.edit {text?, font?, size?, leading?}` sets it again where
 it is now, moved, turned and scaled as it is (scaling it changes its size), as long as its font is
 loaded; the glyphs' own stitching can be changed like any art's, until it is set again.
-**Embroidery › Break Apart** turns it into its glyphs, no longer lettering. In the Embroidery panel, **Embroidery Lettering**
+**Embroidery › Shape › Break Apart** turns it into its glyphs, no longer lettering. In the Embroidery panel, **Embroidery Lettering**
 does the same: *Load Embroidery Font…* picks a font folder, then choose the font, type the text,
 set its size (the sizes the font sews well at are shown, marked ▲ as a warning while the size typed is outside them) and *Place Lettering* puts it in the
 middle of the artboard. With a lettering selected, the section shows what it says, in what font and
