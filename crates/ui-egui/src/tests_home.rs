@@ -381,3 +381,17 @@ fn simple_mode_makes_mistakes_safe_and_text_larger() {
     assert!(panel.iter().any(|t| t == "Saved for you automatically in My Designs:"), "{panel:?}");
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// TB-01: the first start on a tablet turns on simple mode, unless a way of working was chosen.
+#[test]
+fn a_tablet_starts_in_simple_mode_unless_another_way_was_chosen() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(!crate::simple::active(&app));
+    assert!(app.start_on_tablet());
+    assert!(crate::simple::active(&app));
+    // chosen: kept
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("window.experience", serde_json::json!({"level": "digitizer"})).unwrap();
+    assert!(!app.start_on_tablet());
+    assert!(!crate::simple::active(&app));
+}

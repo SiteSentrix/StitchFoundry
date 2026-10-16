@@ -862,6 +862,13 @@ write to folders or a USB stick:
 - Keep Safe's automatic saving to My Designs is desktop only; the web app keeps recovery copies in
   the browser's storage instead.
 
+**Tablets** (TB-01): the web app runs on iPad and Android tablets in Safari or Chrome. The first
+time it opens on a touch tablet (a touch screen whose main pointer is a finger, so touch-screen
+laptops aren't counted) it starts in simple mode: the big buttons on the left and Your Design in
+place of the side panels, which leave too little room for the design on a tablet. Choosing another
+way of working (Window › Experience, or *Show everything*) is kept from then on. Pinch zooms and two
+fingers pan the canvas. Saving downloads the machine file, to copy to a USB stick.
+
 ## Life size on screen
 
 **View › Calibrate Life Size…** shows a 100 mm ruler and the outline of a bank card (85.6 ×

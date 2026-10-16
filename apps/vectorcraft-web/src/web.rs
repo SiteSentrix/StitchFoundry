@@ -119,7 +119,11 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                         app.status("The graphics were lost and have been restarted");
                         app
                     }
-                    None => VectorcraftApp::new(Session::new(), services),
+                    None => {
+                        let mut app = VectorcraftApp::new(Session::new(), services);
+                        tablet_start(&mut app);
+                        app
+                    }
                 };
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
             }),
@@ -454,6 +458,35 @@ const RECOVERY_PREFIX: &str = "vectorcraft-recovery/";
 
 fn js_err(e: wasm_bindgen::JsValue) -> String {
     format!("{e:?}")
+}
+
+/// The key that says the first start on a tablet has been made.
+const TABLET_KEY: &str = "stitchfoundry.tabletStarted";
+
+/// Whether this is a touch tablet: a touch screen, with touch (not a mouse) the main pointer, so
+/// touch-screen laptops aren't counted.
+fn is_touch_tablet() -> bool {
+    let Some(w) = web_sys::window() else { return false };
+    let touch = w.navigator().max_touch_points() > 0;
+    let coarse = w.match_media("(pointer: coarse)").ok().flatten().is_some_and(|m| m.matches());
+    touch && coarse
+}
+
+/// TB-01: the first time the app starts on a touch tablet it starts in simple mode (big buttons,
+/// Your Design in place of the side panels); later starts keep whatever was chosen since.
+fn tablet_start(app: &mut VectorcraftApp) {
+    if !is_touch_tablet() {
+        return;
+    }
+    let Ok(store) = local_storage() else { return };
+    if store.get_item(TABLET_KEY).ok().flatten().is_some() {
+        return;
+    }
+    if app.start_on_tablet() {
+        log::info!("vectorcraft-web: a touch tablet: starting in simple mode");
+    }
+    // Nothing is lost if storage refuses: the next start asks again.
+    let _ = store.set_item(TABLET_KEY, "1");
 }
 
 fn local_storage() -> Result<web_sys::Storage, String> {
