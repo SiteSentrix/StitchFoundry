@@ -6,9 +6,10 @@
 
 use serde_json::{Value, json};
 use sf_core::attr::{Embroidery, StitchType};
+use sf_core::direction::Guide;
 use sf_core::model::FillKind;
 use vectorcraft_doc::{Document, NodeId};
-use vectorcraft_embroidery::outlines_mm;
+use vectorcraft_embroidery::{PT_PER_MM, outlines_mm};
 
 use super::embroidery::{ids_json, stitched_targets};
 use super::*;
@@ -28,6 +29,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id, lines: [[[x, y], [x, y], …], …]} (points; none, one or two lines) replace a tatami fill's flow lines: its rows follow them, copying one line or changing shape from the first to the second → {lines}",
             has_doc,
             set_flow_lines
+        ),
+        cmd!(
+            "embroidery.lineAsDirection",
+            "Use Line as Direction",
+            ["Embroidery"],
+            None,
+            "{ids?, keep?: bool (keep the lines' art; default false)} each other selected line (a path that isn't stitched) becomes a stitch direction line of the selected stitched shapes it crosses: their stitches run parallel to it, from its first point to its last, as the Inclination tool's lines; several lines across a shape make its stitches turn from one to the next; one undo step → {ids, lines}",
+            has_selection,
+            line_as_direction
         ),
         cmd!(
             "embroidery.fillAlongLines",
@@ -53,6 +63,72 @@ pub fn specs() -> Vec<CommandSpec> {
 /// Whether an object is stitched as a tatami fill (the fill whose rows follow flow lines).
 fn tatami(d: &Document, id: NodeId) -> bool {
     d.node(id).and_then(|n| n.embroidery.as_deref()).is_some_and(|e| matches!(&e.stitch, StitchType::Fill(f) if f.kind == FillKind::Tatami))
+}
+
+/// Lines a shape takes from one Use Line as Direction, and points read from each line.
+const MAX_DIRECTION_LINES: usize = 200;
+
+fn line_as_direction(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.lineAsDirection";
+    let keep = bool_or(p, "keep", false);
+    let d = &s.doc()?.doc;
+    let picked = d.paint_order(leaf_targets(s, &targets(s, p)?)?);
+    let (shapes, art): (Vec<NodeId>, Vec<NodeId>) = picked.iter().partition(|id| d.node(**id).is_some_and(|n| n.embroidery.is_some()));
+    if shapes.is_empty() || art.is_empty() {
+        return Err(bad(CMD, "select stitched shapes and the lines drawn across them for their stitch direction"));
+    }
+    // each line: its first and last point (pt), and the shapes it crosses (a point of it inside)
+    let areas: Vec<(NodeId, vectorcraft_geom::BezPath)> = shapes.iter().filter_map(|id| Some((*id, d.node(*id)?.stroke_path()?))).collect();
+    let mut adds: Vec<(NodeId, Guide)> = Vec::new();
+    let mut used: Vec<NodeId> = Vec::new();
+    for id in art.iter().take(MAX_DIRECTION_LINES) {
+        let Some(n) = d.node(*id) else { continue };
+        for line in outlines_mm(n).into_iter().filter(|l| l.len() >= 2 && l.len() <= MAX_POINTS) {
+            let pts: Vec<kurbo::Point> = line.iter().map(|q| kurbo::Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM)).collect();
+            let (Some(a), Some(b)) = (pts.first().copied(), pts.last().copied()) else { continue };
+            if !(a.x.is_finite() && a.y.is_finite() && b.x.is_finite() && b.y.is_finite()) || (a - b).hypot() < 1e-3 {
+                continue;
+            }
+            // the line's points and the middles between them
+            let probes: Vec<kurbo::Point> = pts.windows(2).flat_map(|w| [w[0], w[0].midpoint(w[1])]).chain([b]).collect();
+            for (shape, area) in &areas {
+                if probes.iter().any(|q| kurbo::Shape::winding(area, *q) != 0) {
+                    adds.push((*shape, Guide::new(sf_core::Point::new(a.x, a.y), sf_core::Point::new(b.x, b.y))));
+                    if !used.contains(id) {
+                        used.push(*id);
+                    }
+                }
+            }
+        }
+    }
+    if adds.is_empty() {
+        return Err(bad(CMD, "none of the lines crosses a selected stitched shape: draw them across the shapes"));
+    }
+    let shapes_set: Vec<NodeId> = adds.iter().map(|(s, _)| *s).fold(Vec::new(), |mut v, s| {
+        if !v.contains(&s) {
+            v.push(s);
+        }
+        v
+    });
+    let lines = used.len();
+    s.edit("Use Line as Direction", |d, sel| {
+        for (shape, g) in &adds {
+            let e = d.node_mut(*shape).ok_or(EngineError::NoNode(*shape))?.embroidery.as_deref_mut().ok_or(EngineError::NoNode(*shape))?;
+            let at = super::embroidery::best_insert(&e.guides, g).min(e.guides.len());
+            e.guides.insert(at, g.clone());
+            e.auto_direction = false;
+        }
+        if !keep {
+            for id in &used {
+                if d.node(*id).is_some() {
+                    d.remove(*id)?;
+                }
+            }
+            sel.objects.retain(|id| !used.contains(id));
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "ids": shapes_set.iter().map(|i| i.0).collect::<Vec<_>>(), "lines": lines }))
 }
 
 fn set_flow_lines(s: &mut Session, p: &Value) -> Result<Value> {

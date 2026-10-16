@@ -137,7 +137,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[t("zoom", "Zoom Tool", Some("Z"), "tool-zoom")],
     &[
         t("embroideryBrush", "Embroidery Brush Tool", None, "tool-embroidery-brush"),
-        t("embroideryDirection", "Inclination Tool", None, "tool-embroidery-direction"),
+        t("embroideryDirection", "Inclination Tool", Some("Shift+I"), "tool-embroidery-direction"),
         t("embroideryStitches", "Stitch Edit Tool", None, "tool-embroidery-stitches"),
         t("embroideryColumn", "Column A/B Tool", None, "tool-embroidery-column"),
         t("embroideryMotif", "Motif Tool", None, "tool-embroidery-motif"),

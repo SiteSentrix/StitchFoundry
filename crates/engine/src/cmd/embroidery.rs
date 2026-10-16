@@ -765,7 +765,7 @@ fn add_guide(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Index that keeps guides in order along the shape (nearest neighbours).
-fn best_insert(guides: &[Guide], g: &Guide) -> usize {
+pub(super) fn best_insert(guides: &[Guide], g: &Guide) -> usize {
     if guides.len() < 2 {
         return guides.len();
     }
