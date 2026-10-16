@@ -127,6 +127,23 @@ Required notices are in [NOTICE](NOTICE). Bundled fonts, icons, images and other
 own open licences; each one is listed with its author, source and licence in [ASSETS.md](ASSETS.md).
 The app icon is original artwork; its files are in [`assets/app-icon/`](assets/app-icon/README.md).
 
+### Where it comes from
+
+The GitHub repositories StitchFoundry takes code, data or fonts from:
+
+| Repository | What StitchFoundry uses | How |
+|---|---|---|
+| [storytold/vectorcraft](https://github.com/storytold/vectorcraft) | the whole vector editor StitchFoundry is built on | merged in from time to time (last: version 0.11.0, upstream `8770d2a9`, 2026-10-16); MIT OR Apache-2.0 |
+| [storytold/craft-libs](https://github.com/storytold/craft-libs) | the PDF reader (patched [hayro](https://github.com/LaurenzV/hayro) crates) | fetched at a pinned revision when building; MIT OR Apache-2.0 |
+| [storytold/craft-fonts](https://github.com/storytold/craft-fonts) | the Japanese fonts | optional build input (release builds), never copied here; OFL |
+| [adobe-fonts/source-sans](https://github.com/adobe-fonts/source-sans), [rsms/inter](https://github.com/rsms/inter), [JetBrains/JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) | the interface fonts | copies in `assets/fonts` (from VectorCraft); OFL, listed in [ASSETS.md](ASSETS.md) |
+| [EmbroidePy/pyembroidery](https://github.com/EmbroidePy/pyembroidery) | the Brother PEC and Janome JEF thread colour tables | copied once (version 1.5.1); MIT, notice in [NOTICE](NOTICE) |
+| [Stitchwright/stitchfoundry-fonts](https://github.com/Stitchwright/stitchfoundry-fonts) | embroidery fonts | downloaded in the app (Embroidery › Get Embroidery Fonts…), not in this repository |
+| [inkstitch/embroidery-fonts](https://github.com/inkstitch/embroidery-fonts) | embroidery fonts in Ink/Stitch's format | downloaded in the app, not in this repository; each font keeps its own licence |
+
+Ink/Stitch itself is only a reference from its public documentation: none of its (GPL) code is used.
+Every other dependency is an ordinary Rust crate from crates.io, listed in `Cargo.lock`.
+
 StitchFoundry is based on [VectorCraft](https://github.com/storytold/vectorcraft) by the ArtCraft team.
 It is an independent project, not made, sponsored or endorsed by the ArtCraft team.
 
