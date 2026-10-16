@@ -1489,6 +1489,11 @@ go. The **player** redraws the design stitch by stitch, as the machine will sew 
 buttons step back and forth by stitch, object, colour, trim or machine function, selecting the
 object reached.
 
+**Fewer trims.** Between two objects of one thread, each object ends at its point nearest the
+next one; when they touch or overlap, the thread runs to the next one in small running stitches
+hidden under it (it sews over them) instead of a trim, up to 40 mm. Objects apart are trimmed
+between as before (`embroidery.settings {hideTravel: false}` trims between all of them).
+
 **Embroidery › Colors and Order › Auto Sequence** reorders the stitched objects of each layer or group for the
 fewest colour changes and then the shortest way from one object to the next, keeping objects
 that overlap in their stacking order (the one on top is still sewn last).
