@@ -115,7 +115,7 @@ fn line_as_direction(s: &mut Session, p: &Value) -> Result<Value> {
         for (shape, g) in &adds {
             let e = d.node_mut(*shape).ok_or(EngineError::NoNode(*shape))?.embroidery.as_deref_mut().ok_or(EngineError::NoNode(*shape))?;
             let at = super::embroidery::best_insert(&e.guides, g).min(e.guides.len());
-            e.guides.insert(at, g.clone());
+            e.guides.insert(at, *g);
             e.auto_direction = false;
         }
         if !keep {
