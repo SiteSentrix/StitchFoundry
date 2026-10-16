@@ -94,7 +94,7 @@ fn machine_files(folder: &str, recursive: bool) -> Result<(Vec<String>, bool)> {
 
 /// A design's stitches, read from its file in the format its name says: a file that isn't one
 /// fails rather than being guessed at.
-fn read_pattern(path: &str, bytes: u64) -> std::result::Result<sf_core::Pattern, String> {
+pub(super) fn read_pattern(path: &str, bytes: u64) -> std::result::Result<sf_core::Pattern, String> {
     if bytes > MAX_BYTES {
         return Err(format!("larger than {} MB", MAX_BYTES >> 20));
     }
@@ -113,13 +113,35 @@ fn read_design(path: &str, bytes: u64, modified: Option<u64>) -> std::result::Re
     let p = std::path::Path::new(path);
     let format = p.extension().and_then(|x| sf_formats::Format::from_extension(&x.to_string_lossy().to_ascii_lowercase()));
     let stats = sf_core::stats::pattern_stats(&pattern, &sf_core::model::DesignSettings::default());
+    let preview = preview_runs(&pattern);
+    let r = |v: f64| (v * 10.0).round() / 10.0;
+    let threads: Vec<String> = stats.colors.iter().map(|c| c.thread.color.to_hex()).collect();
+    Ok(json!({
+        "path": path,
+        "name": p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+        "folder": p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default(),
+        "format": format.map(sf_formats::Format::extension),
+        "bytes": bytes,
+        "modified": modified,
+        "widthMm": r(stats.width_mm),
+        "heightMm": r(stats.height_mm),
+        "stitches": stats.stitches,
+        "colors": stats.colors.len(),
+        "threads": threads,
+        "preview": preview,
+    }))
+}
+
+/// A design's stitches as runs per colour (mm from its top left), thinned to a thumbnail's worth
+/// of points: `[{color, runs: [[[x, y], …], …]}, …]`.
+pub(super) fn preview_runs(pattern: &sf_core::Pattern) -> Vec<Value> {
     let b = pattern.bounds();
     // the stitches as runs per colour, thinned to a thumbnail's worth of points
-    let blocks = super::embroidery::stitch_runs(&pattern);
+    let blocks = super::embroidery::stitch_runs(pattern);
     let total: usize = blocks.iter().flatten().map(Vec::len).sum();
     let step = total.div_ceil(PREVIEW_POINTS).max(1);
     let r = |v: f64| (v * 10.0).round() / 10.0;
-    let preview: Vec<Value> = blocks
+    blocks
         .iter()
         .enumerate()
         .filter(|(_, runs)| !runs.is_empty())
@@ -140,22 +162,7 @@ fn read_design(path: &str, bytes: u64, modified: Option<u64>) -> std::result::Re
                 .collect();
             json!({ "color": pattern.thread(i).color.to_hex(), "runs": runs })
         })
-        .collect();
-    let threads: Vec<String> = stats.colors.iter().map(|c| c.thread.color.to_hex()).collect();
-    Ok(json!({
-        "path": path,
-        "name": p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
-        "folder": p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default(),
-        "format": format.map(sf_formats::Format::extension),
-        "bytes": bytes,
-        "modified": modified,
-        "widthMm": r(stats.width_mm),
-        "heightMm": r(stats.height_mm),
-        "stitches": stats.stitches,
-        "colors": stats.colors.len(),
-        "threads": threads,
-        "preview": preview,
-    }))
+        .collect()
 }
 
 /// The designs `p` asks for, read or from the cache: (designs, failed, truncated).

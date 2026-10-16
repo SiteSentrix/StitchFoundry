@@ -1575,6 +1575,18 @@ with a stroke sews the fill only. Commands (trims, stops) and the newer stitch t
 (ripple, tartan, gradient fills…) come in as their nearest StitchFoundry stitching. The mapping
 was written from Ink/Stitch's public documentation, not its code.
 
+## Compare Designs
+
+Embroidery › Compare Designs… puts two designs side by side: each one a machine file (any
+format StitchFoundry reads) or the design open now. It shows a picture of each and the same
+figures for both: stitches, trims, jumps, colour changes, stops, width and height, top and bobbin
+thread, sewing time, average and longest stitch, and how many stitches are under 1 mm (they can
+break threads and needles) or over 7 mm (they can snag). Each row says how much the second
+design differs from the first, and differences of 10% or more are highlighted. Use it to check a
+design against another made from the same art, here or in another program, or two versions of a
+design, before sewing both (`embroidery.compare {a, b}`; each side `"design"`, `{path}` or
+`{dataBase64, name}`).
+
 ## Embroidery fonts
 
 Lettering can use embroidery fonts in Ink/Stitch's font format: a folder with `font.json` and
