@@ -4282,6 +4282,7 @@ theme	Appearance	Erscheinungsbild
 	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry wurde beim letzten Mal nicht normal beendet. Diese Dokumente hatten ungespeicherte Änderungen:
 	StitchFoundry Help…	StitchFoundry-Hilfe…
 	StitchFoundry on GitHub	StitchFoundry auf GitHub
+	Report a Bug…	Fehler melden…
 	Welcome to StitchFoundry	Willkommen bei StitchFoundry
 @msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	Version {0} kann nicht gespeichert werden: StitchFoundry schreibt die Versionen {MIN_VERSION} bis {VERSION}
 @msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	die Dateiversion {0} ist neuer, als dieses StitchFoundry unterstützt ({VERSION})

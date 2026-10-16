@@ -4323,6 +4323,7 @@ lighting	Light	Luz
 	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry no se cerró correctamente la última vez. Estos documentos tenían cambios sin guardar:
 	StitchFoundry Help…	Ayuda de StitchFoundry…
 	StitchFoundry on GitHub	StitchFoundry en GitHub
+	Report a Bug…	Informar de un error…
 	Welcome to StitchFoundry	Te damos la bienvenida a StitchFoundry
 @msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	no se puede guardar la versión {0}: StitchFoundry escribe las versiones {MIN_VERSION} a {VERSION}
 @msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	la versión de archivo {0} es más reciente de lo que admite este StitchFoundry ({VERSION})
