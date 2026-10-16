@@ -72,3 +72,12 @@ The progress docs follow craftrules' [`standards/progress-docs.md`](https://gith
 When a task lands, update in the same PR: the area row in `docs/target-app-parity.md` (score, missing items, hours) and its evidence list, the gap entry in `docs/gaps.md` if it closed or shrank, the checklist it belongs to, the milestone row in `docs/roadmap.md`, and the ROADMAP's tables and progress log when a headline number moves. Update each touched doc's status line and revision history.
 - Grade by behaviour against the public documentation (`plan/illustrator/` notes), not by whether a menu item exists. Scores are self-assessed, so err low; mark each number measured or estimated.
 - Keep the README's Status section in step with the ROADMAP headline.
+
+## Commit authorship
+
+Commits in this repository are authored by **Bruce Wattendorf**, so the work shows on his GitHub profile. AI assistance is credited with a trailer, not as the author.
+
+- Before the first commit in a session, set the identity: `git config user.name "Bruce Wattendorf"` and `git config user.email "bwattendorf@gmail.com"`. If you can't change the config, pass `--author="Bruce Wattendorf <bwattendorf@gmail.com>"` on every `git commit`.
+- Never author or commit as `Claude <noreply@anthropic.com>`.
+- End every commit message with this trailer as its last line:
+  `Co-Authored-By: Claude <noreply@anthropic.com>`
