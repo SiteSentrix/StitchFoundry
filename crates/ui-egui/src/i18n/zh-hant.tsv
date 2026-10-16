@@ -5032,3 +5032,4 @@ machine	Stop	停止
 	Destination Folder:	目的地資料夾：
 	Overrides	覆寫
 	Uses every data set of the open document.	使用開啟文件的每個資料集。
+	Direction	方向

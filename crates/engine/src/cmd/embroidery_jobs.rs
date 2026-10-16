@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Job Orders",
             [],
             None,
-            "{status?: open|production|done|cancelled, query?: text in the number, customer, design or garment} the job orders kept, newest first → {jobs: [{id, number, customer, design, quantity, due, garment, placement, notes, status, created}]}",
+            "{status?: open|production|done|cancelled, query?: text in the number (customer, design or garment too)} the job orders kept, newest first → {jobs: [{id, number, customer, design, quantity, due, garment, placement, notes, status, created}]}",
             always,
             list
         ),

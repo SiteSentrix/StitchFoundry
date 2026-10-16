@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Compare Designs",
         [],
         None,
-        "{a, b: each \"design\" (the design open now), {path} (a machine file) or {dataBase64, name} (its bytes and file name)} two designs side by side → {a, b: {name, format, stitches, jumps, trims, colorChanges, stops, widthMm, heightMm, threadM, bobbinM, seconds, time, maxStitchMm, averageStitchMm, shortStitches (under 1 mm), longStitches (over 7 mm), threads: [\"#rrggbb\"], preview}, differences: [{key, a, b, percent}] (b against a)}",
+        "{a, b: each \"design\" (the design open now; {path}: a machine file; or {dataBase64, name}: its bytes and file name)} two designs side by side → {a, b: {name, format, stitches, jumps, trims, colorChanges, stops, widthMm, heightMm, threadM, bobbinM, seconds, time, maxStitchMm, averageStitchMm, shortStitches (under 1 mm), longStitches (over 7 mm), threads: [\"#rrggbb\"], preview}, differences: [{key, a, b, percent}] (b against a)}",
         has_doc_or_none,
         compare
     )]

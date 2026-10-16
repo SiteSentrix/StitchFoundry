@@ -5737,3 +5737,4 @@ machine	Stop	Остановка
 @msg	choose a source folder	выберите исходную папку
 @msg	open a document with data sets	откройте документ с наборами данных
 @msg	the action has no steps	в действии нет шагов
+	Direction	Направление

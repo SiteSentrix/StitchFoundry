@@ -83,7 +83,7 @@ fn accept_loop(listener: TcpListener, tx: Sender<ControlRequest>, ctx: egui::Con
             continue;
         };
         if let Err(e) = spawn_connection(stream, tx.clone(), ctx.clone(), slot, ConnectionTimeouts::default()) {
-            eprintln!("vectorcraft: control worker failed to start: {e}");
+            eprintln!("stitchfoundry: control worker failed to start: {e}");
         }
     }
 }

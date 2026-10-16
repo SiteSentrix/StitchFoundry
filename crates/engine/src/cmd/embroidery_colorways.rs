@@ -42,7 +42,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Colorway Thread",
             [],
             None,
-            "{slot: the design's colour, from 0, color: \"#rrggbb\", name?, code?, chart?, index?: a colorway's number (the active one)} give a colorway's slot a thread (the design's own threads change with embroidery.setThread) → {index, slot}",
+            "{slot: the design's colour (from 0), color: \"#rrggbb\", name?, code?, chart?, index?: a colorway's number (the active one)} give a colorway's slot a thread (the design's own threads change with embroidery.setThread) → {index, slot}",
             has_doc,
             set_thread
         ),

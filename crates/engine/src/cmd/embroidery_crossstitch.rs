@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Cross-Stitch Pattern…",
             ["Embroidery", "Cross Stitch"],
             None,
-            "{cols?: (40; 1 to 300), rows?: (40; 1 to 300), cell?: mm (2.5; 1 to 10, the side of one X), style?: full | half | upright | double (full), at?: [x, y] points, the grid's top left (default: centred on the page)} an empty cross-stitch grid, ready to paint with the Cross Stitch tool; it is selected → {id, cols, rows, cell}",
+            "{cols?: (40; 1 to 300), rows?: (40; 1 to 300), cell?: mm (2.5; 1 to 10, the side of one X), style?: full | half | upright | double (full), at?: [x, y] points (the grid's top left; default: centred on the page)} an empty cross-stitch grid, ready to paint with the Cross Stitch tool; it is selected → {id, cols, rows, cell}",
             has_doc,
             new_pattern
         ),
