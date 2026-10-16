@@ -173,7 +173,8 @@ jobs:
   # there. Each push replaces the files; the run's artifacts stay as well.
   publish:
     name: Publish the latest build
-    if: github.ref == 'refs/heads/builds'
+    # a push to `builds`, or a run started by hand on main (Actions › Builds › Run workflow)
+    if: github.ref == 'refs/heads/builds' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [windows, linux, macos, web]
     runs-on: ubuntu-latest
     timeout-minutes: 20
