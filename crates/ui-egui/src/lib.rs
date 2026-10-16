@@ -880,6 +880,16 @@ impl VectorcraftApp {
         self.services.dialogs_are_sheets && self.file_dialog_open()
     }
 
+    /// The first start on a touch tablet (the web app on an iPad or Android tablet, TB-01): simple
+    /// mode, with its big buttons and Your Design in place of the side panels, unless a way of
+    /// working has been chosen already. Whether it switched.
+    pub fn start_on_tablet(&mut self) -> bool {
+        if self.ui.experience != state::Experience::All {
+            return false;
+        }
+        self.run("window.experience", serde_json::json!({ "level": "beginner" })).is_ok()
+    }
+
     /// Show a transient status message.
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
