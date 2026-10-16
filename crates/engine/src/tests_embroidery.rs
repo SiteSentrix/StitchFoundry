@@ -5587,6 +5587,16 @@ fn new_type_sews_in_a_design_and_words_follow_a_line() {
     let n = s.doc().unwrap().doc.node(NodeId(words)).unwrap().clone();
     assert!(matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. })), "type on the path");
     assert!(stitches(&s) > before + 100, "{r}");
+    // too long for the line at that height: made smaller, all on the line
+    let arc = s.execute("shape.arc", &json!({"x1": 60, "y1": 420, "x2": 310, "y2": 300})).unwrap()["id"].as_u64().unwrap();
+    let long = s.execute("embroidery.addWords", &json!({"text": "Happy Birthday to You", "height": 30, "path": arc})).unwrap();
+    let id = vectorcraft_doc::NodeId(long["id"].as_u64().unwrap());
+    assert!(crate::cmd::typecmd::with_overflow(&s, &[id], json!({})).get("overflow").is_none(), "{long}");
+    let size = match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => t.first_style().size,
+        _ => 0.0,
+    };
+    assert!(size > 0.0 && size < 30.0 * vectorcraft_embroidery::PT_PER_MM / 0.7 * 0.95, "made smaller: {size} pt");
     // not a line: said so
     let t = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "x"})).unwrap()["id"].as_u64().unwrap();
     assert!(s.execute("embroidery.addWords", &json!({"text": "No", "path": t})).is_err());

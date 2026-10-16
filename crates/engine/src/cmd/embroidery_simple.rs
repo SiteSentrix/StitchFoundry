@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Words",
             [],
             None,
-            "{text, height?: mm the capital letters are tall (20; 5–150), color?: \"#rrggbb\" (dark blue), path?: id (a line the words follow, centred along it: a path, open or closed)} words that sew: text in a clean built-in font, the given height, in the middle of the design or along the line, sewn as satin → {id, widthMm, heightMm}",
+            "{text, height?: mm the capital letters are tall (20; 5–150), color?: \"#rrggbb\" (dark blue), path?: id (a line the words follow, centred along it: a path, open or closed; words longer than the line are made smaller to fit)} words that sew: text in a clean built-in font, the given height, in the middle of the design or along the line, sewn as satin → {id, widthMm, heightMm}",
             has_doc,
             add_words
         ),
@@ -108,6 +108,14 @@ fn make_words(s: &mut Session, p: &Value) -> Result<Value> {
             &json!({ "path": path, "mode": "onPath", "text": text, "size": size, "color": color, "justify": "center" }),
         )?;
         let id = made["id"].as_u64().ok_or_else(|| bad(CMD, "the words weren't made"))?;
+        // words longer than the line are made smaller until they all fit on it (to a fifth of
+        // the height asked at most)
+        let mut fitted = size;
+        let over = |s: &Session| super::typecmd::with_overflow(s, &[vectorcraft_doc::NodeId(id)], json!({})).get("overflow").is_some();
+        while over(s) && fitted > size * 0.2 {
+            fitted *= 0.9;
+            s.execute("text.setStyle", &json!({ "ids": [id], "size": fitted }))?;
+        }
         s.execute("select.set", &json!({ "ids": [id] }))?;
         s.execute("embroidery.set", &json!({ "type": "satin" }))?;
         s.execute("embroidery.setThread", &json!({ "color": color, "name": "Words", "ids": [id] }))?;

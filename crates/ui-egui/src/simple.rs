@@ -507,7 +507,8 @@ pub fn words_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if crate::widgets::primary_button(ui, tl!("Add")).clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+            // (Enter adds: the text field keeps the keyboard, so its losing focus can't say so)
+            if crate::widgets::primary_button(ui, tl!("Add")).clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 action = Some(true);
             }
             if ui.button(tl!("Cancel")).clicked() {
