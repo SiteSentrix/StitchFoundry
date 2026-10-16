@@ -1,7 +1,7 @@
 # Hosting VectorCraft for the web
 
-`vectorcraft-web-<version>.zip` (from the GitHub release, or `packaging/web/package.sh`) holds a
-static site in `vectorcraft-web-<version>/`:
+`stitchfoundry-web-<version>.zip` (from the GitHub release, or `packaging/web/package.sh`) holds a
+static site in `stitchfoundry-web-<version>/`:
 
 | File | What it is |
 |---|---|
