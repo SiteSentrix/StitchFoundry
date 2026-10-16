@@ -343,6 +343,12 @@ ordinary editable data:
   thinnest (an "O" becomes two columns), and sharp inside corners where strokes meet are cut too
   (a "T" becomes three columns). The slits are 0.02 mm wide, too narrow to show in the stitches.
 
+A shape given the **Satin** stitch type gets its inclination lines at once, placed as Auto
+Direction places them (about every one and a half column widths, and wherever the column turns by
+more than 20°), in the same undo step: they show on the selected satin with any tool (the
+Embroidery panel's **Inclination lines** display, on by default) and can be dragged straight away.
+Satin lines drawn as strokes turn along their path and need none.
+
 Editing:
 
 - **Inclination tool** (Embroidery section of the toolbar, **Embroidery › Stitch Direction ›

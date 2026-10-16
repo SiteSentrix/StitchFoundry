@@ -463,7 +463,8 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
                 .iter()
                 .filter_map(Value::as_u64)
                 .filter(|id| {
-                    d.node(NodeId(*id)).is_some_and(|n| !is_line_art(n) && n.embroidery.as_deref().is_some_and(|e| e.guides.is_empty() && e.auto_direction))
+                    d.node(NodeId(*id))
+                        .is_some_and(|n| !is_line_art(n) && n.embroidery.as_deref().is_some_and(|e| e.guides.is_empty() && e.auto_direction))
                 })
                 .collect();
             if !fresh.is_empty() {

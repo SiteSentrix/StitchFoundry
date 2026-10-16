@@ -199,6 +199,10 @@ fn inclination_lines_turn_and_follow_the_object() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 200.0, 40.0);
     s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    // made satin: its lines placed at once, editable (DIR-02), in the same undo step
+    let placed = s.doc().unwrap().doc.node(a).unwrap().embroidery.clone().unwrap();
+    assert!(placed.guides.len() >= 2 && !placed.auto_direction, "{placed:?}");
+    s.execute("embroidery.clearGuides", &json!({})).unwrap();
     s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [150, 90], "b": [150, 150]})).unwrap();
     s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [250, 90], "b": [260, 150]})).unwrap();
     let n = s.doc().unwrap().doc.node(a).unwrap().embroidery.clone().unwrap();
@@ -5700,4 +5704,24 @@ fn words_go_in_an_arc_or_a_circle() {
     let mut s = Session::new();
     s.execute("embroidery.newDesign", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
     assert!(s.execute("embroidery.addWords", &json!({"text": "x", "shape": "zigzag"})).is_err());
+}
+
+/// DIR-02: Stitch Type › Satin places a shape's lines and the type in one undo step; a satin
+/// line (a stroke) gets none (it turns along its path anyway).
+#[test]
+fn a_satin_gets_its_lines_in_one_step() {
+    let mut s = Session::new();
+    s.execute("embroidery.newDesign", &json!({"hoop": {"width": 180, "height": 130}})).unwrap();
+    let id = s.execute("path.create", &json!({"d": "M 100 300 C 120 150, 300 100, 420 200 C 330 160, 180 190, 140 300 Z"})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    let e = s.doc().unwrap().doc.node(NodeId(id)).unwrap().embroidery.clone().unwrap();
+    assert!(e.guides.len() >= 3, "{}", e.guides.len());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(NodeId(id)).unwrap().embroidery.is_none(), "one undo step");
+    let line = s.execute("shape.line", &json!({"x1": 50, "y1": 50, "x2": 300, "y2": 80})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [line]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(NodeId(line)).unwrap().embroidery.as_ref().unwrap().guides.is_empty());
 }
