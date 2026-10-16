@@ -5601,3 +5601,26 @@ fn new_type_sews_in_a_design_and_words_follow_a_line() {
     let t = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "x"})).unwrap()["id"].as_u64().unwrap();
     assert!(s.execute("embroidery.addWords", &json!({"text": "No", "path": t})).is_err());
 }
+
+/// Choosing a hoop makes the page its size, about the page's middle; one undo step.
+#[test]
+fn the_page_follows_the_hoop() {
+    let mut s = Session::new();
+    s.execute("embroidery.newDesign", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+    let page = |s: &Session| s.doc().unwrap().doc.artboards[0].rect;
+    let before = page(&s);
+    s.execute("embroidery.settings", &json!({"hoop": {"width": 100, "height": 100}})).unwrap();
+    let after = page(&s);
+    assert!(
+        (after.width() - 100.0 * vectorcraft_embroidery::PT_PER_MM).abs() < 1e-6
+            && (after.height() - 100.0 * vectorcraft_embroidery::PT_PER_MM).abs() < 1e-6,
+        "{after:?}"
+    );
+    assert!((after.center() - before.center()).hypot() < 1e-6, "same middle");
+    // other settings leave the page alone
+    s.execute("embroidery.settings", &json!({"fabric": "Denim / canvas"})).unwrap();
+    assert_eq!(page(&s), after);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(page(&s), before, "undone with the hoop");
+}

@@ -159,7 +159,8 @@ fn new_from(s: &mut Session, p: &Value) -> Result<Value> {
     let b = BUILTIN.iter().find(|b| b.name.eq_ignore_ascii_case(&name)).ok_or_else(|| bad(CMD, format!("no design template is named `{name}`")))?;
     let pt = |mm: f64| mm * PT_PER_MM;
     s.execute("file.new", &json!({ "width": pt(b.page.0), "height": pt(b.page.1) }))?;
-    s.execute("embroidery.settings", &json!({ "hoop": b.hoop }))?;
+    // (a template's page is its own size, a margin round the hoop's)
+    s.execute("embroidery.settings", &json!({ "hoop": b.hoop, "page": false }))?;
     let (x, y, w, h) = b.guide;
     let shape = |s: &mut Session, inset: f64| -> Result<u64> {
         let r = json!({ "x": pt(x + inset), "y": pt(y + inset), "width": pt(w - 2.0 * inset), "height": pt(h - 2.0 * inset) });

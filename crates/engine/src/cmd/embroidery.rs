@@ -282,7 +282,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Settings",
             [],
             None,
-            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, notes?: text (kept with the design, printed on its worksheets; 2000 characters at most), cost?: true | {perThousand?: price a 1000 stitches (0–1000), perHour?: machine time (0–10000), threadPerKm?: thread a 1000 m (0–10000), setup?: an order (0–1000000), heads?: pieces sewn at once (1–100), currency?: up to 4 characters} | null (the cost estimate shown with the figures and on worksheets), basting?: bool | {hoop?: bool (round the hoop's field, else the design), margin?: mm (5; 0–50: out from the design, in from the hoop's edge), length?: mm (6; 2–12)} | null (a basting run sewn first, in the first thread), start?: centre|top-left|top|top-right|left|right|bottom-left|bottom|bottom-right|null (the first object entered closest to that point of the design's box; null: where it starts), end?: the same|null (the frame there when the design is done, after a trim), checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags), hoopPosition?: [x, y] mm (the design's middle from the hoop's centre; centre or null: centred), registration?: {shape?: cross|circle|target, size?: mm (1–20), perOverlap?: 1–4, color?: \"#rrggbb\"} (the marks that line up the hoopings of a design split for several hoopings)} → the settings",
+            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null (the page takes the hoop's size about its middle), page?: bool (true; false: the page keeps its size), fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, notes?: text (kept with the design, printed on its worksheets; 2000 characters at most), cost?: true | {perThousand?: price a 1000 stitches (0–1000), perHour?: machine time (0–10000), threadPerKm?: thread a 1000 m (0–10000), setup?: an order (0–1000000), heads?: pieces sewn at once (1–100), currency?: up to 4 characters} | null (the cost estimate shown with the figures and on worksheets), basting?: bool | {hoop?: bool (round the hoop's field, else the design), margin?: mm (5; 0–50: out from the design, in from the hoop's edge), length?: mm (6; 2–12)} | null (a basting run sewn first, in the first thread), start?: centre|top-left|top|top-right|left|right|bottom-left|bottom|bottom-right|null (the first object entered closest to that point of the design's box; null: where it starts), end?: the same|null (the frame there when the design is done, after a trim), checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags), hoopPosition?: [x, y] mm (the design's middle from the hoop's centre; centre or null: centred), registration?: {shape?: cross|circle|target, size?: mm (1–20), perOverlap?: 1–4, color?: \"#rrggbb\"} (the marks that line up the hoopings of a design split for several hoopings)} → the settings",
             has_doc,
             settings
         ),
@@ -2193,8 +2193,19 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if changed {
         let new = cfg.clone();
+        // a hoop chosen: the page follows it (the first artboard takes the hoop's size about its
+        // middle, so the design stays where it is)
+        let follow = p.get("page").and_then(Value::as_bool).unwrap_or(true);
+        let page = p.get("hoop").filter(|_| follow).and_then(|_| cfg.hoop.as_ref()).map(|h| (h.width * PT_PER_MM, h.height * PT_PER_MM));
         s.edit("Embroidery Settings", |d, _| {
             d.embroidery = Some(Box::new(new));
+            if let Some((w, h)) = page.filter(|(w, h)| w.is_finite() && h.is_finite() && *w > 0.0 && *h > 0.0)
+                && let Some(a) = d.artboards.first_mut()
+                && ((a.rect.width() - w).abs() > 0.01 || (a.rect.height() - h).abs() > 0.01)
+            {
+                let c = a.rect.center();
+                a.rect = kurbo::Rect::new(c.x - w / 2.0, c.y - h / 2.0, c.x + w / 2.0, c.y + h / 2.0);
+            }
             Ok(())
         })?;
     }
