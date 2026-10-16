@@ -51,7 +51,10 @@ fn side(s: &Session, v: Option<&Value>, which: &str) -> Result<(sf_core::Pattern
                 return Ok((p, name, ext));
             }
             let name = o.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-            let data = o.get("dataBase64").and_then(Value::as_str).ok_or_else(|| bad(CMD, format!("`{which}` needs a `path` or `dataBase64` and `name`")))?;
+            let data = o
+                .get("dataBase64")
+                .and_then(Value::as_str)
+                .ok_or_else(|| bad(CMD, format!("`{which}` needs a `path` or `dataBase64` and `name`")))?;
             let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(CMD, format!("`{which}.dataBase64` isn't base64")))?;
             if bytes.len() as u64 > 64 << 20 {
                 return Err(bad(CMD, format!("`{which}` is larger than 64 MB")));
