@@ -111,6 +111,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("My Machine…", "ui.myMachine"),
         c("Save for My Machine", "ui.saveForMyMachine"),
         Sep,
+        c("Add Words…", "ui.addWords"),
         c("Digitizing Widget", "ui.embroideryWidget"),
         Sep,
         c("Convert Artwork to Embroidery", "embroidery.convert"),
@@ -684,6 +685,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Export Quilting Lines…",
         "",
         "{format?: plt|dxf|svg (plt), path?} the quilting lines (quilt.export: the selected, else all) as a single-stroke file to path, else a picked file (the web downloads it) → {path}",
+    ),
+    (
+        "ui.addWords",
+        "Add Words…",
+        "",
+        "{} opens Add Words: what the words say and how tall they are, sewn as satin in the middle of the design, or along the selected line (embroidery.addWords) → {open, along}",
     ),
     (
         "ui.compareDesigns",
@@ -1779,6 +1786,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.myMachine" => crate::dialogs::my_machine::open(app),
         "ui.fontLibrary" => crate::dialogs::font_library::open(app),
         "ui.compareDesigns" => crate::dialogs::compare::open(app, p),
+        "ui.addWords" => Ok(crate::simple::open_words(app)),
         "ui.makeDesign" => crate::guide::open(app),
         "ui.saveForMyMachine" => crate::dialogs::my_machine::save(app, p),
         "help.commandPalette" => {
@@ -2532,7 +2540,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
-        "ui.embroideryWidget" | "ui.embroideryCheck" | "ui.saveForMyMachine" => app.session.active().is_some(),
+        "ui.embroideryWidget" | "ui.embroideryCheck" | "ui.saveForMyMachine" | "ui.addWords" => app.session.active().is_some(),
         "ui.designFromPrompt" => app.session.active().is_some() && crate::embroidery::prompt::available(app),
         "ui.fontLibrary" => crate::dialogs::font_library::available(app),
         "ui.redrawImage" => crate::embroidery::prompt::available(app) && crate::embroidery::prompt::selected_image(app).is_some(),

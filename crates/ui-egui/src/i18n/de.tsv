@@ -5701,3 +5701,5 @@ machine	Stop	Stopp
 @msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
 @msg	the action has no steps	die Aktion hat keine Schritte
 	Direction	Richtung
+	Along the selected line	Entlang der ausgewählten Linie
+	To curve the words, draw a line first, select it, then Add Words.	Um die Worte zu biegen, zuerst eine Linie zeichnen, auswählen und dann Worte hinzufügen wählen.

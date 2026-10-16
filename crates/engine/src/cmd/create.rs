@@ -490,7 +490,12 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
     add_look(s, "Pen", path_kind(path, None), look, None)
 }
 
+/// `text.create`: in an embroidery design the new type sews too, in the same undo step.
 fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
+    super::embroidery_simple::one_step(s, |s| make_text(s, p))
+}
+
+fn make_text(s: &mut Session, p: &Value) -> Result<Value> {
     let x = f64_req(p, "x", "text.create")?;
     let y = f64_req(p, "y", "text.create")?;
     let text = str_param(p, "text").unwrap_or("");
@@ -512,6 +517,9 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let made = add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)?;
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
+    if let Some(id) = id {
+        super::embroidery_simple::stitch_new_type(s, id.0)?;
+    }
     Ok(super::typecmd::with_overflow(s, id.as_slice(), made))
 }
 

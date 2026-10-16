@@ -1426,6 +1426,7 @@ impl VectorcraftApp {
             }
             canvas::show(self, ui);
         });
+        simple::words_window(self, &ctx);
         if simple {
             simple::windows(self, &ctx);
         } else {

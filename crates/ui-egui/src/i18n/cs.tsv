@@ -6140,3 +6140,5 @@ mark-style	Japanese	Japonské
 @msg	open a document with data sets	otevřete dokument se sadami dat
 @msg	the action has no steps	akce nemá žádné kroky
 	Direction	Směr
+	Along the selected line	Podél vybrané čáry
+	To curve the words, draw a line first, select it, then Add Words.	Chcete-li slova zakřivit, nejprve nakreslete čáru, vyberte ji a pak zvolte Přidat slova.

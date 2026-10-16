@@ -5559,3 +5559,35 @@ fn a_blend_stays_one_object_and_sews_its_layers_in_their_threads() {
     assert_eq!(s.embroidery_plan().unwrap().design.objects.len(), 1);
     assert!(s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#0000ff"], "separate": "yes"})).is_err());
 }
+
+/// Type made with the Type tools in an embroidery design sews at once (as satin); words follow a
+/// line; type in an ordinary document is left unstitched.
+#[test]
+fn new_type_sews_in_a_design_and_words_follow_a_line() {
+    let stitches = |s: &Session| s.embroidery_plan().map_or(0, |p| p.pattern().stitch_count());
+    // an ordinary document: type is type
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("text.create", &json!({"x": 50, "y": 100, "text": "Plain", "size": 48})).unwrap();
+    assert_eq!(stitches(&s), 0);
+    // an embroidery design: the Type tool's type sews, and so does type on a path
+    let mut s = Session::new();
+    s.execute("embroidery.newDesign", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 50, "y": 100, "text": "Hello", "size": 48})).unwrap()["id"].as_u64().unwrap();
+    assert!(stitches(&s) > 100, "typed words sew");
+    let e = s.doc().unwrap().doc.node(NodeId(id)).unwrap().embroidery.clone().unwrap();
+    assert!(matches!(e.stitch, sf_core::attr::StitchType::Satin(_)), "{e:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(NodeId(id)).is_none(), "one undo step");
+    // Add Words along an arc: type on the path, sewn, the words as tall as asked
+    let arc = s.execute("shape.arc", &json!({"x1": 60, "y1": 220, "x2": 310, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+    let before = stitches(&s);
+    let r = s.execute("embroidery.addWords", &json!({"text": "Happy Birthday", "height": 10, "path": arc})).unwrap();
+    let words = r["id"].as_u64().unwrap();
+    let n = s.doc().unwrap().doc.node(NodeId(words)).unwrap().clone();
+    assert!(matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. })), "type on the path");
+    assert!(stitches(&s) > before + 100, "{r}");
+    // not a line: said so
+    let t = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "x"})).unwrap()["id"].as_u64().unwrap();
+    assert!(s.execute("embroidery.addWords", &json!({"text": "No", "path": t})).is_err());
+}

@@ -5782,3 +5782,5 @@ machine	Stop	停止
 @msg	choose a source folder	ソースフォルダーを選択してください
 @msg	open a document with data sets	データセットのあるドキュメントを開いてください
 @msg	the action has no steps	アクションにステップがありません
+	Along the selected line	選択した線に沿って
+	To curve the words, draw a line first, select it, then Add Words.	文字を曲げるには、先に線を描いて選択してから、文字を追加を選びます。

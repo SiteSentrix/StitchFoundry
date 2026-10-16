@@ -588,6 +588,8 @@ fn structured_junk() {
         ("embroidery.compare", json!({"a": "design", "b": {"path": "/nonexistent/\u{0}"}})),
         ("embroidery.compare", json!({"a": {"dataBase64": "AAAA", "name": "x.pes"}, "b": {"dataBase64": "", "name": 7}})),
         ("embroidery.compare", json!({"a": [], "b": null})),
+        ("embroidery.addWords", json!({"text": "Ab", "path": u64::MAX})),
+        ("embroidery.addWords", json!({"text": "Ab", "path": "line", "height": f64::NAN})),
         ("quilt.check", json!({"tolerance": f64::NAN, "ids": [u64::MAX]})),
         ("quilt.join", json!({"tolerance": 1e300})),
         ("quilt.edges", json!({"height": 3})),

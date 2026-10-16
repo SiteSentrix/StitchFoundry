@@ -5242,3 +5242,5 @@ machine	Stop	停止
 	Overrides	覆盖
 	Uses every data set of the open document.	使用打开文档的每个数据集。
 	Direction	方向
+	Along the selected line	沿所选线条
+	To curve the words, draw a line first, select it, then Add Words.	要让文字弯曲，请先画一条线并选中它，然后选择“添加文字”。
