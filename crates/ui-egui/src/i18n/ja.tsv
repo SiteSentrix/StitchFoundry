@@ -5784,3 +5784,10 @@ machine	Stop	停止
 @msg	the action has no steps	アクションにステップがありません
 	Along the selected line	選択した線に沿って
 	To curve the words, draw a line first, select it, then Add Words.	文字を曲げるには、先に線を描いて選択してから、文字を追加を選びます。
+	Add to Design	デザインに追加
+	Colors and Order	色と順序
+	Paint	ペイント
+	Print and Export	印刷と書き出し
+	Special Machines	特殊なミシン
+	Split Lines	分割線
+	Stitch Direction	ステッチの方向

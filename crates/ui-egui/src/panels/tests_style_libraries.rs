@@ -107,13 +107,15 @@ fn the_window_menu_and_the_panel_open_every_library() {
     let entries = crate::menus::menu_entries(&app);
     let opened: Vec<Value> = entries
         .iter()
-        .filter(|e| e.path == ["Window", "Graphic Style Libraries"] && e.command.as_deref() == Some("window.graphicStyleLibrary"))
+        .filter(|e| e.path == ["Window", "Libraries", "Graphic Style Libraries"] && e.command.as_deref() == Some("window.graphicStyleLibrary"))
         .map(|e| e.params["library"].clone())
         .collect();
     assert_eq!(opened, STYLE_LIBRARIES.iter().map(|b| json!(b.id)).collect::<Vec<_>>());
-    let has = |cmd: &str| entries.iter().any(|e| e.path == ["Window", "Graphic Style Libraries"] && e.command.as_deref() == Some(cmd) && e.enabled);
+    let has = |cmd: &str| {
+        entries.iter().any(|e| e.path == ["Window", "Libraries", "Graphic Style Libraries"] && e.command.as_deref() == Some(cmd) && e.enabled)
+    };
     assert!(has("window.graphicStyleLibrary.other") && has("ui.saveGraphicStyleLibrary"));
-    assert!(!entries.iter().any(|e| e.path == ["Window", "Graphic Style Libraries", "User Defined"]), "empty slots are hidden");
+    assert!(!entries.iter().any(|e| e.path == ["Window", "Libraries", "Graphic Style Libraries", "User Defined"]), "empty slots are hidden");
     // The Graphic Styles panel's library button and menu.
     let ctx = context();
     let texts = frame(&ctx, vec![], Modifiers::NONE, 0.0, |ui| {
@@ -136,7 +138,7 @@ fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
     let user_items = |app: &VectorcraftApp| -> Vec<(String, String)> {
         crate::menus::menu_entries(app)
             .into_iter()
-            .filter(|e| e.path == ["Window", "Graphic Style Libraries", "User Defined"])
+            .filter(|e| e.path == ["Window", "Libraries", "Graphic Style Libraries", "User Defined"])
             .map(|e| (e.label, e.command.unwrap_or_default()))
             .collect()
     };

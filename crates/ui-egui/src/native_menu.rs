@@ -162,9 +162,8 @@ impl MenuBar {
 /// [`crate::menus::entry`] (labels in the UI language, live state, empty slots left out).
 pub fn from_tree(app: &VectorcraftApp, tree: &[(&'static str, Vec<menus::Item>)]) -> MenuBar {
     fn level(app: &VectorcraftApp, items: &[menus::Item]) -> Vec<Node> {
-        let nodes = items
-            .iter()
-            .filter_map(|it| menus::entry(app, it))
+        let nodes = menus::entries(app, items)
+            .into_iter()
             .map(|e| match e {
                 Entry::Sep => Node::Separator,
                 Entry::Header(h) => Node::Header(h.to_string()),

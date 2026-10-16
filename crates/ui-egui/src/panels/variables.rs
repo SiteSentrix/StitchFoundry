@@ -486,8 +486,8 @@ mod tests {
             .iter()
             .find(|e| e.command.as_deref() == Some("window.panel") && e.params.get("panel").and_then(serde_json::Value::as_str) == Some(ID))
             .expect("the Variables panel is listed");
-        assert_eq!((panel.path.clone(), panel.label.as_str()), (vec!["Window".to_string()], "Variables"));
-        assert!(!entries.iter().any(|e| e.path == ["Window", "Variables"]), "no Variables submenu");
+        assert_eq!((panel.path.clone(), panel.label.as_str()), (vec!["Window".to_string(), "Document".to_string()], "Variables"));
+        assert!(!entries.iter().any(|e| e.path == ["Window", "Document", "Variables"]), "no Variables submenu");
     }
 
     /// A menu item that needs a name opens the dialog rather than running the command with
