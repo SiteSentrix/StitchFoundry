@@ -123,7 +123,7 @@ fn add_outline(s: &mut Session, p: &Value) -> Result<Value> {
         let id = d.alloc_id();
         let kind = NodeKind::Path { path: path.clone(), rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: false, guide: false };
         let mut n = Node::new(id, kind);
-        n.appearance = Appearance::basic(Paint::None, Paint::solid(color), (width * PT_PER_MM).min(4.0));
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(color), (width * PT_PER_MM).min(4.0)).into();
         n.name = Some("Outline".into());
         n.embroidery = Some(Box::new(e));
         d.insert(parent, index + 1, n)?;

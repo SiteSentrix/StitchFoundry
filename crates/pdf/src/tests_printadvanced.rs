@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use hayro_syntax::Pdf;
+use craft_pdf::syntax::Pdf;
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ColorSettings, DEVICE_CMYK, GENERIC_CMYK, Intent};
 use vectorcraft_color::{Color, Paint};

@@ -17,6 +17,66 @@ fn compound() -> (Session, NodeId, NodeId, NodeId) {
     (s, a, b, c)
 }
 
+/// The two right-hand corners of a square are indexes 1 and 2. Delete must remove those corners
+/// and leave the left side, not a diagonal from shifting indexes as the path opens.
+#[test]
+fn clear_deletes_every_selected_anchor_of_a_closed_path() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    let points = |s: &Session| {
+        s.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect::<Vec<_>>()
+    };
+    let before = points(&s);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, 2]]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let sp = &s.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0];
+    assert!(!sp.closed);
+    assert_eq!(points(&s), vec![before[3], before[0]]);
+    assert_eq!(s.active().unwrap().selection.objects, vec![id]);
+    assert!(s.active().unwrap().selection.anchors.is_empty());
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert!(s.active().unwrap().doc.node(id).is_none(), "a second Delete removes the remainder");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(points(&s), before);
+    // One corner still opens the square into the other three, in order.
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert_eq!(points(&s), vec![before[2], before[3], before[0]]);
+}
+
+/// A marquee that covers one path completely and only some anchors of another stores the first as
+/// a whole object. Delete removes that object and the selected anchors of the other.
+#[test]
+fn clear_deletes_fully_selected_objects_along_with_partial_anchors() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let mut rectangle =
+        |x| NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    let whole = rectangle(10);
+    let partial = rectangle(80);
+    let refs = |s: &Session, id| {
+        s.active().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(si, ai, _)| vec![si, ai]).collect::<Vec<_>>()
+    };
+    let all = refs(&s, whole);
+    let one = refs(&s, partial)[0].clone();
+    let before = refs(&s, partial).len();
+    s.execute("select.anchorsMany", &json!({"items": [{"id": whole.0, "anchors": all}, {"id": partial.0, "anchors": [one]}]})).unwrap();
+    assert!(s.active().unwrap().selection.contains(whole) && s.active().unwrap().selection.partial(whole).is_none());
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert!(s.active().unwrap().doc.node(whole).is_none());
+    assert_eq!(refs(&s, partial).len(), before - 1);
+    assert_eq!(s.active().unwrap().selection.objects, vec![partial]);
+    assert!(s.active().unwrap().selection.anchors.is_empty());
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert!(s.active().unwrap().doc.node(partial).is_none(), "a second Delete removes what the first left");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.active().unwrap().doc.node(whole).is_some());
+    assert_eq!(refs(&s, partial).len(), before);
+}
+
 #[test]
 fn clear_selected_compound_member_preserves_its_sibling_and_is_undoable() {
     let (mut s, a, b, c) = compound();

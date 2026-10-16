@@ -19,6 +19,7 @@ pub const SYMBOLISM: &[&str] =
     &["symbolSprayer", "symbolShifter", "symbolScruncher", "symbolSizer", "symbolSpinner", "symbolStainer", "symbolScreener", "symbolStyler"];
 
 const ROWS: &[Row] = &[
+    (&["dimension"], None, &["mode", "style"]),
     // Global Brush Dimensions.
     (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity", "usePressure", "showBrush"]),
     (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),
@@ -27,9 +28,9 @@ const ROWS: &[Row] = &[
     (&["puppetWarp"], None, &["showMesh", "expand"]),
     (&["arc"], None, &["closed"]),
     (&["spiral"], None, &["decay", "segments", "clockwise"]),
-    (&["rectangularGrid"], None, &["rows", "columns"]),
-    (&["polarGrid"], None, &["concentric", "radial"]),
-    (&["pencil", "paintbrush"], None, &["fidelity", "fill", "editWithin", "closeWithin"]),
+    (&["rectangularGrid"], None, &["rows", "columns", "rowSkew", "columnSkew", "frame", "fill"]),
+    (&["polarGrid"], None, &["concentric", "radial", "concentricSkew", "radialSkew", "compound", "fill"]),
+    (&["pencil", "paintbrush"], None, &["fidelity", "fill", "keepSelected", "editWithin", "closeWithin"]),
     (&["smooth"], None, &["fidelity"]),
     (&["blobBrush", "eraser"], None, &["size"]),
     (&["polygon"], None, &["sides"]),

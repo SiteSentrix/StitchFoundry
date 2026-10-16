@@ -289,7 +289,7 @@ fn convert(s: &mut Session, p: &Value) -> Result<Value> {
                 node.kind = NodeKind::Path { path, rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: false, guide: false };
                 if kind == Kind::Fill {
                     let paint = n.appearance.stroke_paint();
-                    node.appearance = vectorcraft_doc::Appearance::basic(paint, vectorcraft_color::Paint::None, 0.0);
+                    node.appearance = vectorcraft_doc::Appearance::basic(paint, vectorcraft_color::Paint::None, 0.0).into();
                 }
                 node.embroidery = Some(Box::new(e));
                 node.name = Some(

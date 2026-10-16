@@ -1,5 +1,7 @@
-//! Units: format/parse round-trips in every unit, typed units winning over the field's unit, names
-//! and canvas readouts.
+//! Units: format/parse round-trips in every unit, typed units winning over the field's unit,
+//! percentages in arithmetic, names and canvas readouts.
+
+use proptest::prelude::*;
 
 use super::Unit;
 
@@ -35,9 +37,50 @@ fn typed_units_win_over_the_fields_unit() {
 }
 
 #[test]
+fn a_percentage_is_a_share_of_the_value_before_it() {
+    let (mm, cm) = (72.0 / 25.4, 72.0 / 2.54);
+    for (u, s, want) in [
+        (Unit::Centimeters, "3cm*50%", 1.5 * cm),
+        (Unit::Points, "50pt+25%", 62.5),
+        (Unit::Points, "50pt-25%", 37.5),
+        (Unit::Millimeters, "10*50%", 5.0 * mm),
+        (Unit::Centimeters, "3cm/50%", 6.0 * cm),
+        (Unit::Points, "50 pt + 25 %", 62.5),
+        (Unit::Points, "10+20+50%", 45.0),
+        // A percentage added or taken away is a share of everything before it. A percentage factor
+        // is a share of the term before it.
+        (Unit::Points, "100pt+20pt-50%", 60.0),
+        (Unit::Points, "100pt-20pt+50%", 120.0),
+        (Unit::Points, "100pt+20%-10pt", 110.0),
+        (Unit::Points, "10+20*50%", 20.0),
+        (Unit::Points, "10*2+50%", 30.0),
+        (Unit::Points, "10*2/50%", 40.0),
+        (Unit::Points, "10+-50%", 5.0),
+        (Unit::Points, "50pt--25%", 62.5),
+        (Unit::Centimeters, "3cm*-50%", -1.5 * cm),
+    ] {
+        let got = u.parse(s).unwrap_or_else(|| panic!("{u:?} can't read `{s}`"));
+        assert!((got - want).abs() < 1e-9, "{u:?}: `{s}` → {got}, want {want}");
+    }
+}
+
+#[test]
 fn odd_text_reads_as_nothing_without_panicking() {
-    for s in ["", "é", "é5", "°+1", "×2", "5 ×", "—3", "mm", "1/0", "--", "+"] {
+    for s in ["", "é", "é5", "°+1", "×2", "5 ×", "—3", "mm", "1/0", "--", "+", "50%", "%", "5%%", "%5", "1/0%", "10+%", "10*5pt%"] {
         assert_eq!(Unit::Millimeters.parse(s), None, "{s}");
+    }
+}
+
+proptest! {
+    /// Field text made of digits, operators, `%`, spaces and unit letters reads as a finite value
+    /// or as nothing and does not panic.
+    #[test]
+    fn arithmetic_text_reads_as_a_finite_value_or_nothing(s in "[0-9.+*/% ptxinmcfyd-]{0,24}") {
+        for u in Unit::ALL {
+            if let Some(v) = u.parse(&s) {
+                prop_assert!(v.is_finite(), "{u:?}: `{s}` → {v}");
+            }
+        }
     }
 }
 
@@ -65,4 +108,24 @@ fn readouts_show_two_decimals() {
     assert_eq!(Unit::Inches.number(0.5616), "0.0078");
     assert_eq!((Unit::Inches.number(595.2756), Unit::Points.number(595.2756)), ("8.2677".into(), "595.276".into()));
     assert_eq!(Unit::Points.number(-0.00001), "0");
+}
+
+#[test]
+fn a_negative_operand_after_an_operator_is_a_sign() {
+    assert_eq!(Unit::Points.parse("10*-2"), Some(-20.0));
+    assert_eq!(Unit::Points.parse("-10/-2"), Some(5.0));
+    assert_eq!(Unit::Points.parse("5--3"), Some(8.0));
+    assert_eq!(Unit::Points.parse("5 - -3"), Some(8.0));
+    assert_eq!(Unit::Points.parse("5+-3"), Some(2.0));
+    assert_eq!(Unit::Points.parse("10-2"), Some(8.0));
+    assert_eq!(super::parse_number("90*-1"), Some(-90.0));
+}
+
+#[test]
+fn mixed_mul_div() {
+    // `*` and `/` share one precedence level and run left to right.
+    assert_eq!(Unit::Points.parse("10/2*5"), Some(25.0));
+    assert_eq!(crate::parse_number("100*3/4"), Some(75.0));
+    assert_eq!(Unit::Points.parse("10*2/5"), Some(4.0));
+    assert_eq!(Unit::Points.parse("10*2/5 px"), Some(Unit::Pixels.to_pt(4.0)));
 }

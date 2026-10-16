@@ -160,7 +160,7 @@ pub(crate) fn paint_color(node: &Node, prefer_stroke: bool) -> Option<Rgb> {
     // Type is painted by its characters' styles.
     let appearance = match &node.kind {
         NodeKind::Text(t) => std::borrow::Cow::Owned(t.first_style().appearance()),
-        _ => std::borrow::Cow::Borrowed(&node.appearance),
+        _ => std::borrow::Cow::Borrowed(&*node.appearance),
     };
     let fill = || solid(appearance.fill_paint());
     let stroke = || solid(appearance.stroke_paint());

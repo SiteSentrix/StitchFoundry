@@ -25,10 +25,6 @@ real_name = "Brandon Thomas"
 display_name = "Brandon Thomas"
 sync_github_name = false
 
-[people.callmeBalloch]
-real_name = "Riccardo Balloch"
-sync_github_name = false
-
 [people.crqch]
 sync_github_name = true
 
@@ -80,4 +76,42 @@ sync_github_name = true
 [people.atoslins]
 real_name = "Atos Lins"
 display_name = "Atos Lins"
+sync_github_name = false
+
+[people.sanyamsingh001]
+display_name = "sanyamsingh001"
+sync_github_name = false
+
+[people.aguo890]
+real_name = "Aaron Guo"
+display_name = "Aaron Guo"
+sync_github_name = false
+
+[people.Nael-Nathanael]
+sync_github_name = true
+
+[people.switch87]
+real_name = "Gert Pellin"
+sync_github_name = false
+
+[people.lewandowskit]
+real_name = "Tomasz Lewandowski"
+display_name = "Tomasz Lewandowski"
+sync_github_name = false
+
+[people.osamaamin2011]
+real_name = "Osama Amin"
+display_name = "Osama Amin"
+sync_github_name = false
+
+[people.giang17]
+real_name = "Giang Nguyen"
+
+[people.Silvertree2010]
+display_name = "Netter"
+sync_github_name = false
+
+[people.limackk]
+real_name = "Kamil Kwiatkowski"
+display_name = "Kamil Kwiatkowski"
 sync_github_name = false

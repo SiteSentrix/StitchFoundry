@@ -850,7 +850,7 @@ fn a_garment_photo_goes_behind_the_design_life_size_and_unstitched() {
     // on a template layer, its middle on the design's, 400 mm across
     let layer = d.layers.iter().find(|l| matches!(l.kind, NodeKind::Layer { template: true, .. })).expect("a template layer");
     assert!(layer.children().is_some_and(|c| c.iter().any(|n| n.id == id)));
-    let b = d.node(id).unwrap().bounds_in(kurbo::Affine::IDENTITY, false).unwrap();
+    let b = d.node(id).unwrap().bounds_in(&d.symbol_boxes(), kurbo::Affine::IDENTITY, false).unwrap();
     assert!((b.width() / PT - 400.0).abs() < 1.0, "{b:?}");
     assert!(((b.x0 + b.x1) / 2.0 / PT - 70.0).abs() < 2.0 && ((b.y0 + b.y1) / 2.0 / PT - 55.0).abs() < 2.0, "{b:?}");
     // never stitched
@@ -1328,7 +1328,7 @@ fn the_stitch_view_prints_life_size_or_fitted() {
     let mut images = Vec::new();
     d.walk(|n| {
         if matches!(n.kind, NodeKind::Image(_)) {
-            images.push(n.bounds_in(kurbo::Affine::IDENTITY, false).unwrap());
+            images.push(n.bounds_in(&d.symbol_boxes(), kurbo::Affine::IDENTITY, false).unwrap());
         }
     });
     assert_eq!(images.len(), 1);
@@ -4005,7 +4005,8 @@ fn the_kiosk_sets_a_name_in_a_template_and_locks_with_a_pin() {
     // inside the tape's border (90 × 20 mm), its middle the tape's (65, 30 mm)
     assert!(r["widthMm"].as_f64().unwrap() <= 90.5 && r["heightMm"].as_f64().unwrap() <= 20.5, "{r}");
     let id = NodeId(r["id"].as_u64().unwrap());
-    let b = s.doc().unwrap().doc.node(id).unwrap().bounds_in(kurbo::Affine::IDENTITY, false).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let b = d.node(id).unwrap().bounds_in(&d.symbol_boxes(), kurbo::Affine::IDENTITY, false).unwrap();
     assert!((b.center().x / PT - 65.0).abs() < 1.0 && (b.center().y / PT - 30.0).abs() < 1.0, "{b:?}");
     let threads: Vec<String> = s.embroidery_plan().unwrap().pattern().threads.iter().map(|t| t.color.to_hex()).collect();
     assert!(threads.iter().any(|t| t == "#d62828"), "{threads:?}");

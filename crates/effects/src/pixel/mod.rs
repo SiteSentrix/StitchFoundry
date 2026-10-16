@@ -1,4 +1,4 @@
-//! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Brush Strokes ›
+//! Photoshop-style raster effects (Effect › Artistic › Film Grain, Blur › Radial Blur and Smart Blur, Brush Strokes ›
 //! Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes
 //! and Sumi-e, Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone,
 //! Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Stylize › Glowing Edges, Texture
@@ -12,10 +12,12 @@
 //!   cost doesn't grow with the radius, and sample counts come from the effect's quality.
 //! - Beyond the raster's edges is transparency.
 
+mod artistic;
 mod blur;
 mod brushstrokes;
 mod distort;
 mod edges;
+mod loaded;
 mod pixelate;
 mod sharpen;
 mod texture;
@@ -26,13 +28,16 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::util::{flag, num, text};
 
+pub use blur::{SMART_BLUR_MODES, SmartBlurMode};
 pub use brushstrokes::{STROKE_DIRECTIONS, StrokeDirection};
-pub use distort::{GLASS_TEXTURES, GlassTexture};
+pub use distort::{GLASS_TEXTURES, GLASS_TEXTURES_LOADED, GlassTexture};
+pub use loaded::{LOADED, LoadedTexture, TEXTURE_IMAGE, texture};
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 27] = [
+pub const PIXEL_EFFECTS: [&str; 28] = [
+    "artistic.filmGrain",
     "blur.radial",
     "blur.smart",
     "brushStrokes.accentedEdges",
@@ -64,15 +69,21 @@ pub const PIXEL_EFFECTS: [&str; 27] = [
 
 /// A Photoshop-style raster effect with its parameters read and clamped to their ranges. Lengths
 /// are in document units.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PixelFx {
+    /// Artistic › Film Grain: monochrome grain in shadows and midtones, a wider bright
+    /// highlight area (0..20), and tonal intensity (0..10), preserving coverage.
+    FilmGrain { grain: f64, highlight: f64, intensity: f64 },
     /// Blur › Radial Blur around the object's centre: along arcs (spin, an arc of `amount`°) or
     /// along rays (zoom, the content scaled by up to about ±`amount`/2 %), averaging 2^`passes` samples.
     RadialBlur { amount: f64, zoom: bool, passes: u32 },
     /// Blur › Smart Blur (Normal mode): each pixel averaged with the neighbours within `radius`
     /// whose colour differs from its own by no more than `threshold` levels, over a grid of
     /// `samples` × `samples` neighbours at most.
-    SmartBlur { radius: f64, threshold: f64, samples: u32 },
+    /// The Edge Only `mode` draws the edges where neighboring pixels differ by more than
+    /// `threshold` levels in white on black, and Overlay Edge draws them in white over the Normal
+    /// result.
+    SmartBlur { radius: f64, threshold: f64, samples: u32, mode: SmartBlurMode },
     /// Brush Strokes › Accented Edges: the edges, about `width` (1..14) wide, accented towards
     /// white chalk or black ink as `brightness` (0..50) says; `smoothness` (1..15) softens them.
     AccentedEdges { width: f64, brightness: f64, smoothness: f64 },
@@ -102,9 +113,9 @@ pub enum PixelFx {
     /// Distort › Diffuse Glow: the highlights glow white as strongly as `glow` (0..20), from the
     /// brightness `clear` (0..20) leaves clear, under white grain as dense as `graininess` (0..10).
     DiffuseGlow { graininess: f64, glow: f64, clear: f64 },
-    /// Distort › Glass: the object seen through a `texture` surface scaled by `scaling` (0.5..2),
-    /// bent by `distortion` (0..20), smoothed by `smoothness` (1..15), its heights turned over when
-    /// `invert`.
+    /// Distort › Glass: the object seen through a `texture` surface (a built-in one, or an image
+    /// the user loaded) scaled by `scaling` (0.5..2), bent by `distortion` (0..20), smoothed by
+    /// `smoothness` (1..15), its heights turned over when `invert`.
     Glass { distortion: f64, smoothness: f64, texture: GlassTexture, scaling: f64, invert: bool },
     /// Distort › Ocean Ripple: the object under ripples of `size` (1..15) shifting it as much as
     /// `magnitude` (0..20) says.
@@ -192,6 +203,11 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         levels.iter().find(|(name, _)| name.eq_ignore_ascii_case(q)).map_or(default, |(_, v)| *v)
     };
     Some(match id {
+        "artistic.filmGrain" => PixelFx::FilmGrain {
+            grain: num(p, "grain", 4.0).clamp(0.0, 20.0),
+            highlight: num(p, "highlightArea", 0.0).clamp(0.0, 20.0),
+            intensity: num(p, "intensity", 10.0).clamp(0.0, 10.0),
+        },
         "blur.radial" => PixelFx::RadialBlur {
             amount: num(p, "amount", 10.0).clamp(1.0, 100.0),
             zoom: text(p, "method", "spin").eq_ignore_ascii_case("zoom"),
@@ -201,6 +217,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             radius: num(p, "radius", 3.0).clamp(0.1, 100.0),
             threshold: num(p, "threshold", 25.0).clamp(0.1, 100.0),
             samples: quality([("low", 5), ("medium", 7), ("high", 9)], 7),
+            mode: SmartBlurMode::parse(text(p, "blurMode", "normal")),
         },
         "brushStrokes.accentedEdges" => PixelFx::AccentedEdges {
             width: num(p, "edgeWidth", 2.0).clamp(1.0, 14.0),
@@ -248,7 +265,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         "distort.glass" => PixelFx::Glass {
             distortion: num(p, "distortion", 5.0).clamp(0.0, 20.0),
             smoothness: num(p, "smoothness", 3.0).clamp(1.0, 15.0),
-            texture: GlassTexture::parse(text(p, "texture", "frosted")),
+            texture: GlassTexture::parse_with(text(p, "texture", "frosted"), p.get(TEXTURE_IMAGE).and_then(Value::as_str)),
             scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
             invert: flag(p, "invert", false),
         },
@@ -338,7 +355,8 @@ impl PixelFx {
             PixelFx::OceanRipple { size, magnitude } => distort::ripple_shift(size, magnitude),
             PixelFx::UnsharpMask { .. } => 0.0,
             PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
-            PixelFx::ColorHalftone { .. }
+            PixelFx::FilmGrain { .. }
+            | PixelFx::ColorHalftone { .. }
             | PixelFx::Mezzotint { .. }
             | PixelFx::Craquelure { .. }
             | PixelFx::Grain { .. }
@@ -378,7 +396,7 @@ impl PixelFx {
             // The cells around the pixel's, and the cells around theirs.
             PixelFx::ColorHalftone { max_radius, .. } => Some(3.0 * std::f64::consts::SQRT_2 * max_radius),
             PixelFx::Crystallize { cell } => Some(1.5 * cell),
-            PixelFx::Mezzotint { .. } => Some(0.0),
+            PixelFx::FilmGrain { .. } | PixelFx::Mezzotint { .. } => Some(0.0),
             // The dots' points, and the softened colour around them.
             PixelFx::Pointillize { cell } => Some(2.5 * cell),
             // The softened tones around the pixel.
@@ -399,8 +417,14 @@ impl PixelFx {
         let Some(px) = pixels(data, w, h) else { return };
         let to_px = |len: f64| len / space.px.max(1e-9);
         match *self {
+            PixelFx::FilmGrain { grain, highlight, intensity } => artistic::film_grain(px, w, h, space, grain, highlight, intensity),
             PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
-            PixelFx::SmartBlur { radius, threshold, samples } => blur::smart(px, w, h, to_px(radius), threshold, samples),
+            PixelFx::SmartBlur { radius, threshold, samples, mode: SmartBlurMode::Normal } => {
+                blur::smart(px, w, h, to_px(radius), threshold, samples)
+            }
+            PixelFx::SmartBlur { radius, threshold, samples, mode } => {
+                blur::smart_edges(px, w, h, to_px(radius), threshold, samples, mode == SmartBlurMode::OverlayEdge)
+            }
             PixelFx::AccentedEdges { width, brightness, smoothness } => brushstrokes::accented_edges(px, w, h, space, width, brightness, smoothness),
             PixelFx::AngledStrokes { balance, length, sharpness } => brushstrokes::angled_strokes(px, w, h, space, balance, length, sharpness),
             PixelFx::Crosshatch { length, sharpness, strength } => brushstrokes::crosshatch(px, w, h, space, length, sharpness, strength),
@@ -410,7 +434,7 @@ impl PixelFx {
             PixelFx::SprayedStrokes { length, radius, direction } => brushstrokes::sprayed_strokes(px, w, h, space, length, radius, direction),
             PixelFx::SumiE { width, pressure, contrast } => brushstrokes::sumi_e(px, w, h, space, width, pressure, contrast),
             PixelFx::DiffuseGlow { graininess, glow, clear } => distort::diffuse_glow(px, w, h, space, graininess, glow, clear),
-            PixelFx::Glass { distortion, smoothness, texture, scaling, invert } => {
+            PixelFx::Glass { distortion, smoothness, ref texture, scaling, invert } => {
                 distort::glass(px, w, h, space, distortion, smoothness, texture, scaling, invert)
             }
             PixelFx::OceanRipple { size, magnitude } => distort::ocean_ripple(px, w, h, space, size, magnitude),
@@ -436,8 +460,8 @@ impl PixelFx {
 
 /// The entry of `all` whose value in `table` (the same order) is `value`, any case; `default`
 /// otherwise.
-fn pick<T: Copy>(table: &[(&str, &str)], all: &[T], value: &str, default: T) -> T {
-    table.iter().zip(all).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(default, |(_, t)| *t)
+fn pick<T: Clone>(table: &[(&str, &str)], all: &[T], value: &str, default: T) -> T {
+    table.iter().zip(all).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(default, |(_, t)| t.clone())
 }
 
 /// `data` as `w` × `h` RGBA pixels, `None` when it isn't that size (or is empty).

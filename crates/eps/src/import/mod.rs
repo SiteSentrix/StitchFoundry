@@ -18,7 +18,9 @@
 //! `%%Creator`) and these operators: Adobe Illustrator File Format Specification, version 7.0
 //! (1998), listed by PRONOM at https://www.nationalarchives.gov.uk/PRONOM/fmt/423. A file in that
 //! format whose program has its layers (`%AI5_BeginLayer`) comes in through them, as `native` reads
-//! an Illustrator EPS's editing copy (#1027).
+//! an Illustrator EPS's editing copy (#1027). One VectorCraft wrote (its prolog the procedure set
+//! [`crate::legacy_ai::PROCSET`], which prints its gradients flat and leaves its type out) comes in
+//! from those layers alone, without its page.
 //!
 //! The page is the file's `%%BoundingBox` (`%%HiResBoundingBox` when it has one), the first page
 //! of a PostScript file without one. A file whose program can't be read (an operator the
@@ -54,10 +56,11 @@ mod tests_images;
 #[cfg(test)]
 mod tests_native;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use vectorcraft_color::Paint;
-use vectorcraft_color::swatch::Swatch;
+use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_doc::{ColorMode, Document, LayerColor, Node};
 use vectorcraft_geom::{Affine, Rect};
 
@@ -91,6 +94,9 @@ struct Dsc {
     /// In the legacy Illustrator format: its header has `%AI…` comments or names the app as the
     /// creator (see the module docs for the specification).
     illustrator: bool,
+    /// Its prolog is the one VectorCraft's legacy `.ai` writer includes
+    /// ([`crate::legacy_ai::PROCSET`] in `%%DocumentSuppliedResources`).
+    own_legacy: bool,
 }
 
 /// The four numbers of a bounding box comment's value, when it has them and they make a box.
@@ -124,6 +130,9 @@ impl Dsc {
             let creator = value("%%Creator:").is_some_and(|v| v.contains("Illustrator")); // brand-ok: the creator its files name
             if header && (line.starts_with("%AI") || line.starts_with("%%AI") || creator) {
                 d.illustrator = true;
+            }
+            if header && value("%%DocumentSuppliedResources:").is_some_and(|v| v.strip_prefix("procset ") == Some(crate::legacy_ai::PROCSET)) {
+                d.own_legacy = true;
             }
             if let Some(v) = value("%%HiResBoundingBox:") {
                 if header || atend {
@@ -184,6 +193,15 @@ pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String>
         return Err("this is not a PostScript file".into());
     }
     let dsc = Dsc::read(ps);
+    // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
+    // type), and its program has all of it, which is read as the format (as before the file
+    // printed).
+    if editing_data
+        && dsc.own_legacy
+        && let Some(Ok((document, warnings))) = native::program_alone(ps)
+    {
+        return Ok(Imported { document, warnings, preview: false });
+    }
     let [llx, lly, urx, ury] = dsc.bbox.unwrap_or(LETTER);
     let frame = Rect::new(0.0, 0.0, urx - llx, ury - lly);
     let mut doc = Document::new(frame.width(), frame.height());
@@ -250,19 +268,24 @@ fn finish_with(out: Out, layers: Vec<Arc<Node>>) -> Imported {
     let mut doc = out.doc;
     if out.cmyk > out.rgb {
         doc.color_mode = ColorMode::Cmyk;
-        (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
     }
+    // `taken` holds the names `Document::swatch` finds: each swatch's name, and Registration.
+    let mut taken: HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).chain([REGISTRATION.to_string()]).collect();
     for (name, color) in out.spots {
-        if doc.swatch(&name).is_none() {
+        if taken.insert(name.clone()) {
             doc.swatches.push(Swatch { name, paint: Paint::solid(color), global: true, spot: true });
         }
     }
     // Tiling patterns are pattern swatches.
     for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
-        if doc.swatch(&name).is_none() {
+        if taken.insert(name.clone()) {
             doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
         }
     }
     doc.layers = layers;
-    Imported { document: doc, warnings: out.warnings, preview: false }
+    let mut warnings = out.warnings;
+    doc.limit_depth_noting(&mut warnings);
+    Imported { document: doc, warnings, preview: false }
 }

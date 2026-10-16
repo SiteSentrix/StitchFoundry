@@ -1,6 +1,7 @@
 //! The Color Picker (double-click a Fill/Stroke proxy, or `ui.colorPicker`): a colour field with a
 //! channel slider for H, S, B, R, G or B; HSB, RGB, Lab and CMYK fields and hex; Only Web Colors;
-//! the out-of-gamut and out-of-web warnings (click to correct); New/Original chips; and a Color
+//! the out-of-gamut and out-of-web warnings (click to correct); New/Original chips; an eyedropper
+//! button that samples a color anywhere on the screen ([`crate::screen_color`]); and a Color
 //! Swatches list. With art selected the colour shows on it live as it is picked; OK keeps it as one
 //! undo step through `paint.setFill` / `paint.setStroke`, Cancel puts the art back.
 //!
@@ -183,6 +184,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         json!({"stroke": stroke, "original": color_json(&color), "channel": Channel::default().id(), "webOnly": false, "swatches": false}),
     );
     store(&mut d, &Picked::of(color));
+    d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
     app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
@@ -197,6 +199,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let mut pick: Option<Picked> = None;
     let mut new_channel = None;
     let mut toggle_swatches = false;
+    let mut sample = false;
     ui.horizontal_top(|ui| {
         if swatches {
             pick = swatch_list(app, ui, &p.color).map(Picked::of);
@@ -218,7 +221,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 if new_original_chips(ui, &p.color, &original) {
                     pick = Some(Picked::of(original));
                 }
-                ui.add_space(8.0);
+                ui.add_space(4.0);
+                sample = crate::screen_color::button(app, ui);
+                ui.add_space(4.0);
                 ui.vertical(|ui| {
                     if let Some(fix) = gamut
                         && warning_chip(ui, GAMUT_WARNING, &fix)
@@ -249,6 +254,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     }
     if toggle_swatches {
         d.fields.insert("swatches".into(), json!(!swatches));
+    }
+    if sample && let Err(e) = app.run("ui.sampleScreenColor", json!({"picker": true})) {
+        app.status(e);
     }
     store(d, &pick.unwrap_or(p).snapped(d.bool("webOnly")));
     preview(app, d);
@@ -299,6 +307,10 @@ fn new_original_chips(ui: &mut Ui, new: &Color, original: &Color) -> bool {
 
 /// The HSB and RGB fields with the channel radios, hex, Lab and CMYK. Returns the edited colour
 /// and the newly chosen channel.
+///
+/// HSB, RGB and hex are in one grid, and Lab and CMYK are in a second grid beside it. Tab goes
+/// through the fields in the order they are drawn: H, S, B, R, G, B, hex, then L, a, b, C, M, Y,
+/// K, with a stop at each channel's radio button before its field.
 fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, Option<Channel>) {
     let t = Tokens::get(ui.ctx());
     let rgb = p.color.to_rgb();
@@ -307,59 +319,72 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
     let cmyk = p.color.to_cmyk_managed(cms.settings().intent);
     let mut edit = None;
     let mut chosen = None;
-    egui::Grid::new("cp-values").num_columns(4).spacing([6.0, 4.0]).show(ui, |ui| {
-        for i in 0..7 {
-            if let Some(&ch) = Channel::ALL.get(i) {
-                if widgets::radio(ui, ch.label(), ch == channel, true) {
-                    chosen = Some(ch);
+    let spacing = vec2(6.0, 4.0);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = spacing.x;
+        let left = egui::Grid::new("cp-values").spacing(spacing).show(ui, |ui| {
+            for i in 0..7 {
+                if let Some(&ch) = Channel::ALL.get(i) {
+                    if widgets::radio(ui, ch.label(), ch == channel, true) {
+                        chosen = Some(ch);
+                    }
+                    let (v, suffix) = match i {
+                        0 => (p.hsb[0], "°"),
+                        1 | 2 => (p.hsb[i] * 100.0, "%"),
+                        _ => (rgb[i - 3] * 255.0, ""),
+                    };
+                    if let Some(nv) = widgets::plain_field(ui, ("cp-left", i), v as f64, suffix, 0, VALUE_W) {
+                        let nv = nv as f32;
+                        edit = Some(match i {
+                            0..3 => {
+                                let mut hsb = p.hsb;
+                                hsb[i] = if i == 0 { nv.clamp(0.0, 360.0) } else { (nv / 100.0).clamp(0.0, 1.0) };
+                                Picked::from_hsb(hsb)
+                            }
+                            _ => {
+                                let mut c = rgb;
+                                c[i - 3] = (nv / 255.0).clamp(0.0, 1.0);
+                                Picked::of(Color::rgb(c[0], c[1], c[2]))
+                            }
+                        });
+                    }
+                } else if let Some(c) = widgets::hex_field(ui, "cp-hex", &hex_digits(&p.color)).as_deref().and_then(parse_hex) {
+                    edit = Some(Picked::of(c));
                 }
-                let (v, suffix) = match i {
-                    0 => (p.hsb[0], "°"),
-                    1 | 2 => (p.hsb[i] * 100.0, "%"),
-                    _ => (rgb[i - 3] * 255.0, ""),
+                ui.end_row();
+            }
+        });
+        egui::Grid::new("cp-values-right").spacing(spacing).show(ui, |ui| {
+            for i in 0..7 {
+                let (label, v, suffix) = match i {
+                    0 => ("L", lab.l, ""),
+                    1 => ("a", lab.a, ""),
+                    2 => ("b", lab.b, ""),
+                    _ => (["C", "M", "Y", "K"][i - 3], cmyk[i - 3] * 100.0, "%"),
                 };
-                if let Some(nv) = widgets::plain_field(ui, ("cp-left", i), v as f64, suffix, 0, VALUE_W) {
+                // The hex field is taller than a value field. K's row takes the height of the hex
+                // field's row beside it.
+                let height = if i == 6 { left.response.rect.bottom() - ui.cursor().top() } else { ui.spacing().interact_size.y };
+                let size = vec2(ui.available_size_before_wrap().x, height);
+                ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.add_space(12.0);
+                    ui.label(egui::RichText::new(label).size(12.5).color(t.text));
+                });
+                if let Some(nv) = widgets::plain_field(ui, ("cp-right", i), v as f64, suffix, 0, VALUE_W) {
                     let nv = nv as f32;
-                    edit = Some(match i {
-                        0..3 => {
-                            let mut hsb = p.hsb;
-                            hsb[i] = if i == 0 { nv.clamp(0.0, 360.0) } else { (nv / 100.0).clamp(0.0, 1.0) };
-                            Picked::from_hsb(hsb)
-                        }
-                        _ => {
-                            let mut c = rgb;
-                            c[i - 3] = (nv / 255.0).clamp(0.0, 1.0);
-                            Picked::of(Color::rgb(c[0], c[1], c[2]))
-                        }
-                    });
+                    edit = Some(Picked::of(if i < 3 {
+                        let mut l = [lab.l, lab.a, lab.b];
+                        l[i] = if i == 0 { nv.clamp(0.0, 100.0) } else { nv.clamp(-128.0, 127.0) };
+                        cms.from_lab(Lab::new(l[0], l[1], l[2]))
+                    } else {
+                        let mut k = cmyk;
+                        k[i - 3] = (nv / 100.0).clamp(0.0, 1.0);
+                        Color::cmyk(k[0], k[1], k[2], k[3])
+                    }));
                 }
-            } else if let Some(c) = widgets::hex_field(ui, "cp-hex", &hex_digits(&p.color)).as_deref().and_then(parse_hex) {
-                edit = Some(Picked::of(c));
+                ui.end_row();
             }
-            let (label, v, suffix) = match i {
-                0 => ("L", lab.l, ""),
-                1 => ("a", lab.a, ""),
-                2 => ("b", lab.b, ""),
-                _ => (["C", "M", "Y", "K"][i - 3], cmyk[i - 3] * 100.0, "%"),
-            };
-            ui.horizontal(|ui| {
-                ui.add_space(12.0);
-                ui.label(egui::RichText::new(label).size(12.5).color(t.text));
-            });
-            if let Some(nv) = widgets::plain_field(ui, ("cp-right", i), v as f64, suffix, 0, VALUE_W) {
-                let nv = nv as f32;
-                edit = Some(Picked::of(if i < 3 {
-                    let mut l = [lab.l, lab.a, lab.b];
-                    l[i] = if i == 0 { nv.clamp(0.0, 100.0) } else { nv.clamp(-128.0, 127.0) };
-                    cms.from_lab(Lab::new(l[0], l[1], l[2]))
-                } else {
-                    let mut k = cmyk;
-                    k[i - 3] = (nv / 100.0).clamp(0.0, 1.0);
-                    Color::cmyk(k[0], k[1], k[2], k[3])
-                }));
-            }
-            ui.end_row();
-        }
+        });
     });
     (edit, chosen)
 }
@@ -431,6 +456,37 @@ mod tests {
 
     fn fill_hex(app: &VectorcraftApp) -> String {
         crate::panels::current_paints(app).0.color().unwrap().to_hex()
+    }
+
+    /// Runs one frame of the dialog with `events` in `ctx`, which keeps the keyboard focus from
+    /// frame to frame, and returns the texts drawn with their screen rects.
+    fn frame_in(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, Rect)> {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, out: &mut Vec<(String, Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| collect(&c.shape, &mut texts));
+        texts
+    }
+
+    /// Returns the label of the value field that has the keyboard, which is the letter (or `#`)
+    /// nearest to the field's left on its row, and the field's rect. Returns `None` when no text
+    /// field has the keyboard.
+    fn focused_field(ctx: &egui::Context, texts: &[(String, Rect)]) -> Option<(String, Rect)> {
+        let id = ctx.memory(|m| m.focused()).filter(|&id| egui::TextEdit::load_state(ctx, id).is_some())?;
+        let field = ctx.read_response(id)?.rect;
+        let labels = ["H", "S", "B", "R", "G", "#", "L", "a", "b", "C", "M", "Y", "K"];
+        let (label, _) = texts
+            .iter()
+            .filter(|(t, r)| labels.contains(&t.as_str()) && r.max.x <= field.min.x && field.y_range().contains(r.center().y))
+            .max_by(|a, b| a.1.max.x.total_cmp(&b.1.max.x))?;
+        Some((label.clone(), field))
     }
 
     #[test]
@@ -548,6 +604,38 @@ mod tests {
         app.run("ui.colorPicker", json!({"stroke": false, "color": {"c": 0, "m": 100, "y": 100, "k": 0}})).unwrap();
         super::super::confirm(&mut app).unwrap();
         assert_eq!(crate::panels::current_paints(&app).0.color(), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
+    }
+
+    /// #1692: Tab goes through one color model's fields before the next: H, S, B, then R, G, B, the
+    /// hex field, then L, a, b, then C, M, Y, K. Each Lab or CMYK field is level with the field on
+    /// its left.
+    #[test]
+    fn tab_goes_through_one_color_models_fields_before_the_next() {
+        let mut app = app();
+        app.run("ui.colorPicker", json!({})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        // The picker opens with the keyboard in H. The loop presses Tab until K has the keyboard
+        // and records each stop. A stop is `None` when no text field has the keyboard, as at a
+        // channel's radio button.
+        let mut texts = vec![];
+        for _ in 0..3 {
+            texts = frame_in(&ctx, &mut app, vec![]);
+        }
+        let mut stops = vec![focused_field(&ctx, &texts)];
+        while stops.len() < 40 && stops.last().and_then(|s| s.as_ref()).is_none_or(|(label, _)| label != "K") {
+            texts = frame_in(&ctx, &mut app, vec![tab.clone()]);
+            stops.push(focused_field(&ctx, &texts));
+        }
+        let names: Vec<Option<&str>> = stops.iter().map(|s| s.as_ref().map(|(label, _)| label.as_str())).collect();
+        let fields: Vec<&str> = names.iter().flatten().copied().collect();
+        assert_eq!(fields, ["H", "S", "B", "R", "G", "B", "#", "L", "a", "b", "C", "M", "Y", "K"], "{names:?}");
+        assert_eq!(names[names.len() - 2..], [Some("Y"), Some("K")], "one Tab takes Y to K");
+        let found: Vec<&(String, Rect)> = stops.iter().flatten().collect();
+        for (left, right) in found[..7].iter().zip(&found[7..]) {
+            assert_eq!(left.1.center().y, right.1.center().y, "{} and {} are level", left.0, right.0);
+        }
     }
 
     #[test]

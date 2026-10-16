@@ -115,6 +115,12 @@ impl Session {
             return *ev;
         }
         let Some(id) = self.lent_tool(self.tool.id()) else { return *ev };
+        // Typing in progress is kept as its own step first: the lent tool's drag previews from the
+        // document its interaction started from, which would drop the typing (#1881).
+        if crate::cmd::typing_in_progress(self) {
+            // Fails only without a document, and then there is no typing to keep.
+            let _ = crate::cmd::settle_interaction(self);
+        }
         let lent = self.make_tool(id);
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }
@@ -193,7 +199,9 @@ impl Session {
             guides: view.guides && !self.menu.guides_locked,
             snap_to_grid: view.snap_to_grid,
             show_bbox: view.show_bbox,
-            snap_to_pixel: view.snap_to_pixel,
+            // Snap to Grid and Snap to Pixel are exclusive, as in Illustrator; left both on, the grid
+            // wins instead of pixels quietly rounding every drag to whole points (#1816).
+            snap_to_pixel: view.snap_to_pixel && !view.snap_to_grid,
             snap_to_point: view.snap_to_point,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
@@ -264,6 +272,7 @@ impl Session {
         if let Some(r) = self.plane_widget_pointer(ev, view) {
             return r;
         }
+        self.leave_draw_inside(ev, view)?;
         let ev = &self.lend_selection_tool(ev);
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         let r = self.take_tool_panic().and_then(|()| {
@@ -277,6 +286,26 @@ impl Session {
             self.give_back_tool(view)?;
         }
         r
+    }
+
+    /// In Draw Inside, a double-click with a selection tool outside the geometric bounds of the
+    /// object new art goes inside, grown by the selection tolerance, or after that object is gone,
+    /// sets the drawing mode to Draw Normal (`view.drawMode {mode: "normal"}`, as Shift+D does).
+    /// The tool then takes the double-click as in Draw Normal.
+    fn leave_draw_inside(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<()> {
+        if ev.kind != PointerKind::DoubleClick
+            || self.draw_mode != crate::DrawMode::Inside
+            || !vectorcraft_tools::catalog::is_selection_tool(self.tool.id())
+        {
+            return Ok(());
+        }
+        let Some(d) = self.active() else { return Ok(()) };
+        let tol = self.prefs.selection_tolerance / view.zoom.max(1e-9);
+        let inside = self.draw_inside.and_then(|t| d.doc.bounds_of(&[t], false)).is_some_and(|b| b.inflate(tol, tol).contains(ev.pos));
+        if !inside {
+            self.execute("view.drawMode", &serde_json::json!({ "mode": "normal" }))?;
+        }
+        Ok(())
     }
 
     /// A guide dragged out of a ruler, whatever the tool: a vertical one out of the left ruler, a
@@ -449,6 +478,16 @@ impl Session {
         let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
         if let Some(k) = p.get("key").and_then(Value::as_str) {
             values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
+        }
+        if tool.unwrap_or(self.tool_id()) == "dimension" {
+            if let Some(style) = values.get("style") {
+                vectorcraft_doc::dimension::DimensionOptions::from_params(style.clone())?;
+            }
+            if let Some(mode) = values.get("mode")
+                && !mode.as_str().is_some_and(|m| ["linear", "angular", "radial", "radius", "diameter"].contains(&m))
+            {
+                return Err("Unknown dimension mode".into());
+            }
         }
         Ok(self.set_tool_options(tool, &values))
     }

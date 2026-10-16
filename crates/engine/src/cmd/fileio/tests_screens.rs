@@ -105,6 +105,9 @@ fn density_buckets_go_into_sub_folders() {
     // A prefix names files, not folders.
     let r = export(&mut s, json!({"range": "2", "prefix": "../a\\b:", "formats": [{"format": "svg"}]}));
     assert_eq!(names(&r), ["..-a-b-Artboard-2.svg"]);
+    // So does a suffix: it can't open a folder or climb out of the export folder.
+    let r = export(&mut s, json!({"range": "2", "formats": [{"format": "svg", "suffix": "/../x\\..\\y"}, {"format": "png", "suffix": "-ok"}]}));
+    assert_eq!(names(&r), ["Artboard-2-..-x-..-y.svg", "Artboard-2-ok.png"]);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -118,6 +121,35 @@ fn sub_folders_are_made_in_the_export_folder() {
     assert_eq!(written, [format!("{folder}/1x/Artboard-1.png"), format!("{folder}/2x/Artboard-1@2x.png"), format!("{folder}/3x/Artboard-1@3x.png")]);
     assert_eq!(size(&std::fs::read(dir.join("3x").join("Artboard-1@3x.png")).unwrap()), (120, 90));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// #1713: whatever a suffix or prefix says (`..`, an absolute path, a drive, a share), every file
+/// lands directly in the export folder.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_hostile_suffix_or_prefix_stays_in_the_export_folder() {
+    let mut s = session(1);
+    let top = std::env::temp_dir().join(format!("vc-screens-escape-{}", std::process::id()));
+    let dir = top.join("out");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    for text in ["/../../up", "\\..\\up", "/etc/x", "C:\\Windows\\x", "\\\\server\\share\\x", "/..", ".."] {
+        for key in ["suffix", "prefix"] {
+            let mut p = json!({"folder": folder, "formats": [{"format": "svg"}]});
+            if key == "suffix" {
+                p["formats"][0][key] = json!(text);
+            } else {
+                p[key] = json!(text);
+            }
+            let r = export(&mut s, p);
+            let written = std::path::PathBuf::from(r["files"][0].as_str().unwrap());
+            assert!(written.is_file(), "{key} {text}");
+            assert_eq!(written.parent().unwrap().canonicalize().unwrap(), dir.canonicalize().unwrap(), "{key} {text}");
+        }
+    }
+    // Nothing beside the export folder, no folder inside it.
+    assert_eq!(std::fs::read_dir(&top).unwrap().count(), 1);
+    assert!(std::fs::read_dir(&dir).unwrap().all(|e| e.unwrap().path().is_file()));
+    let _ = std::fs::remove_dir_all(top);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -191,6 +223,43 @@ fn format_settings_apply_to_their_rows_and_rows_win() {
     assert_eq!(size(&f[0].1), (40, 30), "settings don't pick sizes or artboards");
     assert_eq!(px(&f[1].1), [255, 255, 255, 255], "the row's own wins");
     assert!(f[2].1.len() < f[3].1.len(), "quality 5 is smaller than quality 100");
+}
+
+/// The format ids `text` lists as `a|b|c` after `start`, up to `end`, sorted.
+fn listed(text: &str, start: &str, end: char) -> Vec<String> {
+    let (_, rest) = text.split_once(start).unwrap_or_else(|| panic!("no `{start}` in {text}"));
+    let mut ids: Vec<String> = rest.split(end).next().unwrap_or_default().split('|').map(|f| f.trim().to_string()).collect();
+    ids.sort();
+    ids
+}
+
+/// The params text (a row's `format` and the keys of `settings`) and the refusal of a format a row
+/// can't have list exactly the formats a row writes.
+#[test]
+fn the_params_and_the_refusal_list_every_format_a_row_writes() {
+    let mut s = session(1);
+    let (mut written, mut refusals) = (vec![], vec![]);
+    for f in FORMATS.iter().filter(|f| f.write) {
+        match s.execute("document.exportForScreens", &json!({"formats": [{"format": f.id}]})) {
+            Ok(r) => {
+                assert_eq!(files(&r).len(), 1, "{}", f.id);
+                written.push(f.id.to_string());
+            }
+            Err(crate::EngineError::BadParams { msg, .. }) => refusals.push(msg),
+            Err(e) => panic!("{}: {e}", f.id),
+        }
+    }
+    written.sort();
+    let params = crate::cmd::find_command("document.exportForScreens").unwrap().params;
+    assert_eq!(listed(params, "[{format: ", ','), written, "a row's format");
+    assert_eq!(listed(params, "settings?: {", ':'), written, "the keys of settings");
+    assert!(!refusals.is_empty());
+    for msg in refusals {
+        let list = msg.strip_prefix("Export for Screens writes ").unwrap_or_else(|| panic!("{msg}"));
+        let mut ids: Vec<String> = list.replace(" or ", ", ").split(", ").map(str::to_string).collect();
+        ids.sort();
+        assert_eq!(ids, written, "{msg}");
+    }
 }
 
 #[test]

@@ -26,6 +26,12 @@ vectorcraft-text = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 
+# `perf` on Windows (src/perf.rs) reads how busy the processors are (GetSystemTimes) and this
+# process's working set (GetProcessMemoryInfo) through winsafe's safe wrappers over Win32 (MIT),
+# which the desktop app's src/gpu.rs also uses.
+[target.'cfg(windows)'.dependencies]
+winsafe = { version = "0.0.29", default-features = false, features = ["kernel", "psapi"] }
+
 # DirectWrite's system font collection (the desktop app's src/system_fonts.rs, shared): fonts that
 # font services such as Adobe Fonts load in place (#579). MIT OR Apache-2.0.
 [target.'cfg(all(windows, not(target_vendor = "win7")))'.dependencies]

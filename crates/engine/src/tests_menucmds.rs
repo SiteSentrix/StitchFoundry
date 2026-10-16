@@ -2,9 +2,10 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ColorMode, LiveShape, Node, NodeKind, TextKind};
-use vectorcraft_geom::Rect;
+use vectorcraft_doc::{Appearance, ColorMode, LiveShape, Node, NodeKind, TextKind};
+use vectorcraft_geom::{Rect, shapes};
 
+use super::tests_large_edits::{layer, run_soon, square, undo_gives_back};
 use super::*;
 
 fn session() -> Session {
@@ -137,6 +138,100 @@ fn hide_all_artwork_above_deselects_the_objects_it_hides() {
     assert_eq!((selected(&s), key(&s)), (vec![hidden, a, b], Some(a)));
 }
 
+/// Lock › All Artwork Above and Hide › All Artwork Above take each object that overlaps a selected
+/// object below it in the same layer, once, whether it is locked or hidden already or not. An object
+/// that overlaps only a selected object above it, the group around a selected object, the selected
+/// objects and an object that lies over a selected object of another layer stay as they are.
+#[test]
+fn lock_and_hide_all_artwork_above_take_what_overlaps_a_selected_object_below_in_its_layer() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    // `b` overlaps only `c`, which lies above it.
+    let b = rect(&mut s, 250.0, 0.0, 100.0, 100.0);
+    let c = rect(&mut s, 90.0, 0.0, 200.0, 100.0);
+    // `d` overlaps `a`, `e` overlaps `c`, `f` overlaps both, `g` overlaps neither, and `k` overlaps `a` and is locked.
+    let d = rect(&mut s, 20.0, 50.0, 30.0, 30.0);
+    let e = rect(&mut s, 200.0, 50.0, 30.0, 30.0);
+    let f = rect(&mut s, 60.0, 10.0, 50.0, 20.0);
+    let g = rect(&mut s, 500.0, 500.0, 20.0, 20.0);
+    let k = rect(&mut s, 10.0, 10.0, 10.0, 10.0);
+    s.execute("layer.setProps", &json!({"id": k.0, "locked": true})).unwrap();
+    // `m` is in a group, and `n` overlaps it.
+    let m = rect(&mut s, 800.0, 0.0, 50.0, 50.0);
+    sel(&mut s, &[m]);
+    let group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let n = rect(&mut s, 820.0, 20.0, 50.0, 50.0);
+    // In another layer, `h` lies where `a` lies, and `j` overlaps `i`.
+    s.execute("layer.new", &json!({})).unwrap();
+    let h = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let i = rect(&mut s, 600.0, 0.0, 100.0, 100.0);
+    let j = rect(&mut s, 650.0, 50.0, 100.0, 100.0);
+    let (taken, kept) = ([d, e, f, k, n, j], [a, b, c, g, group, m, h, i]);
+    for (cmd, lock) in [("object.lock.above", true), ("object.hide.above", false)] {
+        let done = |s: &Session, id: NodeId| if lock { node(s, id).locked } else { !node(s, id).visible };
+        sel(&mut s, &[a, c, m, i]);
+        let steps = undo_len(&s);
+        assert_eq!(s.execute(cmd, &json!({})).unwrap(), json!({"count": 6}), "{cmd}");
+        assert!(taken.iter().all(|id| done(&s, *id)), "{cmd}");
+        assert!(!kept.iter().any(|id| done(&s, *id)), "{cmd}");
+        assert_eq!((undo_len(&s), selected(&s)), (steps + 1, vec![a, c, m, i]), "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// A session with 1,000 tiles of 100 x 200 pt in rows of 40 under the 50,000 squares of [`square`],
+/// 50 on each tile, all of it selected; and the ids of the tiles and of the squares.
+fn tiles_under_squares() -> (Session, Vec<NodeId>, Vec<NodeId>) {
+    let tile = |t: usize| {
+        let (x, y) = ((t % 40) as f64 * 100.0, (t / 40) as f64 * 200.0);
+        Rect::new(x, y, x + 100.0, y + 200.0)
+    };
+    let s = super::tests_large_edits::session(51_000, |d, k| {
+        if k < 1000 { Node::path(d.alloc_id(), shapes::rectangle(tile(k)), Appearance::default_art()) } else { square(d, k - 1000) }
+    });
+    let mut tiles = layer(&s, 0);
+    let squares = tiles.split_off(1000);
+    (s, tiles, squares)
+}
+
+/// With 1,000 tiles selected under 50,000 squares, Lock › All Artwork Above locks every square in one
+/// undo step and Hide › All Artwork Above hides every square, each within 20 s, and the tiles stay
+/// selected.
+#[test]
+fn lock_and_hide_all_artwork_above_1000_tiles_under_50000_objects_finish_within_20_s() {
+    let (mut s, tiles, squares) = tiles_under_squares();
+    sel(&mut s, &tiles);
+    let before = s.doc().unwrap().doc.clone();
+    let (mut s, r) = run_soon(s, "object.lock.above", json!({}));
+    assert_eq!(r, json!({"count": 50_000}));
+    let d = &s.doc().unwrap().doc;
+    assert!(squares.iter().all(|id| d.node(*id).is_some_and(|n| n.locked)), "every square is locked");
+    assert!(tiles.iter().all(|id| d.node(*id).is_some_and(|n| !n.locked)), "no tile is locked");
+    assert!(selected(&s) == tiles, "the tiles stay selected");
+    undo_gives_back(&mut s, &before);
+    let (s, r) = run_soon(s, "object.hide.above", json!({}));
+    assert_eq!(r, json!({"count": 50_000}));
+    let d = &s.doc().unwrap().doc;
+    assert!(squares.iter().all(|id| d.node(*id).is_some_and(|n| !n.visible)), "every square is hidden");
+    assert!(tiles.iter().all(|id| d.node(*id).is_some_and(|n| n.visible)), "no tile is hidden");
+    assert!(selected(&s) == tiles, "the tiles stay selected");
+}
+
+/// With all 51,000 objects of [`tiles_under_squares`] selected, Lock › All Artwork Above and Hide ›
+/// All Artwork Above each find nothing to lock or hide within 20 s and record no undo step.
+#[test]
+fn lock_and_hide_all_artwork_above_with_51000_objects_selected_finish_within_20_s() {
+    let (s, tiles, squares) = tiles_under_squares();
+    let (steps, all) = (undo_len(&s), [tiles, squares].concat());
+    assert!(selected(&s) == all, "everything is selected");
+    let (s, r) = run_soon(s, "object.lock.above", json!({}));
+    assert_eq!(r, json!({"count": 0}));
+    let (s, r) = run_soon(s, "object.hide.above", json!({}));
+    assert_eq!(r, json!({"count": 0}));
+    assert_eq!(undo_len(&s), steps);
+    assert!(selected(&s) == all, "everything stays selected");
+}
+
 #[test]
 fn lock_and_hide_other_layers() {
     let mut s = session();
@@ -151,6 +246,73 @@ fn lock_and_hide_other_layers() {
     assert!(!d.node(l1).unwrap().locked);
     s.execute("object.hide.otherLayers", &json!({})).unwrap();
     assert!(!s.doc().unwrap().doc.node(l2).unwrap().visible);
+}
+
+/// How many steps there are to undo and to redo, and whether the document has unsaved changes.
+fn history(s: &Session) -> (usize, usize, bool) {
+    let st = s.doc().unwrap();
+    (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+}
+
+/// Select `ids` with a move of them left to redo, and mark the document saved.
+fn select_with_a_step_to_redo(s: &mut Session, ids: &[NodeId]) {
+    sel(s, ids);
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+}
+
+/// Lock › All Artwork Above and Hide › All Artwork Above with no object above the selection, or with
+/// every one locked (Lock) or hidden (Hide) already, and Lock › Other Layers and Hide › Other Layers
+/// with no other layer, or with every one locked or hidden already, record no undo step: the step to
+/// redo stays and the document stays unmodified. All Artwork Above still deselects a selected object
+/// that is hidden.
+#[test]
+fn lock_and_hide_with_nothing_to_lock_or_hide_record_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let over = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    // Nothing is above `over`, and the document has one layer.
+    select_with_a_step_to_redo(&mut s, &[over]);
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+    for c in ["object.lock.above", "object.hide.above", "object.lock.otherLayers", "object.hide.otherLayers"] {
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"count": 0}), "{c}");
+        assert_eq!(history(&s), before, "{c}");
+        assert_eq!(selected(&s), [over], "{c}");
+    }
+    // Lock › All Artwork Above locks `over` above `a` in one undo step, and then it has nothing left
+    // to lock. Hide › All Artwork Above then hides `over`, and then it has nothing left to hide.
+    for c in ["object.lock.above", "object.hide.above"] {
+        select_with_a_step_to_redo(&mut s, &[a]);
+        let undo = history(&s).0;
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"count": 1}), "{c}");
+        assert_eq!(history(&s), (undo + 1, 0, true), "{c}");
+        select_with_a_step_to_redo(&mut s, &[a]);
+        let before = history(&s);
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"count": 1}), "{c} again");
+        assert_eq!(history(&s), before, "{c} again");
+    }
+    // A hidden object selected beside `a` is deselected, still without an undo step.
+    let hidden = rect(&mut s, 400.0, 400.0, 20.0, 20.0);
+    s.execute("layer.setProps", &json!({"id": hidden.0, "visible": false})).unwrap();
+    select_with_a_step_to_redo(&mut s, &[hidden, a]);
+    let before = history(&s);
+    assert_eq!(s.execute("object.hide.above", &json!({})).unwrap(), json!({"count": 1}));
+    assert_eq!((history(&s), selected(&s)), (before, vec![a]));
+    // Other Layers locks, then hides, a second layer in one undo step each, and then it has nothing
+    // left to lock or hide.
+    s.execute("layer.new", &json!({})).unwrap();
+    for c in ["object.lock.otherLayers", "object.hide.otherLayers"] {
+        select_with_a_step_to_redo(&mut s, &[a]);
+        let undo = history(&s).0;
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"count": 1}), "{c}");
+        assert_eq!(history(&s), (undo + 1, 0, true), "{c}");
+        select_with_a_step_to_redo(&mut s, &[a]);
+        let before = history(&s);
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"count": 1}), "{c} again");
+        assert_eq!(history(&s), before, "{c} again");
+    }
 }
 
 // ---------- Transform Each ----------
@@ -193,6 +355,118 @@ fn transform_each_random_is_deterministic_with_seed() {
     let (x, y) = (run(), run());
     assert_eq!(x, y);
     assert!(x.x0.abs() <= 50.0 && x.width() == 100.0);
+}
+
+/// #1910: Transform Each's Reflect X flips left-right; Reflect Y flips top-bottom (same as
+/// Effect › Distort › Transform and Illustrator's Transform Each checkboxes).
+#[test]
+fn transform_each_reflect_x_flips_left_right_reflect_y_flips_top_bottom() {
+    let mut s = session();
+    // A right-pointing triangle: tip at x=100, base on the left.
+    let id =
+        id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 50}, {"x": 0, "y": 100}], "closed": true})).unwrap());
+    sel(&mut s, &[id]);
+    s.execute("object.transformEach", &json!({"reflectX": true})).unwrap();
+    let tip_x = match &node(&s, id).kind {
+        // The tip is the only vertex at y=50; Reflect X about the centre maps (100, 50) → (0, 50).
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.iter().find(|a| (a.p.y - 50.0).abs() < 1e-6).map(|a| a.p.x).unwrap_or(f64::NAN),
+        _ => panic!("expected a path"),
+    };
+    assert!((tip_x - 0.0).abs() < 1e-6, "reflectX must move the tip from x=100 to x=0, got {tip_x}");
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A down-pointing tip at (50, 100); Reflect Y about the centre (50, 50) maps it to (50, 0).
+    let id2 =
+        id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 50, "y": 100}], "closed": true})).unwrap());
+    sel(&mut s, &[id2]);
+    s.execute("object.transformEach", &json!({"reflectY": true})).unwrap();
+    let tip_y = match &node(&s, id2).kind {
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.iter().find(|a| (a.p.x - 50.0).abs() < 1e-6).map(|a| a.p.y).unwrap_or(f64::NAN),
+        _ => panic!("expected a path"),
+    };
+    assert!((tip_y - 0.0).abs() < 1e-6, "reflectY must move the tip from y=100 to y=0, got {tip_y}");
+}
+
+/// Transform Each with its default values, or with any values that move nothing (both scales 100%,
+/// no move, rotation or reflection, Random or not), records no undo step and replies with the
+/// objects. With only a layer selected there is no object to transform: with Copy or without, it
+/// records no undo step and keeps the selection. With Copy and objects selected, the default values
+/// copy them in one undo step.
+#[test]
+fn transform_each_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    select_with_a_step_to_redo(&mut s, &[a, b]);
+    let before = history(&s);
+    let still = json!({"scaleH": 100, "scaleV": 100, "moveH": 0, "moveV": 0, "rotate": 0, "reflectX": false, "reflectY": false, "random": true});
+    for p in [json!({}), still, json!({"reference": 0, "strokes": true, "corners": true, "patterns": true})] {
+        assert_eq!(s.execute("object.transformEach", &p).unwrap(), json!({"ids": [a.0, b.0]}), "{p}");
+        assert_eq!(history(&s), before, "{p}");
+        assert_eq!(s.journal.last().unwrap().0, "object.transformEach");
+    }
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    sel(&mut s, &[layer]);
+    for p in [json!({"moveH": 10}), json!({"moveH": 10, "copy": true})] {
+        assert_eq!(s.execute("object.transformEach", &p).unwrap(), json!({"ids": []}), "{p}");
+        assert_eq!(history(&s), before, "{p}");
+        assert_eq!(selected(&s), [layer], "{p}");
+    }
+    sel(&mut s, &[a, b]);
+    let r = s.execute("object.transformEach", &json!({"copy": true})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 2);
+    assert_eq!(history(&s), (before.0 + 1, 0, true));
+}
+
+/// #1732: Transform Again (⌘D) repeats a Transform Each — the same transform on the objects
+/// again, another copy when the Transform Each made copies — rather than an earlier transform.
+#[test]
+fn transform_again_repeats_transform_each() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    // An earlier Transform must not be what Transform Again repeats.
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 5]})).unwrap();
+    s.execute("object.transformEach", &json!({"moveH": 50})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(55.0, 5.0, 155.0, 105.0));
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(105.0, 5.0, 205.0, 105.0), "50 pt more, not 5");
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(155.0, 5.0, 255.0, 105.0), "again and again");
+    // With Copy, every Transform Again makes another copy, further on each time.
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let r = s.execute("object.transformEach", &json!({"moveH": 50, "copy": true})).unwrap();
+    let first = NodeId(r["ids"][0].as_u64().unwrap());
+    assert_eq!(bounds(&s, first), Rect::new(50.0, 0.0, 150.0, 100.0));
+    let r = s.execute("object.transformAgain", &json!({})).unwrap();
+    let second = NodeId(r["ids"][0].as_u64().unwrap());
+    assert_ne!(second, first);
+    assert_eq!(bounds(&s, second), Rect::new(100.0, 0.0, 200.0, 100.0), "another copy, 50 pt further");
+    assert_eq!(bounds(&s, a), Rect::new(0.0, 0.0, 100.0, 100.0), "the original stays");
+    assert_eq!(bounds(&s, first), Rect::new(50.0, 0.0, 150.0, 100.0), "and the first copy too");
+}
+
+/// #1732: the Transform Each dialog previews through an interaction; OK commits it, and
+/// Transform Again repeats what the commit recorded. A preview that changed nothing doesn't take
+/// the record over (it records no undo step either).
+#[test]
+fn transform_again_repeats_a_committed_transform_each_preview() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.begin_interaction("Transform Each").unwrap();
+    s.preview("object.transformEach", &json!({"moveH": 50})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(50.0, 0.0, 150.0, 100.0));
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(100.0, 0.0, 200.0, 100.0), "the dialog's Transform Each repeats");
+    s.begin_interaction("Transform Each").unwrap();
+    s.preview("object.transformEach", &json!({})).unwrap();
+    s.commit_interaction().unwrap();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(150.0, 0.0, 250.0, 100.0), "still the one that changed something");
 }
 
 #[test]
@@ -328,7 +602,8 @@ fn convert_rectangle_path_to_live_shape() {
     );
     sel(&mut s, &[p]);
     assert_eq!(s.execute("object.shape.convertToShape", &json!({})).unwrap()["converted"], 1);
-    let NodeKind::Path { live: Some(LiveShape::Rectangle { w, h, .. }), path, .. } = &node(&s, p).kind else { panic!() };
+    let n = node(&s, p);
+    let (Some(LiveShape::Rectangle { w, h, .. }), NodeKind::Path { path, .. }) = (n.live_shape(), &n.kind) else { panic!() };
     assert!(close(*w, 40.0) && close(*h, 20.0));
     assert_eq!(path.bounds(), Some(Rect::new(0.0, 0.0, 40.0, 20.0)));
 }
@@ -350,7 +625,7 @@ fn convert_rotated_rectangle_and_ellipse() {
     assert_eq!(s.execute("object.shape.convertToShape", &json!({})).unwrap()["converted"], 2);
     let b = bounds(&s, p);
     assert!(close(b.x0, 0.0) && close(b.x1, 100.0) && close(b.y1, 100.0), "{b:?}");
-    assert!(matches!(node(&s, e).kind, NodeKind::Path { live: Some(LiveShape::Ellipse { .. }), .. }));
+    assert!(matches!(node(&s, e).live_shape(), Some(LiveShape::Ellipse { .. })));
 }
 
 #[test]
@@ -522,6 +797,22 @@ fn find_and_replace_options() {
     assert!(s.execute("edit.findReplace", &json!({"find": ""})).is_err());
 }
 
+/// Find and Replace that replaces each match with the text it is (`CAT` found in `cat`, ignoring
+/// case, and replaced by `cat`) records no undo step: the step to redo stays and the document stays
+/// unmodified. It still replies with the count. A replacement that changes the text is one undo step.
+#[test]
+fn find_and_replace_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    let a = text(&mut s, "cat cat");
+    select_with_a_step_to_redo(&mut s, &[a]);
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2}));
+    assert_eq!((history(&s), plain(&s, a)), (before, "cat cat".to_string()));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2}));
+    assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
+}
+
 #[test]
 fn find_next_cycles_through_text_objects() {
     let mut s = session();
@@ -556,6 +847,43 @@ fn select_same_font_size_and_fill() {
     assert!(s.execute("select.same.fontSize", &json!({})).is_err());
 }
 
+/// #1737: Select > Same reads type's fill and stroke from its characters (the first run), so type
+/// matches type and paths both ways.
+#[test]
+fn select_same_paint_reads_type_characters() {
+    let mut s = session();
+    let t1 = text(&mut s, "a");
+    let t2 = text(&mut s, "b");
+    let t3 = text(&mut s, "c");
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let q = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[t1, t2, r]);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    sel(&mut s, &[t3, q]);
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    sel(&mut s, &[t1, r]);
+    s.execute("paint.setStroke", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    sel(&mut s, &[t3]);
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    let q_stroke = node(&s, q).appearance;
+    assert_eq!((q_stroke.stroke_paint(), q_stroke.stroke_width()), (Paint::solid(Color::BLACK), 1.0));
+
+    let same = |s: &mut Session, from: NodeId, cmd: &str| {
+        sel(s, &[from]);
+        s.execute(cmd, &json!({})).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        v
+    };
+    assert_eq!(same(&mut s, t1, "select.same.fillColor"), vec![t1, t2, r]);
+    assert_eq!(same(&mut s, q, "select.same.fillColor"), vec![t3, q]);
+    assert_eq!(same(&mut s, r, "select.same.strokeColor"), vec![t1, r]);
+    assert_eq!(same(&mut s, t3, "select.same.strokeColor"), vec![t3, q]);
+    assert_eq!(same(&mut s, q, "select.same.strokeWeight"), vec![t3, q]);
+    assert_eq!(same(&mut s, t1, "select.same.fillAndStroke"), vec![t1, r]);
+}
+
 #[test]
 fn select_direction_handles_selects_all_anchors() {
     let mut s = session();
@@ -563,6 +891,21 @@ fn select_direction_handles_selects_all_anchors() {
     sel(&mut s, &[a]);
     assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4);
     assert_eq!(s.doc().unwrap().selection.anchors.get(&a).unwrap().len(), 4);
+}
+
+#[test]
+fn direction_handles_leave_out_hidden_and_locked_paths() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let hidden = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let locked = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, hidden, locked]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.setProps", &json!({"ids": [hidden.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0], "locked": true})).unwrap();
+    sel(&mut s, &[g]);
+    assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4);
+    assert_eq!(selected(&s), vec![a]);
 }
 
 #[test]
@@ -576,6 +919,214 @@ fn select_point_and_area_text() {
     s.execute("select.object.areaText", &json!({})).unwrap();
     assert_eq!(selected(&s), vec![a]);
     assert_eq!(s.execute("select.object.brushStrokes", &json!({})).unwrap()["count"], 0);
+}
+
+/// Select › Object and Select › Same leave out hidden and locked objects, and the objects in hidden
+/// or locked groups and sublayers, as Select All does.
+#[test]
+fn select_menu_commands_leave_out_hidden_and_locked_art() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let shown = text(&mut s, "shown");
+    let hidden = text(&mut s, "hidden");
+    let locked = text(&mut s, "locked");
+    let in_hidden_group = text(&mut s, "in a hidden group");
+    let in_locked_group = text(&mut s, "in a locked group");
+    let open = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 10, "y2": 10})).unwrap());
+    let hidden_open = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 20, "x2": 10, "y2": 30})).unwrap());
+    sel(&mut s, &[in_hidden_group]);
+    let hidden_group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[in_locked_group]);
+    let locked_group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let hidden_sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    let in_hidden_sub = text(&mut s, "in a hidden sublayer");
+    let locked_sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    let in_locked_sub = text(&mut s, "in a locked sublayer");
+    assert_eq!(s.doc().unwrap().doc.parent_of(in_hidden_sub), Some(hidden_sub));
+    assert_eq!(s.doc().unwrap().doc.parent_of(in_locked_sub), Some(locked_sub));
+    s.execute("object.setProps", &json!({"ids": [hidden.0, hidden_open.0, hidden_group.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0, locked_group.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [hidden_sub.0], "visible": false})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [locked_sub.0], "locked": true})).unwrap();
+    assert_eq!(s.execute("select.object.textObjects", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![shown]);
+    assert_eq!(s.execute("select.object.pointText", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![shown]);
+    assert_eq!(s.execute("select.same.fontSize", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![shown]);
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![open]);
+}
+
+/// Next Object Above and Below pass over the hidden and locked objects and the sublayers beside the
+/// selected object.
+#[test]
+fn next_object_above_and_below_pass_over_what_cant_be_selected() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let hidden = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let locked = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": layer.0})).unwrap();
+    let b = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    let order: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(order, vec![a, hidden, locked, sub, b]);
+    s.execute("object.setProps", &json!({"ids": [hidden.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0], "locked": true})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("select.nextAbove", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("select.nextBelow", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a]);
+    // Nothing that can be selected below it: the selection stays.
+    s.execute("select.nextBelow", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a]);
+}
+
+/// In isolation mode Select › Same and Select › Object select only objects in the isolated group.
+#[test]
+fn select_menu_commands_stay_inside_the_isolated_group() {
+    let mut s = session();
+    let outside = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let _text_outside = text(&mut s, "outside");
+    let a = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let text_inside = text(&mut s, "inside");
+    for id in [outside, a, b] {
+        fill(&mut s, id, "#ff0000");
+    }
+    sel(&mut s, &[a, b, text_inside]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("select.same.fillColor", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    s.execute("select.object.textObjects", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![text_inside]);
+    s.execute("select.object.pointText", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![text_inside]);
+    s.execute("select.same.fontSize", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![text_inside]);
+    // All on Same Layers takes the objects of the isolated group.
+    sel(&mut s, &[a]);
+    s.execute("select.object.allOnSameLayers", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b, text_inside]);
+}
+
+/// In isolation mode a recalled selection leaves out the objects outside the isolated group, and
+/// Next Object Above selects nothing outside it.
+#[test]
+fn recalled_selections_and_next_object_stay_inside_the_isolated_group() {
+    let mut s = session();
+    let outside = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let _above_outside = rect(&mut s, 0.0, 20.0, 10.0, 10.0);
+    let a = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[outside, a]);
+    s.execute("select.save", &json!({"name": "Both"})).unwrap();
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.recall", &json!({"name": "Both"})).unwrap();
+    assert_eq!(selected(&s), vec![a]);
+    // An object outside the group (selected by id) has no neighbor in it: the selection stays.
+    sel(&mut s, &[outside]);
+    s.execute("select.nextAbove", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![outside]);
+}
+
+/// In isolation mode Open Paths and All on Same Layers select nothing when the isolated group, or
+/// the layer it is on, is hidden or locked.
+#[test]
+fn select_menu_commands_leave_out_an_isolated_group_hidden_or_locked_since() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 10, "y2": 10})).unwrap());
+    let b = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 20, "x2": 10, "y2": 30})).unwrap());
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "visible": false})).unwrap();
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![]);
+    sel(&mut s, &[a]);
+    s.execute("select.object.allOnSameLayers", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![]);
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "visible": true})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [g.0], "locked": true})).unwrap();
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![]);
+}
+
+/// The selection after command `c` runs with nothing selected.
+fn select_from_none(s: &mut Session, c: &str) -> Vec<NodeId> {
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute(c, &json!({})).unwrap();
+    selected(s)
+}
+
+/// In isolation mode Select All, All on Active Artboard and Inverse select nothing while the
+/// isolated group is hidden or locked, or the layer it is on is hidden or a template.
+#[test]
+fn select_all_leaves_out_an_isolated_group_hidden_or_locked_since() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let commands = ["select.all", "select.allOnArtboard", "select.inverse"];
+    for c in commands {
+        assert_eq!(select_from_none(&mut s, c), vec![a, b], "{c}");
+    }
+    let changes = [
+        ("object.setProps", json!({"ids": [g.0], "visible": false}), json!({"ids": [g.0], "visible": true})),
+        ("object.setProps", json!({"ids": [g.0], "locked": true}), json!({"ids": [g.0], "locked": false})),
+        ("layer.setProps", json!({"ids": [layer.0], "visible": false}), json!({"ids": [layer.0], "visible": true})),
+        // A template layer that has been unlocked again.
+        ("layer.setProps", json!({"ids": [layer.0], "template": true, "locked": false}), json!({"ids": [layer.0], "template": false})),
+    ];
+    for (cmd, on, off) in changes {
+        s.execute(cmd, &on).unwrap();
+        for c in commands {
+            assert_eq!(select_from_none(&mut s, c), vec![], "{c} after {cmd} {on}");
+        }
+        s.execute(cmd, &off).unwrap();
+        for c in commands {
+            assert_eq!(select_from_none(&mut s, c), vec![a, b], "{c} after {cmd} {off}");
+        }
+    }
+}
+
+/// Pattern editing and opacity mask editing isolate a new layer: Select All, All on Active
+/// Artboard and Inverse select the art on it.
+#[test]
+fn select_all_in_pattern_and_mask_editing_selects_the_art_being_edited() {
+    let mut s = session();
+    let commands = ["select.all", "select.allOnArtboard", "select.inverse"];
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let tile = selected(&s);
+    assert_eq!(tile.len(), 1);
+    for c in commands {
+        assert_eq!(select_from_none(&mut s, c), tile, "{c} in pattern editing");
+    }
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    let obj = rect(&mut s, 0.0, 0.0, 200.0, 200.0);
+    let m = rect(&mut s, 0.0, 0.0, 100.0, 200.0);
+    sel(&mut s, &[obj, m]);
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("transparency.editOpacityMask", &json!({})).unwrap();
+    let mask = selected(&s);
+    assert_eq!(mask.len(), 1);
+    for c in commands {
+        assert_eq!(select_from_none(&mut s, c), mask, "{c} in opacity mask editing");
+    }
 }
 
 #[test]
@@ -642,6 +1193,30 @@ fn saved_selections_live_in_the_document() {
     assert_eq!(s.execute("select.recall", &json!({"name": "Pair"})).unwrap()["count"], 1);
 }
 
+/// A recall leaves out the objects hidden or locked since the save, themselves or through their
+/// group or sublayer.
+#[test]
+fn recalled_selections_leave_out_objects_hidden_or_locked_since() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let hidden = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let locked = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let in_group = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[in_group]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    let in_sub = rect(&mut s, 80.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, hidden, locked, in_group, in_sub]);
+    s.execute("select.save", &json!({"name": "All"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [hidden.0, g.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [sub.0], "locked": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.recall", &json!({"name": "All"})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![a]);
+}
+
 #[test]
 fn edit_selection_applies_several_edits_as_one_step() {
     let mut s = session();
@@ -697,12 +1272,49 @@ fn change_case_variants() {
     assert!(s.execute("type.changeCase", &json!({"case": "weird"})).is_err());
 }
 
+/// Change Case is one undo step, and Change Case to the case the text has already records no undo
+/// step: the step to redo stays and the document stays unmodified. It still replies with the
+/// objects.
+#[test]
+fn change_case_to_the_case_the_text_has_records_no_undo_step() {
+    let mut s = session();
+    let t = text(&mut s, "hello wORLD. again here");
+    for case in ["upper", "lower", "title", "sentence"] {
+        sel(&mut s, &[t]);
+        let undo = history(&s).0;
+        s.execute("type.changeCase", &json!({"case": case})).unwrap();
+        assert_eq!(history(&s), (undo + 1, 0, true), "{case}");
+        select_with_a_step_to_redo(&mut s, &[t]);
+        let before = (history(&s), plain(&s, t));
+        assert_eq!(s.execute("type.changeCase", &json!({"case": case})).unwrap(), json!({"ids": [t.0]}), "{case} again");
+        assert_eq!((history(&s), plain(&s, t)), before, "{case} again");
+    }
+}
+
 #[test]
 fn smart_punctuation_quotes_dashes_ellipsis() {
     let mut s = session();
     let t = text(&mut s, "\"Hi\" it's 1--2 and 3---4...");
     sel(&mut s, &[t]);
     assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap()["changed"], 1);
+    assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
+}
+
+/// Smart Punctuation on type with nothing left to change, or on a selection with no type in it,
+/// records no undo step and replies `changed: 0`.
+#[test]
+fn smart_punctuation_with_nothing_to_change_records_no_undo_step() {
+    let mut s = session();
+    let t = text(&mut s, "\"Hi\" it's 1--2 and 3---4...");
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[t]);
+    assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap()["changed"], 1);
+    for id in [t, r] {
+        select_with_a_step_to_redo(&mut s, &[id]);
+        let before = history(&s);
+        assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap(), json!({"changed": 0}), "{id:?}");
+        assert_eq!(history(&s), before, "{id:?}");
+    }
     assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
 }
 
@@ -719,6 +1331,29 @@ fn convert_point_area_roundtrip() {
     let NodeKind::Text(tt) = &node(&s, t).kind else { panic!() };
     assert!(matches!(tt.kind, TextKind::Point));
     assert_eq!(tt.plain_text(), "Some words");
+}
+
+/// Convert To Area Type with no point type selected, and Convert To Point Type with no area type
+/// selected, record no undo step and reply with the objects. With point type and area type
+/// selected, Convert To Area Type converts the point type in one undo step, and Convert To Point
+/// Type then converts both in another.
+#[test]
+fn converting_type_to_the_kind_it_is_records_no_undo_step() {
+    let mut s = session();
+    let p = text(&mut s, "Point");
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 100, "text": "Area", "area": {"width": 100, "height": 50}})).unwrap());
+    for (c, id) in [("type.convertToAreaType", a), ("type.convertToPointType", p)] {
+        select_with_a_step_to_redo(&mut s, &[id]);
+        let before = history(&s);
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"ids": [id.0]}), "{c}");
+        assert_eq!(history(&s), before, "{c}");
+    }
+    for c in ["type.convertToAreaType", "type.convertToPointType"] {
+        select_with_a_step_to_redo(&mut s, &[p, a]);
+        let undo = history(&s).0;
+        s.execute(c, &json!({})).unwrap();
+        assert_eq!(history(&s), (undo + 1, 0, true), "{c}");
+    }
 }
 
 #[test]
@@ -756,6 +1391,26 @@ fn area_placeholder_fills_frame() {
     sel(&mut s, &[a]);
     s.execute("type.fillPlaceholder", &json!({})).unwrap();
     assert!(plain(&s, a).len() > 400);
+}
+
+/// Fill with Placeholder Text on type that holds its placeholder text already (point type, and area
+/// type filled to its frame), and `type.insert` with an empty `text`, record no undo step and reply
+/// with the objects. Inserting text is one undo step.
+#[test]
+fn placeholder_and_insert_that_change_nothing_record_no_undo_step() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 100, "text": "", "area": {"width": 300, "height": 300}})).unwrap());
+    sel(&mut s, &[t, a]);
+    s.execute("type.fillPlaceholder", &json!({})).unwrap();
+    select_with_a_step_to_redo(&mut s, &[t, a]);
+    let before = (history(&s), plain(&s, t), plain(&s, a));
+    for (c, p) in [("type.fillPlaceholder", json!({})), ("type.insert", json!({"text": ""}))] {
+        assert_eq!(s.execute(c, &p).unwrap(), json!({"ids": [t.0, a.0]}), "{c}");
+        assert_eq!((history(&s), plain(&s, t), plain(&s, a)), before, "{c}");
+    }
+    s.execute("type.insert", &json!({"text": "z"})).unwrap();
+    assert_eq!(history(&s), (before.0.0 + 1, 0, true));
 }
 
 #[test]
@@ -805,6 +1460,26 @@ fn ruler_guides_and_lock() {
     s.execute("guide.remove", &json!({"index": 0})).unwrap();
     assert!(s.doc().unwrap().doc.guides.is_empty());
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
+}
+
+/// #1534: Lock Guides locks the paths made into guides too: they can't be selected (so neither
+/// moved, reshaped nor deleted), by a click, a marquee or Select All, and locking lets them go.
+#[test]
+fn locked_guides_lock_guide_paths() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 20.0, 20.0, 10.0, 10.0));
+    sel(&mut s, &[a]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    sel(&mut s, &[a, b]);
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    sel(&mut s, &[a, b]);
+    assert_eq!(selected(&s), vec![a, b]);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert_eq!(selected(&s), vec![b]);
 }
 
 fn guides(s: &Session) -> Vec<(bool, f64)> {
@@ -902,6 +1577,119 @@ fn guides_and_art_are_shift_selected_together() {
     s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
     s.execute("edit.clear", &json!({"ids": [b.0]})).unwrap();
     assert_eq!(guides(&s).len(), 2);
+}
+
+/// When ruler guides and art are selected together, moving the art moves the guides as well;
+/// copy leaves both in place and moves the copies; single undo reverts both.
+#[test]
+fn guides_and_art_move_together_when_selected() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+
+    // Select art and both guides.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0, 1], "toggle": true})).unwrap();
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![a], vec![0, 1]));
+
+    // 1. Moving via object.transform moves both art and guides in one step.
+    let n = undo_len(&s);
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 25, 35]})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (35.0, 45.0));
+    assert_eq!(guides(&s), vec![(true, 225.0), (false, 335.0)]);
+    assert_eq!(undo_len(&s), n + 1);
+
+    // Undo restores both in one step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (10.0, 10.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+
+    // Redo reapplies both.
+    s.execute("edit.redo", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (35.0, 45.0));
+    assert_eq!(guides(&s), vec![(true, 225.0), (false, 335.0)]);
+
+    // Undo back to start.
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 2. object.move also moves both.
+    s.execute("object.move", &json!({"dx": 15, "dy": 20})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (25.0, 30.0));
+    assert_eq!(guides(&s), vec![(true, 215.0), (false, 320.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 3. Arrow-key nudge moves both.
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0})).unwrap();
+    let k = s.prefs.keyboard_increment;
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!(b.x0, 10.0 + k);
+    assert_eq!(guides(&s)[0], (true, 200.0 + k));
+    assert_eq!(guides(&s)[1], (false, 300.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 4. Copy (e.g. Alt-drag) duplicates both art and guides, leaving originals in place.
+    let res = s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 50, 60], "copy": true})).unwrap();
+    let copied_id = NodeId(res["ids"][0].as_u64().unwrap());
+    assert_ne!(copied_id, a);
+    let b_orig = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    let b_copy = s.doc().unwrap().doc.bounds_of(&[copied_id], false).unwrap();
+    assert_eq!((b_orig.x0, b_orig.y0), (10.0, 10.0));
+    assert_eq!((b_copy.x0, b_copy.y0), (60.0, 70.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0), (true, 250.0), (false, 360.0)]);
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![copied_id], vec![2, 3]));
+
+    // Undo takes back both copies in one step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+    assert!(s.doc().unwrap().doc.node(copied_id).is_none());
+    assert!(s.doc().unwrap().doc.node(a).is_some());
+
+    // 5. Explicit ids: only the specified art moves, guides stay put.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0, 1], "toggle": true})).unwrap();
+    s.execute("object.transform", &json!({"ids": [a.0], "matrix": [1, 0, 0, 1, 40, 50]})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (50.0, 60.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 6. Interactive preview copies: dragging with Alt previews the copies and commit keeps them.
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 10, 20], "copy": true})).unwrap();
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 30, 40], "copy": true})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(guides(&s).len(), 4);
+    assert_eq!(guides(&s)[2], (true, 230.0));
+    assert_eq!(guides(&s)[3], (false, 340.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+
+    // 7. Dragging a guide (guide.move) when art is also selected moves both art and guides.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0, 1], "toggle": true})).unwrap();
+    s.execute("guide.move", &json!({"dx": 10, "dy": 20})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (20.0, 30.0));
+    assert_eq!(guides(&s), vec![(true, 210.0), (false, 320.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    assert_eq!((b.x0, b.y0), (10.0, 10.0));
+    assert_eq!(guides(&s), vec![(true, 200.0), (false, 300.0)]);
+
+    // 8. Copy-dragging a guide (guide.move { copy: true }) when art is also selected duplicates both.
+    s.execute("guide.move", &json!({"dx": 10, "dy": 20, "copy": true})).unwrap();
+    assert_eq!(guides(&s).len(), 4);
+    assert_eq!(guides(&s)[2], (true, 210.0));
+    assert_eq!(guides(&s)[3], (false, 320.0));
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
 }
 
 /// #451: an artboard guide (`guide.add {artboard}`) runs across its artboard only, and is moved,
@@ -1383,4 +2171,16 @@ fn crop_image_trim_cuts_to_the_opaque_pixels_as_they_are() {
     let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
     assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64()), (Some(false), Some(30)), "{r}");
     assert_eq!(bounds(&s, img), b);
+}
+
+#[test]
+fn crop_image_trim_leaves_a_cmyk_image_alone() {
+    // CMYK images keep their ink amounts and have no alpha: nothing to cut, and not an error.
+    let inks = vectorcraft_doc::cmyk::Inks::new(4, 2, [255, 0, 0, 0].repeat(8)).unwrap();
+    let tiff = vectorcraft_doc::ImageBlob::cmyk_tiff(&inks).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "inks.tif", "dataBase64": vectorcraft_format::base64_encode(&tiff.bytes)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
+    assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64(), r["height"].as_u64()), (Some(false), Some(4), Some(2)), "{r}");
 }

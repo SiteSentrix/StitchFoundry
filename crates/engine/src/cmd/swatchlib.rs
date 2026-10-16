@@ -393,6 +393,17 @@ pub fn library_colors(s: &Session, key: &str) -> Option<Vec<Color>> {
     Some(library(s, key)?.1.iter().filter_map(colors).collect())
 }
 
+/// The colour swatches of library `key` (an id or name) or, for [`DOCUMENT_SWATCHES`], of the
+/// active document (tint swatches left out: they stand for their base). `None` when there is no
+/// such library (or document).
+pub fn library_swatches(s: &Session, key: &str) -> Option<Vec<Swatch>> {
+    let own = |sw: &&Swatch| matches!(sw.paint, Paint::Solid { swatch: None, .. });
+    if key == DOCUMENT_SWATCHES {
+        return Some(s.active()?.doc.swatches_iter().filter(own).cloned().collect());
+    }
+    Some(library(s, key)?.1.iter().filter(own).cloned().collect())
+}
+
 /// The `limitTo` parameter's palette ([`limit_palette`]); `None` without one (or for "").
 pub(crate) fn limit_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Palette>> {
     let Some(key) = str_param(p, "limitTo").filter(|k| !k.is_empty()) else { return Ok(None) };
@@ -606,7 +617,7 @@ fn reset_defaults(s: &mut Session, p: &Value) -> Result<Value> {
         let mut added = vec![];
         if replace {
             let before: Vec<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
-            (d.swatches, d.swatch_groups) = (defaults, groups);
+            (d.swatches, d.swatch_groups) = (defaults.into(), groups.into());
             added.extend(d.swatches_iter().filter(|w| !before.contains(&w.name)).map(|w| w.name.clone()));
             live.extend(d.swatches_iter().filter(|w| w.global).map(|w| w.name.clone()));
             d.map_solid_paints(&mut |_, l, _| unlink_dead(&live, l));

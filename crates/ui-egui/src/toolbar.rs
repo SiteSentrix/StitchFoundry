@@ -5,6 +5,8 @@
 //! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode, Edit Toolbar (its
 //! All Tools drawer and the toolbar edits it makes: `edit_toolbar`).
 
+use std::sync::Arc;
+
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -68,6 +70,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["width", "warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"],
             &["rotate", "reflect", "scale", "shear", "reshape", "freeTransform", "puppetWarp"],
             &["shapeBuilder", "livePaintBucket", "livePaintSelection", "blend"],
+            &["dimension"],
         ],
     ),
     ("Type", &[&["areaType", "typeOnPath", "verticalAreaType", "verticalTypeOnPath"], &["type", "verticalType", "touchType"]]),
@@ -117,7 +120,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
-    let w = if cols == 2 { 76.0 } else { WIDTH };
+    // Two 36 pt buttons with 2 pt either side inside the border and separator line (at 76 they
+    // overran the right border).
+    let w = if cols == 2 { 80.0 } else { WIDTH };
     // Where the panel docks: along the window's left edge, under the bars.
     let edge = ui.available_rect_before_wrap();
     ui.ctx().data_mut(|d| d.insert_temp(crate::floating::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
@@ -147,6 +152,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Before the flyout: one torn off this frame floats from the next (its bar mustn't be in two
     // layers in one frame).
     floating(app, ui.ctx());
+    crate::dialogs::dimension::floating(app, ui.ctx());
     flyout(app, ui.ctx());
     crate::edit_toolbar::drawer(app, ui.ctx());
 }
@@ -200,12 +206,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
         // A group torn off into a floating flyout is raised instead of opening its flyout.
         let mut raise: Option<&'static str> = None;
+        let labels = app.session.prefs.tool_group_labels;
         let mut i = 0;
         while i < all.len() {
-            if all[i].0.is_some() && !app.session.prefs.tool_group_labels {
-                // User Interface › Show Tool Group Labels off: a faint dash between the groups.
-                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
-                ui.painter().line_segment([r.center() - vec2(6.0, 0.0), r.center() + vec2(6.0, 0.0)], egui::Stroke::new(1.0, t.divider));
+            if all[i].0.is_some() && !labels {
+                // User Interface › Show Tool Group Labels off: the tools run on from group to group,
+                // in one column or two (as the reference's Basic toolbar in two), with nothing
+                // between the groups.
             } else if let Some(cat) = all[i].0 {
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
                 // A long name is cut to its first four characters in the single column.
@@ -214,18 +221,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     if cols == 1 && cat.chars().count() > 6 { format!("{}...", cat.chars().take(4).collect::<String>()) } else { cat.to_string() };
                 ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
             }
-            // One row = `cols` slots (a category label always starts a new row).
+            // One row = `cols` slots (a category label always starts a new row; without labels,
+            // nothing does).
             let mut row = vec![i];
-            while row.len() < cols && i + row.len() < all.len() && all[i + row.len()].0.is_none() {
+            while row.len() < cols && i + row.len() < all.len() && (all[i + row.len()].0.is_none() || !labels) {
                 row.push(i + row.len());
             }
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                if cols == 1 {
-                    ui.add_space((WIDTH - 36.0) / 2.0);
-                } else {
-                    ui.add_space(2.0);
-                }
+                // Centred on the panel's inside (`bounds`: within its border and, docked, the
+                // separator line egui reserves on its right), not on `WIDTH`, which sat them 2½ pt
+                // right of centre docked; nor on this row, which the scroll area starts ½ pt in.
+                ui.add_space((bounds.center().x - cols as f32 * 18.0 - ui.cursor().min.x).max(0.0));
                 for &k in &row {
                     let slot = &all[k].1;
                     let shown_id = if slot.contains(&active) {
@@ -341,6 +348,7 @@ fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<Flyo
 /// Options.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
+        "dimension" => crate::dialogs::dimension::open(app),
         "hand" => app.run("view.fitArtboard", json!({})),
         "zoom" => app.run("view.actualSize", json!({})),
         "rotate" | "scale" | "reflect" | "shear" | "selection" | "directSelection" | "groupSelection" => {
@@ -389,6 +397,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 /// Warp's mesh and pins, the Artboard tool's Move and Scale Artwork with Artboard (set through
 /// `tool.setOption`).
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if app.session.tool_id() == "dimension" {
+        return crate::dialogs::dimension::controls(app, ui);
+    }
     /// (value, label) of each choice.
     type Choices = &'static [(&'static str, &'static str)];
     const MIRROR: [(&str, &str, Choices); 2] = [
@@ -462,38 +473,44 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes, screen mode and Edit Toolbar, as
 /// large as the toolbar's `cols` (one or two) leave room for (#1129): in two columns the proxy and
 /// buttons grow and the three drawing modes show side by side.
+/// The All Tools drawer's Show section hides any of them but Edit Toolbar.
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usize) {
     let two = cols == 2;
-    ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
-    ui.add_space(5.0);
+    let show = app.ui.toolbar_show;
+    if show.fill_stroke {
+        ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
+        ui.add_space(5.0);
+    }
     // Color (the last solid colour), Gradient (the last gradient) and None, as commands.
     let (chip, gap) = if two { (17.0, 4.0) } else { (11.0, 2.0) };
-    ui.horizontal(|ui| {
-        ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
-        ui.spacing_mut().item_spacing.x = gap;
-        let mut clicked = None;
-        for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
-            let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
-            match cmd {
-                "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
-                "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
-                _ => widgets::paint_chip(ui, r, &Paint::None),
+    if show.coloring {
+        ui.horizontal(|ui| {
+            ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
+            ui.spacing_mut().item_spacing.x = gap;
+            let mut clicked = None;
+            for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
+                let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
+                match cmd {
+                    "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
+                    "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
+                    _ => widgets::paint_chip(ui, r, &Paint::None),
+                }
+                if resp.on_hover_text(tl!(tip)).clicked() {
+                    clicked = Some(cmd);
+                }
             }
-            if resp.on_hover_text(tl!(tip)).clicked() {
-                clicked = Some(cmd);
+            if let Some(cmd) = clicked {
+                app.run(cmd, json!({})).ok();
             }
-        }
-        if let Some(cmd) = clicked {
-            app.run(cmd, json!({})).ok();
-        }
-    });
-    ui.add_space(6.0);
+        });
+        ui.add_space(6.0);
+    }
     let modes = [
         (vectorcraft_engine::DrawMode::Normal, "dc-draw-normal", "Draw Normal", "normal"),
         (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
         (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
     ];
-    if two {
+    if two && show.draw_mode {
         // Side by side, each one a click away.
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 3.0 * 22.0) / 2.0);
@@ -507,12 +524,13 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
     ui.vertical_centered(|ui| {
         // One column: the current mode's button, which cycles them.
         if !two
+            && show.draw_mode
             && let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
             && widgets::icon_button(ui, icon, &format!("{} (Shift+D)", tl!(name)), mode != vectorcraft_engine::DrawMode::Normal, 26.0).clicked()
         {
             app.run("view.drawMode", json!({})).ok();
         }
-        if widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
+        if show.screen_mode && widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
             app.run("view.screenMode", json!({})).ok();
         }
         // Edit Toolbar: the All Tools drawer opens beside the toolbar, by this button.
@@ -629,9 +647,12 @@ fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating
 /// One row per tool: icon, name and shortcut, with a dot by the active tool. Returns the tool clicked.
 fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String]) -> Option<&'static str> {
     let mut chosen = None;
-    let w = 250.0;
-    for id in tools {
-        let Some(tool) = tool_info(id) else { continue };
+    let lang = crate::i18n::current();
+    let color = |tool: &ToolInfo| if active == tool.id { t.flyout_active } else { t.text_strong };
+    let rows: Vec<(&ToolInfo, RowText)> =
+        tools.iter().filter_map(|id| tool_info(id)).map(|tool| (tool, row_text(ui, lang, tool, color(tool)))).collect();
+    let w = rows_width(rows.iter().map(|(_, text)| text));
+    for (tool, (name, shortcut)) in rows {
         let is_active = active == tool.id;
         let (r, resp) = ui.allocate_exact_size(vec2(w, 30.0), Sense::click());
         if resp.hovered() {
@@ -642,22 +663,37 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String]) -> Option<
         }
         let ir = egui::Rect::from_min_size(r.min + vec2(24.0, 6.0), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, t.icon);
-        let color = if is_active { t.flyout_active } else { t.text_strong };
-        ui.painter().text(r.left_center() + vec2(52.0, 0.0), egui::Align2::LEFT_CENTER, tl!(tool.label), egui::FontId::proportional(13.0), color);
-        if let Some(sc) = crate::shortcut_editor::tool_shortcut(tool.id) {
-            ui.painter().text(
-                r.right_center() - vec2(18.0, 0.0),
-                egui::Align2::RIGHT_CENTER,
-                format!("({sc})"),
-                egui::FontId::proportional(13.0),
-                color,
-            );
+        let color = color(tool);
+        ui.painter().galley(pos2(r.left() + NAME_X, r.center().y - name.size().y / 2.0), name, color);
+        if let Some(sc) = shortcut {
+            ui.painter().galley(pos2(r.right() - ROW_END - sc.size().x, r.center().y - sc.size().y / 2.0), sc, color);
         }
         if resp.clicked() {
             chosen = Some(tool.id);
         }
     }
     chosen
+}
+
+/// A flyout row's name and its shortcut, laid out.
+type RowText = (Arc<egui::Galley>, Option<Arc<egui::Galley>>);
+
+/// Where a flyout row's name starts, the least gap between it and the shortcut, and the room right
+/// of the shortcut.
+const NAME_X: f32 = 52.0;
+const NAME_GAP: f32 = 14.0;
+const ROW_END: f32 = 18.0;
+
+/// The name of `tool` in `lang` and its shortcut in brackets, as a flyout row draws them.
+fn row_text(ui: &Ui, lang: crate::i18n::Lang, tool: &ToolInfo, color: Color32) -> RowText {
+    let lay = |s: String| ui.painter().layout_no_wrap(s, egui::FontId::proportional(13.0), color);
+    (lay(crate::i18n::tr(lang, tool.label).to_string()), crate::shortcut_editor::tool_shortcut(tool.id).map(|sc| lay(format!("({sc})"))))
+}
+
+/// The width of a flyout's rows: 250 pt, or what its longest name needs to stay clear of its
+/// shortcut (translated names are far longer than the English ones, #1616).
+fn rows_width<'a>(rows: impl Iterator<Item = &'a RowText>) -> f32 {
+    rows.map(|(name, sc)| NAME_X + name.size().x + sc.as_ref().map_or(0.0, |sc| NAME_GAP + sc.size().x) + ROW_END).fold(250.0, f32::max)
 }
 
 /// The grab bar of the group whose first tool is `key` (one id, flyout or floating, so a drag
@@ -901,6 +937,36 @@ pub(crate) mod tests {
         assert_eq!(frame_in(&mut app, &ctx, 8.0, vec![], 500.0)[0], tools[0]);
     }
 
+    /// The tool buttons sit in the middle of the panel, between its border and the separator
+    /// line, docked and floating, in one or two columns (docked, they sat 2½ pt right of centre).
+    #[test]
+    fn the_tool_buttons_are_centred_in_the_panel() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        for (double, floating) in [(false, None), (true, None), (false, Some([100.0, 100.0])), (true, Some([100.0, 100.0]))] {
+            app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
+            app.ui.toolbar_pos = floating;
+            frame(&mut app, &ctx, 0.0, vec![]);
+            let tools = frame(&mut app, &ctx, 0.1, vec![]);
+            // The title bar spans the panel's inside.
+            let hdr = ctx.viewport(|vp| {
+                vp.prev_pass
+                    .widgets
+                    .layers()
+                    .flat_map(|(_, w)| w.iter())
+                    .filter(|w| w.rect.height() == 14.0 && w.rect.width() > 40.0)
+                    .map(|w| w.rect)
+                    .next()
+            });
+            let hdr = hdr.unwrap();
+            let first = tools[0];
+            let row_right = tools.iter().filter(|r| r.top() == first.top()).map(|r| r.right()).fold(first.right(), f32::max);
+            assert_eq!(row_right - hdr.center().x, hdr.center().x - first.left(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
+            assert!(first.left() >= hdr.left() && row_right <= hdr.right(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
+        }
+    }
+
     /// #812: double-clicking the Artboard tool opens Artboard Options of the active artboard, a
     /// graph tool Graph Type for the selected graph, and the Magic Wand tool its panel.
     #[test]
@@ -1017,6 +1083,36 @@ pub(crate) mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
         assert_eq!((b.x0, b.y0), (35.0, 10.0));
+    }
+
+    /// #1616: in every language a flyout is wide enough that no tool's name runs into its shortcut
+    /// (the Spanish Live Paint names need more than the 250 pt the English ones fit in).
+    #[test]
+    fn a_flyout_is_as_wide_as_its_longest_translated_row() {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            for lang in crate::i18n::Lang::all() {
+                for group in TOOL_GROUPS {
+                    let rows: Vec<RowText> = group.iter().map(|tool| row_text(ui, lang, tool, Color32::WHITE)).collect();
+                    let w = rows_width(rows.iter());
+                    assert!(w >= 250.0, "{lang:?}");
+                    for (tool, (name, sc)) in group.iter().zip(&rows) {
+                        let name_end = NAME_X + name.size().x;
+                        let shortcut_start = w - ROW_END - sc.as_ref().map_or(0.0, |sc| sc.size().x);
+                        assert!(
+                            name_end <= shortcut_start + 0.01,
+                            "{lang:?} {}: the name ends at {name_end}, the shortcut starts at {shortcut_start}",
+                            tool.id
+                        );
+                    }
+                }
+            }
+            let es = crate::i18n::Lang::from_code("es").unwrap();
+            let live_paint = TOOL_GROUPS.iter().find(|g| g.iter().any(|t| t.id == "livePaintSelection")).expect("the Live Paint group");
+            let rows: Vec<RowText> = live_paint.iter().map(|tool| row_text(ui, es, tool, Color32::WHITE)).collect();
+            assert!(rows_width(rows.iter()) > 250.0, "the Spanish Live Paint flyout is wider than the English one");
+        });
+        out.textures_delta.clear();
     }
 
     #[test]
@@ -1210,6 +1306,42 @@ pub(crate) mod tests {
         lefts.len()
     }
 
+    /// Rows of tool buttons by their tops: how many buttons each row holds, top to bottom.
+    fn row_sizes(rects: &[egui::Rect]) -> Vec<usize> {
+        let mut rows: Vec<(i32, usize)> = vec![];
+        for r in rects {
+            let top = r.top().round() as i32;
+            match rows.last_mut() {
+                Some((t, n)) if *t == top => *n += 1,
+                _ => rows.push((top, 1)),
+            }
+        }
+        rows.into_iter().map(|(_, n)| n).collect()
+    }
+
+    /// #1736: without group labels (as it ships), the tools run on from group to group: one column
+    /// evenly spaced, with nothing between the groups; two columns with every row full but maybe
+    /// the last. With the labels, each group starts its own row under its name.
+    #[test]
+    fn the_tools_run_on_without_group_labels() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        let one = frame_in(&mut app, &ctx, 0.0, vec![], 1600.0);
+        assert_eq!(one.len(), slots(&app).len());
+        let steps: Vec<f32> = one.windows(2).map(|w| w[1].top() - w[0].top()).collect();
+        assert!(steps.iter().all(|d| (d - steps[0]).abs() < 0.5), "evenly spaced: {steps:?}");
+        app.ui.toolbar_double = true;
+        let rows = row_sizes(&frame_in(&mut app, &ctx, 0.5, vec![], 1600.0));
+        let slots = slots(&app).len();
+        assert_eq!(rows.iter().sum::<usize>(), slots);
+        assert!(rows[..rows.len() - 1].iter().all(|n| *n == 2), "{rows:?}");
+        assert_eq!(rows.len(), slots.div_ceil(2));
+        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
+        let labelled = row_sizes(&frame_in(&mut app, &ctx, 1.0, vec![], 1600.0));
+        assert!(labelled.len() > rows.len() && labelled.contains(&1), "{labelled:?}");
+    }
+
     #[test]
     fn the_double_arrow_toggles_one_and_two_columns_in_a_short_window() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -1391,8 +1523,8 @@ pub(crate) mod tests {
         assert!(r.min.x.is_finite() && r.min.y.is_finite() && r.left() >= 0.0, "on screen: {r:?}");
     }
 
-    /// User Interface › Show Tool Group Labels (#663): on, the toolbar names its groups; off, it
-    /// shows none of the names, a faint dash between the groups instead.
+    /// User Interface › Show Tool Group Labels (#663): off as it ships (#1736), the toolbar shows
+    /// none of its groups' names and nothing between the groups; on, it names them.
     #[test]
     fn tool_group_labels_can_be_hidden() {
         fn texts(s: &egui::Shape, out: &mut Vec<String>) {
@@ -1413,11 +1545,11 @@ pub(crate) mod tests {
             out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
             shown
         };
-        let with = draw(&mut app);
-        assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
-        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": false})).unwrap();
         let without = draw(&mut app);
         assert!(!without.iter().any(|t| ["Select", "Shapes", "Draw", "Modify", "Type"].contains(&t.as_str())), "{without:?}");
+        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
+        let with = draw(&mut app);
+        assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
     }
 
     /// Hover `at` for two seconds, coming from elsewhere: the texts painted meanwhile.

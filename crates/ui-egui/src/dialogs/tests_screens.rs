@@ -1,5 +1,6 @@
 //! Export for Screens, drawn headlessly: the fields it opens on (defaults, then the document's last
-//! settings), the artboard choice, Format Settings, desktop folders and web downloads.
+//! settings, and the artboards the Artboard tool has selected), the artboard choice, Format
+//! Settings, desktop folders and web downloads.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,6 +8,7 @@ use std::rc::Rc;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use super::tests_export::{frame, kind, set};
 use super::*;
@@ -21,7 +23,10 @@ fn app(artboards: usize, web: bool) -> (VectorcraftApp, Log) {
     let l = log.clone();
     let mut services = Services::default();
     if web {
-        services.download = Some(Box::new(move |name: &str, bytes: &[u8]| l.borrow_mut().push((name.to_string(), bytes.to_vec()))));
+        services.download = Some(Box::new(move |name: &str, bytes: &[u8]| {
+            l.borrow_mut().push((name.to_string(), bytes.to_vec()));
+            Ok(())
+        }));
     } else {
         services.reveal = Some(Box::new(move |path: &str| {
             l.borrow_mut().push((path.to_string(), vec![]));
@@ -57,7 +62,7 @@ fn opens_on_defaults_and_draws_every_view() {
     assert_eq!(field(&app, "folder"), json!(fileio::export_folder().unwrap_or_default()), "the Desktop, else home");
     assert_eq!((field(&app, "openLocation"), field(&app, "subfolders"), field(&app, "preset")), (json!(true), json!(false), json!("")));
     let settings = field(&app, "settings");
-    for f in ["png", "png8", "jpg", "webp", "gif", "svg", "pdf"] {
+    for f in ["png", "png8", "jpg", "webp", "gif", "tiff", "svg", "pdf"] {
         assert!(settings[f].is_object(), "{f} has settings");
     }
     assert!(settings["jpg"].get("quality").is_none() && settings["jpg"].get("imageMap").is_none(), "rows choose quality; no maps");
@@ -69,7 +74,7 @@ fn opens_on_defaults_and_draws_every_view() {
     frame(&mut app);
     set(&mut app, "tab", json!("artboards"));
     set(&mut app, "select", json!("full"));
-    for f in ["png", "png8", "jpg", "webp", "gif", "svg", "pdf"] {
+    for f in ["png", "png8", "jpg", "webp", "gif", "tiff", "svg", "pdf"] {
         set(&mut app, "__settings", json!(f));
         frame(&mut app);
         assert_eq!(field(&app, "__settings"), json!(f));
@@ -94,6 +99,82 @@ fn checked_artboards_read_as_a_range() {
     ] {
         assert_eq!(export_for_screens::range_text(&boards), text);
     }
+}
+
+#[test]
+fn opens_with_the_artboards_the_artboard_tool_selected_and_exports_only_them() {
+    let (mut app, log) = app(4, true);
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let view = app.view_info();
+    let click = |app: &mut VectorcraftApp, i: usize, shift: bool| {
+        let mods = Mods { shift, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, pressure: 1.0 }, view);
+        }
+    };
+    // A click on artboard 2 and a Shift-click on artboard 3 select those two. The dialog opens with
+    // them checked, and Download writes only them.
+    click(&mut app, 1, false);
+    click(&mut app, 2, true);
+    open(&mut app);
+    assert_eq!(
+        (field(&app, "select"), field(&app, "range"), field(&app, "boards")),
+        (json!("range"), json!("2-3"), json!([false, true, true, false]))
+    );
+    frame(&mut app);
+    assert_eq!(field(&app, "boards"), json!([false, true, true, false]), "drawing the dialog keeps them");
+    let r = confirm(&mut app).unwrap();
+    assert_eq!(r["files"], json!(["Artboard-2.png", "Artboard-3.png"]));
+    assert_eq!(log.borrow().len(), 1, "one zip");
+    // With every artboard selected it opens on All.
+    click(&mut app, 0, true);
+    click(&mut app, 3, true);
+    open(&mut app);
+    assert_eq!((field(&app, "select"), field(&app, "range"), field(&app, "boards")), (json!("all"), json!("1-4"), json!([true, true, true, true])));
+}
+
+#[test]
+fn opens_with_the_rows_selected_in_the_artboards_panel_else_on_the_saved_choice() {
+    let (mut app, _) = app(4, true);
+    // An export of the full document with a prefix and a JPEG row is the saved choice.
+    app.run("file.exportForScreens", json!({"fullDocument": true, "prefix": "proof-", "formats": [{"format": "jpg", "quality": 80, "scale": "2x"}]}))
+        .unwrap();
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    let ctx = egui::Context::default();
+    let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 400.0)));
+    let panel = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let raw = egui::RawInput { events, time: Some(time), screen_rect: screen, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| crate::panels::artboards::show(app, ui));
+        out.textures_delta.clear();
+        out
+    };
+    // With the Artboard tool in use, a click on Artboard 2's row and a Shift-click on Artboard 3's
+    // select those two. The dialog opens with them checked instead of the saved Full Document.
+    let rows = panel(&mut app, 0.0, vec![]);
+    for (time, label, modifiers) in [(1.0, "Artboard 2", egui::Modifiers::NONE), (2.0, "Artboard 3", egui::Modifiers::SHIFT)] {
+        let at = screen_text_at(&rows, label);
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        panel(&mut app, time, vec![egui::Event::ModifiersChanged(modifiers), egui::Event::PointerMoved(at), button(true), button(false)]);
+    }
+    assert_eq!(crate::panels::artboards::picked(&app, 4), [1, 2], "the panel highlights rows 2 and 3");
+    open(&mut app);
+    let picked = app.ui.dialog.take().expect("a dialog is open").fields;
+    assert_eq!((&picked["select"], &picked["range"], &picked["boards"]), (&json!("range"), &json!("2-3"), &json!([false, true, true, false])));
+    // With the Selection tool in use, the dialog opens on the saved choice.
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    open(&mut app);
+    assert_eq!((field(&app, "select"), field(&app, "range"), field(&app, "boards")), (json!("full"), json!("1-4"), json!([true, true, true, true])));
+    assert_eq!((field(&app, "prefix"), field(&app, "formats")[0]["format"].clone()), (json!("proof-"), json!("jpg")));
+    // Only the artboard fields differ.
+    let others = |fields: &serde_json::Map<String, Value>| {
+        let mut f = fields.clone();
+        for k in ["select", "range", "boards"] {
+            f.remove(k);
+        }
+        f
+    };
+    assert_eq!(others(&picked), others(&app.ui.dialog.as_ref().expect("a dialog is open").fields));
 }
 
 #[test]
@@ -189,4 +270,262 @@ fn a_preset_export_reopens_on_its_rows() {
     open(&mut app);
     let scales: Vec<Value> = field(&app, "formats").as_array().unwrap().iter().map(|r| r["scale"].clone()).collect();
     assert_eq!(scales, [json!("64w"), json!("3x"), json!("144ppi")]);
+}
+
+/// Persistent frames keep dropdowns open between the pointer press and release.
+struct ScreensFrame {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl ScreensFrame {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        Self { ctx, time: 0.0 }
+    }
+
+    fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        self.time += 0.1;
+        let input = egui::RawInput {
+            events,
+            time: Some(self.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+            ..Default::default()
+        };
+        let mut out = self.ctx.run_ui(input, |ui| super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    fn settle(&mut self, app: &mut VectorcraftApp) -> egui::FullOutput {
+        self.frame(app, vec![]);
+        self.frame(app, vec![])
+    }
+
+    fn asset_panel(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        self.time += 0.1;
+        let input = egui::RawInput {
+            events,
+            time: Some(self.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(236.0, 700.0))),
+            ..Default::default()
+        };
+        let mut out = self.ctx.run_ui(input, |ui| crate::panels::show_icon_panel(app, ui, "assetExport"));
+        out.textures_delta.clear();
+        out
+    }
+
+    fn click(&mut self, app: &mut VectorcraftApp, at: egui::Pos2) -> egui::FullOutput {
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        self.frame(app, vec![egui::Event::PointerMoved(at)]);
+        self.frame(app, vec![button(true)]);
+        self.frame(app, vec![button(false)]);
+        self.settle(app)
+    }
+
+    fn click_label(&mut self, app: &mut VectorcraftApp, label: &str) -> egui::FullOutput {
+        let out = self.settle(app);
+        self.click(app, screen_text_at(&out, label))
+    }
+
+    fn choose(&mut self, app: &mut VectorcraftApp, current: &str, next: &str) {
+        let out = self.click_label(app, current);
+        self.click(app, screen_text_at(&out, next));
+    }
+}
+
+fn screen_text_at(out: &egui::FullOutput, label: &str) -> egui::Pos2 {
+    fn find(shape: &egui::Shape, label: &str) -> Option<egui::Pos2> {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == label => Some(t.visual_bounding_rect().center()),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, label)),
+            _ => None,
+        }
+    }
+    out.shapes.iter().find_map(|s| find(&s.shape, label)).unwrap_or_else(|| panic!("missing {label}: {}", crate::tests_labels::shapes_text(out)))
+}
+
+/// First-directory entries of the big-endian TIFF chosen below: tag, type, count, inline value.
+fn big_tiff_tags(bytes: &[u8]) -> Vec<(u16, u16, u32, u16)> {
+    assert_eq!(&bytes[..4], b"MM\0*");
+    let short = |at| u16::from_be_bytes(bytes[at..at + 2].try_into().unwrap());
+    let long = |at| u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap());
+    let dir = long(4) as usize;
+    (0..usize::from(short(dir)))
+        .map(|i| {
+            let at = dir + 2 + 12 * i;
+            (short(at), short(at + 2), long(at + 4), short(at + 8))
+        })
+        .collect()
+}
+
+/// Locate the gear from the painted Formats label and its production column width.
+fn screen_format_gear(out: &egui::FullOutput, width: f32) -> egui::Pos2 {
+    fn label(shape: &egui::Shape) -> Option<egui::Rect> {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Formats:" => Some(t.visual_bounding_rect()),
+            egui::Shape::Vec(shapes) => shapes.iter().find_map(label),
+            _ => None,
+        }
+    }
+    let label = out.shapes.iter().find_map(|s| label(&s.shape)).expect("painted Formats row");
+    // The existing 24 pt gear is right-aligned in the 350 pt dialog or 236 pt panel.
+    egui::pos2(label.left() + width - 12.0, label.center().y)
+}
+
+fn saved_tiff_alias_gear(alias: &str, asset_panel: bool) {
+    let (mut app, log) = app(1, true);
+    app.run("paint.setStroke", json!({"none": true})).unwrap();
+    app.run("object.convertDocumentColorMode", json!({"mode": "cmyk"})).unwrap();
+    if asset_panel {
+        app.run("assets.add", json!({"name": "Badge"})).unwrap();
+    }
+    let rows = json!([{"format": alias, "scale": "2x", "suffix": "@2x", "antiAlias": "none"}]);
+    app.run(
+        "assets.settings.set",
+        json!({
+            "formats": rows.clone(),
+            "settings": {
+                "tiff": {"colorModel": "rgb", "byteOrder": "little", "lzw": false, "embedIcc": false, "antiAlias": "type"},
+                "png": {"interlaced": true}
+            }
+        }),
+    )
+    .unwrap();
+    let saved_before = app.session.active().unwrap().doc.export_settings.clone();
+    if !asset_panel {
+        open(&mut app);
+    }
+    let mut h = ScreensFrame::new();
+    let draw = |h: &mut ScreensFrame, app: &mut VectorcraftApp, events| {
+        if asset_panel { h.asset_panel(app, events) } else { h.frame(app, events) }
+    };
+    draw(&mut h, &mut app, vec![]);
+    let out = draw(&mut h, &mut app, vec![]);
+    let gear = screen_format_gear(&out, if asset_panel { 236.0 } else { 350.0 });
+    draw(&mut h, &mut app, vec![egui::Event::PointerMoved(gear)]);
+    for pressed in [true, false] {
+        draw(
+            &mut h,
+            &mut app,
+            vec![egui::Event::PointerButton { pos: gear, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+        );
+    }
+    assert_eq!(field(&app, "__settings"), "tiff", "gear for {alias}, asset panel={asset_panel}");
+    assert_eq!(field(&app, "tab"), if asset_panel { "assets" } else { "artboards" });
+    let out = h.settle(&mut app);
+    for label in ["Format Settings", "TIFF", "Color Model:", "RGB", "Byte Order:", "Little-endian (II)", "LZW Compression", "Embed ICC Profile"] {
+        screen_text_at(&out, label);
+    }
+    assert_eq!(field(&app, "formats"), rows, "opening the gear preserves the saved spelling and row options");
+    assert_eq!(app.session.active().unwrap().doc.export_settings, saved_before, "opening settings does not save them");
+    let mut expected = field(&app, "settings");
+    assert_eq!(expected["tiff"]["colorModel"], "rgb", "saved RGB overrides the CMYK document default");
+    assert_eq!(expected["tiff"]["lzw"], false);
+    assert_eq!(expected["tiff"]["embedIcc"], false);
+    assert_eq!(expected["tiff"]["antiAlias"], "type");
+    assert_eq!(expected["png"]["interlaced"], true);
+    h.choose(&mut app, "Little-endian (II)", "Big-endian (MM)");
+    expected["tiff"]["byteOrder"] = json!("big");
+    assert_eq!(field(&app, "settings"), expected, "only the chosen TIFF option changes");
+    h.click_label(&mut app, "Done");
+    assert_eq!(field(&app, "formats"), rows);
+    h.click_label(&mut app, "Download");
+    assert!(app.ui.dialog.is_none(), "{}", app.ui.status);
+    {
+        let log = log.borrow();
+        let [(name, bytes)] = log.as_slice() else { panic!("expected one TIFF download for {alias}") };
+        assert_eq!(name, if asset_panel { "Badge@2x.tif" } else { "Artboard-1@2x.tif" });
+        let tags = big_tiff_tags(bytes); // The gear's edited canonical settings reach the aliased row.
+        assert!(tags.contains(&(259, 3, 1, 1)), "saved uncompressed option survives");
+        assert!(tags.contains(&(262, 3, 1, 2)), "saved RGB survives");
+        assert!(!tags.iter().any(|t| t.0 == 34675), "saved profile-off option survives");
+        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap();
+        assert_eq!((img.width(), img.height()), if asset_panel { (60, 40) } else { (120, 80) });
+    }
+    let saved = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!(saved["formats"], rows, "export preserves the alias, scale, suffix and row override");
+    assert_eq!(saved["settings"], expected, "canonical TIFF edits and other format settings persist");
+    open(&mut app);
+    assert_eq!(field(&app, "formats"), rows);
+    assert_eq!(field(&app, "settings"), expected);
+}
+
+#[test]
+fn tiff_saved_alias_gear_opens_and_edits_settings_in_screens() {
+    for alias in ["tiff", "tif", "TIFF", ".tif"] {
+        saved_tiff_alias_gear(alias, false);
+    }
+}
+
+#[test]
+fn tiff_saved_alias_gear_opens_and_edits_settings_in_asset_export() {
+    for alias in ["tiff", "tif", "TIFF", ".tif"] {
+        saved_tiff_alias_gear(alias, true);
+    }
+}
+
+#[test]
+fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
+    let (mut app, log) = app(2, true);
+    app.run("paint.setStroke", json!({"none": true})).unwrap();
+    app.run("paint.setFill", json!({"color": "#c03020"})).unwrap();
+    open(&mut app);
+    // Begin with an existing PNG row; TIFF must be chosen from the actual popup.
+    set(&mut app, "formats", json!([{"format": "png", "scale": "2x", "suffix": "@2x"}]));
+    set(&mut app, "prefix", json!("proof-"));
+    let mut h = ScreensFrame::new();
+    h.choose(&mut app, "PNG", "TIFF");
+    assert_eq!(field(&app, "formats"), json!([{"format": "tiff", "scale": "2x", "suffix": "@2x"}]));
+    // Leave only the first of two boards checked.
+    h.click_label(&mut app, "Artboard 2");
+    assert_eq!(field(&app, "boards"), json!([true, false]));
+    assert_eq!(field(&app, "range"), json!("1"));
+
+    // Exercise the settings dropdown independently of the row's format choice.
+    set(&mut app, "__settings", json!("png"));
+    h.choose(&mut app, "PNG", "TIFF");
+    assert_eq!(field(&app, "__settings"), json!("tiff"));
+    let settings = field(&app, "settings");
+    assert_eq!(settings["tiff"]["colorModel"], "rgb");
+    assert_eq!(settings["tiff"]["byteOrder"], "little");
+    assert_eq!(settings["tiff"]["lzw"], true);
+    assert_eq!(settings["tiff"]["embedIcc"], true);
+    h.choose(&mut app, "Little-endian (II)", "Big-endian (MM)");
+    h.click_label(&mut app, "LZW Compression");
+    h.click_label(&mut app, "Embed ICC Profile");
+    let settings = field(&app, "settings");
+    assert_eq!(settings["tiff"]["byteOrder"], "big");
+    assert_eq!(settings["tiff"]["lzw"], false);
+    assert_eq!(settings["tiff"]["embedIcc"], false);
+    h.click_label(&mut app, "Done");
+    h.click_label(&mut app, "Download");
+    assert!(app.ui.dialog.is_none(), "{}", app.ui.status);
+
+    {
+        let log = log.borrow();
+        let [(name, bytes)] = log.as_slice() else { panic!("expected one TIFF download") };
+        assert_eq!(name, "proof-Artboard-1@2x.tif");
+        let tags = big_tiff_tags(bytes);
+        assert!(tags.contains(&(259, 3, 1, 1)), "uncompressed as selected");
+        assert!(tags.contains(&(262, 3, 1, 2)), "RGB");
+        assert!(!tags.iter().any(|t| t.0 == 34675), "ICC profile disabled");
+        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap().to_rgba8();
+        assert_eq!(img.dimensions(), (120, 80));
+        assert_eq!(img.get_pixel(0, 0).0[3], 0, "transparent board corner");
+        let inside = img.get_pixel(40, 28).0;
+        assert!(inside[0] > inside[1] && inside[3] == 255, "ellipse at the scaled position: {inside:?}");
+    }
+
+    open(&mut app);
+    assert_eq!(field(&app, "formats"), json!([{"format": "tiff", "scale": "2x", "suffix": "@2x"}]));
+    assert_eq!(field(&app, "boards"), json!([true, false]));
+    assert_eq!(field(&app, "prefix"), "proof-");
+    assert_eq!(field(&app, "settings")["tiff"], settings["tiff"]);
+    // Existing vector and raster choices remain selectable.
+    h.choose(&mut app, "TIFF", "SVG");
+    assert_eq!(field(&app, "formats")[0]["format"], "svg");
+    h.choose(&mut app, "SVG", "PNG");
+    assert_eq!(field(&app, "formats")[0]["format"], "png");
 }

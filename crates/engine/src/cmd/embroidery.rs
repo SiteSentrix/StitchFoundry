@@ -1070,7 +1070,7 @@ pub(crate) fn machine_file_doc(title: &str, bytes: &[u8], ext: &str) -> Result<(
             NodeKind::Path { path: PathData { subpaths }, rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: false, guide: false };
         let mut n = vectorcraft_doc::Node::new(id, kind);
         n.name = Some(thread.label()).filter(|l| !l.is_empty());
-        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(c.r, c.g, c.b)), 0.3 * PT_PER_MM);
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(c.r, c.g, c.b)), 0.3 * PT_PER_MM).into();
         let mut e = Embroidery::manual();
         e.thread = Some(thread);
         n.embroidery = Some(Box::new(e));
@@ -1960,7 +1960,7 @@ fn draw(s: &mut Session, p: &Value) -> Result<Value> {
     let id = s.edit(label, |d, sel| {
         let id = d.alloc_id();
         let mut n = vectorcraft_doc::Node::new(id, kind);
-        n.appearance = appearance;
+        n.appearance = appearance.into();
         n.embroidery = Some(Box::new(e));
         d.insert(parent, index, n)?;
         sel.set([id]);
@@ -2462,7 +2462,7 @@ pub(super) fn sheet_text(doc: &mut Document, x: f64, y: f64, text: &str, size: f
     };
     let t = vectorcraft_doc::text::TextObject::point(kurbo::Point::new(x, y), text, style);
     let mut n = vectorcraft_doc::Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
-    n.appearance = Appearance::basic(Paint::solid(color), Paint::None, 0.0);
+    n.appearance = Appearance::basic(Paint::solid(color), Paint::None, 0.0).into();
     let layer = doc.layers.first().map(|l| l.id);
     doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
     Ok(())
@@ -2713,7 +2713,7 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         let kind =
             NodeKind::Path { path: PathData { subpaths }, rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: false, guide: false };
         let mut n = vectorcraft_doc::Node::new(doc.alloc_id(), kind);
-        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(c.r, c.g, c.b)), 0.5);
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(c.r, c.g, c.b)), 0.5).into();
         doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
     }
     // the figures (a pattern: one line under the design)

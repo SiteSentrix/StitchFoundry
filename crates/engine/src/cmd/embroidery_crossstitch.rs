@@ -151,11 +151,12 @@ fn cell_mm(p: &Value, cmd: &str) -> Result<Option<f64>> {
 }
 
 fn data<'a>(n: &'a Node, key: &str) -> Option<&'a str> {
-    n.attrs.as_deref()?.data.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+    n.extras().attrs.as_deref()?.data.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
 }
 
 fn with_data(n: &mut Node, key: &str, value: String) {
-    let attrs = n.attrs.get_or_insert_with(|| Box::new(ObjectAttributes::default()));
+    let mut extras = n.extras_mut();
+    let attrs = extras.attrs.get_or_insert_with(|| Box::new(ObjectAttributes::default()));
     attrs.data.retain(|(k, _)| k != key);
     attrs.data.push((key.to_string(), value));
 }

@@ -646,8 +646,13 @@ mod tests {
         // The web downloads the file under that name.
         let downloads = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
         let dl = downloads.clone();
-        let services =
-            crate::Services { download: Some(Box::new(move |name: &str, _: &[u8]| dl.borrow_mut().push(name.to_string()))), ..Default::default() };
+        let services = crate::Services {
+            download: Some(Box::new(move |name: &str, _: &[u8]| {
+                dl.borrow_mut().push(name.to_string());
+                Ok(())
+            })),
+            ..Default::default()
+        };
         let mut web = VectorcraftApp::new(Session::new(), services);
         web.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         web.run("ui.saveSwatchLibrary", json!({})).unwrap();

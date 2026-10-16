@@ -4,7 +4,6 @@
 //! Every operation counts against a budget and procedures nest only so deep, so a looping or
 //! recursing program ends with [`PsError::Limit`] instead of hanging.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use vectorcraft_geom::Affine;
@@ -30,6 +29,8 @@ pub(crate) const MAX_GSAVE: usize = 1000;
 const MAX_MEMORY: usize = 1 << 30;
 
 pub(crate) struct Interp<'a> {
+    /// The list of the arrays and dictionaries made since this started ([`super::obj::track`]).
+    made: u64,
     pub lex: Lexer<'a>,
     pub stack: Vec<Obj>,
     pub dicts: Vec<DictRef>,
@@ -86,7 +87,7 @@ struct SaveMark {
 }
 
 fn new_dict() -> DictRef {
-    Rc::new(RefCell::new(Dict::new()))
+    DictRef::new(Dict::new())
 }
 
 /// An encoding vector: 256 `/.notdef` names (type is read as Latin-1 whatever the encoding).
@@ -102,6 +103,7 @@ const CATEGORIES: &str = "Category Generic Font CIDFont CMap FontSet Encoding Fo
 
 impl<'a> Interp<'a> {
     pub fn new(src: &'a [u8], g: GState, out: Out) -> Self {
+        let made = super::obj::track();
         let system = new_dict();
         {
             let mut d = system.borrow_mut();
@@ -141,6 +143,7 @@ impl<'a> Interp<'a> {
             system.borrow_mut().insert(Key::name(name), Obj::Dict(d.clone()));
         }
         Self {
+            made,
             lex: Lexer::new(src),
             stack: vec![],
             dicts: vec![system.clone(), global.clone(), user.clone()],
@@ -206,6 +209,8 @@ impl<'a> Interp<'a> {
         self.dicts.clear();
         self.stack.clear();
         self.journal.clear();
+        // What the program linked into itself, reachable or not.
+        super::obj::release_tracked(self.made);
     }
 
     // ---------- the operand stack ----------

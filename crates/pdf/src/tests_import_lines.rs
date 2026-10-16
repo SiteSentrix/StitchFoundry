@@ -131,6 +131,47 @@ fn a_stroke_written_as_stroked_glyph_outlines_is_the_types_stroke() {
     assert_eq!(d.layers[0].children().unwrap().len(), 2);
 }
 
+/// A `.ai` page moved right in the row, so its art past the artboard clears the page before it
+/// (#1528), still has the stroke drawn on its type's glyphs read as the type's stroke.
+#[test]
+fn a_stroke_on_the_type_of_a_moved_ai_page_is_still_the_types_stroke() {
+    let ai = "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>";
+    let content = format!(
+        "0 g -70 10 80 20 re f BT 1 0 0 rg /F1 24 Tf 10 50 Td (Hi) Tj ET 0 0 1 RG 0.5 w {}{}",
+        outline('H', 10.0),
+        outline('i', 10.0 + 0.722 * 24.0)
+    );
+    let pages = [("0 g 10 10 20 20 re f", String::new()), (content.as_str(), HELVETICA.to_string())].map(|(c, resources)| PdfPage {
+        entries: ai.into(),
+        resources,
+        ..PdfPage::new(100.0, 100.0, c)
+    });
+    let d = import(&vectorcraft_testkit::pdf::pdf(&pages, None)).unwrap();
+    assert!(d.artboards[1].rect.x0 > d.artboards[0].rect.x1 + 36.0 + 1.0, "page 2 moved: {:?}", d.artboards);
+    let art = d.layers[1].children().unwrap();
+    assert_eq!(art.len(), 2, "the note and the type: {art:?}");
+    assert!(matches!(art[1].appearance.items.as_slice(), [AppearanceItem::Stroke(_)]), "{:?}", art[1].appearance);
+}
+
+#[test]
+fn glyphs_each_followed_by_their_stroked_outline_stay_one_object() {
+    // Type on a path is written glyph by glyph: each glyph, then its outline stroked in the same
+    // colour (a shadow under the type).
+    let glyph = |c: char, x: f64, stroke: &str| format!("BT 0 0 1 rg /F1 24 Tf {x} 50 Td ({c}) Tj ET {stroke} 0.5 w {}", outline(c, x));
+    let i_at = 10.0 + 0.722 * 24.0;
+    let d = import(&page(&(glyph('H', 10.0, "0 0 1 RG") + &glyph('i', i_at, "0 0 1 RG")))).unwrap();
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "one object: {art:?}");
+    let NodeKind::Text(t) = &art[0].kind else { panic!("{:?}", art[0].kind) };
+    assert_eq!(t.plain_text(), "Hi");
+    let [AppearanceItem::Stroke(st)] = art[0].appearance.items.as_slice() else { panic!("{:?}", art[0].appearance) };
+    assert_eq!(st.paint.color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    // A stroke of another colour drawn over each glyph in turn would also cover the next one's
+    // neighbour as one object's stroke: the glyphs stay as the file draws them.
+    let d = import(&page(&(glyph('H', 10.0, "1 1 1 RG") + &glyph('i', i_at, "1 1 1 RG")))).unwrap();
+    assert_eq!(texts(&d).len(), 2);
+}
+
 /// A 300 × 200 pt page with `lines` of (x, y from the top, size, text) in Source Sans 3.
 fn source_sans(lines: &[(f32, f32, f32, &str)]) -> Vec<u8> {
     crate::tests_live_text::text_pdf(lines, false)

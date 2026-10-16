@@ -1,6 +1,8 @@
 //! The graphics state and the operators that draw: coordinates, paths, colours, painting,
 //! clipping and shadings. Painted paths become document objects as they are drawn ([`Out`]).
 
+use std::collections::{HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -26,6 +28,9 @@ const HAIRLINE: f64 = 0.25;
 const MAX_INKS: usize = 32;
 /// Most dashes `strokepath` makes of a path (more and it outlines the path undashed).
 const MAX_DASHES: f64 = 1e5;
+/// Most entries a dash pattern has: the most elements an array has in a typical PostScript
+/// implementation (PLRM 3rd ed., Table B.1).
+const MAX_DASH_ENTRIES: usize = 65_535;
 /// Most entries an indexed colour space's table has.
 const MAX_HIVAL: usize = 4095;
 /// Most elements the current path may have.
@@ -34,9 +39,20 @@ const MAX_PATH: usize = 1 << 20;
 const MAX_DRAWN: usize = 1 << 24;
 /// Samples taken of a shading function that isn't a plain interpolation.
 const SHADING_SAMPLES: usize = 32;
-/// Most bounds of a stitched linear function that become a gradient's stops: past it, the
-/// function is sampled like any other (each stop evaluates the whole function).
+/// Most bounds of a stitched linear function that become a gradient's stops (two where the pieces
+/// don't meet): past it, the function is sampled like any other (each stop evaluates the whole
+/// function).
 const MAX_STITCH_STOPS: usize = 1024;
+/// Most functions one evaluation of a shading's function visits: the function itself, each entry
+/// of an array of functions and, in each stitching function, the piece that applies to the input.
+/// For every shading type, the `Function` entry is one function dictionary or an array of one for
+/// each color component (PLRM 3rd ed., Tables 4.12 to 4.17; a type 7 shading has the entries of
+/// type 6). The reader allows at most [`MAX_INKS`] components, and the depth limit allows each
+/// entry a chain of at most 8 functions.
+const MAX_FUNCTION_VISITS: usize = 1 + MAX_INKS * 8;
+/// Work one function costs against the operation budget each time it is evaluated: about as much
+/// as 8 operations (measured).
+const FUNCTION_OPS: u64 = 8;
 
 pub(super) const FAR_AWAY: &str = "objects far outside the page were left out";
 pub(super) const TOO_MUCH: &str = "the file draws more than StitchFoundry reads: the rest was left out";
@@ -111,7 +127,8 @@ pub(crate) struct GState {
     pub cap: LineCap,
     pub join: LineJoin,
     pub miter: f64,
-    pub dash: Vec<f64>,
+    /// The dash pattern, shared by the states saved or copied from this one.
+    pub dash: Rc<[f64]>,
     pub dash_offset: f64,
     /// The current path, in document space.
     pub path: BezPath,
@@ -141,7 +158,7 @@ impl Default for GState {
             cap: LineCap::Butt,
             join: LineJoin::Miter,
             miter: 10.0,
-            dash: vec![],
+            dash: Rc::from([]),
             dash_offset: 0.0,
             path: BezPath::new(),
             cur: None,
@@ -181,19 +198,45 @@ pub(crate) struct Out {
     pub rgb: usize,
     /// Spot inks used: name and colour at full tint.
     pub spots: Vec<(String, Color)>,
+    /// The color at full tint of each spot ink in [`Self::spots`], by name.
+    spot_colors: HashMap<Rc<str>, Color>,
     /// Rectangles painted with a shading (`shfill`): a clipping group of one is the clip path
     /// filled with it.
-    pub shadings: Vec<NodeId>,
+    pub shadings: HashSet<NodeId>,
     /// Tiling patterns made into pattern swatches: the pattern's `PaintProc` (a pattern made
     /// again with `makepattern` shares it) and cell, the colour an uncoloured one painted in, and
-    /// the swatch's name.
-    tilings: Vec<(Shared<Obj>, Rect, Option<Paint>, String)>,
+    /// the swatch's name. Each list holds the patterns of one [`tiling_hash`]; a pattern whose
+    /// cell has a NaN corner is left out.
+    tilings: HashMap<u64, Vec<Tiling>>,
     /// How deep art drawn apart (a pattern's cell, a Type 3 glyph) is nested.
     pub apart: u32,
 }
 
 fn sane(r: Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= LIMIT)
+}
+
+/// A tiling pattern made into a pattern swatch, as [`Out::tilings`] lists it.
+type Tiling = (Shared<Obj>, Rect, Option<Paint>, String);
+
+/// A hash of what tells tiling patterns apart in [`Out::tilings`]. Patterns that compare equal
+/// hash alike: each number goes in by its bits, and −0 goes in as 0.
+fn tiling_hash(proc: &Shared<Obj>, tile: Rect, under: Option<&Paint>) -> u64 {
+    let mut h = DefaultHasher::new();
+    proc.hash(&mut h);
+    [tile.x0, tile.y0, tile.x1, tile.y1].map(|v| (v + 0.0).to_bits()).hash(&mut h);
+    if let Some(Paint::Solid { color, swatch, tint }) = under {
+        let c = match *color {
+            Color::Rgb { r, g, b } => [r, g, b, 0.0],
+            Color::Cmyk { c, m, y, k } => [c, m, y, k],
+            Color::Gray { k } => [k, 0.0, 0.0, 0.0],
+            Color::Lab { l, a, b } => [l, a, b, 0.0],
+        };
+        c.map(|v| (v + 0.0).to_bits()).hash(&mut h);
+        swatch.hash(&mut h);
+        (tint + 0.0).to_bits().hash(&mut h);
+    }
+    h.finish()
 }
 
 impl Out {
@@ -212,8 +255,9 @@ impl Out {
             cmyk: 0,
             rgb: 0,
             spots: vec![],
-            shadings: vec![],
-            tilings: vec![],
+            spot_colors: HashMap::new(),
+            shadings: HashSet::new(),
+            tilings: HashMap::new(),
             apart: 0,
         }
     }
@@ -323,9 +367,9 @@ impl Out {
     /// A new clip of `path` inside `clips`; `None` for a rectangle around the whole page, which
     /// clips nothing.
     fn clip(&mut self, path: BezPath, rule: FillRule) -> Option<Arc<Clip>> {
-        let lines = path.elements().iter().all(|e| !matches!(e, PathEl::QuadTo(..) | PathEl::CurveTo(..)));
-        let around = path.bounding_box().inflate(0.5, 0.5);
-        if lines && path.elements().len() <= 6 && around.contains(self.frame.origin()) && around.contains(Point::new(self.frame.x1, self.frame.y1)) {
+        // Only a polygon that really covers the page: a diamond touching its edges has the page as
+        // its bounding box but cuts its corners away (#1542).
+        if path.elements().len() <= 6 && vectorcraft_geom::hit::polygon_covers_rect(&path, self.frame, 0.5) {
             return None;
         }
         self.next_clip += 1;
@@ -392,6 +436,13 @@ impl Interp<'_> {
         Ok(())
     }
 
+    /// Count `n` path elements an operator makes, reads or copies against the operation budget,
+    /// an operation each: making or reading an element takes up to about as long as an operation,
+    /// and copying one takes less (measured).
+    fn spend_elements(&mut self, n: usize) -> Res {
+        self.spend(n as u64)
+    }
+
     fn move_to(&mut self, p: Point) -> Res {
         self.grow()?;
         // Consecutive movetos: the last one counts.
@@ -414,10 +465,12 @@ impl Interp<'_> {
         Ok(())
     }
 
-    /// Path elements in user space appended (the first move a line when there is a current point).
+    /// Path elements in user space appended (the first move a line when there is a current point),
+    /// each counted against the operation budget.
     fn append_user(&mut self, els: impl Iterator<Item = PathEl>) -> Res {
         let xf = self.xf();
         for el in els {
+            self.spend_elements(1)?;
             match el {
                 PathEl::MoveTo(p) => {
                     let p = xf * p;
@@ -434,7 +487,10 @@ impl Interp<'_> {
                     self.g.path.curve_to(xf * a, xf * b, xf * p);
                     self.g.cur = Some(xf * p);
                 }
-                PathEl::ClosePath => self.g.path.close_path(),
+                PathEl::ClosePath => {
+                    self.grow()?;
+                    self.g.path.close_path();
+                }
             }
         }
         Ok(())
@@ -503,6 +559,8 @@ impl Interp<'_> {
         let nums: Vec<f64> = match self.stack.last() {
             Some(Obj::Array { .. }) => {
                 let items = self.pop_array()?;
+                // Five elements a rectangle, counted before the array is read.
+                self.spend_elements(items.len() / 4 * 5)?;
                 let v: Option<Vec<f64>> = items.borrow().iter().map(Obj::as_num).collect();
                 v.ok_or(PsError::Ps("typecheck", String::new()))?
             }
@@ -540,16 +598,19 @@ impl Interp<'_> {
         Ok(())
     }
 
-    fn stroke_path(&mut self, bp: BezPath) {
+    fn stroke_path(&mut self, bp: BezPath) -> Res {
         if bp.elements().is_empty() || self.g.paint.is_none() || self.g.null {
-            return;
+            return Ok(());
         }
-        let st = self.stroke_layer();
+        let st = self.stroke_layer()?;
         self.out.stroke(bp, st, &self.g.clips);
+        Ok(())
     }
 
-    /// The stroke the graphics state draws, in document space.
-    fn stroke_layer(&self) -> StrokeLayer {
+    /// The stroke the graphics state draws, in document space. Each entry of the dash pattern it
+    /// copies counts as an operation.
+    fn stroke_layer(&mut self) -> Res<StrokeLayer> {
+        self.spend(self.g.dash.len() as u64)?;
         let k = self.scale();
         let w = self.g.width * k;
         let mut st = StrokeLayer::new(self.g.paint.clone(), if w > 0.0 && w.is_finite() { w } else { HAIRLINE });
@@ -560,7 +621,7 @@ impl Interp<'_> {
         let pattern: Vec<f64> = self.g.dash.iter().map(|d| d * k).collect();
         let dash = Dash { pattern, offset: self.g.dash_offset * k, align_corners: false };
         st.dash = dash.is_dashed().then_some(dash);
-        st
+        Ok(st)
     }
 
     /// The current path in user space, each element as its operator and points (quadratic
@@ -593,6 +654,7 @@ impl Interp<'_> {
         let curve = self.pop_proc()?;
         let line = self.pop_proc()?;
         let mv = self.pop_proc()?;
+        self.spend_elements(self.g.path.elements().len())?;
         for (op, pts) in self.user_elements()? {
             for p in pts {
                 self.push_num(p.x)?;
@@ -636,7 +698,12 @@ impl Interp<'_> {
             (Op::UCache, 0),
         ];
         let nums: Vec<f64> = match nums {
-            Obj::Array { items, .. } => items.borrow().iter().filter_map(Obj::as_num).collect(),
+            Obj::Array { items, .. } => {
+                // Each entry of the data array and each byte of the operator string counts as an
+                // element read.
+                self.spend_elements(items.len().saturating_add(ops.len()))?;
+                items.borrow().iter().filter_map(Obj::as_num).collect()
+            }
             _ => return ps_err("typecheck", "an encoded user path"),
         };
         let mut next = nums.into_iter();
@@ -652,6 +719,8 @@ impl Interp<'_> {
                     let v = next.next().ok_or(PsError::Ps("rangecheck", "a user path".into()))?;
                     self.push_num(v)?;
                 }
+                // Each operator run counts as an operation.
+                self.spend(1)?;
                 self.op(op)?;
             }
         }
@@ -675,10 +744,7 @@ impl Interp<'_> {
             }
             let bp = self.take_path();
             match op {
-                Op::UStroke => {
-                    self.stroke_path(bp);
-                    Ok(())
-                }
+                Op::UStroke => self.stroke_path(bp),
                 _ => self.fill_path(bp, if op == Op::UEoFill { FillRule::EvenOdd } else { FillRule::NonZero }),
             }
         });
@@ -739,9 +805,13 @@ impl Interp<'_> {
         }
     }
 
-    /// The area the clip leaves, in document space (the page without a clip).
-    fn clip_bounds(&self) -> Rect {
-        self.g.clips.iter().rev().find_map(|c| c.region.as_ref()).map_or(self.out.frame, |(p, _)| p.bounding_box())
+    /// The area the clip leaves, in document space (the page without a clip). The clip path read
+    /// counts against the operation budget.
+    fn clip_bounds(&mut self) -> Res<Rect> {
+        let (bounds, len) =
+            self.g.clips.iter().rev().find_map(|c| c.region.as_ref()).map_or((self.out.frame, 0), |(p, _)| (p.bounding_box(), p.elements().len()));
+        self.spend_elements(len)?;
+        Ok(bounds)
     }
 
     // ---------- colour ----------
@@ -851,11 +921,14 @@ impl Interp<'_> {
                         Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(t), swatch: Some(REGISTRATION.into()), tint: t }
                     }
                     [one] => {
-                        let full = match self.out.spots.iter().find(|(n, _)| **n == **one) {
-                            Some((_, c)) => *c,
+                        let full = match self.out.spot_colors.get(one) {
+                            Some(c) => *c,
                             None => {
                                 let c = self.tint_color(alt, tint, &[1.0])?;
                                 self.out.spots.push((one.to_string(), c));
+                                // The tint transform may have listed this ink already: the color
+                                // listed first stays.
+                                self.out.spot_colors.entry(one.clone()).or_insert(c);
                                 c
                             }
                         };
@@ -946,7 +1019,9 @@ impl Interp<'_> {
         let xf = m * Affine::translate(tile.origin().to_vec2());
         let proc = get("PaintProc").ok_or(PsError::Ps("undefined", "PaintProc".into()))?;
         let key = proc.items().cloned().ok_or(PsError::Ps("typecheck", "PaintProc".into()))?;
-        if let Some((.., name)) = self.out.tilings.iter().find(|(p, t, u, _)| p.same(&key) && *t == tile && *u == under) {
+        let hash = tiling_hash(&key, tile, under.as_ref());
+        let made = self.out.tilings.get(&hash).and_then(|list| list.iter().find(|(p, t, u, _)| p.same(&key) && *t == tile && *u == under));
+        if let Some((.., name)) = made {
             return Ok(Paint::Pattern { pattern: name.clone(), xf });
         }
         if self.out.apart >= MAX_APART {
@@ -964,12 +1039,16 @@ impl Interp<'_> {
         if art.is_empty() {
             return Ok(Paint::None);
         }
-        let name =
-            (self.out.doc.patterns.len() + 1..).map(|i| format!("Pattern {i}")).find(|n| self.out.doc.pattern(n).is_none()).unwrap_or_default();
+        // The document gets its patterns only here, so the n made so far are Pattern 1 to
+        // Pattern n.
+        let name = format!("Pattern {}", self.out.doc.patterns.len() + 1);
         let mut def = PatternDef::new(&name, art);
         def.tile = tile;
         self.out.doc.patterns.push(def);
-        self.out.tilings.push((key, tile, under, name.clone()));
+        // A cell with a NaN corner equals no cell, so the lookup above could never find it.
+        if !tile.is_nan() {
+            self.out.tilings.entry(hash).or_insert_with(|| Vec::with_capacity(1)).push((key, tile, under, name.clone()));
+        }
         Ok(Paint::Pattern { pattern: name, xf })
     }
 
@@ -1020,7 +1099,9 @@ impl Interp<'_> {
         // Where the colour changes: the ends, and the bounds of stitched linear functions (unless
         // there are too many).
         let mut visits = 0;
-        let ts: Vec<f64> = match linear_points(&f, 0, &mut visits).filter(|p| p.len() <= MAX_STITCH_STOPS) {
+        let points = linear_points(&f, 0, &mut visits).filter(|p| p.len() <= MAX_STITCH_STOPS);
+        let stitched = points.is_some();
+        let ts: Vec<f64> = match points {
             Some(mut pts) => {
                 pts.retain(|t| (d0.min(d1)..=d0.max(d1)).contains(t));
                 pts.iter().map(|t| if d1 != d0 { (t - d0) / (d1 - d0) } else { 0.0 }).chain([0.0, 1.0]).collect()
@@ -1034,15 +1115,25 @@ impl Interp<'_> {
         let c = |i: usize| coords.get(i).copied().unwrap_or(0.0);
         let (r0, r1) = (c(2).max(0.0), c(5).max(1e-6));
         let mut stops = Vec::with_capacity(ts.len());
+        let stop = |paint: Paint, offset: f64| match paint {
+            Paint::Solid { color, swatch, tint } => GradientStop { swatch, tint, ..GradientStop::new(offset as f32, color) },
+            _ => GradientStop::new(offset as f32, Color::BLACK),
+        };
         for t in ts {
             let comps = self.eval(&f, &[d0 + (d1 - d0) * t], 0)?;
             let paint = self.paint_of(&space, &comps)?;
             let offset = if radial { (r0 + (r1 - r0) * t) / r1 } else { t };
-            let stop = match paint {
-                Paint::Solid { color, swatch, tint } => GradientStop { swatch, tint, ..GradientStop::new(offset as f32, color) },
-                _ => GradientStop::new(offset as f32, Color::BLACK),
-            };
-            stops.push(stop);
+            // At a bound of a stitched function the pieces need not meet (a hard colour change):
+            // the colour just before the bound is a stop at the same offset, ahead of the one
+            // after it.
+            if stitched && t > 0.0 && t < 1.0 {
+                let comps = self.eval(&f, &[d0 + (d1 - d0) * (t - 1e-9)], 0)?;
+                let before = stop(self.paint_of(&space, &comps)?, offset);
+                if before.color != stop(paint.clone(), offset).color {
+                    stops.push(before);
+                }
+            }
+            stops.push(stop(paint, offset));
         }
         let (gk, geom) = if radial {
             let centre = Point::new(c(3), c(4));
@@ -1061,16 +1152,34 @@ impl Interp<'_> {
     /// A function (types 0, 2 and 3; an array of them, one per component) at `x` (types 2 and 3
     /// take one input).
     pub fn eval(&mut self, f: &Obj, x: &[f64], depth: u32) -> Res<Vec<f64>> {
-        if depth > 8 {
+        self.eval_inner(f, x, depth, &mut 0)
+    }
+
+    /// [`Self::eval`], with `visits` (shared by the whole recursion, incremented on every call)
+    /// counting the functions visited against [`MAX_FUNCTION_VISITS`], as [`linear_points`] counts
+    /// its nodes. The depth limit alone stops a function that refers to itself, but not one that
+    /// fans out through shared arrays: when four levels of arrays each have 100 entries that all
+    /// refer to the same array of the level below (at the last level, the same function), one
+    /// evaluation would visit 101,010,101 functions. Each function visited also counts
+    /// [`FUNCTION_OPS`] against the operation budget.
+    fn eval_inner(&mut self, f: &Obj, x: &[f64], depth: u32, visits: &mut usize) -> Res<Vec<f64>> {
+        *visits += 1;
+        if depth > 8 || *visits > MAX_FUNCTION_VISITS {
             return ps_err("limitcheck", "Function");
         }
+        self.spend(FUNCTION_OPS)?;
         let d = match f {
             Obj::Dict(d) => d.clone(),
             Obj::Array { items, .. } => {
+                // Each entry is at least one more function: an array with more entries than the
+                // visits left raises `limitcheck` before it is copied.
+                if items.len() > MAX_FUNCTION_VISITS - *visits {
+                    return ps_err("limitcheck", "Function");
+                }
                 let fs = items.to_vec();
                 let mut out = vec![];
                 for g in &fs {
-                    out.extend(self.eval(g, x, depth + 1)?.first().copied());
+                    out.extend(self.eval_inner(g, x, depth + 1, visits)?.first().copied());
                 }
                 return Ok(out);
             }
@@ -1112,7 +1221,7 @@ impl Interp<'_> {
                 let (e0, e1) = (encode.get(2 * k).copied().unwrap_or(0.0), encode.get(2 * k + 1).copied().unwrap_or(1.0));
                 let u = if b != a { e0 + (t - a) / (b - a) * (e1 - e0) } else { e0 };
                 let g = fs.and_then(|fs| fs.get(k)).ok_or(PsError::Ps("rangecheck", "Functions".into()))?;
-                self.eval(&g, &[u], depth + 1)
+                self.eval_inner(&g, &[u], depth + 1, visits)
             }
             _ => {
                 self.out.warn(UNKNOWN_FUNCTIONS);
@@ -1147,14 +1256,19 @@ impl Interp<'_> {
             ExecForm => self.exec_form()?,
             StrokePath => {
                 let bp = self.take_path();
-                let mut st = self.stroke_layer();
+                let mut st = self.stroke_layer()?;
                 // A dash pattern far finer than the path would make countless pieces.
                 let period: f64 = st.dash.as_ref().map_or(0.0, |d| d.pattern.iter().sum());
-                if st.dash.is_some() && !(period > 0.0 && bp.perimeter(1e-3) / period < MAX_DASHES) {
+                let periods = if st.dash.is_some() && period > 0.0 { bp.perimeter(1e-3) / period } else { 0.0 };
+                if st.dash.is_some() && !(period > 0.0 && periods < MAX_DASHES) {
                     st.dash = None;
                 }
                 let tol = (0.01 / self.scale().max(1e-9)).clamp(1e-4, 1.0);
                 let outline = vectorcraft_effects::stroke::line_outline(&bp, &st, st.width, tol);
+                // The path, each entry of the dash pattern in each period, and the outline count
+                // as elements.
+                let dashes = st.dash.as_ref().map_or(0.0, |d| periods * d.pattern.len() as f64) as usize;
+                self.spend_elements(bp.elements().len().saturating_add(dashes).saturating_add(outline.elements().len()))?;
                 if outline.elements().len() >= MAX_PATH {
                     return Err(PsError::Limit("a path has too many points"));
                 }
@@ -1214,13 +1328,20 @@ impl Interp<'_> {
                 self.push(Obj::Int(0))?;
                 self.push(Obj::Int(0))?;
             }
-            GStateNew => self.push(Obj::GState(Rc::new(self.g.clone())))?,
+            GStateNew => {
+                self.spend_elements(self.g.path.elements().len())?;
+                self.push(Obj::GState(Rc::new(self.g.clone())))?;
+            }
             CurrentGState => {
                 self.pop()?;
+                self.spend_elements(self.g.path.elements().len())?;
                 self.push(Obj::GState(Rc::new(self.g.clone())))?;
             }
             SetGState => match self.pop()? {
-                Obj::GState(g) => self.g = (*g).clone(),
+                Obj::GState(g) => {
+                    self.spend_elements(g.path.elements().len())?;
+                    self.g = (*g).clone();
+                }
                 _ => return ps_err("typecheck", ""),
             },
             SetLineWidth => self.g.width = self.pop_num()?.abs(),
@@ -1246,11 +1367,18 @@ impl Interp<'_> {
             SetDash => {
                 let offset = self.pop_num()?;
                 let items = self.pop_array()?;
+                if items.len() > MAX_DASH_ENTRIES {
+                    return ps_err("limitcheck", "");
+                }
+                // Each entry read counts as an operation.
+                self.spend(items.len() as u64)?;
                 let v: Option<Vec<f64>> = items.borrow().iter().map(|o| o.as_num().filter(|v| v.is_finite() && *v >= 0.0)).collect();
-                self.g.dash = v.ok_or(PsError::Ps("typecheck", String::new()))?;
+                self.g.dash = v.ok_or(PsError::Ps("typecheck", String::new()))?.into();
                 self.g.dash_offset = offset;
             }
             CurrentDash => {
+                // The array made counts against the memory budget.
+                self.alloc(self.g.dash.len() * std::mem::size_of::<Obj>())?;
                 let d = self.g.dash.iter().map(|v| Obj::Real(*v)).collect();
                 self.push(Obj::array(d))?;
                 self.push_num(self.g.dash_offset)?;
@@ -1528,6 +1656,7 @@ impl Interp<'_> {
             }
             ClosePath => {
                 if self.g.cur.is_some() {
+                    self.grow()?;
                     self.g.path.close_path();
                     self.g.cur = self.g.start;
                 }
@@ -1541,13 +1670,14 @@ impl Interp<'_> {
                 if xf.determinant().abs() < 1e-12 {
                     return ps_err("undefinedresult", "");
                 }
+                self.spend_elements(self.g.path.elements().len())?;
                 let b = xf.inverse().transform_rect_bbox(self.g.path.bounding_box());
                 for v in [b.x0, b.y0, b.x1, b.y1] {
                     self.push_num(v)?;
                 }
             }
             ClipPath => {
-                let b = self.clip_bounds();
+                let b = self.clip_bounds()?;
                 self.take_path();
                 self.g.path = b.to_path(0.1);
                 self.g.cur = Some(b.origin());
@@ -1568,6 +1698,7 @@ impl Interp<'_> {
                 }
             }
             Clip | EoClip => {
+                self.spend_elements(self.g.path.elements().len())?;
                 let bp = self.g.path.clone();
                 self.clip_with(bp, if op == EoClip { FillRule::EvenOdd } else { FillRule::NonZero });
             }
@@ -1582,7 +1713,7 @@ impl Interp<'_> {
             }
             Stroke => {
                 let bp = self.take_path();
-                self.stroke_path(bp);
+                self.stroke_path(bp)?;
             }
             RectFill => {
                 let bp = self.rects()?;
@@ -1598,7 +1729,7 @@ impl Interp<'_> {
                     let xf = self.xf();
                     bp.apply_affine(xf * m * xf.inverse());
                 }
-                self.stroke_path(bp);
+                self.stroke_path(bp)?;
             }
             ShFill => {
                 let d = self.pop_dict()?;
@@ -1611,13 +1742,13 @@ impl Interp<'_> {
                 }
                 let m = self.xf();
                 if let Some(g) = self.gradient(&d, m)? {
-                    let area = self.clip_bounds();
+                    let area = self.clip_bounds()?;
                     let paint = Paint::Gradient(Box::new(g));
                     let clips = self.g.clips.clone();
                     self.out.fill(area.to_path(0.1), FillRule::NonZero, paint, self.g.overprint, &clips);
                     if let Some((_, n)) = self.out.drawn.last() {
                         let id = n.id;
-                        self.out.shadings.push(id);
+                        self.out.shadings.insert(id);
                     }
                 }
             }
@@ -1676,7 +1807,7 @@ fn linear_points(f: &Obj, depth: u32, visits: &mut usize) -> Option<Vec<f64>> {
 
 /// The clip path a clipping group of one shading rectangle (`shfill` through a clip) can be
 /// filled with instead.
-pub(crate) fn collapse(nodes: &mut [Arc<Node>], shadings: &[NodeId]) {
+pub(crate) fn collapse(nodes: &mut [Arc<Node>], shadings: &HashSet<NodeId>) {
     for n in nodes.iter_mut() {
         let NodeKind::Group { children, clip: true } = &n.kind else {
             if let Some(c) = Arc::make_mut(n).children_mut() {
@@ -1688,7 +1819,7 @@ pub(crate) fn collapse(nodes: &mut [Arc<Node>], shadings: &[NodeId]) {
             && shadings.contains(&fill.id)
             && let (NodeKind::Path { path, rule, clipping: true, .. }, NodeKind::Path { .. }) = (&clip.kind, &fill.kind)
         {
-            let mut p = Node::path(fill.id, path.clone(), fill.appearance.clone());
+            let mut p = Node::path(fill.id, path.clone(), (*fill.appearance).clone());
             if let NodeKind::Path { rule: r, .. } = &mut p.kind {
                 *r = *rule;
             }

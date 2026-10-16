@@ -202,7 +202,7 @@ fn knife(s: &mut Session, p: &Value) -> Result<Value> {
                     .filter(|r| r.len() >= 3)
                     .map(|r| SubPath::polyline(&r.iter().map(|q| Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM)).collect::<Vec<_>>(), true))
                     .collect();
-                let mut c = Node::path(pid, PathData::new(subs), n.appearance.clone());
+                let mut c = Node::path(pid, PathData::new(subs), (*n.appearance).clone());
                 if let NodeKind::Path { rule, .. } = &mut c.kind {
                     *rule = vectorcraft_geom::FillRule::EvenOdd;
                 }
@@ -307,7 +307,7 @@ fn break_apart(s: &mut Session, _p: &Value) -> Result<Value> {
                 Some(parts) => {
                     for (k, subs) in parts.iter().enumerate() {
                         let pid = d.alloc_id();
-                        let mut c = Node::path(pid, PathData::new(subs.clone()), n.appearance.clone());
+                        let mut c = Node::path(pid, PathData::new(subs.clone()), (*n.appearance).clone());
                         if let NodeKind::Path { rule, .. } = &mut c.kind {
                             *rule = vectorcraft_geom::FillRule::EvenOdd;
                         }

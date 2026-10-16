@@ -18,7 +18,7 @@ use vectorcraft_doc::{ExportAsset, Node, NodeId};
 use vectorcraft_engine::DocState;
 
 use super::{pstate, set_pstate};
-use crate::dialogs::{EXPORT_FOR_SCREENS, open_export_for_screens_assets, screen_formats, screen_saved_rows};
+use crate::dialogs::{EXPORT_FOR_SCREENS, open_export_for_screens_assets, screen_formats, screen_saved_options, screen_saved_rows};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -67,11 +67,14 @@ pub(crate) fn paint_thumb(ui: &Ui, st: &DocState, a: &ExportAsset, r: Rect) {
     let key = (nodes, px);
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
         let art: Vec<&Node> = ids().iter().filter_map(|id| st.doc.node(*id)).collect();
+        // Same Art Optimized supersample as assets.export (#983): abutting fills leave no seam in
+        // the tile (Layers row thumbs stay cheap without it).
+        let opts = vectorcraft_render::RenderOptions { image_mips: true, precise: true, supersample: true, ..Default::default() };
         let img = RENDERER.with(|rr| match art.as_slice() {
-            [one] => rr.borrow_mut().render_node_thumbnail(&st.doc, one, px, None),
+            [one] => rr.borrow_mut().render_node_thumbnail_with(&st.doc, one, px, None, &opts),
             many => {
                 let group = Node::group(NodeId(0), many.iter().map(|n| Arc::new((*n).clone())).collect());
-                rr.borrow_mut().render_node_thumbnail(&st.doc, &group, px, None)
+                rr.borrow_mut().render_node_thumbnail_with(&st.doc, &group, px, None, &opts)
             }
         })?;
         let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
@@ -191,6 +194,18 @@ fn export(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
 
 fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
     let mut p = json!({ "assets": ids });
+    // Match the shared dialog's TIFF defaults, retaining saved choices and other formats.
+    if let Some(st) = app.session.active()
+        && screen_saved_rows(&st.doc.export_settings)
+            .0
+            .iter()
+            .any(|row| row["format"].as_str().and_then(vectorcraft_engine::cmd::fileio::format).is_some_and(|f| f.id == "tiff"))
+    {
+        let saved = &st.doc.export_settings;
+        let mut settings = saved.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
+        settings.insert("tiff".into(), Value::Object(screen_saved_options(app, saved, "tiff")));
+        p["settings"] = Value::Object(settings);
+    }
     if io::is_web(app) {
         p["zip"] = json!(ids.len() * files_each > 1);
     } else {

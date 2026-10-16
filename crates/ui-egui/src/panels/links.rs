@@ -1,8 +1,9 @@
 //! Links panel: every image in the document, linked files with their status (missing, modified)
 //! and embedded images, as rows with a thumbnail, name, page and status. Clicking a row selects
 //! its image; the buttons Relink, Go To, Update and Edit Original act on the selected rows; Link
-//! Info shows the details of the first. The flyout adds Relink to Folder, Embed / Unembed,
-//! Placement Options, Show filters, Sort, thumbnail size and Show in Folder.
+//! Info shows the details of the first. The flyout adds Relink to Folder, Find in Folder (Find
+//! Linked Files: `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Show filters, Sort,
+//! thumbnail size and Show in Folder.
 //!
 //! Everything runs through the `links.*` commands (`links.editOriginal` and `links.reveal` are UI
 //! commands: they hand the file to the system).
@@ -126,6 +127,18 @@ fn relink_picked(app: &mut VectorcraftApp, ids: Vec<u64>) {
     report(app, r, |v| format!("Relinked {} image(s)", v["relinked"].as_array().map_or(0, Vec::len)));
 }
 
+/// Replace images `ids` with a picked file (Control bar, Properties): it keeps its own aspect
+/// ratio, fitted inside the old bounds (Placement Options: Fit), whatever their Placement Options
+/// say.
+pub(crate) fn replace(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    crate::picks::button(app, move |app| {
+        let pick = crate::FilePick { filters: vectorcraft_engine::cmd::fileio::place_filters().collect(), ..Default::default() };
+        let Some(path) = crate::picks::open(app, &pick) else { return };
+        let r = app.run("links.relink", json!({ "ids": ids.clone(), "path": path, "preserve": "fit" }));
+        report(app, r, |v| format!("Replaced {} image(s)", v["relinked"].as_array().map_or(0, Vec::len)));
+    });
+}
+
 /// Relink images `ids` (none: every missing one) to the files of their names in a picked folder.
 fn relink_to_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
     crate::picks::button(app, move |app| relink_to_picked_folder(app, ids.clone()));
@@ -154,11 +167,12 @@ pub(crate) fn go_to(app: &mut VectorcraftApp, id: u64) {
 
 /// Write embedded image `id` to a picked file (the web downloads it) and link it there.
 pub(crate) fn unembed(app: &mut VectorcraftApp, id: u64, name: &str) {
-    if let Some(dl) = app.services.download.as_mut() {
+    if app.services.download.is_some() {
         if let Ok(v) = app.session.execute("links.unembed", &json!({ "id": id }))
             && let (Some(name), Some(bytes)) = (v["name"].as_str(), v["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode))
         {
-            dl(name, &bytes);
+            // A download that can't start is said like any file that can't be written.
+            let _ = crate::io::write_reporting(app, name, &bytes);
         }
         return;
     }
@@ -218,11 +232,16 @@ fn badge(ui: &Ui, r: egui::Rect, status: &str) {
 
 fn status_tip(r: &Value) -> String {
     let path = r["found"].as_str().or(r["path"].as_str()).unwrap_or_default();
-    match r["status"].as_str().unwrap_or_default() {
+    let tip = match r["status"].as_str().unwrap_or_default() {
         "missing" => crate::i18n::fmt(tl!("Missing: {path}"), &[("path", path)]),
         "modified" => crate::i18n::fmt(tl!("Modified since it was read: {path}"), &[("path", path)]),
         "embedded" => tl!("Embedded").into(),
         _ => path.to_string(),
+    };
+    // An image too large to draw (`links.list`'s note).
+    match r["note"].as_str() {
+        Some(note) => format!("{tip}\n{}", crate::i18n::msg(note)),
+        None => tip,
     }
 }
 
@@ -233,7 +252,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, tl!("No document"));
         return;
     };
-    let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return };
+    let Some(st) = app.session.active() else { return };
+    let doc = st.doc.clone();
+    let thumbs = super::layers::ThumbSource::of(app, st, &doc);
     let selected = selected_images(app);
     let rows: &[Value] = cache.list["links"].as_array().map_or(&[], Vec::as_slice);
     let mut clicked: Option<(u64, bool, bool)> = None;
@@ -266,8 +287,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if o.thumb > 0.0 {
                     let tr = egui::Rect::from_min_size(egui::pos2(x, rect.center().y - o.thumb / 2.0), vec2(o.thumb, o.thumb));
                     ui.painter().rect_filled(tr, 0.0, egui::Color32::WHITE);
-                    if let Some(n) = doc.node(NodeId(id)) {
-                        super::layers::real_thumb(ui, &doc, n, tr);
+                    if let Some(n) = super::layers::node_arc(&doc, NodeId(id)) {
+                        super::layers::real_thumb(ui, &thumbs, &n, tr);
                     }
                     ui.painter().rect_stroke(tr, 0.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
                     x = tr.right() + 6.0;
@@ -455,6 +476,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Relink to Folder…"), (any || missing_any) && app.services.pick_folder.is_some(), false) {
         relink_to_folder(app, ids(&sel, |_| true));
+    }
+    if menu_item(ui, tl!("Find in Folder…"), (!linked.is_empty() || missing_any) && app.services.pick_folder.is_some(), false) {
+        crate::menus::invoke(app, "ui.findLinksInFolder", json!({ "ids": linked }));
     }
     if menu_item(ui, tl!("Go To Link"), sel.len() == 1, false)
         && let Some(id) = sel.first().and_then(|r| r["id"].as_u64())

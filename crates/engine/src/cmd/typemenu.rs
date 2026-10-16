@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Change Case",
             ["Type", "Change Case"],
             None,
-            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?} → {ids}",
+            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?|id?} → {ids}",
             has_selection,
             change_case
         ),
@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Area Type",
             ["Type"],
             None,
-            "{ids?} point type → area type framed by its current layout bounds → {ids}",
+            "{ids?|id?} point type → area type framed by its current layout bounds → {ids}",
             has_selection,
             to_area
         ),
@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Point Type",
             ["Type"],
             None,
-            "{ids?} area type → point type; soft line wraps become line breaks → {ids}",
+            "{ids?|id?} area type → point type; soft line wraps become line breaks → {ids}",
             has_selection,
             to_point
         ),
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -61,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill with Placeholder Text",
             ["Type"],
             None,
-            "{ids?} replace selected text with placeholder text (area type is filled to its frame) → {ids}",
+            "{ids?|id?} replace selected text with placeholder text (area type is filled to its frame) → {ids}",
             has_selection,
             fill_placeholder
         ),
@@ -70,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string, ids?|id?: object ids (default: the selection)} append to the selected text objects",
             has_selection,
             insert_char
         ),
@@ -132,9 +132,10 @@ fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
-/// Rewrite every run of the given text objects with `f(run text, state)`.
+/// Rewrite every run of the given text objects with `f(run text, state)`. When no run changes, the
+/// document and its undo history stay as they are.
 fn edit_runs<S: Default>(s: &mut Session, label: &str, ids: &[NodeId], f: impl Fn(&str, &mut S) -> String) -> Result<usize> {
-    s.edit(label, |d, _| {
+    super::overprint::edit_counted(s, label, |d| {
         let mut changed = 0;
         for id in ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -260,6 +261,11 @@ fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = texts(s, p, "type.convertToAreaType")?;
+    // With no point type among the objects, the document and its undo history stay as they are.
+    let d = &s.doc()?.doc;
+    if !ids.iter().any(|id| matches!(d.node(*id).map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, TextKind::Point))) {
+        return Ok(ids_json(&ids));
+    }
     s.edit("Convert To Area Type", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -302,6 +308,11 @@ fn locate(runs: &[TextRun], byte: usize) -> Option<(usize, usize)> {
 
 fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = texts(s, p, "type.convertToPointType")?;
+    // With no area type among the objects, the document and its undo history stay as they are.
+    let d = &s.doc()?.doc;
+    if !ids.iter().any(|id| matches!(d.node(*id).map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, TextKind::Area { .. }))) {
+        return Ok(ids_json(&ids));
+    }
     s.edit("Convert To Point Type", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -418,6 +429,22 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
     };
     let spacing = p.get("spacing").and_then(Value::as_f64).filter(|x| x.is_finite()).map(|x| x.clamp(-1000.0, 1000.0));
+    // Without a flip, when every object already has every value given, the document and its undo
+    // history stay as they are.
+    let has_values = |t: &TextObject| match &t.kind {
+        TextKind::OnPath { start: st, end: en, .. } => {
+            start.is_none_or(|v| v == *st)
+                && end.is_none_or(|v| v == *en)
+                && effect.is_none_or(|e| t.path_effect == e)
+                && align.is_none_or(|a| t.path_align == a)
+                && spacing.is_none_or(|v| t.path_spacing == v)
+        }
+        _ => true,
+    };
+    let d = &s.doc()?.doc;
+    if !flip && ids.iter().all(|id| path_text(d.node(*id)).is_none_or(has_values)) {
+        return options(s);
+    }
     s.edit("Type on a Path Options", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -457,13 +484,18 @@ start as rough drafts like this one. Keep going until the frame is full and the 
 
 fn fill_placeholder(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = texts(s, p, "type.fillPlaceholder")?;
-    s.edit("Fill with Placeholder Text", |d, _| {
+    // When filling leaves every object as it was, the document and its undo history stay as they
+    // are.
+    super::overprint::edit_counted(s, "Fill with Placeholder Text", |d| {
+        let mut changed = 0;
         for id in &ids {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                let before = t.clone();
                 fill_with_placeholder(t);
+                changed += usize::from(*t != before);
             }
         }
-        Ok(())
+        Ok(changed)
     })?;
     Ok(ids_json(&ids))
 }
@@ -539,6 +571,16 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(bad(C, "give `char` or `text`")),
     };
     let ids = texts(s, p, C)?;
+    // When `text` is empty and every object ends with a run of text, the document and its undo
+    // history stay as they are.
+    let d = &s.doc()?.doc;
+    let ends_with_text = |id: &NodeId| match d.node(*id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => t.runs.last().is_some_and(|r| r.inline.is_none()),
+        _ => false,
+    };
+    if text.is_empty() && ids.iter().all(ends_with_text) {
+        return Ok(ids_json(&ids));
+    }
     s.edit("Typing", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };

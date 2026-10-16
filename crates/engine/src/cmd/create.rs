@@ -33,8 +33,24 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2} → {id}", has_doc, line),
         cmd!("shape.spiral", "Spiral", [], None, "{cx, cy, radius, decay=80 (%), segments=10, clockwise?} → {id}", has_doc, spiral),
         cmd!("shape.arc", "Arc", [], None, "{x1, y1, x2, y2, closed?} → {id}", has_doc, arc),
-        cmd!("shape.rectangularGrid", "Rectangular Grid", [], None, "{x, y, width, height, rows=5, columns=5} → {id}", has_doc, rect_grid),
-        cmd!("shape.polarGrid", "Polar Grid", [], None, "{x, y, width, height, concentric=5, radial=5} → {id}", has_doc, polar_grid),
+        cmd!(
+            "shape.rectangularGrid",
+            "Rectangular Grid",
+            [],
+            None,
+            "{x, y, width, height, rows=5, columns=5, rowSkew=0, columnSkew=0 (−500…500 %: + crowds the horizontal dividers toward the top, the vertical ones toward the right), frame=true (the outside as one rectangle, else its four sides), fill=false (the current fill, else none)} → {id}",
+            has_doc,
+            rect_grid
+        ),
+        cmd!(
+            "shape.polarGrid",
+            "Polar Grid",
+            [],
+            None,
+            "{x, y, width, height, concentric=5, radial=5, concentricSkew=0, radialSkew=0 (−500…500 %: + crowds the ellipses toward the outside, the radial dividers clockwise of the top one), compound=false (the ellipses pair up into compound-path rings), fill=false (the current fill, else none)} → {id}",
+            has_doc,
+            polar_grid
+        ),
         cmd!(
             "path.create",
             "Create Path",
@@ -58,7 +74,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -79,6 +95,12 @@ pub(crate) fn add_node(s: &mut Session, label: &str, kind: NodeKind, appearance:
 
 /// Insert a new object looking like `look` (drawing modes apply); select it.
 pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>) -> Result<Value> {
+    insert_look(s, label, kind, look, name, true)
+}
+
+/// [`add_look`] that selects the new object only when `select` is set; otherwise the selection
+/// stays as it was.
+pub(crate) fn insert_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>, select: bool) -> Result<Value> {
     let parent = s.doc()?.target_parent()?;
     let mode = s.draw_mode;
     let inside = s.draw_inside;
@@ -97,7 +119,7 @@ pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewAr
                         let (par, idx, _) = d.position(target).ok_or(crate::EngineError::NoNode(target))?;
                         let mut mask = d.node(target).cloned().ok_or(crate::EngineError::NoNode(target))?;
                         mask.id = d.alloc_id();
-                        mask.appearance = Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0);
+                        mask.appearance = Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0).into();
                         if let NodeKind::Path { clipping, .. } = &mut mask.kind {
                             *clipping = true;
                         }
@@ -121,7 +143,9 @@ pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewAr
                 d.insert(parent, usize::MAX, n)?;
             }
         }
-        sel.set([id]);
+        if select {
+            sel.set([id]);
+        }
         Ok(id)
     })?;
     Ok(json!({ "id": id.0 }))
@@ -157,7 +181,7 @@ fn draw_mode(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn path_kind(path: PathData, live: Option<LiveShape>) -> NodeKind {
-    NodeKind::Path { path, rule: FillRule::NonZero, live, clipping: false, guide: false }
+    NodeKind::Path { path, rule: FillRule::NonZero, live: live.map(Box::new), clipping: false, guide: false }
 }
 
 fn rect_of(p: &Value, cmd: &str) -> Result<Rect> {
@@ -351,14 +375,24 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
     add_art(s, "Arc", path_kind(shapes::arc(a, b, 0.0, bool_or(p, "closed", false)), None), None)
 }
 
-fn grid_group(s: &mut Session, label: &str, paths: Vec<PathData>) -> Result<Value> {
+/// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the
+/// current fill when `fill`; a path of several subpaths becomes a compound path of them.
+fn grid_group(s: &mut Session, label: &str, paths: Vec<PathData>, fill: bool) -> Result<Value> {
     let parent = s.doc()?.target_parent()?;
-    let look = s.new_art_look(vectorcraft_color::Paint::None, s.paint.stroke.clone(), s.paint.stroke_width);
+    let fill = if fill { s.paint.fill.clone() } else { vectorcraft_color::Paint::None };
+    let look = s.new_art_look(fill, s.paint.stroke.clone(), s.paint.stroke_width);
     let id = s.edit(label, |d, sel| {
         let children = paths
             .into_iter()
             .map(|pd| {
-                let mut n = Node::path(d.alloc_id(), pd, Appearance::default());
+                let mut n = if pd.subpaths.len() > 1 {
+                    let members =
+                        pd.subpaths.into_iter().map(|sp| std::sync::Arc::new(Node::path(d.alloc_id(), PathData::single(sp), Appearance::default())));
+                    let children = members.collect();
+                    Node::new(d.alloc_id(), NodeKind::Compound { children, rule: FillRule::NonZero })
+                } else {
+                    Node::path(d.alloc_id(), pd, Appearance::default())
+                };
                 look.apply(d, &mut n);
                 std::sync::Arc::new(n)
             })
@@ -371,18 +405,43 @@ fn grid_group(s: &mut Session, label: &str, paths: Vec<PathData>) -> Result<Valu
     Ok(json!({ "id": id.0 }))
 }
 
+/// A grid's divider count `count` with its skew `key` in percent (0 when absent, clamped to
+/// ±[`shapes::GRID_SKEW_MAX`]).
+fn dividers(p: &Value, count: &str, key: &str, cmd: &str) -> Result<(u32, f64)> {
+    let n = p.get(count).and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
+    let skew = match p.get(key) {
+        None | Some(Value::Null) => 0.0,
+        Some(v) => v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?,
+    };
+    Ok((n, skew.clamp(-shapes::GRID_SKEW_MAX, shapes::GRID_SKEW_MAX)))
+}
+
+/// A grid's on/off option `key` (`default` when absent).
+fn switch(p: &Value, key: &str, default: bool, cmd: &str) -> Result<bool> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(v) => v.as_bool().ok_or_else(|| bad(cmd, format!("`{key}` must be true or false"))),
+    }
+}
+
 fn rect_grid(s: &mut Session, p: &Value) -> Result<Value> {
-    let r = rect_of(p, "shape.rectangularGrid")?;
-    let rows = p.get("rows").and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
-    let cols = p.get("columns").and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
-    grid_group(s, "Rectangular Grid", shapes::rectangular_grid(r, rows, cols, true))
+    const CMD: &str = "shape.rectangularGrid";
+    let r = rect_of(p, CMD)?;
+    let paths =
+        shapes::rectangular_grid(r, dividers(p, "rows", "rowSkew", CMD)?, dividers(p, "columns", "columnSkew", CMD)?, switch(p, "frame", true, CMD)?);
+    grid_group(s, "Rectangular Grid", paths, switch(p, "fill", false, CMD)?)
 }
 
 fn polar_grid(s: &mut Session, p: &Value) -> Result<Value> {
-    let r = rect_of(p, "shape.polarGrid")?;
-    let c = p.get("concentric").and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
-    let rad = p.get("radial").and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
-    grid_group(s, "Polar Grid", shapes::polar_grid(r, c, rad))
+    const CMD: &str = "shape.polarGrid";
+    let r = rect_of(p, CMD)?;
+    let paths = shapes::polar_grid(
+        r,
+        dividers(p, "concentric", "concentricSkew", CMD)?,
+        dividers(p, "radial", "radialSkew", CMD)?,
+        switch(p, "compound", false, CMD)?,
+    );
+    grid_group(s, "Polar Grid", paths, switch(p, "fill", false, CMD)?)
 }
 
 /// An anchor `{x, y, in?, out?, smooth?}` given to `cmd` (handles `[x, y]`, at the anchor when
@@ -451,7 +510,9 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         // Lays the text out (and sizes an Auto Size frame).
         super::typecmd::refresh_bounds(&mut t);
     }
-    add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)
+    let made = add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)?;
+    let id = made.get("id").and_then(Value::as_u64).map(NodeId);
+    Ok(super::typecmd::with_overflow(s, id.as_slice(), made))
 }
 
 /// The paragraph attributes new type gets (the Type tools, `text.create`): aligned to the start of
@@ -466,12 +527,16 @@ pub(crate) fn new_type_para() -> vectorcraft_doc::ParaStyle {
     }
 }
 
-/// The leading model and character alignment new type starts with (`t`'s paragraph and runs):
-/// `leadingModel` and `charAlign` from `p`, else em box top to top and em box centre while the
+/// The paragraph alignment, leading model and character alignment new type starts with (`t`'s
+/// paragraph and runs): `justify` from `p` (else as [`new_type_para`] left it), `leadingModel`
+/// and `charAlign` from `p`, else em box top to top and em box centre while the
 /// interface is in Japanese (#432), else the Roman baseline for both. Noted in the journal, so a
 /// replay sets the same whatever the interface.
 pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut TextObject) -> Result<()> {
     use vectorcraft_doc::{CharAlign, LeadingModel};
+    if let Some(j) = str_param(p, "justify") {
+        t.para.justify = super::typecmd::justify_param(j).ok_or_else(|| bad(cmd, "justify must be auto|left|center|right|justifyAll"))?;
+    }
     let japanese = s.japanese_interface();
     let leading = match p.get("leadingModel").filter(|v| !v.is_null()) {
         Some(v) => match v.as_str() {

@@ -8,7 +8,7 @@ use serde_json::{Map, Value, json};
 use super::*;
 use crate::Prefs;
 use crate::units::Measure;
-use vectorcraft_doc::Unit;
+use vectorcraft_doc::{GridPrefs, Unit};
 
 /// What kind of value a preference holds.
 #[derive(Clone, Copy, Debug)]
@@ -352,6 +352,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("useCompression", "File Handling", "Files", "Use Compression", bool),
     // The W/H link of the Transform panel, the Properties panel and the Control bar
     p!("constrainProportions", "General", "Transform Panel", "Constrain Width and Height Proportions", bool),
+    p!("singleCornerRadius", "General", "Transform Panel", "Single Corner Radius", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -504,6 +505,11 @@ impl Prefs {
             *self = p;
         }
     }
+
+    /// The document grid Guides & Grid › Gridline every and Subdivisions set.
+    pub fn grid(&self) -> GridPrefs {
+        GridPrefs { spacing: self.gridline_every, subdivisions: self.grid_subdivisions }
+    }
 }
 
 impl Session {
@@ -539,8 +545,7 @@ impl Session {
         for st in &mut self.docs {
             if history_changed {
                 st.history.limit = self.prefs.history_states as usize;
-                let over = st.history.undo.len().saturating_sub(st.history.limit);
-                st.history.undo.drain(..over);
+                st.history.trim();
             }
             // Documents in pattern editing mode redraw their tile edge.
             if tile_edge_changed && st.doc.pattern_edit.is_some() {
@@ -548,8 +553,7 @@ impl Session {
             }
             if grid_changed {
                 let d = std::sync::Arc::make_mut(&mut st.doc);
-                d.grid.spacing = self.prefs.gridline_every;
-                d.grid.subdivisions = self.prefs.grid_subdivisions;
+                d.grid = self.prefs.grid();
                 st.revision += 1;
             }
             // Hyphenation exceptions change every text object's line breaks.

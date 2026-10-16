@@ -68,6 +68,53 @@ fn a_placed_document_draws_exactly_with_its_own_art() {
 }
 
 #[test]
+fn an_enveloped_placed_document_shows_its_file_once_read() {
+    let mut d = doc("enveloped-1");
+    let placed = d.remove(NodeId(50)).unwrap();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("a placed document") };
+    let p = (**p).clone();
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let envelope = NodeKind::Envelope {
+        content: vec![placed],
+        kind: Box::new(kind),
+        fidelity: 50.0,
+        editing: false,
+        options: Default::default(),
+        frame: Box::new(Affine::IDENTITY),
+    };
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, Node::new(NodeId(60), envelope)).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let before = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    assert!(vectorcraft_doc::placed_document::read_cached(&p).is_some(), "the file is read");
+    let after = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    assert!(after != before, "the file's art shows");
+    assert!(after == Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+}
+
+#[test]
+fn a_placed_document_with_a_drop_shadow_shows_its_file_once_read() {
+    let mut d = doc("shadowed-1");
+    let n = d.node_mut(NodeId(50)).unwrap();
+    let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    n.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params, visible: true });
+    let NodeKind::PlacedDocument(p) = &n.kind else { panic!("a placed document") };
+    let p = (**p).clone();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let before = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    assert!(vectorcraft_doc::placed_document::read_cached(&p).is_some(), "the file is read");
+    let after = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    assert!(after != before, "the file's art shows");
+    assert!(after == Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+}
+
+#[test]
 fn on_screen_a_placed_document_shows_a_placeholder_then_its_bitmap() {
     let d = doc("progressive-1");
     let generation = placed_document::generation();

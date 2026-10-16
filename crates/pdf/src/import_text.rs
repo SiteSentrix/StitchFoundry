@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, ParaDirection, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Node, ParaDirection, TextKind, TextObject, TextRun};
 use vectorcraft_text::TextLayout;
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
@@ -81,6 +81,9 @@ pub(crate) struct Look {
     pub h_scale: f64,
     pub fill: Option<Paint>,
     pub stroke: Option<(Paint, f64)>,
+    /// The fill, the stroke overprints.
+    pub overprint_fill: bool,
+    pub overprint_stroke: bool,
 }
 
 impl Look {
@@ -91,7 +94,8 @@ impl Look {
             && (self.size - other.size).abs() <= self.size * 0.01
             && (self.h_scale - other.h_scale).abs() < 0.5
             && self.fill == other.fill
-            && (other.stroke.is_none() || self.stroke == other.stroke)
+            && self.overprint_fill == other.overprint_fill
+            && (other.stroke.is_none() || (self.stroke == other.stroke && self.overprint_stroke == other.overprint_stroke))
     }
 
     fn style(&self) -> CharStyle {
@@ -105,6 +109,8 @@ impl Look {
             fill: self.fill.clone().unwrap_or(Paint::None),
             stroke,
             stroke_width,
+            overprint_fill: self.overprint_fill,
+            overprint_stroke: self.overprint_stroke,
             ..CharStyle::default()
         }
     }
@@ -138,6 +144,9 @@ pub(crate) struct TextLine {
     gaps: Vec<(usize, f64)>,
     /// Each glyph's advance in the file's font (points), with [`Self::baseline`].
     advances: Vec<f64>,
+    /// The strokes of its glyphs' outlines drawn between them, one per glyph with ink so far
+    /// (written right after the line).
+    pub held: Vec<Node>,
 }
 
 /// What a finished line of type tells beyond its text object (see [`crate::import_lines`]).
@@ -171,7 +180,13 @@ impl TextLine {
             ink: vec![],
             gaps: vec![],
             advances: vec![],
+            held: vec![],
         }
+    }
+
+    /// The paint the last glyph is filled with.
+    pub fn last_fill(&self) -> Option<&Paint> {
+        self.runs.last()?.0.fill.as_ref()
     }
 
     /// Add glyph `text` set vertically (`upright`) if it continues this column (or makes this
@@ -301,12 +316,13 @@ impl TextLine {
     }
 
     /// A stroke (`stroke`: paint and width) over the glyph just drawn at `at` in `font` (fill
-    /// and stroke rendering): the run is stroked. `false`: it isn't that glyph.
-    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: (Paint, f64)) -> bool {
+    /// and stroke rendering), which `overprint`s or not: the run is stroked. `false`: it isn't
+    /// that glyph.
+    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: (Paint, f64), overprint: bool) -> bool {
         let Some((look, _)) = self.runs.last_mut().filter(|(l, _)| l.font == font && (at.origin - self.last).hypot() < self.at.size * 1e-3) else {
             return false;
         };
-        look.stroke = Some(stroke);
+        (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
         true
     }
 
@@ -343,6 +359,20 @@ impl TextLine {
             t.runs = tracked_each(std::mem::take(&mut t.runs), own, self.at.size);
         }
         if let Some(path) = path {
+            // Evenly spaced type keeps its length along the path: the path runs through the
+            // glyphs' origins, one curve each, to the end of the last glyph, and tracking makes up
+            // the difference from the advances.
+            if own.is_none() {
+                let length: f64 = path.segments().take(self.baseline.len()).map(|seg| kurbo::ParamCurveArclen::arclen(&seg, 1e-3)).sum();
+                let laid = vectorcraft_text::layout(db, &t);
+                let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
+                let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
+                let size = self.at.size;
+                if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
+                    let (tracking, spaces) = spacing(&laid, &[], length - natural, chars, size);
+                    t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
+                }
+            }
             t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
             t.xf = Affine::IDENTITY;
             t.cached_bounds = Some(vectorcraft_text::layout(db, &t).bounds);

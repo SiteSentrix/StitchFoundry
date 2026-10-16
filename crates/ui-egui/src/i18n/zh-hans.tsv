@@ -179,7 +179,6 @@
 	Art	图稿
 	Art using a deleted global swatch keeps its colour.	使用已删除全局色板的图稿会保留其颜色。
 	Artboard Options	画板选项
-	Artboard Options: edit with the Artboard tool	画板选项：使用画板工具编辑
 	Artboard Options…	画板选项…
 	Artboard Tool	画板工具
 	Artboard {number}	画板 {number}
@@ -202,6 +201,7 @@
 	Author Title:	作者职务：
 	Author:	作者：
 	Auto	自动
+	Auto Color	自动颜色
 	Automatic	自动
 	Auto Size New Area Type	自动调整新区域文字大小
 	Auto Spell Check	自动拼写检查
@@ -326,6 +326,59 @@
 	Character Style Options	字符样式选项
 	Character Styles	字符样式
 	Check Links	检查链接
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	检查脚本
+	Check Script…	检查脚本…
+	Copy Report	复制报告
+	StitchFoundry read this script without running it.	StitchFoundry 读取了此脚本，但没有运行它。
+	Needs nothing beyond plain JavaScript	只需要普通的 JavaScript
+	Needs the script language's own objects or directives	需要脚本语言自身的对象或指令
+	Needs the document model	需要文档模型
+	Needs files	需要文件
+	Needs menu commands	需要菜单命令
+	Needs dialogs	需要对话框
+	Needs features only the reference app has	需要只有参考应用才有的功能
+	Outside the document	文档之外
+	Writes, moves or deletes files	写入、移动或删除文件
+	Opens files in other apps	在其他应用中打开文件
+	Opens network connections	打开网络连接
+	Loads native code	加载本机代码
+	Sends messages to other apps	向其他应用发送消息
+	Reads or sets environment variables	读取或设置环境变量
+	Runs code the checker can't read	运行检查无法读取的代码
+	Changes the reference app's preferences	更改参考应用的首选项
+	Menu commands	菜单命令
+	Names the script builds as it runs: {count}	脚本在运行时组成的名称：{count}
+	Document model	文档模型
+	Object types: {names}	对象类型：{names}
+	Directives	指令
+	Includes	包含的文件
+	Checked	已检查
+	Not followed: outside the script's folder	已跳过：在脚本文件夹之外
+	Includes itself	包含自身
+	Not read	未读取
+	Not read: a limit was reached	未读取：已达到上限
+	Compiled or not text	已编译或不是文本
+	Problems	问题
+	String not closed	字符串未闭合
+	Comment not closed	注释未闭合
+	Regular expression not closed	正则表达式未闭合
+	Template literal not closed	模板字面量未闭合
+	XML literal not closed	XML 字面量未闭合
+	Bracket never closed	括号未闭合
+	Closing bracket with no opening one	闭合括号没有对应的左括号
+	Syntax newer than ES3	比 ES3 更新的语法
+	Unknown directive	未知指令
+	Not valid UTF-8: unreadable bytes were replaced	不是有效的 UTF-8：无法读取的字节已被替换
+	Mixed line endings	换行符混用
+	Nesting too deep to follow	嵌套过深，无法跟踪
+	line {line}	第 {line} 行
+	lines {lines}	第 {lines} 行
+	{file}, line {line}	{file}，第 {line} 行
+	Compiled script: ask its author for the .jsx file	已编译的脚本：请向作者索取 .jsx 文件
+	Too large to check	太大，无法检查
+	Not a script for the reference app	不是参考应用的脚本
+	Some lists were cut short at their limit.	部分列表已在上限处截断。
 	Check Spelling…	检查拼写…
 	Choose a folder	选择文件夹
 	Choose…	选择…
@@ -386,6 +439,7 @@
 	Color bars	色彩条
 	Color blindness – Deuteranopia-type	色盲 – 绿色盲型
 	Color blindness – Protanopia-type	色盲 – 红色盲型
+	Color blindness – Tritanopia-type	色盲 – 蓝色盲型
 	Color Burn	颜色加深
 	Color conversion:	色彩转换：
 	Color Dodge	颜色减淡
@@ -553,6 +607,7 @@
 	Cyan	青
 	Dark	深色
 	Darken	变暗
+	Darkness	暗度
 	dash	虚线
 	Dash Pattern	虚线样式
 	Dashed	虚线
@@ -665,6 +720,8 @@
 	Do Not Move	不移动
 	Do you want to save the changes you made to “{name}”?	要存储对“{name}”所做的更改吗？
 	Can't open “{name}”.	无法打开“{name}”。
+	Can't save “{name}”.	无法保存“{name}”。
+	Can't export “{name}”.	无法导出“{name}”。
 	Document	文档
 	Document Color Mode	文档颜色模式
 	Document Info	文档信息
@@ -898,6 +955,9 @@
 	Export…	导出…
 	Extrude & Bevel…	突出与斜角…
 	Eyedropper	吸管
+	Sample Color from Screen	从屏幕取样颜色
+	This system has no screen color sampler	此系统没有屏幕取色工具
+	The active document changed while the screen color sampler was open	屏幕取色工具打开期间，当前文档已更改
 	Eyedropper Applies:	吸管应用：
 	Eyedropper Options	吸管选项
 	Eyedropper Picks Up:	吸管拾取：
@@ -928,6 +988,7 @@
 	Fill (X), double-click for the Color Picker	填色 (X)，双击打开拾色器
 	Fill and Stroke	填色和描边
 	Fill new strokes	为新描边应用填色
+	Keep selected	保持选择状态
 	Fill Color	填色
 	Fill New Type Objects With Placeholder Text	用占位文本填充新文字对象
 	Fill Rule	填充规则
@@ -952,6 +1013,7 @@
 	Fit Headline	适合标题
 	Decrease Font Size	减小字体大小
 	Increase Font Size	增大字体大小
+	Reset Tracking and Kerning	重置字距和字偶距
 	Spacing	间距
 	Step Type	按增量调整文字
 	Fit in View	适合视图
@@ -1067,12 +1129,31 @@
 	Graph	图表
 	Graph Data	图表数据
 	Graph Type	图表类型
+	Graph Design	图表设计
+	Graph Marker	图表标记
+	New Design	新建设计
+	Delete Design	删除设计
+	Paste Design	粘贴设计
+	Select Unused	选择未使用项
+	Import Data…	导入数据…
+	Transpose	转置
+	Switch x/y	切换 x/y
+	Number of Decimals:	小数位数：
+	Column Width:	列宽：
+	No Legend	无图例
+	Standard Legend	标准图例
+	Legends in Wedges	楔形中的图例
+	Ratio	比例
+	Even	平均
+	Stacked	堆积
 	Graphic Style	图形样式
 	Graphic Style Libraries	图形样式库
 	Graphic Style Libraries Menu	图形样式库菜单
 	Graphic Style Library	图形样式库
 	Graphic Style Options	图形样式选项
 	Graphic Style Options…	图形样式选项…
+	Symbol Options	符号选项
+	Symbol Options…	符号选项…
 	Graphic Styles	图形样式
 	Graphic Styles Options	图形样式选项
 	Graphics	图形
@@ -1129,6 +1210,7 @@
 	Hide Print Tiling	隐藏打印分页
 	Hide Rulers	隐藏标尺
 	Hide Slices	隐藏切片
+	Hide Template	隐藏模板
 	Hide Text Threads	隐藏文本串接线
 	Hide Thumbnail	隐藏缩略图
 	Hide Thumbnails	隐藏缩略图
@@ -1168,6 +1250,9 @@
 	Identify Objects By	对象识别方式
 	Ignore	忽略
 	Ignore Artboards (all the art as one page)	忽略画板 (所有图稿作为一页)
+	Auto Grouping	自动编组
+	Enhanced	增强
+	Ignore Color	忽略颜色
 	Ignore White	忽略白色
 	Palette:	调板：
 	Limited	有限
@@ -1227,6 +1312,8 @@
 	Internal CSS	内部 CSS
 	Internet Standard RGB (sRGB)	互联网标准 RGB (sRGB)
 	Intersect	交集
+	Intertwine	交织
+	Arrange Intertwine Area	排列交织区域
 	Inverse	反向
 	Invert	反相
 	Invert Colors	反相颜色
@@ -1296,6 +1383,20 @@
 	Left:	左：
 	Legacy Macintosh RGB (Gamma 1.8)	旧版 Macintosh RGB (Gamma 1.8)
 	Legacy vector clipboard	旧版矢量剪贴板
+	Legacy (version 7)	旧版 (版本 7)
+	Transparent Images:	透明图像：
+	Flatten	拼合
+	Omit	省略
+	Legacy .ai Options	旧版 .ai 选项
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	旧版 .ai 文件只包含一个画板：勾选的每个画板都会存储为单独的文件。
+	{count} of {total} artboards	{total} 个画板中的 {count} 个
+	Check an artboard to save.	请勾选要存储的画板。
+	Hidden Objects:	隐藏的对象：
+	Hidden Layer	隐藏图层
+	Make Visible	设为可见
+	Text:	文本：
+	Editable	可编辑
+	PDF-compatible	与 PDF 兼容
 	Legacy vector clipboard (no transparency)	旧版矢量剪贴板 (无透明度)
 	Less	较少
 	Letter	信纸
@@ -1806,6 +1907,7 @@
 	Panel menu	面板菜单
 	Panel Options…	面板选项…
 	Panels	面板
+	Panels Except Tools and Control	除工具和控制栏外的面板
 	Paragraph	段落
 	Paragraph Style	段落样式
 	Paragraph Style Options	段落样式选项
@@ -1829,6 +1931,7 @@
 	Pathfinder Options…	路径查找器选项…
 	Pathfinders:	路径查找器：
 	Paths	路径
+	Path Length	路径长度
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	路径：{paths}    锚点：{anchors}    颜色：{colors}
 	Pattern	图案
 	Pattern Editing	图案编辑
@@ -2062,6 +2165,9 @@
 	Rectangle: Sunshine	矩形：阳光
 	Rectangle…	矩形…
 	Rectangular Grid	矩形网格
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	水平分隔线：
+	Vertical Dividers:	垂直分隔线：
 	Rectangular Grid Tool	矩形网格工具
 	Red	红
 	Redefine Character Style	重新定义字符样式
@@ -2123,6 +2229,13 @@
 	Relinked {n} image(s); not in that folder: {}	已重新链接 {n} 张图像；不在该文件夹中：{}
 	Relinked {} image(s)	已重新链接 {} 张图像
 	Relink…	重新链接…
+	Find Linked Files	查找链接文件
+	Find Linked Files in Folder…	在文件夹中查找链接文件…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	请为每个链接文件选择要重新链接到的文件。大小和内容与链接中保存的相同的文件排在最前面。
+	Same file	相同文件
+	Same size	相同大小
+	Don't Relink	不重新链接
+	Copy into the document's folder	复制到文档所在的文件夹
 	Reload Plug-ins	重新载入增效工具
 	Remove	移除
 	Remove Anchor Points	移除锚点
@@ -2340,6 +2453,16 @@
 	Scripts	脚本
 	Search	搜索
 	Search All	搜索全部
+	Filter	筛选
+	Clear All	全部清除
+	By Object	按对象
+	By Layer	按图层
+	Images	图像
+	Groups	编组
+	Linked Files	链接文件
+	Locked	已锁定
+	Hidden	已隐藏
+	Filter Layers Panel Rows	筛选图层面板行
 	Search commands and tools	搜索命令和工具
 	Search commands and tools…	搜索命令和工具…
 	Search Commands…	搜索命令…
@@ -2360,6 +2483,7 @@
 	Select an image to see its Link Info.	选择图像以查看其链接信息。
 	Select an image to trace	选择要描摹的图像
 	Select Anchors	选择锚点
+	Select Segments	选择路径段
 	Select Appearance Item	选择外观项目
 	Select art and choose Object › Pattern › Make.	选择图稿并选择“对象 › 图案 › 创建”。
 	Select art and click New Symbol to make one.	选择图稿并单击“新建符号”以创建。
@@ -2402,7 +2526,6 @@
 	Set base color to the current color	将基色设为当前颜色
 	Set Bounds	设置边界
 	Set Current Layer	设为当前图层
-	Set Key Object	设为关键对象
 	Set Keyboard Shortcut	设置键盘快捷键
 	Set Mesh Point Color	设置网格点颜色
 	Set Preference	设置首选项
@@ -2472,6 +2595,7 @@
 	Show Modified	显示已修改
 	Show Note	显示注解
 	Show Options	显示选项
+	Color Panel Options	颜色面板选项
 	Show Package	显示打包
 	Show Panel	显示面板
 	Show Pattern Swatches	显示图案色板
@@ -2484,6 +2608,7 @@
 	Show Slices	显示切片
 	Show Swatch Bounds	显示色板边界
 	Show Swatch Kinds	显示色板种类
+	Show Template	显示模板
 	Show Text Threads	显示文本串接线
 	Show The Home Screen When No Documents Are Open	没有打开文档时显示主页
 	Show Thumbnail	显示缩略图
@@ -2564,6 +2689,7 @@
 	Snap to Glyph	靠齐字符
 	Snap to Grid	对齐网格
 	Snap to Pixel	对齐像素
+	Precise Cursors	精确光标
 	Snap to Point	对齐点
 	Snapping Tolerance	吸附容差
 	Social Square Post 1080×1080	社交方形帖子 1080×1080
@@ -2589,6 +2715,8 @@
 	Spiral Tool	螺旋工具
 	Split Freeform Line	分割自由曲线
 	Split Into Grid	分割为网格线
+	Total:	总计：
+	Add Guides	添加参考线
 	Split Into Grid…	分割为网格…
 	Split Path	分割路径
 	spot	专色
@@ -2897,6 +3025,8 @@
 	Update Changed Links	更新已更改的链接
 	{count} linked image(s) changed on disk. Show the new versions?	有 {count} 个链接图像已在磁盘上更改。要显示新版本吗？
 @msg	Updated {_1} linked file(s) changed on disk	已更新 {_1} 个在磁盘上更改的链接文件
+@msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
+@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容纳所显示字体一行的区域文字已加高框架 ({_1})：否则文字不会显示
 	Update Modified Links	更新已修改的链接
 	Updated {} image(s)	已更新 {} 张图像
 	UPPERCASE	大写
@@ -2990,6 +3120,7 @@
 	Vertical %	垂直 %
 	Vertical Align Bottom	垂直底对齐
 	Vertical Align Center	垂直居中对齐
+	Horizontal & Vertical Align Center	水平和垂直居中对齐
 	Vertical Align Top	垂直顶对齐
 	Vertical Area Type Tool	直排区域文字工具
 	Vertical Distribute Bottom	垂直分布下缘
@@ -3077,6 +3208,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}：单击以修正为最接近的颜色 ({hex})
 	“{file}” is protected by a password.	“{file}”受密码保护。
 	● Recording	● 录制中
+imageTrace	Outline	轮廓
 @plural	{n} item|{n} items	{n} 个项目
 @plural	Color Table ({n} color)|Color Table ({n} colors)	颜色表 ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	要删除这 {n} 个图形样式吗？
@@ -3149,6 +3281,7 @@
 	 to set spacing and orientation	可设置间距与方向
 	:	：
 	Isolate Selected Group	隔离选择的编组
+	Isolate Selected Object	隔离选择的对象
 	Release Clipping Mask	释放剪切蒙版
 	Make Compound Path	制作复合路径
 	Release Compound Path	释放复合路径
@@ -3177,6 +3310,42 @@
 	Set:	集：
 	Shortcut	快捷键
 	Use Default	使用默认值
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	导入快捷键组
+	Import Shortcut Set…	导入快捷键组…
+	Each entry of the file is matched to a StitchFoundry tool, command or panel. Check the matches and answer what is left.	文件中的每个条目都会对应到 StitchFoundry 的工具、命令或面板。请检查对应结果，并回答剩余的条目。
+	Keys	按键
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	文件以代码记录按键和修饰键。请检查建议的含义，并回答尚未确定的代码。
+	Click, then press the key this code stands for (Esc cancels)	单击后按下此代码代表的键 (Esc 取消)
+	Press a key…	请按一个键…
+	from your earlier imports	来自你之前的导入
+	from the format's public description	依据格式的公开说明
+	not known yet	尚未确定
+	Shortcuts	快捷键
+	In the File	文件中的名称
+	In StitchFoundry	StitchFoundry 中的对应
+	Needs Attention Only	仅显示需要处理的条目
+	Ready	就绪
+	Needs a choice	需要选择
+	Needs a key	需要按键
+	No equivalent	无对应项
+	Tools take a single key (optionally with Shift)	工具只能使用单个键 (可搭配 Shift)
+	A later row takes this shortcut	后面的行会使用此快捷键
+	Same item as a later row	与后面某一行的项目相同
+	Start from StitchFoundry Defaults	从 StitchFoundry 默认开始
+	Add to the Current Shortcuts	添加到当前快捷键
+	Remember My Choices	记住我的选择
+	{ready} of {total} ready	{total} 个中有 {ready} 个就绪
+	The file is too large to read in full, so only its first part is listed.	文件太大，无法完整读取，因此只列出开头部分。
+	Report copied	已复制报告
+	Line {line}	第 {line} 行
+	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
+	Read Shortcut Set File	读取快捷键组文件
+	Import Matches	导入对应
+	Remember Import Matches	记住导入对应
+	Forget Import Matches	清除导入对应
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	与 {n} 个默认快捷键一致
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	文件中有 {n} 个部分未读取
 	RGB:	RGB：
 	Anchors	锚点
 	Image Trace (Make and Expand)	图像描摹 (创建并扩展)
@@ -3569,6 +3738,10 @@ axis	Both	两者
 	Method	方法
 	Quality	质量
 	Radius	半径
+	Mode	模式
+	Blur Mode	模糊模式
+	Edge Only	仅边缘
+	Overlay Edge	叠加边缘
 	Spin	旋转
 	Draft	草稿
 	Good	良好
@@ -3649,6 +3822,9 @@ effect	Vertical	垂直
 	Blocks	块状
 	Frosted	磨砂
 	Tiny Lens	小镜头
+	Loaded Texture	已载入的纹理
+	Load Texture…	载入纹理…
+	Texture Image	纹理图像
 	Rename Data Set	重命名数据集
 	Rename Variable	重命名变量
 	Variable Options	变量选项
@@ -3675,9 +3851,6 @@ effect	Vertical	垂直
 	Rotation Y	Y 轴旋转
 	Rotation Z	Z 轴旋转
 	Shading	明暗处理
-	Direction	方向
-	Elevation	仰角
-	Ambient	环境光
 	Segments	分段数
 	Show axis	显示轴
 	Reset all	全部重置
@@ -3804,7 +3977,6 @@ lighting	Light	光源
 	Fits the hoop	可放入绣框
 	Give objects a stitch type in the Embroidery panel.	在“刺绣”面板中为对象指定针迹类型。
 	Gradient to	渐变至
-	Hidden	隐藏
 	Hide Digitizing Widget	隐藏打版控件
 	Hoop	绣框
 	Inclination Tool	针迹方向工具
@@ -4107,7 +4279,7 @@ machine	Stop	停止
 	Hand stitch	手缝针迹
 	Gap	间隙
 	Jagged edges	锯齿边缘
-	Both sides	两侧
+	Both sides	双面
 	Side 1	第 1 侧
 	Side 2	第 2 侧
 	Jag depth	锯齿深度
@@ -4130,7 +4302,6 @@ machine	Stop	停止
 
 # Embroidery (StitchFoundry): spacing profiles and blends
 	Spacing profile	间距曲线
-	Even	均匀
 	Accordion	疏密交替
 	Fade out	渐隐
 	Fade in	渐显
@@ -4173,7 +4344,7 @@ machine	Stop	停止
 	Bean Ring	三重针圆环
 	Hexagons	六边形
 	Chevrons	V形纹
-	Ogee	洋葱拱纹
+	Ogee	反曲线
 	Basket weave	编篮纹
 	Stars	星星
 	Hearts	爱心
@@ -4355,7 +4526,6 @@ machine	Stop	停止
 @msg	the machine file didn't encode	无法编码绣花机文件
 	Worksheet	工作单
 	Outline Around	外围轮廓
-	Stacked	竖排
 	Oval	椭圆
 	Octagon	八边形
 	Shield	盾形
@@ -4757,8 +4927,8 @@ machine	Stop	停止
 	Make a Design…	制作图案…
 	Make a Design, Step by Step	一步一步制作图案
 	Step by step: words, a shape, appliqué, a picture or a sample	一步一步：文字、形状、贴布绣、图片或示例
-	Step	步骤
-	Back	上一步
+	Step	阶梯
+	Back	背面
 	What would you like to make?	你想做什么？
 	A name or some words	名字或几个字
 	For towels, bags, pillows and gifts	用于毛巾、包、枕头和礼物
@@ -4968,3 +5138,106 @@ machine	Stop	停止
 	Top thread (m)	面线 (m)
 	Width (mm)	宽度 (mm)
 	same	相同
+	Ruler Origin	标尺原点
+	Reset Ruler Origin	重置标尺原点
+	Artistic	艺术效果
+	Film Grain…	胶片颗粒…
+	Highlight Area	高光区域
+	Concentric Dividers:	同心分隔线：
+	Radial Dividers:	径向分隔线：
+	Skew:	倾斜：
+	Inside	内侧
+	Outside	外侧
+	Use Outside Rectangle As Frame	使用外部矩形作为框架
+	Create Compound Path From Ellipses	从椭圆形创建复合路径
+	Fill Grid	网格填色
+	Select two or more objects, or a group	请选择两个或更多对象，或一个组
+	Cove	凹圆
+	Depth	深度
+	Front	正面
+	Isometric Bottom	等角底部
+	Isometric Left	等角左侧
+	Isometric Right	等角右侧
+	Isometric Top	等角顶部
+	Off-Axis Back	离轴背面
+	Off-Axis Bottom	离轴底部
+	Off-Axis Front	离轴正面
+	Off-Axis Left	离轴左侧
+	Off-Axis Right	离轴右侧
+	Off-Axis Top	离轴顶部
+	Reset all 3D settings to their defaults.	将所有 3D 设置重置为默认值。
+	Taper	锥化
+	Twist	扭转
+	Volume	体积
+3d	Cap	封口
+3d	Solid	实心
+3d	Hollow	空心
+3d	Bevel	斜角
+3d	Rounded	圆角
+3d	Space	间距
+	Bevel Shape	斜角形状
+	Bevel Inside	斜角向内
+	Bevel both sides	双面斜角
+	Presets	预设
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一个对象只能应用一种 3D 效果。请编辑现有效果的选项，或先将其移去。
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}目前需要路径或复合路径。请先将文字、图像和编组转换为路径。
+@msg	{label} requires a shape with at least two anchors	{label}需要至少有两个锚点的形状
+@msg	The shape is too complex for a 3D effect	形状过于复杂，无法应用 3D 效果
+@msg	The 3D surface is too complex; simplify the shape	3D 表面过于复杂；请简化形状
+	Transform Objects	变换对象
+@msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
+@msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
+@msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
+	Load EPS into Clipboard	将 EPS 载入剪贴板
+@msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+	Fill and Stroke Controls	填色和描边控件
+	Coloring Controls	颜色控件
+	Draw Mode Controls	绘图模式控件
+	Screen Mode Controls	屏幕模式控件
+	Drawer menu	抽屉菜单
+	Toolbar: Show Controls	工具栏：显示控件
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control 必须是 fillStroke、coloring、drawMode 或 screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	未知控件 `{name}`：fillStroke、coloring、drawMode 或 screenMode
+	Single Corner Radius	统一圆角半径
+	Top Left:	左上：
+	Top Right:	右上：
+	Bottom Left:	左下：
+	Bottom Right:	右下：
+	Softness	柔和度
+	Ambient Light	环境光
+	Light behind the object	光源位于对象后方
+	Registration:	对齐点:
+	Create Dimension	创建尺寸标注
+	Dimension Tool	尺寸标注工具
+	Dimension Tool Options	尺寸标注工具选项
+	Font Family:	字体系列：
+	Font Style:	字体样式：
+	Precision:	精度：
+	Update Dimensions	更新尺寸标注
+	Display	显示
+	Dimension	尺寸
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	图纸 : 实际尺寸 — 1:10 会将页面上的 1 个单位标注为 10。
+	Preview (1 inch on the page)	预览（页面上 1 英寸）
+	Set as Default	设为默认
+	 out from a highlighted edge to place its dimension  |  	 从高亮的边向外拖动以放置其尺寸  |  
+	 cancels  |  Double-click the tool for options	 取消  |  双击工具打开选项
+	Linear	线性
+	Angular	角度
+	Away from the Line	远离尺寸线
+	Between Line and Object	在尺寸线与对象之间
+	Drag out from a segment, or click two points, then click to place.	从线段向外拖动，或单击两个点，然后单击以放置。
+	Drag out from a corner, or click two straight lines, then click to place.	从角向外拖动，或单击两条直线，然后单击以放置。
+	Drag out from a circle or arc for its radius, inwards for its diameter.	从圆或圆弧向外拖动得到半径，向内拖动得到直径。
+@msg	Choose a circle or a perfect arc	请选择圆或标准圆弧
+@msg	Choose a precision from 0 to 6	请选择 0 到 6 之间的精度
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封闭开放轮廓的圆形端部。部分旋转的切割侧面保持开放。
+	Distance	距离
+	Make Image Dynamic	使图像动态化
+	Import Data Sets…	导入数据集…
+	Export Data Sets…	导出数据集…
+	Make Graph Dynamic	使图表动态化
+	Batch…	批处理…
+	Source Folder:	源文件夹：
+	Destination Folder:	目标文件夹：
+	Overrides	覆盖
+	Uses every data set of the open document.	使用打开文档的每个数据集。

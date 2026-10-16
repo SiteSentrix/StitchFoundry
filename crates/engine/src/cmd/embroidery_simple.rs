@@ -42,7 +42,7 @@ fn page(s: &Session) -> Result<kurbo::Rect> {
 fn centre(s: &mut Session, id: u64, c: kurbo::Point) -> Result<()> {
     let b = {
         let d = &s.doc()?.doc;
-        d.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.bounds_in(kurbo::Affine::IDENTITY, false))
+        d.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.bounds_in(&d.symbol_boxes(), kurbo::Affine::IDENTITY, false))
     };
     if let Some(b) = b {
         let (dx, dy) = (c.x - b.center().x, c.y - b.center().y);
@@ -141,7 +141,7 @@ mod tests {
         let d = &s.doc().unwrap().doc;
         let n = d.node(id).unwrap();
         assert!(matches!(n.embroidery.as_deref().map(|e| &e.stitch), Some(sf_core::attr::StitchType::Satin(_))));
-        let (b, page) = (n.bounds_in(kurbo::Affine::IDENTITY, false).unwrap(), d.artboards[0].rect);
+        let (b, page) = (n.bounds_in(&d.symbol_boxes(), kurbo::Affine::IDENTITY, false).unwrap(), d.artboards[0].rect);
         assert!((b.center().x - page.center().x).abs() < 1.0 && (b.center().y - page.center().y).abs() < 1.0, "{b:?} {page:?}");
         assert!(s.embroidery_plan().unwrap().pattern().stitch_count() > 100);
         assert!(s.execute("embroidery.addWords", &json!({"text": "  "})).is_err());

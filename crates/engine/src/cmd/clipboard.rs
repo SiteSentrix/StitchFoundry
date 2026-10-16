@@ -21,7 +21,7 @@ use vectorcraft_color::Swatch;
 use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDef, Symbol, TextStyleDef};
 use vectorcraft_geom::Rect;
 
-pub use flavours::{BITMAP, EMF, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
+pub use flavours::{BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
 pub(crate) use resources::SwatchChoices;
 
 use super::*;
@@ -80,7 +80,8 @@ pub struct Clipboard {
     pub para_styles: Vec<TextStyleDef>,
     /// Brushes the objects' strokes use.
     pub brushes: Vec<Brush>,
-    /// The artboard the objects were copied from: Paste on All Artboards keeps their offset to it.
+    /// The artboard the objects were copied from (none when they lie on no artboard): Paste on All
+    /// Artboards keeps their offset to it.
     pub source_artboard: Option<Rect>,
     /// Per object: the name of the layer it was copied from (Paste Remembers Layers).
     pub source_layers: Vec<Option<String>>,
@@ -109,8 +110,14 @@ impl Clipboard {
             source_layers.push(anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|l| l.is_layer())).and_then(|l| l.name.clone()));
         }
         let bounds = nodes.iter().filter_map(Node::visual_bounds).reduce(|a, b| a.union(b));
-        let board = bounds.and_then(|b| d.artboard_at(b.center())).unwrap_or(0);
-        Self { source_artboard: d.artboards.get(board).map(|a| a.rect), source_layers, source_doc: Some(st.uid), ..Self::gather(d, nodes) }
+        // Art on no artboard has no source artboard: in-place pastes put it back where it was (#1924).
+        let board = bounds.and_then(|b| d.artboard_at(b.center()));
+        Self {
+            source_artboard: board.and_then(|i| d.artboards.get(i)).map(|a| a.rect),
+            source_layers,
+            source_doc: Some(st.uid),
+            ..Self::gather(d, nodes)
+        }
     }
 
     /// Every object of `src` (each top-level layer's contents) with its resources, for Place and
@@ -142,8 +149,8 @@ impl Clipboard {
         d.patterns = self.patterns.clone();
         d.swatches.extend(self.swatches.iter().cloned());
         d.graphic_styles.extend(self.graphic_styles.iter().cloned());
-        d.char_styles = self.char_styles.clone();
-        d.para_styles = self.para_styles.clone();
+        d.char_styles = self.char_styles.clone().into();
+        d.para_styles = self.para_styles.clone().into();
         if !self.brushes.is_empty() {
             let mut lib = vectorcraft_brush::library(&d);
             for b in &self.brushes {
@@ -168,21 +175,26 @@ impl Clipboard {
         d.fix_next_id();
         d
     }
-}
 
-impl Session {
-    /// The internal clipboard as standalone SVG (`None` when it is empty).
-    pub fn clipboard_svg(&self) -> Option<String> {
-        if self.clipboard.is_empty() {
+    /// The objects as standalone SVG (`None` when there are none).
+    pub fn svg(&self) -> Option<String> {
+        if self.is_empty() {
             return None;
         }
-        let d = self.clipboard.to_document();
+        let d = self.to_document();
         // SVG has no filters for the Photoshop-style effects: their objects go in as images.
         let flat = super::rasterfx::flatten_pixel_effects(&d);
         Some(vectorcraft_svg::export(
             flat.as_ref().unwrap_or(&d),
             &vectorcraft_svg::ExportOptions { artboard: None, object_ids: vectorcraft_svg::ObjectIds::Minimal, ..Default::default() },
         ))
+    }
+}
+
+impl Session {
+    /// The internal clipboard as standalone SVG (`None` when it is empty).
+    pub fn clipboard_svg(&self) -> Option<String> {
+        self.clipboard.svg()
     }
 }
 

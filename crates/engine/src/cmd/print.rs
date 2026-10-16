@@ -6,7 +6,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_eps::{Level, PrintJob, PrintPage};
-use vectorcraft_pdf::{PrintOptions, PrintSettings};
+use vectorcraft_geom::{Affine, Rect};
+use vectorcraft_pdf::{PrintLayers, PrintOptions, PrintPreview, PrintSettings};
 
 use super::fileio::pdf::{merge, pdf_error};
 use super::fileio::{extension, write_or_return};
@@ -30,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Preview",
             [],
             None,
-            "{settings?: {…print.setup settings} (over the document's)} → {pages (copies included), sheets: [{artboard (0-based; null with artboards ignored), tile? (1-based), ink? (separations), width, height (pt, the page), orientation, scale: [width %, height %], transform: [a, b, c, d, e, f] (document space → the page, pt, y down), area: [x0, y0, x1, y1] (the document region the page prints), trim: [x0, y0, x1, y1] (the artboard on the page)}] (one copy, in order), tiles: [{artboard, columns, rows, printed: [1-based tiles], tiles: [[x0, y0, x1, y1]…] (document space)}], inks: [{name, spot, print, frequency, angle}] (separations), warnings (art larger than the imageable area, options not applied yet…), settings} without printing",
+            "{settings?: {…settings of print.setup} (over the document's)} → {pages (copies included), sheets: [{artboard (0-based; null with artboards ignored), tile? (1-based), ink? (separations), width, height (pt, the page), orientation, scale: [width %, height %], transform: [a, b, c, d, e, f] (document space → the page, pt, y down), area: [x0, y0, x1, y1] (the document region the page prints), trim: [x0, y0, x1, y1] (the artboard on the page)}] (one copy, in order), tiles: [{artboard, columns, rows, printed: [1-based tiles], tiles: [[x0, y0, x1, y1]…] (document space)}], inks: [{name, spot, print, frequency, angle}] (separations), warnings (art larger than the imageable area, type that prints in the fallback font, options not applied yet…), settings} without printing",
             has_doc,
             preview
         ),
@@ -39,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print",
             [],
             Some("Cmd+P"),
-            "{settings?: {…print.setup settings} (over the document's), path?, format?: pdf (default: a print-ready PDF) | postscript (the default for a .ps path: a PostScript file with DSC comments, %%Pages, a page per sheet with its paper size, marks, separations with their ink and halftone screen, the fixed flatness, negatives), level?: 3|2 (the PostScript language level), flattenerPreset?: \"medium\" (PostScript: the preset transparency is flattened with — high, low or a saved one, see flattener.presets.list)} print the document, one page per sheet of paper (per tile, per ink, per copy) → {pages, format, path, bytes, warnings}; no path → {dataBase64, bytes, pages, format, warnings}. Raster effects print at the document's raster effects resolution; a PDF leaves halftone screens and flatness to the output device",
+            "{settings?: {…settings of print.setup} (over the document's), path?, format?: pdf (default: a print-ready PDF) | postscript (the default for a .ps path: a PostScript file with DSC comments, %%Pages, a page per sheet with its paper size, marks, separations with their ink and halftone screen, the fixed flatness, negatives), level?: 3|2 (the PostScript language level), flattenerPreset?: \"medium\" (PostScript: the preset transparency is flattened with — high, low or a saved one, see flattener.presets.list), acknowledgeLoss?: bool (with path: write over the file the document was read from although reading it left things out)} print the document, one page per sheet of paper (per tile, per ink, per copy) → {pages, format, path, bytes, warnings}; no path → {dataBase64, bytes, pages, format, warnings}. Raster effects print at the document's raster effects resolution; a PDF leaves halftone screens and flatness to the output device",
             has_doc,
             print
         ),
@@ -90,10 +91,41 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &s.doc()?.doc;
     let set = settings(C, doc, p)?;
     super::printadvanced::flattener(C, &set, &s.prefs.flattener_presets)?;
-    let pv = vectorcraft_pdf::preview(doc, &set).map_err(|e| pdf_error(C, e))?;
+    let mut pv = vectorcraft_pdf::preview(doc, &set).map_err(|e| pdf_error(C, e))?;
+    pv.warnings.extend(fonts_warning(doc, set.print_layers, &areas(&pv)));
     let mut v = serde_json::to_value(pv).map_err(|e| EngineError::Other(e.to_string()))?;
     v["settings"] = to_json(&set)?;
     Ok(v)
+}
+
+/// The parts of the document (document space) that the pages of `pv` print.
+fn areas(pv: &PrintPreview) -> Vec<Rect> {
+    pv.sheets
+        .iter()
+        .filter_map(|p| on_page(Rect::new(p.area[0], p.area[1], p.area[2], p.area[3]), Affine::new(p.transform), (p.width, p.height)))
+        .collect()
+}
+
+/// The part of `area` (document space) that lands on a `w` × `h` page placed by `to_page`
+/// (document space → the page); `None` when none of it does.
+fn on_page(area: Rect, to_page: Affine, (w, h): (f64, f64)) -> Option<Rect> {
+    let det = to_page.determinant();
+    if !(det.is_finite() && det.abs() > 1e-12) {
+        return Some(area);
+    }
+    let page = to_page.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, w, h));
+    let r = area.intersect(page);
+    (r.area() > 0.0).then_some(r)
+}
+
+/// The warning about type in `doc` that prints in the fallback font: on the layers `which` prints,
+/// on pages that print `areas`.
+fn fonts_warning(doc: &Document, which: PrintLayers, areas: &[Rect]) -> Option<String> {
+    // Placed documents print their files' art, which names the resources this adds.
+    let doc = doc.with_placed_art();
+    let mut layers = doc.layers.clone();
+    vectorcraft_pdf::keep_layers(&mut layers, which);
+    super::fonts::substitution_warning_of(super::fonts::printed_fonts(&doc, &layers, areas))
 }
 
 const PRINT: &str = "file.print";
@@ -128,11 +160,15 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     let flat = super::rasterfx::flatten_raster_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);
     // Print as Bitmap and the flattener preset (Advanced) render and flatten it first.
-    let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets)?;
+    let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets, s.prefs.black_output == "rich")?;
     let path = str_param(p, "path");
+    // Fonts are read from the type before raster effects and Print as Bitmap turn it into images.
+    let which = set.print_layers;
     if !postscript {
-        let r = vectorcraft_pdf::print(prepared.as_ref().unwrap_or(doc), &PrintOptions { settings: set, ..Default::default() })
-            .map_err(|e| pdf_error(PRINT, e))?;
+        let printed = prepared.as_ref().unwrap_or(doc);
+        let fonts = fonts_warning(&full, which, &areas(&vectorcraft_pdf::preview(printed, &set).map_err(|e| pdf_error(PRINT, e))?));
+        let mut r = vectorcraft_pdf::print(printed, &PrintOptions { settings: set, ..Default::default() }).map_err(|e| pdf_error(PRINT, e))?;
+        r.warnings.extend(fonts);
         return write_or_return(path, &r.bytes, json!({ "pages": r.pages, "format": "pdf", "warnings": r.warnings }));
     }
     let level = match p.get("level").filter(|v| !v.is_null()) {
@@ -175,5 +211,7 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
             warnings.push(w.clone());
         }
     }
+    let areas: Vec<Rect> = plan.sheets.iter().filter_map(|sh| on_page(sh.area, sh.view * sh.place, sh.size)).collect();
+    warnings.extend(fonts_warning(&full, which, &areas));
     write_or_return(path, &out.bytes, json!({ "pages": plan.order.len(), "format": "postscript", "warnings": warnings }))
 }

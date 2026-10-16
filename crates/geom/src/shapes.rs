@@ -208,36 +208,70 @@ pub fn spiral(center: Point, radius: f64, decay_percent: f64, segments: u32, clo
     PathData::single(sp)
 }
 
-/// Rectangular grid as separate open lines (plus an optional frame rectangle).
-pub fn rectangular_grid(r: Rect, h_dividers: u32, v_dividers: u32, frame: bool) -> Vec<PathData> {
+/// The largest grid divider skew, in percent either way.
+pub const GRID_SKEW_MAX: f64 = 500.0;
+
+/// Where a divider at fraction `t` (0..1) of a grid's extent lands under `skew` percent: evenly
+/// spaced at 0, crowded toward 1 by a positive skew and toward 0 by a negative one (`t` raised to
+/// 1 + |skew| / 100 from the far end).
+fn skewed(t: f64, skew: f64) -> f64 {
+    // NaN reads as no skew.
+    let k = 1.0 + skew.abs().min(GRID_SKEW_MAX) / 100.0;
+    if skew > 0.0 {
+        1.0 - (1.0 - t).powf(k)
+    } else if skew < 0.0 {
+        t.powf(k)
+    } else {
+        t
+    }
+}
+
+/// Rectangular grid, bottom object first: the outside as one rectangle (`frame`) or as its four
+/// sides (top, bottom, left, right), then the horizontal and the vertical dividers as open lines.
+/// A positive `h_skew` crowds the horizontal dividers toward the top and a positive `v_skew` the
+/// vertical ones toward the right (percent, see [`GRID_SKEW_MAX`]).
+pub fn rectangular_grid(r: Rect, (h_dividers, h_skew): (u32, f64), (v_dividers, v_skew): (u32, f64), frame: bool) -> Vec<PathData> {
     let r = r.abs();
-    let mut out = Vec::new();
+    let (tl, tr, br, bl) = (Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1));
+    let mut out = if frame { vec![rectangle(r)] } else { vec![line(tl, tr), line(bl, br), line(tl, bl), line(tr, br)] };
     for i in 1..=h_dividers {
-        let y = r.y0 + r.height() * i as f64 / (h_dividers + 1) as f64;
+        // From the top down: toward the top is toward 0.
+        let y = r.y0 + r.height() * skewed(i as f64 / (h_dividers + 1) as f64, -h_skew);
         out.push(line(Point::new(r.x0, y), Point::new(r.x1, y)));
     }
     for i in 1..=v_dividers {
-        let x = r.x0 + r.width() * i as f64 / (v_dividers + 1) as f64;
+        let x = r.x0 + r.width() * skewed(i as f64 / (v_dividers + 1) as f64, v_skew);
         out.push(line(Point::new(x, r.y0), Point::new(x, r.y1)));
-    }
-    if frame {
-        out.push(rectangle(r));
     }
     out
 }
 
-/// Polar grid: concentric ellipses plus radial dividers.
-pub fn polar_grid(r: Rect, concentric: u32, radial: u32) -> Vec<PathData> {
+/// Polar grid, bottom object first: the concentric ellipses from the outside in, then the radial
+/// dividers from the top one clockwise. A positive `c_skew` crowds the ellipses toward the outside
+/// and a positive `r_skew` the radial dividers clockwise of the top one (percent, see
+/// [`GRID_SKEW_MAX`]). With `compound`, the ellipses pair up from the outside in into rings (two
+/// subpaths, the inner one reversed so that it is a hole under either fill rule); an odd one out
+/// is the innermost ellipse alone.
+pub fn polar_grid(r: Rect, (concentric, c_skew): (u32, f64), (radial, r_skew): (u32, f64), compound: bool) -> Vec<PathData> {
     let r = r.abs();
     let c = r.center();
-    let mut out = Vec::new();
-    for i in 1..=concentric + 1 {
-        let f = i as f64 / (concentric + 1) as f64;
-        out.push(ellipse(Rect::from_center_size(c, (r.width() * f, r.height() * f))));
+    let mut out: Vec<PathData> = Vec::new();
+    for i in (1..=concentric + 1).rev() {
+        let f = skewed(i as f64 / (concentric + 1) as f64, c_skew);
+        let mut e = ellipse(Rect::from_center_size(c, (r.width() * f, r.height() * f)));
+        // Every second ellipse from the outside is the hole of the one before it.
+        match out.last_mut().filter(|_| compound && (concentric + 1 - i) % 2 == 1) {
+            Some(ring) => {
+                e.reverse();
+                ring.subpaths.append(&mut e.subpaths);
+            }
+            None => out.push(e),
+        }
     }
     // No dividers at 0 (the loop never divides by it).
     for i in 0..radial {
-        let a = -PI / 2.0 + TAU * i as f64 / radial as f64;
+        // The turn runs clockwise on screen: clockwise of the top is toward its start.
+        let a = -PI / 2.0 + TAU * skewed(i as f64 / radial as f64, -r_skew);
         out.push(line(c, Point::new(c.x + r.width() / 2.0 * a.cos(), c.y + r.height() / 2.0 * a.sin())));
     }
     out
@@ -401,11 +435,88 @@ mod tests {
 
     #[test]
     fn grids() {
-        assert_eq!(rectangular_grid(Rect::new(0.0, 0.0, 10.0, 10.0), 5, 5, true).len(), 11);
-        assert_eq!(polar_grid(Rect::new(0.0, 0.0, 10.0, 10.0), 5, 5).len(), 11);
+        let r = Rect::new(0.0, 0.0, 10.0, 10.0);
+        assert_eq!(rectangular_grid(r, (5, 0.0), (5, 0.0), true).len(), 11);
+        assert_eq!(polar_grid(r, (5, 0.0), (5, 0.0), false).len(), 11);
         // #1008: no radial dividers is none, only the outer ellipse without concentric ones.
         for (radial, len) in [(0, 1), (1, 2), (2, 3)] {
-            assert_eq!(polar_grid(Rect::new(0.0, 0.0, 10.0, 10.0), 0, radial).len(), len, "{radial}");
+            assert_eq!(polar_grid(r, (0, 0.0), (radial, 0.0), false).len(), len, "{radial}");
+        }
+    }
+
+    fn close(got: &[f64], want: &[f64]) -> bool {
+        got.len() == want.len() && got.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-9)
+    }
+
+    /// The first anchor of each of `paths`.
+    fn starts(paths: &[PathData]) -> Vec<Point> {
+        paths.iter().map(|p| p.subpaths[0].anchors[0].p).collect()
+    }
+
+    /// #1377: the frame is one rectangle or its four sides, at the bottom; a skew moves the
+    /// dividers toward the top / right (positive) or the bottom / left, in order and inside the
+    /// grid, and none leaves them evenly spaced.
+    #[test]
+    fn a_rectangular_grid_frames_and_skews_its_dividers() {
+        let r = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let framed = rectangular_grid(r, (3, 0.0), (1, 0.0), true);
+        assert!(framed[0].is_closed() && framed[1..].iter().all(|p| !p.is_closed()));
+        assert_eq!(starts(&framed[1..]), [Point::new(0.0, 25.0), Point::new(0.0, 50.0), Point::new(0.0, 75.0), Point::new(50.0, 0.0)]);
+        let sides = rectangular_grid(r, (3, 0.0), (1, 0.0), false);
+        assert_eq!(sides.len(), 8);
+        assert!(sides.iter().all(|p| !p.is_closed() && p.anchor_count() == 2));
+        assert_eq!(sides[4..], framed[1..]);
+        for (skew, toward_start) in [(100.0, true), (-100.0, false), (GRID_SKEW_MAX, true), (-1e9, false), (f64::INFINITY, true)] {
+            let g = rectangular_grid(r, (3, skew), (3, -skew), true);
+            let ys: Vec<f64> = starts(&g[1..4]).iter().map(|p| p.y).collect();
+            let xs: Vec<f64> = starts(&g[4..]).iter().map(|p| p.x).collect();
+            for v in [&ys, &xs] {
+                assert!(v.windows(2).all(|w| w[0] < w[1]) && v[0] > 0.0 && v[2] < 100.0, "{skew}: {v:?}");
+                // Toward the top (y) and the left (x) is toward 0: the middle divider passes the middle.
+                assert_eq!(v[1] < 50.0, toward_start, "{skew}: {v:?}");
+            }
+            assert_eq!(ys, xs, "one curve for both axes");
+        }
+        // 100 % squares the fraction from the side the dividers crowd to: 1/4, 1/2 and 3/4 from the top.
+        let g = rectangular_grid(r, (3, 100.0), (0, 0.0), true);
+        assert!(close(&starts(&g[1..]).iter().map(|p| p.y).collect::<Vec<_>>(), &[6.25, 25.0, 56.25]), "{g:?}");
+        assert_eq!(rectangular_grid(r, (3, f64::NAN), (1, f64::NAN), true), framed);
+    }
+
+    /// #1377: the ellipses come from the outside in and skew toward the outside (positive) or the
+    /// centre; the radial dividers keep the top one and skew clockwise (positive) of it or
+    /// counterclockwise; as compound paths the ellipses pair up into rings.
+    #[test]
+    fn a_polar_grid_skews_its_dividers_and_pairs_ellipses_into_rings() {
+        let r = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let widths = |g: &[PathData], n: usize| g[..n].iter().map(|p| p.bounds().unwrap().width()).collect::<Vec<_>>();
+        for (skew, want) in [(0.0, [100.0, 75.0, 50.0, 25.0]), (100.0, [100.0, 93.75, 75.0, 43.75]), (-100.0, [100.0, 56.25, 25.0, 6.25])] {
+            let got = widths(&polar_grid(r, (3, skew), (0, 0.0), false), 4);
+            assert!(close(&got, &want), "{skew}: {got:?}");
+        }
+        // Radial: four dividers point up, right, down and left; skewed, the first stays up and the
+        // other three all point to the right (clockwise of it) or to the left.
+        let ends = |skew: f64| polar_grid(r, (0, 0.0), (4, skew), false)[1..].iter().map(|p| p.subpaths[0].anchors[1].p).collect::<Vec<_>>();
+        let even = ends(0.0);
+        for (p, want) in even.iter().zip([(50.0, 0.0), (100.0, 50.0), (50.0, 100.0), (0.0, 50.0)]) {
+            assert!(p.distance(Point::new(want.0, want.1)) < 1e-9, "{even:?}");
+        }
+        for (skew, right) in [(GRID_SKEW_MAX, true), (-GRID_SKEW_MAX, false)] {
+            let e = ends(skew);
+            assert!(e[0].distance(even[0]) < 1e-9);
+            assert!(e[1..].iter().all(|p| (p.x > 50.0) == right && (p.x - 50.0).abs() > 1e-6), "{skew}: {e:?}");
+        }
+        // Compound: 4 ellipses are 2 rings, 5 are 2 rings and the innermost ellipse; each ring's
+        // hole runs against its outside.
+        for (concentric, shapes) in [(3, vec![2, 2]), (4, vec![2, 2, 1]), (0, vec![1])] {
+            let g = polar_grid(r, (concentric, 0.0), (2, 0.0), true);
+            assert_eq!(g.len(), shapes.len() + 2);
+            assert_eq!(g[..shapes.len()].iter().map(|p| p.subpaths.len()).collect::<Vec<_>>(), shapes);
+            for ring in g.iter().filter(|p| p.subpaths.len() == 2) {
+                assert!(ring.is_closed());
+                assert!(ring.subpaths[0].signed_area() * ring.subpaths[1].signed_area() < 0.0);
+                assert!(ring.subpaths[0].signed_area().abs() > ring.subpaths[1].signed_area().abs());
+            }
         }
     }
 

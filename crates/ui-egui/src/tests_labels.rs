@@ -51,6 +51,18 @@ fn effect_menu_has_a_vector_effects_section() {
 }
 
 #[test]
+fn effect_menu_lists_film_grain_in_artistic_before_blur() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let artistic: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Artistic"]).collect();
+    assert_eq!(artistic.len(), 1);
+    assert_eq!(artistic[0].label, "Film Grain…");
+    assert_eq!(artistic[0].command.as_deref(), Some("effect.dialog"));
+    let at = |name: &str| entries.iter().position(|e| e.path == ["Effect", name]).unwrap();
+    assert!(at("Artistic") < at("Blur"));
+}
+
+#[test]
 fn effect_menu_lists_the_pixelate_filters_between_blur_and_sharpen() {
     let app = app();
     let entries = menus::menu_entries(&app);
@@ -126,6 +138,40 @@ fn effect_menu_lists_the_texture_filters_between_sharpen_and_video() {
         entries.iter().filter_map(|e| e.path.get(1).filter(|_| e.path.len() == 2 && e.path[0] == "Effect")).map(String::as_str).collect();
     let at = |name: &str| raster.iter().position(|s| *s == name).unwrap();
     assert!(at("Sharpen") < at("Texture") && at("Texture") < at("Video"));
+}
+
+/// Effect › Stylize under Raster Effects, between Sharpen and Texture: Glowing Edges opens its
+/// dialog.
+#[test]
+fn effect_menu_lists_glowing_edges_in_the_raster_stylize_between_sharpen_and_texture() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let at = |label: &str| entries.iter().position(|e| e.path[0] == "Effect" && e.label == label).unwrap();
+    let glowing = &entries[at("Glowing Edges…")];
+    assert_eq!(glowing.path, ["Effect", "Stylize"]);
+    assert_eq!(glowing.command.as_deref(), Some("effect.dialog"));
+    assert_eq!(glowing.params, json!({"effect": "stylize.glowingEdges"}));
+    assert!(at("Unsharp Mask…") < at("Glowing Edges…") && at("Glowing Edges…") < at("Craquelure…"));
+}
+
+/// The vector effects' Stylize keeps its six effects and leaves Glowing Edges out.
+#[test]
+fn effect_menu_keeps_glowing_edges_out_of_the_vector_stylize() {
+    let tree = menus::menu_tree();
+    let (_, effect) = tree.iter().find(|(t, _)| *t == "Effect").expect("Effect menu");
+    let raster = effect.iter().position(|i| matches!(i, Item::Header("Raster Effects"))).expect("Raster Effects");
+    let stylize: Vec<(usize, Vec<&str>)> = effect
+        .iter()
+        .enumerate()
+        .filter_map(|(i, it)| match it {
+            Item::Sub("Stylize", items) => Some((i, items.iter().filter_map(|c| if let Item::Cmd(l, ..) = c { Some(*l) } else { None }).collect())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(stylize.len(), 2);
+    assert!(stylize[0].0 < raster && raster < stylize[1].0);
+    assert_eq!(stylize[0].1, ["Round Corners…", "Scribble…", "Drop Shadow…", "Inner Glow…", "Outer Glow…", "Feather…"]);
+    assert_eq!(stylize[1].1, ["Glowing Edges…"]);
 }
 
 #[test]

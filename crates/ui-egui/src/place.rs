@@ -44,7 +44,7 @@ pub enum DropTarget {
     Place(DropAt),
     /// Opened as File → Open opens it: no document is open, the drop missed the canvas (the tab
     /// bar), it is a document dropped where the platform doesn't say, or it is a library, a presets
-    /// file or a plug-in.
+    /// file, a plug-in or a shortcut set.
     Open,
 }
 
@@ -301,8 +301,9 @@ impl VectorcraftApp {
     /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
-    /// own and a picture or text is placed in the middle of the view. A library, a presets file or
-    /// a plug-in opens wherever it is dropped, as File → Open opens it ([`io::opens_as`]).
+    /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
+    /// plug-in, a shortcut set or a script opens wherever it is dropped, as File → Open opens it
+    /// ([`io::opens_as`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
         let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
         let at = match pos {
@@ -391,7 +392,8 @@ pub fn drain(app: &mut VectorcraftApp) {
 
 /// Files dragged over the window: the canvas is outlined where they would be placed. On the web
 /// the browser gives a dragged file's type but not its name, so the canvas is outlined for any
-/// file dragged over it, including libraries, presets and plug-ins, which open when dropped.
+/// file dragged over it, including libraries, presets, plug-ins and shortcut sets, which open when
+/// dropped.
 pub fn paint_drop_highlight(app: &VectorcraftApp, ctx: &egui::Context, painter: &egui::Painter, rect: egui::Rect) {
     let pos = drag_pos(ctx);
     let placed = ctx.input(|i| {
@@ -440,7 +442,12 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     let (name, details) = image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return false };
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(&name).size(12.0).color(t.text_strong));
+    // The file name is a link: its menu relinks (replaces) the image and reaches the Links
+    // panel's other actions for it.
+    let resp = ui
+        .add(egui::Label::new(egui::RichText::new(&name).size(12.0).color(t.accent).underline()).sense(egui::Sense::click()))
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    egui::Popup::menu(&resp).show(|ui| link_menu(app, ui, id, linked));
     ui.separator();
     ui.label(egui::RichText::new(details).size(12.0).color(t.text_dim));
     ui.separator();
@@ -453,6 +460,32 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     }
     ui.separator();
     true
+}
+
+/// The menu of the Control bar's file name for image `id`: Replace… (another file takes the
+/// image's place with its own aspect ratio; an embedded image becomes linked), Go To Link, Edit
+/// Original, Update Link and Placement Options….
+fn link_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool) {
+    ui.set_min_width(200.0);
+    if widgets::menu_item(ui, tl!("Replace…"), app.services.pick_open.is_some(), false) {
+        crate::panels::links::replace(app, vec![id]);
+    }
+    if widgets::menu_item(ui, tl!("Go To Link"), true, false) {
+        crate::panels::links::go_to(app, id);
+    }
+    if widgets::menu_item(ui, tl!("Edit Original"), linked, false) {
+        crate::menus::invoke(app, "links.editOriginal", json!({ "id": id }));
+    }
+    if widgets::menu_item(ui, tl!("Update Link"), linked, false) {
+        let msg = match app.run("links.update", json!({ "ids": [id] })) {
+            Ok(v) => format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)),
+            Err(e) => e,
+        };
+        app.status(msg);
+    }
+    if widgets::menu_item(ui, tl!("Placement Options…"), true, false) {
+        crate::menus::invoke(app, "ui.placementOptionsDialog", json!({ "ids": [id] }));
+    }
 }
 
 /// Embed (and Edit Original) for linked image `id`, Unembed… for an embedded one named `name`

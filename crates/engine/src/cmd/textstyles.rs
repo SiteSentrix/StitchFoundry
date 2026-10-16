@@ -58,7 +58,7 @@ macro_rules! style_cmds {
                 concat!($p, ".new"),
                 concat!("New ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name?, attrs?: {…}} (default attrs: the selected text's) → {name}",
+                "{name?, attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
                 |s, p| new(s, p, $kind),
                 true,
             ),
@@ -66,7 +66,7 @@ macro_rules! style_cmds {
                 concat!($p, ".apply"),
                 concat!("Apply ", $what, " Style"),
                 &[],
-                "{name, clearOverrides?, ids?|id + start?/end? (a Type tool range: character styles style it, paragraph styles apply to the paragraphs it touches)} → {count}",
+                "{name, clearOverrides?, ids?|id?, start?, end? (id with start and end: a Type tool range; character styles style it, paragraph styles apply to the paragraphs it touches)} → {count}",
                 |s, p| apply(s, p, $kind),
                 true,
             ),
@@ -74,7 +74,7 @@ macro_rules! style_cmds {
                 concat!($p, ".redefine"),
                 concat!("Redefine ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name, id?, start?} from the selected text; users keep their overrides",
+                "{name, id?, start?: byte, end?: byte} from selected text; nonempty character ranges sample their first selected character, start alone keeps insertion affinity, paragraph styles sample start; users keep their overrides",
                 |s, p| redefine(s, p, $kind),
                 true,
             ),
@@ -133,6 +133,14 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
     m
 }
 
+/// Captured character styles set Auto leading explicitly. A missing style attribute instead
+/// leaves the text's existing leading alone, unlike a run's omitted Auto value.
+fn char_attrs(v: &CharStyle) -> Map<String, Value> {
+    let mut m = to_attrs(v);
+    m.insert("leading".into(), json!(v.leading));
+    m
+}
+
 /// Every attribute name `T` reads, including those its JSON leaves out at their defaults (Auto
 /// leading and kerning, no mojikumi…): the field names serde's derive hands `deserialize_struct`.
 /// Not `justify_auto`, which [`to_map`] turns into `"justify": "Auto"`.
@@ -183,6 +191,10 @@ fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Val
 /// round-trip through JSON.
 fn restyle<T: Serialize + DeserializeOwned + Clone>(cur: &T, old: &Map<String, Value>, new: &Map<String, Value>) -> T {
     let Some(mut m) = to_map(cur) else { return cur.clone() };
+    // Runs omit Auto leading from JSON; it still matches a style's explicit null.
+    if old.get("leading") == Some(&Value::Null) {
+        m.entry("leading").or_insert(Value::Null);
+    }
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());
@@ -254,8 +266,9 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
     }
 }
 
-/// The selected text's attributes: the Type tool range's start (`id`, `start`) or the first
-/// selected text object's first run.
+/// The selected text's attributes: the first selected character for a nonempty range,
+/// the insertion style at a lone `start`, or the first selected text object's first run.
+/// Paragraph capture always samples the paragraph at `start`.
 fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<String, Value>>> {
     let d = &s.doc()?.doc;
     let id = match id_param(p, "id") {
@@ -265,7 +278,13 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<Stri
     let Some(NodeKind::Text(t)) = id.and_then(|i| d.node(i)).map(|n| &n.kind) else { return Ok(None) };
     let at = p.get("start").and_then(Value::as_u64).map_or(0, |v| usize::try_from(v).unwrap_or(usize::MAX));
     Ok(Some(match kind {
-        Kind::Char => to_attrs(&vectorcraft_text::edit::style_at(&t.runs, at)),
+        Kind::Char => {
+            let style = match p.get("end").and_then(Value::as_u64).map(|v| usize::try_from(v).unwrap_or(usize::MAX)) {
+                Some(end) => vectorcraft_text::edit::insertion_style(&t.runs, at.min(end), at.max(end)),
+                None => vectorcraft_text::edit::style_at(&t.runs, at),
+            };
+            char_attrs(&style)
+        }
         // The paragraph at `start`.
         Kind::Para => to_attrs(t.para_at(t.paragraphs_in(at, at).start)),
     }))
@@ -294,7 +313,7 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
             // form (so comparing a style with its text's attributes is exact).
             let c = kind.cmd(verb);
             let full = match kind {
-                Kind::Char => to_attrs(&with_attrs(&CharStyle::default(), m, &c)?),
+                Kind::Char => char_attrs(&with_attrs(&CharStyle::default(), m, &c)?),
                 Kind::Para => to_attrs(&with_attrs(&ParaStyle::default(), m, &c)?),
             };
             Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))
@@ -644,6 +663,72 @@ mod tests {
     }
 
     #[test]
+    fn auto_leading_redefine_keeps_overrides_and_history() {
+        for redefine in [true, false] {
+            let (mut s, source) = session_with_text("Source");
+            let [linked, local] =
+                ["Linked", "Local"].map(|text| s.execute("text.create", &json!({"x": 10, "y": 90, "text": text})).unwrap()["id"].as_u64().unwrap());
+            let ids = [source, linked, local];
+            s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"leading": 30}})).unwrap();
+            s.execute("charStyle.apply", &json!({"name": "Body", "ids": ids})).unwrap();
+            s.execute("text.setStyle", &json!({"ids": [local], "leading": 42})).unwrap();
+            s.execute("text.setStyle", &json!({"ids": [source], "leading": "auto"})).unwrap();
+            let before = s.doc().unwrap().doc.clone();
+            let undo = s.doc().unwrap().history.undo.len();
+            if redefine {
+                s.execute("charStyle.redefine", &json!({"name": "Body", "id": source})).unwrap();
+            } else {
+                s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"leading": null}})).unwrap();
+            }
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [None, None, Some(42.0)]);
+            assert!(ids.iter().all(|&id| runs(&s, id)[0].style.style_name.as_deref() == Some("Body")));
+            let after = s.doc().unwrap().doc.clone();
+            assert_eq!(after.char_styles[0].attrs.get("leading"), Some(&Value::Null), "Auto is explicit, not an unset attribute");
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc, before);
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc, after);
+            let back = vectorcraft_format::load(&vectorcraft_format::save(&after, false)).unwrap();
+            assert_eq!(back.char_styles, after.char_styles);
+            for id in ids {
+                let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("not text") };
+                assert_eq!(t.runs, runs(&s, id));
+            }
+            // Auto users follow the next numeric definition; real numeric and Auto overrides stay.
+            s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"leading": 26}})).unwrap();
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(26.0), Some(26.0), Some(42.0)]);
+            s.execute("text.setStyle", &json!({"ids": [linked], "leading": "auto"})).unwrap();
+            s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"leading": 28}})).unwrap();
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(28.0), None, Some(42.0)]);
+            // Omitting leading replaces the definition without resetting the text's leading.
+            s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"tracking": 20}})).unwrap();
+            assert!(!s.doc().unwrap().doc.char_styles[0].attrs.contains_key("leading"));
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(28.0), None, Some(42.0)]);
+        }
+    }
+
+    #[test]
+    fn auto_leading_new_distinguishes_unset_attributes() {
+        let (mut s, id) = session_with_text("Title");
+        s.execute("text.setStyle", &json!({"leading": 30})).unwrap();
+        s.execute("charStyle.new", &json!({"name": "Sparse", "attrs": {"tracking": 20}})).unwrap();
+        assert!(!s.doc().unwrap().doc.char_styles[0].attrs.contains_key("leading"));
+        s.execute("charStyle.apply", &json!({"name": "Sparse", "id": id})).unwrap();
+        assert_eq!(runs(&s, id)[0].style.leading, Some(30.0));
+        s.execute("charStyle.new", &json!({"name": "Automatic", "attrs": {"leading": null}})).unwrap();
+        s.execute("charStyle.apply", &json!({"name": "Automatic", "id": id})).unwrap();
+        assert_eq!(runs(&s, id)[0].style.leading, None);
+        assert_eq!(s.doc().unwrap().doc.char_styles[1].attrs.get("leading"), Some(&Value::Null));
+        // New from Auto text captures that value too, rather than leaving leading unspecified.
+        s.execute("charStyle.new", &json!({"name": "Captured", "id": id})).unwrap();
+        s.execute("text.setStyle", &json!({"ids": [id], "leading": 36})).unwrap();
+        s.execute("charStyle.apply", &json!({"name": "Captured", "id": id})).unwrap();
+        assert_eq!(runs(&s, id)[0].style.leading, None);
+        assert_eq!(s.doc().unwrap().doc.char_styles[2].attrs.get("leading"), Some(&Value::Null));
+    }
+
+    #[test]
     fn paragraph_styles_and_survive_save() {
         let (mut s, id) = session_with_text("Body");
         s.execute("paraStyle.new", &json!({"name": "Centered", "attrs": {"justify": "Center", "space_after": 6.0}})).unwrap();
@@ -659,5 +744,105 @@ mod tests {
         let d = s.doc().unwrap().doc.clone();
         let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
         assert_eq!(back.para_styles, d.para_styles);
+    }
+
+    fn capture_boundary_command(redefine: bool, text: &str, start: usize, end: Option<usize>, expected_size: f64) {
+        let (mut s, id) = session_with_text(text);
+        s.execute("text.setStyle", &json!({"id": id, "size": 18})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 2, "end": text.len(), "size": 34})).unwrap();
+        if redefine {
+            s.execute("charStyle.new", &json!({"name": "Captured", "attrs": {"size": 24}})).unwrap();
+        }
+        s.doc_mut().unwrap().mark_saved();
+        let before = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let mut params = json!({"name": "Captured", "id": id, "start": start});
+        if let Some(end) = end {
+            params["end"] = json!(end);
+        }
+        let command = if redefine { "charStyle.redefine" } else { "charStyle.new" };
+        s.execute(command, &params).unwrap();
+        let st = s.doc().unwrap();
+        let def = st.doc.char_styles.iter().find(|d| d.name == "Captured").unwrap();
+        assert_eq!(def.attrs.get("size").and_then(Value::as_f64), Some(expected_size), "{command} {text:?} {start}..{end:?}");
+        assert!(!def.attrs.contains_key("style_name"));
+        assert_eq!(st.doc.node(NodeId(id)), before.node(NodeId(id)), "capture does not apply the definition");
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert!(st.is_dirty());
+        let after = st.doc.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert!(!s.doc().unwrap().is_dirty());
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, after);
+        assert_eq!(s.doc().unwrap().selection, selection);
+    }
+
+    fn capture_boundary_ranges(redefine: bool) {
+        for (text, start, end, size) in [
+            ("ABcdef", 2, 5, 34.0),
+            ("é漢字", 2, 5, 34.0),
+            ("ABcdef", 5, 2, 34.0), // command ranges are ordered before selected-character sampling
+            ("ABcdef", 1, 5, 18.0), // a mixed range samples its first selected character
+            ("ABcdef", 2, 2, 18.0), // collapsed range retains insertion affinity
+            ("ABcdef", 3, 3, 34.0),
+            ("ABcdef", 99, 100, 34.0), // beyond the text retains the final run
+        ] {
+            capture_boundary_command(redefine, text, start, Some(end), size);
+        }
+    }
+
+    #[test]
+    fn char_style_new_range_capture_boundary() {
+        capture_boundary_ranges(false);
+    }
+
+    #[test]
+    fn char_style_redefine_range_capture_boundary() {
+        capture_boundary_ranges(true);
+    }
+
+    #[test]
+    fn char_style_start_only_capture_affinity_controls() {
+        for redefine in [false, true] {
+            for text in ["ABcdef", "é漢字"] {
+                for (start, size) in [(0, 18.0), (2, 18.0), (3, 34.0), (99, 34.0)] {
+                    capture_boundary_command(redefine, text, start, None, size);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn para_style_range_capture_samples_start_paragraph() {
+        for redefine in [false, true] {
+            for (start, end, justify) in [(0, 7, "Left"), (4, 7, "Right"), (4, 0, "Right")] {
+                let (mut s, id) = session_with_text("One\nTwo");
+                s.execute("text.setStyle", &json!({"id": id, "justify": "left"})).unwrap();
+                s.execute("text.setStyle", &json!({"id": id, "start": 4, "end": 7, "justify": "right"})).unwrap();
+                if redefine {
+                    s.execute("paraStyle.new", &json!({"name": "Captured", "attrs": {"justify": "Center"}})).unwrap();
+                }
+                let before = s.doc().unwrap().doc.clone();
+                let selection = s.doc().unwrap().selection.clone();
+                let undo = s.doc().unwrap().history.undo.len();
+                let command = if redefine { "paraStyle.redefine" } else { "paraStyle.new" };
+                s.execute(command, &json!({"name": "Captured", "id": id, "start": start, "end": end})).unwrap();
+                let st = s.doc().unwrap();
+                let def = st.doc.para_styles.iter().find(|d| d.name == "Captured").unwrap();
+                assert_eq!(def.attrs["justify"], json!(justify), "paragraph capture still samples start, not the end or a normalized range");
+                assert_eq!(st.doc.node(NodeId(id)), before.node(NodeId(id)));
+                assert_eq!(st.selection, selection);
+                assert_eq!(st.history.undo.len(), undo + 1);
+                let after = st.doc.clone();
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(s.doc().unwrap().doc, before);
+                s.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(s.doc().unwrap().doc, after);
+            }
+        }
     }
 }

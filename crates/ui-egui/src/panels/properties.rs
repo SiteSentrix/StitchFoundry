@@ -60,6 +60,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         type_sections(app, ui);
         divider(ui);
     }
+    if crate::dialogs::dimension::selected(app).is_some() {
+        crate::dialogs::dimension::properties_section(app, ui);
+        divider(ui);
+    }
     appearance_section(app, ui);
     divider(ui);
     section_header(ui, tl!("Align"));
@@ -97,7 +101,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     divider(ui);
     section_header(ui, tl!("Quick Actions"));
     let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
-    let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(l, LiveShape::Path { .. }));
+    let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
@@ -149,8 +153,8 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let links = crate::panels::links::ID;
     ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
     ui.horizontal(|ui| {
-        if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Relink…"), w).clicked() {
-            crate::panels::links::relink(app, vec![id]);
+        if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
+            crate::panels::links::replace(app, vec![id]);
         }
         if widgets::flat_button(ui, tl!("Links"), w).clicked() {
             app.ui.open_panel = Some(links.into());
@@ -159,7 +163,7 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The one selected Image Trace object: its preset (choosing another traces it again with that
-/// one), view, Expand and Release.
+/// one), view, a button to reveal the tracing controls, Expand and Release.
 fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vectorcraft_doc::TraceView) {
     section_header(ui, tl!("Image Trace"));
     ui.horizontal(|ui| {
@@ -167,6 +171,9 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
     ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
+    if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
+        crate::panels::image_trace::open_settings(app);
+    }
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
         for (label, id) in [(tl!("Expand"), "imageTrace.expand"), (tl!("Release"), "imageTrace.release")] {
@@ -193,19 +200,33 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     }
 }
 
-/// Edit Artboards (the Artboard tool): the active artboard's name, position and size, its preset and
+/// Edit Artboards (the Artboard tool): the active artboard's name, which can be edited to rename
+/// it, and the Artboard Options icon; its position and size, its preset and
 /// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602), Move
 /// and Scale Artwork with Artboard, New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
 /// Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let units = app.session.general_unit();
+    let origin = app.ruler_origin();
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     let i = super::artboards::selected(app, n);
     let scale_art = super::artboards::scale_art(app);
     let move_art = super::artboards::move_art(app);
     if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
-        // Its name as it is (names are never translated).
-        ui.label(egui::RichText::new(&ab.name).size(13.0).color(Tokens::get(ui.ctx()).text));
+        // The field shows the artboard's name as it is (names are never translated). Typing a new
+        // name and pressing Enter or clicking elsewhere renames the artboard as the Artboards panel's
+        // rename does; pressing Escape or leaving the field empty keeps the old name. A click on
+        // the icon opens the artboard's Artboard Options, as double-clicking the Artboard tool's
+        // button does.
+        ui.horizontal(|ui| {
+            let w = (ui.available_width() - 26.0 - ui.spacing().item_spacing.x).max(80.0);
+            if let Some(name) = widgets::text_field(ui, ("ab", "name"), Some(&ab.name), w, 1).filter(|n| !n.is_empty()) {
+                app.run("artboard.setProps", json!({"index": i, "name": name})).ok();
+            }
+            if widgets::icon_button(ui, "dc-artboard-options", tl!("Artboard Options"), false, 26.0).clicked() {
+                app.run("tool.options", json!({"tool": "artboard"})).ok();
+            }
+        });
         let fw = super::field_width(ui);
         egui::Grid::new("ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             let r = ab.rect;
@@ -214,8 +235,13 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             {
                 for (label, key, v) in [(l1, k1, v1), (l2, k2, v2)] {
                     dim_label(ui, label);
-                    if let Some(v) = widgets::num_field(ui, ("ab", key, row), Some(v), units, fw) {
-                        app.run("artboard.setProps", json!({"index": i, key: v, "scaleArt": scale_art, "moveArt": move_art})).ok();
+                    let offset = match key {
+                        "x" => origin.x,
+                        "y" => origin.y,
+                        _ => 0.0,
+                    };
+                    if let Some(v) = widgets::num_field(ui, ("ab", key, row), Some(v - offset), units, fw) {
+                        app.run("artboard.setProps", json!({"index": i, key: v + offset, "scaleArt": scale_art, "moveArt": move_art})).ok();
                     }
                 }
                 ui.end_row();
@@ -232,7 +258,7 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             super::artboards::select(app, n);
         }
         if ui.add_enabled_ui(n > 1, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {
-            app.run("artboard.delete", json!({"index": i})).ok();
+            super::artboards::delete_selected(app);
         }
     });
     divider(ui);
@@ -393,6 +419,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     let units = app.session.general_unit();
+    let origin = app.ruler_origin();
     // The bounding box, rotated with rotated objects (as in the Transform panel).
     let Some(bx) = app.selection_box() else {
         dim_label(ui, tl!("No Selection"));
@@ -401,6 +428,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let b = bx.rect;
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
     let rp = bx.reference_point(refi);
+    let copy = super::transform::alt_enter_copies(app, ui);
     section_header(ui, tl!("Transform"));
     let fw = super::field_width(ui);
     ui.horizontal(|ui| {
@@ -411,21 +439,21 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         let link = app.session.prefs.constrain_proportions;
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x), units, fw) {
-                app.run("object.setBounds", json!({"x": v, "reference": refi})).ok();
+            if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x - origin.x), units, fw) {
+                app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "W:");
             if let Some(v) = widgets::num_field(ui, "tw", Some(b.width()), units, fw) {
-                app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link})).ok();
+                app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
             dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field(ui, "ty", Some(rp.y), units, fw) {
-                app.run("object.setBounds", json!({"y": v, "reference": refi})).ok();
+            if let Some(v) = widgets::num_field(ui, "ty", Some(rp.y - origin.y), units, fw) {
+                app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "H:");
             if let Some(v) = widgets::num_field(ui, "th", Some(b.height()), units, fw) {
-                app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link})).ok();
+                app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
         });
@@ -437,11 +465,12 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::scrub::note_label(ui, icon.rect);
         // The bounding box's angle: a new value turns the selection to it.
         if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, fw) {
-            app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
+            app.run("object.rotate", json!({"angle": a, "absolute": true, "copy": copy})).ok();
         }
         ui.add_space(10.0);
         // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical
-        // line (the left-right flip), flip-horizontal-2 a horizontal one (top-bottom).
+        // line (the left-right flip), flip-horizontal-2 a horizontal one (top-bottom). The labels
+        // are the reference app's Properties panel names for the same buttons (#1910).
         if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Along Horizontal Axis"), false, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "vertical"})).ok();
         }
@@ -465,7 +494,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
     {
-        match live {
+        match &**live {
             vectorcraft_doc::LiveShape::Rectangle { .. } => corner_radius_row(app, ui, &n, "radius"),
             vectorcraft_doc::LiveShape::Polygon { .. } => super::transform::polygon_rows(app, ui, &n, live, "props-polygon"),
             vectorcraft_doc::LiveShape::Ellipse { pie, .. } => super::transform::pie_rows(app, ui, *pie, "props-pie"),
@@ -669,6 +698,33 @@ mod tests {
         assert!(widths.iter().all(|w| (w - widths[0]).abs() < 1.0), "X, rotation, corner radius, opacity: {widths:?}");
     }
 
+    /// #1512: the link behind Corner Radius. On, one field sets every corner; off, a field per
+    /// corner shows each corner's own radius.
+    #[test]
+    fn the_corner_radius_link_shows_a_field_per_corner() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+        app.run("object.setLiveShape", json!({"radius": 7, "corners": [2]})).unwrap();
+        let ctx = egui::Context::default();
+        let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(app.session.prefs.single_corner_radius, "linked at first");
+        assert!(has(&texts, "Corner Radius:") && !has(&texts, "Top Left:") && !has(&texts, "7 pt"), "{texts:?}");
+        app.run("prefs.set", json!({"key": "singleCornerRadius", "value": false})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        for l in ["Corner Radius:", "Top Left:", "Top Right:", "Bottom Right:", "Bottom Left:"] {
+            assert!(has(&texts, l), "{l}: {texts:?}");
+        }
+        assert_eq!(texts.iter().filter(|(t, _)| t == "7 pt").count(), 1, "the bottom-right corner: {texts:?}");
+        // The fields sit in line, in the order top left, top right, bottom right, bottom left.
+        let at = |s: &str| texts.iter().find(|(t, _)| t == s).unwrap().1;
+        assert!(at("Top Left:").top() < at("Top Right:").top() && at("Top Right:").top() < at("Bottom Right:").top());
+        assert!((at("7 pt").top() - at("Bottom Right:").top()).abs() < 6.0, "{texts:?}");
+    }
+
     /// The Transform section's More Options holds Scale Corners and Scale Strokes & Effects, and
     /// stays open while they are toggled.
     #[test]
@@ -777,6 +833,460 @@ mod tests {
         let texts = frame(&mut app, &ctx, vec![]);
         click(&mut app, &ctx, &texts, "Exit");
         assert_eq!(app.session.tool_id(), "selection");
+    }
+
+    /// Typing a name into Edit Artboards' name field and pressing Enter renames the active artboard
+    /// alone, trimmed as the Artboards panel's rename trims it, with one command and one undo step;
+    /// a click elsewhere in the panel renames it too. Pressing Escape or leaving the field empty
+    /// keeps the name and runs no command.
+    #[test]
+    fn edit_artboards_renames_the_active_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        super::super::artboards::select(&mut app, 1);
+        app.session.doc_mut().unwrap().mark_saved();
+        let before = app.session.doc().unwrap().doc.artboards.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let ctx = egui::Context::default();
+        let key = |key, modifiers| vec![Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }];
+        // Click the field showing Artboard 2's name, select all of it, type `typed`, then send each
+        // frame's events of `end` → the number of commands run.
+        let rename = |app: &mut VectorcraftApp, typed: Vec<Event>, end: Vec<Vec<Event>>| {
+            frame(app, &ctx, vec![]);
+            let texts = frame(app, &ctx, vec![]);
+            let name = app.session.doc().unwrap().doc.artboards[1].name.clone();
+            click(app, &ctx, &texts, &name);
+            frame(app, &ctx, key(egui::Key::A, egui::Modifiers::COMMAND));
+            let commands = app.run_count;
+            frame(app, &ctx, typed);
+            for events in end {
+                frame(app, &ctx, events);
+            }
+            frame(app, &ctx, vec![]);
+            app.run_count.wrapping_sub(commands)
+        };
+        let enter = || vec![key(egui::Key::Enter, egui::Modifiers::NONE)];
+        let text = |s: &str| vec![Event::Text(s.into())];
+        assert_eq!(rename(&mut app, text("Cover"), vec![key(egui::Key::Escape, egui::Modifiers::NONE)]), 0, "Escape");
+        assert_eq!(rename(&mut app, key(egui::Key::Backspace, egui::Modifiers::NONE), enter()), 0, "an empty field");
+        assert_eq!(app.session.doc().unwrap().doc.artboards, before);
+        assert_eq!(rename(&mut app, text(" Cover "), enter()), 1);
+        let mut renamed = before.clone();
+        renamed[1].name = "Cover".into();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.artboards, renamed, "Artboard 2 alone is renamed");
+        assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.artboards, before);
+        assert!(!st.is_dirty());
+        // The click elsewhere is a press and release on the panel's "Artboard" heading, outside
+        // the field.
+        let at = frame(&mut app, &ctx, vec![]).iter().find(|(t, _)| t == "Artboard").map(|(_, r)| r.center()).unwrap();
+        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        assert_eq!(rename(&mut app, text("Back"), vec![vec![Event::PointerMoved(at), b(true)], vec![b(false)]]), 1, "a click elsewhere");
+        renamed[1].name = "Back".into();
+        assert_eq!(app.session.doc().unwrap().doc.artboards, renamed);
+    }
+
+    /// A click on Edit Artboards' Artboard Options icon opens Artboard Options for the active
+    /// artboard, as double-clicking the Artboard tool's button does (`tool.options {tool: "artboard"}`).
+    #[test]
+    fn edit_artboards_opens_the_active_artboards_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        super::super::artboards::select(&mut app, 1);
+        app.run("tool.options", json!({"tool": "artboard"})).unwrap();
+        let want = app.ui.dialog.take().unwrap().fields;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        // The icon is the rightmost clickable widget on the name's line.
+        let name = texts.iter().find(|(t, _)| t == "Artboard 2").map(|(_, r)| *r).unwrap();
+        let icon = ctx.viewport(|vp| {
+            vp.prev_pass
+                .widgets
+                .layers()
+                .flat_map(|(_, w)| w.iter())
+                .filter(|w| w.sense.senses_click() && w.rect.y_range().contains(name.center().y))
+                .map(|w| w.rect)
+                .max_by(|a, b| a.left().total_cmp(&b.left()))
+                .unwrap()
+                .center()
+        });
+        let commands = app.run_count;
+        let press = |pressed| Event::PointerButton { pos: icon, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(icon), press(true)]);
+        frame(&mut app, &ctx, vec![press(false)]);
+        assert_eq!(app.run_count, commands.wrapping_add(1), "one command");
+        let d = app.ui.dialog.take().expect("Artboard Options");
+        assert_eq!((d.kind.as_str(), d.f64("index", 9.0), d.str("name").as_str()), (crate::dialogs::artboard_options::KIND, 1.0, "Artboard 2"));
+        assert_eq!(d.fields, want, "the fields the tool's double-click shows");
+        assert_eq!(app.session.tool_id(), "artboard");
+    }
+
+    fn artboard_deletion_app(count: usize) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": count})).unwrap();
+        for i in 0..count {
+            app.run("shape.rectangle", json!({"x": i * 250 + 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        }
+        app.select_tool("artboard");
+        super::super::artboards::select(&mut app, 0);
+        app
+    }
+
+    fn artboard_deletion_click(
+        app: &mut VectorcraftApp,
+        ctx: &egui::Context,
+        draw: fn(&mut VectorcraftApp, &mut Ui),
+        label: Option<&str>,
+        modifiers: egui::Modifiers,
+    ) {
+        let at = if let Some(label) = label {
+            panel_frame(app, ctx, vec![], draw);
+            let texts = panel_frame(app, ctx, vec![], draw);
+            texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"))
+        } else {
+            // The trash is the last 24-point footer button. Use the drawn panel bounds, as the Asset Export bin test uses its footer.
+            let mut bounds = Rect::NOTHING;
+            for _ in 0..2 {
+                let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), ..Default::default() };
+                let mut out = ctx.run_ui(raw, |ui| {
+                    draw(app, ui);
+                    bounds = ui.min_rect();
+                });
+                out.textures_delta.clear();
+            }
+            assert!(bounds.width() >= 24.0 && bounds.height() >= 24.0);
+            bounds.right_bottom() - vec2(12.0, 12.0)
+        };
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
+        panel_frame(app, ctx, vec![Event::ModifiersChanged(modifiers), Event::PointerMoved(at), button(true)], draw);
+        panel_frame(app, ctx, vec![button(false)], draw);
+        panel_frame(app, ctx, vec![Event::ModifiersChanged(egui::Modifiers::NONE)], draw);
+    }
+
+    fn select_artboard_rows(app: &mut VectorcraftApp, ctx: &egui::Context, indices: &[usize]) {
+        for (at, i) in indices.iter().enumerate() {
+            let modifiers = if at == 0 { egui::Modifiers::NONE } else { egui::Modifiers::SHIFT };
+            artboard_deletion_click(app, ctx, super::super::artboards::show, Some(&format!("Artboard {}", i + 1)), modifiers);
+        }
+        let count = app.session.doc().unwrap().doc.artboards.len();
+        assert_eq!(super::super::artboards::picked(app, count), indices, "the rows are selected before deletion");
+    }
+
+    fn assert_artboard_deletion(draw: fn(&mut VectorcraftApp, &mut Ui), label: Option<&str>) {
+        for indices in [vec![0, 2], vec![2], vec![3], vec![2, 3], vec![0, 1, 2, 3]] {
+            let mut app = artboard_deletion_app(4);
+            let ctx = egui::Context::default();
+            select_artboard_rows(&mut app, &ctx, &indices);
+            app.session.doc_mut().unwrap().mark_saved();
+            let before = app.session.doc().unwrap().doc.clone();
+            let undo = app.session.doc().unwrap().history.undo.len();
+            let all_selected = indices == [0, 1, 2, 3];
+            let expected: Vec<_> = if all_selected {
+                assert_eq!(app.view().unwrap().artboard, 3, "the active last board must not replace the first-board survivor oracle");
+                vec![&before.artboards[0]]
+            } else {
+                before.artboards.iter().enumerate().filter(|(i, _)| !indices.contains(i)).map(|(_, a)| a).collect()
+            };
+            let expected = serde_json::to_value(expected).unwrap();
+            let artwork = serde_json::to_value(&before.layers).unwrap();
+
+            let commands = app.run_count;
+            artboard_deletion_click(&mut app, &ctx, draw, label, egui::Modifiers::NONE);
+            let st = app.session.doc().unwrap();
+            assert_eq!(
+                serde_json::to_value(&st.doc.artboards).unwrap(),
+                expected,
+                "selected deletion keeps the expected IDs; all-selected keeps original board 1"
+            );
+            assert_eq!(app.run_count, commands.wrapping_add(1), "one command from the actual deletion control");
+            assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), artwork, "artwork IDs, geometry and appearance stay intact");
+            assert_eq!(st.history.undo.len(), undo + 1, "one deletion is one undo step");
+            assert!(st.is_dirty());
+            let active = app.view().unwrap().artboard;
+            if all_selected {
+                assert_eq!(active, 0);
+            }
+            assert!(active < st.doc.artboards.len(), "the active artboard remains in range");
+            assert_eq!(app.session.tool_options()["active"], json!(active));
+            assert_eq!(super::super::artboards::picked(&app, st.doc.artboards.len()), [active]);
+            assert_eq!(app.session.tool_options()["selected"], json!([active]), "raw tool selection contains only the remaining active board");
+
+            app.run("edit.undo", json!({})).unwrap();
+            let st = app.session.doc().unwrap();
+            assert_eq!(serde_json::to_value(&st.doc.artboards).unwrap(), serde_json::to_value(&before.artboards).unwrap());
+            assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), artwork);
+            assert_eq!(st.history.undo.len(), undo);
+            assert!(!st.is_dirty(), "one undo returns to the saved document");
+            app.run("edit.redo", json!({})).unwrap();
+            let st = app.session.doc().unwrap();
+            assert_eq!(serde_json::to_value(&st.doc.artboards).unwrap(), expected, "redo removes the same artboard IDs");
+            assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), artwork);
+            assert_eq!(st.history.undo.len(), undo + 1);
+            assert!(st.is_dirty());
+        }
+    }
+
+    fn assert_artboard_deletion_guard(draw: fn(&mut VectorcraftApp, &mut Ui), label: Option<&str>) {
+        let mut app = artboard_deletion_app(1);
+        // Leave a redo entry to ensure a disabled action preserves both history branches.
+        app.run("artboard.setProps", json!({"index": 0, "name": "Temporary"})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        let ctx = egui::Context::default();
+        select_artboard_rows(&mut app, &ctx, &[0]);
+        app.session.doc_mut().unwrap().mark_saved();
+        let before = app.session.doc().unwrap().doc.clone();
+        let st = app.session.doc().unwrap();
+        let history = (st.history.undo.len(), st.history.redo.len());
+        assert!(history.1 > 0);
+        let active = app.view().unwrap().artboard;
+        let options = app.session.tool_options();
+
+        let commands = app.run_count;
+        artboard_deletion_click(&mut app, &ctx, draw, label, egui::Modifiers::NONE);
+        assert_eq!(app.run_count, commands, "the disabled last-board control dispatches no command");
+        let st = app.session.doc().unwrap();
+        assert_eq!(serde_json::to_value(&st.doc.artboards).unwrap(), serde_json::to_value(&before.artboards).unwrap());
+        assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), serde_json::to_value(&before.layers).unwrap());
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), history);
+        assert!(!st.is_dirty(), "deleting the last artboard is a no-op");
+        assert_eq!(app.view().unwrap().artboard, active);
+        assert_eq!(app.session.tool_options(), options);
+    }
+
+    #[test]
+    fn artboard_menu_deletes_selected_artboards_in_one_undo_step() {
+        assert_artboard_deletion(super::super::artboards::menu, Some("Delete Artboards"));
+    }
+
+    #[test]
+    fn properties_deletes_selected_artboards_in_one_undo_step() {
+        assert_artboard_deletion(show, Some("Delete Artboard"));
+    }
+
+    #[test]
+    fn artboard_menu_preserves_last_artboard() {
+        assert_artboard_deletion_guard(super::super::artboards::menu, Some("Delete Artboards"));
+    }
+
+    #[test]
+    fn properties_preserves_last_artboard() {
+        assert_artboard_deletion_guard(show, Some("Delete Artboard"));
+    }
+
+    #[test]
+    fn artboard_trash_deletes_selected_artboards_in_one_undo_step() {
+        assert_artboard_deletion(super::super::artboards::show, None);
+    }
+
+    #[test]
+    fn artboard_trash_preserves_last_artboard() {
+        assert_artboard_deletion_guard(super::super::artboards::show, None);
+    }
+
+    /// Click the actual panel footer's New button (24 points, with a 4-point gap before Trash).
+    fn artboard_history_new(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        let mut bounds = Rect::NOTHING;
+        for _ in 0..2 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                super::super::artboards::show(app, ui);
+                bounds = ui.min_rect();
+            });
+            out.textures_delta.clear();
+        }
+        let count = app.session.doc().unwrap().doc.artboards.len();
+        let commands = app.run_count;
+        let at = bounds.right_bottom() - vec2(40.0, 12.0);
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        panel_frame(app, ctx, vec![Event::PointerMoved(at), button(true)], super::super::artboards::show);
+        panel_frame(app, ctx, vec![button(false)], super::super::artboards::show);
+        assert_eq!(app.run_count, commands.wrapping_add(1), "the actual New button dispatches once");
+        assert_eq!(app.session.doc().unwrap().doc.artboards.len(), count + 1);
+        assert_eq!(app.session.tool_options()["active"], json!(count));
+        assert_eq!(app.view().unwrap().artboard, count);
+    }
+
+    /// Keep the panel and its natural focus in the same context throughout Undo and deletion.
+    fn artboard_history_key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, modifiers: egui::Modifiers) {
+        for pressed in [true, false] {
+            let events = vec![Event::ModifiersChanged(modifiers), Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }];
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                crate::shortcuts::handle(app, ui.ctx());
+                super::super::artboards::show(app, ui);
+            });
+            out.textures_delta.clear();
+        }
+    }
+
+    fn artboard_history_delete_after_undo(key: Option<egui::Key>, duplicate: bool) {
+        let mut app = artboard_deletion_app(2);
+        app.session.set_tool_option("moveArt", &json!(false));
+        app.session.set_tool_option("scaleArt", &json!(true));
+        app.session.doc_mut().unwrap().mark_saved();
+        let st = app.session.doc().unwrap();
+        let before = st.doc.clone();
+        let selection = st.selection.clone();
+        assert!(!selection.is_empty(), "selected artwork catches a Clear fallthrough");
+        let undo = st.history.undo.len();
+        let ctx = egui::Context::default();
+        if duplicate {
+            let commands = app.run_count;
+            artboard_deletion_click(&mut app, &ctx, super::super::artboards::menu, Some("Duplicate Artboards"), egui::Modifiers::NONE);
+            assert_eq!(app.run_count, commands.wrapping_add(1));
+            assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 3);
+            assert_eq!(app.session.tool_options()["active"], json!(2));
+            assert_eq!(app.view().unwrap().artboard, 2);
+        } else {
+            artboard_history_new(&mut app, &ctx);
+        }
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, before, "the real Undo shortcut restores the original document");
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+        assert!(!st.is_dirty());
+        // Capture the state before another panel or pointer can repair it. Still exercise deletion
+        // on RED: keyboard deletion used to do nothing; Properties already clamped its own target.
+        let after_undo = (app.view().unwrap().artboard, app.session.tool_options());
+        if let Some(key) = key {
+            artboard_history_key(&mut app, &ctx, key, egui::Modifiers::NONE);
+        } else {
+            let texts = panel_frame(&mut app, &ctx, vec![], show);
+            assert!(texts.iter().any(|(label, _)| label == &before.artboards[1].name));
+            artboard_deletion_click(&mut app, &ctx, show, Some("Delete Artboard"), egui::Modifiers::NONE);
+        }
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.artboards, vec![before.artboards[0].clone()], "deletion after Undo removes the shown second board");
+        assert_eq!(st.doc.layers, before.layers, "ordinary artwork survives without geometry or style changes");
+        assert_eq!(st.selection, selection, "deletion never falls through to Clear");
+        assert_eq!(after_undo.0, 1, "Undo normalizes the navigator before another gesture");
+        assert_eq!(after_undo.1, json!({"active": 1, "selected": [1], "moveArt": false, "scaleArt": true}));
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert_eq!(st.history.undo.last().unwrap().label, "Delete Artboard");
+        assert!(st.is_dirty());
+        assert_eq!(app.view().unwrap().artboard, 0);
+        assert_eq!(app.session.tool_options(), json!({"active": 0, "selected": [0], "moveArt": false, "scaleArt": true}));
+        let deleted = st.doc.clone();
+
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, before);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+        assert!(!st.is_dirty());
+        // Valid current selection stays put; history does not restore an earlier artboard selection.
+        assert_eq!(app.session.tool_options()["selected"], json!([0]));
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, deleted);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert!(st.is_dirty());
+    }
+
+    #[test]
+    fn artboard_history_new_undo_delete_uses_remaining_board() {
+        artboard_history_delete_after_undo(Some(egui::Key::Delete), false);
+    }
+
+    #[test]
+    fn artboard_history_new_undo_backspace_uses_remaining_board() {
+        artboard_history_delete_after_undo(Some(egui::Key::Backspace), false);
+    }
+
+    #[test]
+    fn artboard_history_new_undo_properties_agrees_with_tool() {
+        artboard_history_delete_after_undo(None, false);
+    }
+
+    #[test]
+    fn artboard_history_duplicate_undo_delete_uses_remaining_board() {
+        artboard_history_delete_after_undo(Some(egui::Key::Delete), true);
+    }
+
+    #[test]
+    fn artboard_history_undo_prunes_only_removed_indices() {
+        for order in [[0, 1, 2], [0, 2, 1]] {
+            let mut app = artboard_deletion_app(2);
+            app.session.set_tool_option("moveArt", &json!(false));
+            app.session.set_tool_option("scaleArt", &json!(true));
+            app.session.doc_mut().unwrap().mark_saved();
+            let st = app.session.doc().unwrap();
+            let before = st.doc.clone();
+            let selection = st.selection.clone();
+            let undo = st.history.undo.len();
+            let ctx = egui::Context::default();
+            artboard_history_new(&mut app, &ctx);
+            let created = app.session.doc().unwrap().doc.clone();
+            for (at, i) in order.into_iter().enumerate() {
+                let modifiers = if at == 0 { egui::Modifiers::NONE } else { egui::Modifiers::SHIFT };
+                artboard_deletion_click(&mut app, &ctx, super::super::artboards::show, Some(&format!("Artboard {}", i + 1)), modifiers);
+            }
+            let options = app.session.tool_options();
+            let expected = if order[2] == 2 { json!([0, 1]) } else { json!([1, 0]) };
+            assert_eq!(options["selected"], if order[2] == 2 { json!([2, 0, 1]) } else { json!([1, 0, 2]) });
+            artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+            let mut normalized = options;
+            normalized["active"] = expected[0].clone();
+            normalized["selected"] = expected;
+            assert_eq!(app.session.tool_options(), normalized, "only the removed index is pruned, preserving surviving order and options");
+            assert_eq!(json!(app.view().unwrap().artboard), normalized["active"]);
+            let st = app.session.doc().unwrap();
+            assert_eq!(st.doc, before);
+            assert_eq!(st.selection, selection);
+            assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+            assert!(!st.is_dirty());
+            artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+            assert_eq!(app.session.doc().unwrap().doc, created);
+            assert_eq!(app.session.doc().unwrap().selection, selection);
+            assert_eq!(app.session.tool_options(), normalized, "Redo does not replace an already valid multiselection");
+        }
+    }
+
+    #[test]
+    fn artboard_history_valid_multiselection_survives_undo_redo() {
+        let mut app = artboard_deletion_app(3);
+        app.session.set_tool_option("moveArt", &json!(false));
+        app.session.set_tool_option("scaleArt", &json!(true));
+        let ctx = egui::Context::default();
+        select_artboard_rows(&mut app, &ctx, &[0, 1]);
+        let options = app.session.tool_options();
+        assert_eq!(options["selected"], json!([1, 0]));
+        let view = app.view().unwrap().artboard;
+        app.session.doc_mut().unwrap().mark_saved();
+        let st = app.session.doc().unwrap();
+        let before = st.doc.clone();
+        let selection = st.selection.clone();
+        let undo = st.history.undo.len();
+        app.run("object.move", json!({"dx": 7, "dy": 9})).unwrap();
+        let moved = app.session.doc().unwrap().doc.clone();
+        assert_ne!(moved, before);
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+        app.sync_views();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, before);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+        assert!(!st.is_dirty());
+        assert_eq!(app.session.tool_options(), options);
+        assert_eq!(app.view().unwrap().artboard, view);
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+        app.sync_views();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, moved);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert!(st.is_dirty());
+        assert_eq!(app.session.tool_options(), options);
+        assert_eq!(app.view().unwrap().artboard, view);
     }
 
     /// #681: Rearrange All opens Rearrange All Artboards in one click, from the Document section

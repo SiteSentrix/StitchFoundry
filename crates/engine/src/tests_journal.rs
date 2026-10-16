@@ -41,7 +41,7 @@ fn replay_reproduces_the_created_date_of_an_earlier_run() {
     s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     // As if the original run happened long ago: a replay now must still land on its date.
-    s.journal[0].1["created"] = json!(1_234_567_890);
+    s.journal.get_mut(0).unwrap().1["created"] = json!(1_234_567_890);
     let mut r = Session::new();
     for (id, p) in &s.journal {
         r.execute(id, p).unwrap();
@@ -63,12 +63,13 @@ fn recorded_actions_leave_out_replay_only_values() {
     // …while values resolved from the preferences stay recorded.
     let scale = steps.iter().find(|(id, _)| id == "object.scale").unwrap();
     assert!(scale.1.get("strokes").is_some(), "{scale:?}");
-    assert_eq!(s.journal_for_action(1), s.journal[1..].to_vec());
+    assert_eq!(s.journal_for_action(1), s.journal.since(1).to_vec());
 }
 
 /// The artboard the app passes to Paste in Place, in Front and in Back, to Align to Artboard, to
-/// All on Active Artboard and to a batch (its active one) is journaled and left out of recorded
-/// actions, so a played action uses the artboard active when it plays.
+/// Distribute Objects and Distribute Spacing, to All on Active Artboard and to a batch (its active
+/// one) is journaled and left out of recorded actions, so a played action uses the artboard active
+/// when it plays.
 #[test]
 fn recorded_actions_leave_out_the_artboard_the_app_passes() {
     let mut s = Session::new();
@@ -82,12 +83,14 @@ fn recorded_actions_leave_out_the_artboard_the_app_passes() {
         ("edit.pasteInBack", json!({"artboard": 1})),
         ("select.allOnArtboard", json!({"artboard": 1})),
         ("object.align", json!({"horizontal": "left", "to": "artboard", "artboard": 1})),
+        ("object.distribute", json!({"horizontal": "left", "to": "artboard", "artboard": 1})),
+        ("object.distributeSpacing", json!({"axis": "horizontal", "to": "artboard", "artboard": 1})),
         ("command.batch", json!({"artboard": 1, "commands": [{"command": "select.allOnArtboard", "params": {}}]})),
     ];
     for (id, p) in &steps {
         s.execute(id, p).unwrap();
     }
-    assert!(s.journal[start..].iter().all(|(_, p)| p["artboard"] == json!(1)), "the journal keeps it: {:?}", &s.journal[start..]);
+    assert!(s.journal.since(start).iter().all(|(_, p)| p["artboard"] == json!(1)), "the journal keeps it: {:?}", s.journal.since(start));
     let action = s.journal_for_action(start);
     assert_eq!(action.len(), steps.len());
     for ((id, mut p), (step, recorded)) in steps.into_iter().zip(action) {
@@ -123,6 +126,33 @@ fn a_batch_passes_its_artboard_to_each_step_when_it_runs() {
     let new = step("file.new", json!({"width": 100, "height": 100}));
     s.execute("command.batch", &json!({"artboard": 2, "commands": [new, all_on_artboard]})).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 1, "in the new document");
+}
+
+/// A batch passes its `artboard` to each Fit to Artwork Bounds and Fit to Selected Art step that
+/// names no `index`, as their `index` (past the document's last artboard, the last one), and a
+/// step's own `index` is kept. A recorded action leaves out the `index` the app passes them, so
+/// the action resizes the artboard active when it plays.
+#[test]
+fn fit_steps_take_the_batchs_artboard_and_actions_leave_out_their_index() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 30})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let (was, art) = (boards(&s), vectorcraft_geom::Rect::new(10.0, 10.0, 30.0, 40.0));
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    s.execute("command.batch", &json!({"artboard": 9, "commands": [step("artboard.fitToArt", json!({}))]})).unwrap();
+    assert_eq!(boards(&s), [was[0], was[1], art], "artboard 3, the last one, for a batch's artboard past it");
+    s.execute("command.batch", &json!({"artboard": 1, "commands": [step("artboard.fitToSelection", json!({}))]})).unwrap();
+    assert_eq!(boards(&s), [was[0], art, art], "the batch's artboard 2");
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [step("artboard.fitToArt", json!({"index": 0}))]})).unwrap();
+    assert_eq!(boards(&s)[0], art, "an index the step names is kept");
+    let start = s.journal.len();
+    s.execute("artboard.fitToArt", &json!({"index": 1})).unwrap();
+    s.execute("artboard.fitToSelection", &json!({"index": 1})).unwrap();
+    assert!(s.journal.since(start).iter().all(|(_, p)| p["index"] == json!(1)), "the journal keeps it: {:?}", s.journal.since(start));
+    let action = s.journal_for_action(start);
+    assert_eq!(action, [("artboard.fitToArt".to_string(), json!({})), ("artboard.fitToSelection".to_string(), json!({}))]);
 }
 
 #[test]
@@ -370,4 +400,26 @@ fn a_move_drag_is_named_for_whether_it_copied() {
         s.commit_interaction().unwrap();
         assert_eq!(last(&s).as_deref(), Some(label), "begun as {begin}, copy: {copy}");
     }
+}
+
+#[test]
+fn a_failed_preview_is_not_journaled_at_commit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    let journal = s.journal.len();
+
+    // Only a failing preview: committing records nothing.
+    s.begin_interaction("Bad").unwrap();
+    assert!(s.preview("no.such.command", &json!({})).is_err());
+    s.commit_interaction().unwrap();
+    assert_eq!(s.journal.len(), journal);
+
+    // A good preview followed by a failing one: the document is back at the snapshot, so the
+    // earlier preview is not journaled either.
+    s.begin_interaction("Opacity").unwrap();
+    s.preview("transparency.set", &json!({"opacity": 50})).unwrap();
+    assert!(s.preview("no.such.command", &json!({})).is_err());
+    s.commit_interaction().unwrap();
+    assert_eq!(s.journal.len(), journal);
 }

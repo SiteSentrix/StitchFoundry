@@ -252,7 +252,7 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
     let o = app.session.tool_options();
     let id = NodeId(o.get("editing")?.as_u64()?);
     let len = match &app.session.active()?.doc.node(id)?.kind {
-        NodeKind::Text(t) => t.plain_text().len(),
+        NodeKind::Text(t) => vectorcraft_text::edit::runs_len(&t.runs),
         _ => return None,
     };
     let g = |k: &str| o.get(k).and_then(Value::as_u64).map_or(0, |v| (v as usize).min(len));

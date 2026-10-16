@@ -497,7 +497,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Library",
             [],
             None,
-            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|charStyle|paraStyle, ids?: objects (default: the selection), name?} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). An item the library already has (same kind and contents) isn't added again → {library, kind, name, id?: graphic id, existing: bool}",
+            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). An item the library already has (same kind and contents) isn't added again → {library, kind, name, id?: graphic id, existing: bool}",
             has_doc,
             add
         ),
@@ -506,7 +506,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use Library Item",
             [],
             None,
-            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colours; default: the kind's)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colours: paint the selection (and the defaults) as paint.setFill/paint.setStroke; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number) and apply it to the selected text, one undo step → {kind, ids?, style?}",
+            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colours; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colours: paint the selection (and the defaults) as paint.setFill/paint.setStroke; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number) and apply it to the selected text, one undo step → {kind, ids?, style?}",
             has_doc,
             use_item
         ),

@@ -19,9 +19,10 @@ const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
 pub fn grid_of(n: &Node) -> Option<Cow<'_, GradientMesh>> {
     match &n.kind {
         NodeKind::Mesh(m) => Some(Cow::Borrowed(m)),
-        NodeKind::Envelope { kind: EnvelopeKind::Mesh { rows, cols, points, handles }, editing: false, .. } => {
-            envelope_grid(*rows, *cols, points, handles).map(Cow::Owned)
-        }
+        NodeKind::Envelope { kind, editing: false, .. } => match &**kind {
+            EnvelopeKind::Mesh { rows, cols, points, handles } => envelope_grid(*rows, *cols, points, handles).map(Cow::Owned),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -132,11 +133,11 @@ mod tests {
         let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points: grid_points(Rect::new(100.0, 100.0, 200.0, 200.0), 1, 1), handles: vec![] };
         let env = NodeKind::Envelope {
             content: vec![Arc::new(rect)],
-            kind,
+            kind: Box::new(kind),
             fidelity: 50.0,
             editing: false,
             options: EnvelopeOptions::NEW,
-            frame: Affine::IDENTITY,
+            frame: Box::new(Affine::IDENTITY),
         };
         let l = d.layers[0].id;
         d.insert(Some(l), 0, Node::new(id, env)).unwrap();

@@ -16,6 +16,11 @@ use crate::VectorcraftApp;
 /// Writes a file; callable from any thread.
 pub type SharedWriteFn = std::sync::Arc<dyn Fn(&str, &[u8]) -> Result<(), String> + Send + Sync>;
 
+/// Writes the file at a path with what the filler it is given writes into it (atomically, as
+/// `vectorcraft_format::write_atomic_with`); callable from any thread.
+pub type SharedStreamFn =
+    std::sync::Arc<dyn Fn(&str, &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<(), String> + Send + Sync>;
+
 /// A writer for the work: the host's file writer (or browser download) on the UI thread, the
 /// shared one on the worker.
 pub type Writer<'a> = &'a mut dyn FnMut(&str, &[u8]) -> Result<(), String>;
@@ -40,7 +45,8 @@ struct Task {
 /// A job in progress.
 pub struct Job {
     id: u64,
-    /// What the status bar shows ("Saving Poster.vectorcraft").
+    /// What the status bar and `ui.inspect` show ("Saving Poster.vectorcraft"); empty for work they
+    /// don't show.
     pub label: String,
     /// The document the job reads (`DocState::uid`), if any.
     pub doc: Option<u64>,
@@ -91,7 +97,8 @@ impl Background {
 
 /// Run `work` on a worker thread when `enabled` and the host can write from one, else now; `then`
 /// gets its result on the UI thread. → `then`'s result, or `{background: true, status}` while the
-/// work runs (the status bar shows `label`).
+/// work runs (the status bar shows `label`). With an empty `label` neither the status bar nor
+/// `ui.inspect` shows the work, and the reply has no `status`.
 pub fn run(
     app: &mut VectorcraftApp,
     enabled: bool,
@@ -110,6 +117,9 @@ pub fn run(
                     let bg = &mut app.background;
                     bg.next_id += 1;
                     bg.jobs.push(Job { id, label: label.clone(), doc, then: Box::new(then) });
+                    if label.is_empty() {
+                        return Ok(json!({ "background": true }));
+                    }
                     let status = format!("{label}…");
                     app.status(status.clone());
                     return Ok(json!({ "background": true, "status": status }));
@@ -137,7 +147,13 @@ pub fn poll(app: &mut VectorcraftApp) {
 /// Wait for every job and apply its result (before quitting, closing a document, or another save
 /// of a document a job is reading).
 pub fn wait_all(app: &mut VectorcraftApp) {
-    while !app.background.jobs.is_empty() {
+    wait_until(app, |_| false);
+}
+
+/// Apply the jobs' results as they arrive (in the order the jobs were started) until `ready` holds
+/// or no job is left.
+pub fn wait_until(app: &mut VectorcraftApp, ready: impl Fn(&VectorcraftApp) -> bool) {
+    while !ready(app) && !app.background.jobs.is_empty() {
         let Some(done) = app.background.worker.as_ref().and_then(|(_, rx)| rx.recv().ok()) else {
             // The worker is gone: its jobs can't finish.
             for job in std::mem::take(&mut app.background.jobs) {

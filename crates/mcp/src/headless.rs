@@ -35,9 +35,9 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     (
         "file.save",
         "Save",
-        "{path?, format?, options?, svg?: {…SVG options}} = document.save: .stitchfoundry (or .vectorcraft), .ai (a PDF that reopens editable), .pdf, .svg or .svgz (default: the document's own path and format)",
+        "{…as document.save} = document.save {path?, format?, options?, svg?: {…SVG options}}: .stitchfoundry (or .vectorcraft), .ai (a PDF that reopens editable), .pdf, .svg or .svgz (default: the document's own path and format)",
     ),
-    ("file.export", "Export…", "{path?, format?, artboard?, range?, scale?, …} = document.export (no path → dataBase64)"),
+    ("file.export", "Export…", "{…as document.export} = document.export {path?, format?, artboard?, range?, scale?, …} (no path → dataBase64)"),
     (
         "file.exportForScreens",
         "Export for Screens…",
@@ -47,7 +47,7 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     (
         "tool.setOption",
         "Tool Option",
-        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them); kept options last across tool switches",
+        "{key?, value? | values?: {key: value…}, tool?: id (default: the active tool)} → the tool's options (`{}` reads them); kept options last across tool switches",
     ),
 ];
 
@@ -125,6 +125,12 @@ impl Headless {
     }
 
     fn exec(&mut self, id: &str, params: &Value) -> Result<Value, String> {
+        // A key the command's description doesn't name is an error, not a default (#1442).
+        match HOST_COMMANDS.iter().find(|c| c.0 == id) {
+            Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params),
+            None => self.session.check_params(id, params),
+        }
+        .map_err(|e| e.to_string())?;
         match id {
             "file.open" => self.open(params),
             "file.save" => self.save(params),
@@ -190,7 +196,8 @@ impl Headless {
             }
         }
         let sel = self.session.active().map(|d| d.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>()).unwrap_or_default();
-        Ok(json!({"selection": sel, "tool": self.session.tool_id(), "requests": requests}))
+        let key = self.session.active().and_then(|d| d.selection.key).map(|k| k.0);
+        Ok(json!({"selection": sel, "key": key, "tool": self.session.tool_id(), "requests": requests}))
     }
 
     fn key(&mut self, p: &Value) -> Result<Value, String> {

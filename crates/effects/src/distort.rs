@@ -1,6 +1,7 @@
 //! Distort & Transform effects.
 
 use serde_json::Value;
+use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, Anchor, ParamCurve, PathData, Point, Rect, SubPath, Vec2};
 
 use crate::util::*;
@@ -102,11 +103,59 @@ pub fn roughen(path: &PathData, b: Rect, p: &Value) -> PathData {
     PathData::new(subs)
 }
 
+/// The move and the number of copies of a Transform effect with params `p` that only moves what
+/// it applies to, as [`transform_map`] reads them; `None` when it also scales, rotates or reflects,
+/// or moves by a random share.
+pub(crate) fn transform_move(p: &Value) -> Option<(Vec2, usize)> {
+    let (m, copies) = transform_map(Rect::ZERO, p, 0);
+    let [a, b, c, d, x, y] = m.as_coeffs();
+    (!flag(p, "random", false) && [a, b, c, d] == [1.0, 0.0, 0.0, 1.0]).then_some((Vec2::new(x, y), copies))
+}
+
+/// The offsets at which Transform effects with params `ps`, applied in order, place `path`, the
+/// original's place first, when each of them only moves it ([`transform_move`]): each effect moves
+/// every place it is given, or with copies keeps them and adds each copy's. `None` when one of
+/// them does more than move, or when [`transform`] stops its copies of `path` early.
+pub(crate) fn transform_offsets(ps: &[Value], path: &PathData) -> Option<Vec<Vec2>> {
+    let mut offsets = vec![Vec2::ZERO];
+    let mut all = path.clone();
+    for p in ps {
+        let (v, copies) = transform_move(p)?;
+        let next = transform(&all, Rect::ZERO, p, 0);
+        if next.anchor_count() != all.anchor_count().saturating_mul(copies + 1) {
+            return None;
+        }
+        all = next;
+        if copies == 0 {
+            offsets.iter_mut().for_each(|o| *o += v);
+            continue;
+        }
+        let from = offsets.clone();
+        offsets.extend((1..=copies).flat_map(|k| from.iter().map(move |o| *o + v * k as f64)));
+    }
+    Some(offsets)
+}
+
 /// Largest scale (%) and move (pt) the Transform effect takes.
 const MAX_SCALE: f64 = 100_000.0;
 const MAX_MOVE: f64 = 1.0e7;
 /// The Transform effect's copies stop before one reaches further than this (pt) from the origin.
 const MAX_REACH: f64 = 1.0e9;
+/// Most anchors a Transform effect's copies make of a path, the original included: 1000 copies of
+/// a 2000-anchor path. Stacked Transform effects multiply their copies (three of 1000 copies make
+/// a thousand million of one square), so the limit is on the result, not on each effect's count.
+pub(crate) const MAX_COPY_ANCHORS: usize = 2_000_000;
+/// Most image and symbol instance nodes a Transform effect's copies make of an art, the originals
+/// included: 1000 copies of a 2000-image art. Stacked Transform effects multiply their copies
+/// (three of 1000 copies make a thousand million of one image), so the limit is on the result,
+/// not on each effect's count.
+pub(crate) const MAX_COPY_OBJECTS: usize = 2_000_000;
+
+/// Does `r` stay within [`MAX_REACH`] of the origin? A Transform effect's copies stop before one
+/// doesn't.
+pub(crate) fn within_reach(r: Rect) -> bool {
+    [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_REACH)
+}
 
 /// Transform effect: scale, rotate and reflect about reference point `reference` of the bounds
 /// (the 9-point grid, 4 = centre), then move; `copies` more times, each from the last. With
@@ -114,6 +163,41 @@ const MAX_REACH: f64 = 1.0e9;
 /// the angle a share of theirs, drawn from `seed` (the object's), so an object keeps its result
 /// on every redraw while each object varies its own way.
 pub fn transform(path: &PathData, b: Rect, p: &Value, seed: u64) -> PathData {
+    transform_within(path, b, p, seed, MAX_COPY_ANCHORS)
+}
+
+/// [`transform`] whose copies make at most `max` anchors of the path, the original included.
+pub(crate) fn transform_within(path: &PathData, b: Rect, p: &Value, seed: u64, max: usize) -> PathData {
+    let (m, copies) = transform_map(b, p, seed);
+    if copies == 0 {
+        return path.transformed(m);
+    }
+    // Each copy adds the path once more, and a Transform after this one copies the lot again:
+    // copies stop where the result would pass [`MAX_COPY_ANCHORS`] (#1705).
+    let each = path.anchor_count();
+    let mut anchors = each;
+    let mut out = path.clone();
+    let mut cur = path.clone();
+    for _ in 0..copies {
+        anchors = anchors.saturating_add(each);
+        if anchors > max {
+            break;
+        }
+        cur = cur.transformed(m);
+        if !cur.bounds().is_some_and(within_reach) {
+            break;
+        }
+        out.subpaths.extend(cur.subpaths.iter().cloned());
+    }
+    out
+}
+
+/// The Transform effect's map and how many copies of what it is applied to it makes, for bounds
+/// `b` (the reference point lies on them), params `p` and the object's `seed` for Random: the map
+/// applies to the object itself when `copies` is 0, and once more to each of `copies` copies
+/// otherwise (see [`transform_within`], and images, whose copies count nodes against
+/// [`MAX_COPY_OBJECTS`]).
+pub(crate) fn transform_map(b: Rect, p: &Value, seed: u64) -> (Affine, usize) {
     let random = flag(p, "random", false);
     // The share (0..1) of value `k` applied.
     let share = |k: u64| if random { (noise(seed, k, 0, 0) + 1.0) / 2.0 } else { 1.0 };
@@ -127,20 +211,7 @@ pub fn transform(path: &PathData, b: Rect, p: &Value, seed: u64) -> PathData {
         * Affine::scale_non_uniform(scale("scaleH", 0) * reflect("reflectX"), scale("scaleV", 1) * reflect("reflectY"))
         * Affine::translate(-o);
     let copies = num(p, "copies", 0.0).clamp(0.0, 1000.0) as usize;
-    if copies == 0 {
-        return path.transformed(m);
-    }
-    let within = |r: Rect| [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_REACH);
-    let mut out = path.clone();
-    let mut cur = path.clone();
-    for _ in 0..copies {
-        cur = cur.transformed(m);
-        if !cur.bounds().is_some_and(within) {
-            break;
-        }
-        out.subpaths.extend(cur.subpaths.iter().cloned());
-    }
-    out
+    (m, copies)
 }
 
 /// Tweak: random displacement of anchors and/or control points.
@@ -194,7 +265,10 @@ pub fn twist(path: &PathData, b: Rect, angle: f64) -> PathData {
     map_nonlinear(path, pieces, f)
 }
 
-/// Zig Zag: `ridges` extra points per segment, alternately displaced along the normal.
+const ZIGZAG_ARCLEN_ACCURACY: f64 = 1e-4;
+
+/// Zig Zag: `ridges` extra points per segment, evenly spaced along its length and alternately
+/// displaced along the normal.
 pub fn zig_zag(path: &PathData, b: Rect, p: &Value) -> PathData {
     let size = num(p, "size", 10.0).clamp(-1e4, 1e4);
     let amp = if flag(p, "relative", false) { size / 100.0 * mean_size(b) } else { size };
@@ -207,8 +281,12 @@ pub fn zig_zag(path: &PathData, b: Rect, p: &Value) -> PathData {
         let mut k = 0usize;
         for i in 0..segs {
             let c = sp.segment(i);
+            // Ridges are spaced by length, not by `t`: a line's retracted handles bunch `t` up
+            // near the anchors, and so does any uneven curve.
+            let len = c.arclen(ZIGZAG_ARCLEN_ACCURACY);
             for j in 0..=ridges {
-                let t = j as f64 / (ridges + 1) as f64;
+                let s = j as f64 / (ridges + 1) as f64;
+                let t = if j > 0 && len > 1e-9 { c.inv_arclen(s * len, ZIGZAG_ARCLEN_ACCURACY).clamp(0.0, 1.0) } else { s };
                 let nrm = if j == 0 {
                     // Average the normals of the segments meeting at the anchor.
                     let prev = if i > 0 {

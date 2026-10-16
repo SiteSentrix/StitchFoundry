@@ -9,8 +9,15 @@
 //! - Gradient definitions: `(name) type stops Bd`, its stops as `colour style [opacity 6]
 //!   midpoint ramp Bs` (style 0 grey, 1 CMYK, 2 RGB with its CMYK, 3 and 4 named colours), `BD`.
 //! - A gradient on an object: `[flag] Bb` (1: the stroke), `flag (name) x y angle length a b c d
-//!   tx ty Bg`, the gradient matrix `a b c d tx ty Bm`, the focal point `x y angle length Bh`,
-//!   `flag BB`.
+//!   tx ty Bg`, the focal point `x y angle length Bh`, `flag BB`. Newer files write the gradient's
+//!   place as matrices after `Bg` (whose own numbers are then not in art space): `a b c d tx ty Xm`
+//!   takes the unit vector (a radial's unit circle) onto the gradient's whole ramp (0 to 100, its
+//!   angle and length in it), and `a b c d tx ty Bm` takes it onto the part between two stops next to each other, one
+//!   `Bm` for each pair in the order of the ramp (`Bc`, around them, are the caps past the first and
+//!   last stops). Without `Xm`, a radial gradient's one `Bm` takes the unit circle onto it.
+//!
+//! "AI7 spec": Adobe Illustrator File Format Specification, version 7.0 (1998), listed by PRONOM at
+//! https://www.nationalarchives.gov.uk/PRONOM/fmt/423; §3.5 documents the gradient operators.
 
 use std::collections::HashMap;
 
@@ -151,6 +158,11 @@ impl GradientDef {
         if self.gradient.stops.is_empty() {
             return None;
         }
+        // Stops are listed along the ramp from either end: listed downwards they're reversed, so
+        // stops sharing a ramp point keep their order (and each its midpoint, to the next stop).
+        if self.gradient.stops.first().zip(self.gradient.stops.last()).is_some_and(|(first, last)| first.offset > last.offset) {
+            self.gradient.stops.reverse();
+        }
         self.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
         Some((self.name, self.gradient))
     }
@@ -166,8 +178,11 @@ pub(super) struct Instance {
     length: f64,
     /// `Bg`'s own matrix.
     bg: Affine,
-    /// The gradient matrix (`Bm`), when there is one.
-    bm: Option<Affine>,
+    /// `Xm`: "the overall matrix applied to the gradient" (AI7 spec §3.5.4), when there is one.
+    xm: Option<Affine>,
+    /// The first and the last gradient matrix (`Bm`), when there are any. After `Xm` they are
+    /// imaging bands (AI7 spec §3.5.6), not the gradient's matrix.
+    bm: Option<(Affine, Affine)>,
     /// The focal point's offset from the origin (`Bh`).
     hilight: Vec2,
 }
@@ -197,10 +212,22 @@ impl Instance {
         }
     }
 
-    /// `a b c d tx ty Bm`.
-    pub fn bm(&mut self, vals: &[V]) {
+    /// The matrix of `a b c d tx ty Bm` or `Xm`, when it can be inverted.
+    fn matrix(vals: &[V]) -> Option<Affine> {
         let n: Vec<f64> = vals.iter().filter_map(V::num).collect();
-        self.bm = n.get(n.len().saturating_sub(6)..).and_then(affine).filter(|m| m.determinant().abs() > 1e-12);
+        n.get(n.len().saturating_sub(6)..).and_then(affine).filter(|m| m.determinant().abs() > 1e-12)
+    }
+
+    /// `a b c d tx ty Bm`: one for each pair of stops next to each other.
+    pub fn bm(&mut self, vals: &[V]) {
+        if let Some(m) = Self::matrix(vals) {
+            self.bm = Some((self.bm.map_or(m, |(first, _)| first), m));
+        }
+    }
+
+    /// `a b c d tx ty Xm`: "the overall matrix applied to the gradient" (AI7 spec §3.5.4).
+    pub fn xm(&mut self, vals: &[V]) {
+        self.xm = Self::matrix(vals);
     }
 
     /// `x y angle length Bh`.
@@ -211,27 +238,76 @@ impl Instance {
         }
     }
 
+    /// Does it carry a matrix of its own (`Xm` or `Bm`) rather than only `Bg`'s numbers?
+    pub fn has_matrix(&self) -> bool {
+        self.xm.is_some() || self.bm.is_some()
+    }
+
     /// The paint, through `to_doc` (art space → the document), when the gradient is defined.
     pub fn paint(&self, defs: &HashMap<String, Gradient>, to_doc: Affine) -> Option<Paint> {
         let name = self.name.as_ref()?;
         let gradient = defs.get(name)?.clone();
-        let m = to_doc * self.bm.unwrap_or(Affine::IDENTITY) * self.bg;
-        let a = self.angle.to_radians();
-        let dir = Vec2::new(a.cos(), a.sin()) * self.length;
-        let start = m * self.origin;
-        let end = m * (self.origin + dir);
+        let radial = gradient.kind == GradientKind::Radial;
+        // `Xm` maps the unit circle (or vector) to the art, `Bg`'s origin, angle and length already
+        // in it, and so does a radial's `Bm`: files whose PDF part draws the radial draw it through
+        // that `Bm` alone, whatever `Bg` holds. The highlight is an offset from the centre in art space.
+        let unit = self.xm.or(self.bm.filter(|_| radial).map(|(first, _)| first));
+        // A skewed matrix leaves `along` and `across` oblique: a linear ramp runs along the normal to
+        // its isolines (`across`), and a radial's ellipse is set by the matrix's principal axes.
+        let through = |m: Affine, origin: Point, dir: Vec2| {
+            let start = m * origin;
+            let along = m * (origin + dir) - start;
+            let across = m * (origin + Vec2::new(-dir.y, dir.x)) - start;
+            if radial {
+                let (major, minor) = principal_axes(along, across);
+                (start, start + major, minor.hypot() / major.hypot())
+            } else {
+                let normal = Vec2::new(-across.y, across.x).normalize();
+                (start, start + normal * along.dot(normal), 1.0)
+            }
+        };
+        let (start, end, aspect, focal) = match (unit, self.bm) {
+            (Some(unit), _) => {
+                let (start, end, aspect) = through(to_doc * unit, Point::ORIGIN, Vec2::new(1.0, 0.0));
+                (start, end, aspect, to_doc * (unit * Point::ORIGIN + self.hilight))
+            }
+            // A linear gradient's `Bm`s alone: they run from its first stop to its last.
+            (None, Some((first, last))) => {
+                let (a, b) = (to_doc * first * Point::ORIGIN, to_doc * last * Point::new(1.0, 0.0));
+                let from = gradient.stops.first().map_or(0.0, |s| f64::from(s.offset));
+                let to = gradient.stops.last().map_or(1.0, |s| f64::from(s.offset));
+                let whole = (b - a) / (to - from).max(1e-6);
+                let start = a - whole * from;
+                (start, start + whole, 1.0, start)
+            }
+            // `Bg`'s own numbers, in art space through its matrix.
+            (None, None) => {
+                let m = to_doc * self.bg;
+                let a = self.angle.to_radians();
+                let (start, end, aspect) = through(m, self.origin, Vec2::new(a.cos(), a.sin()) * self.length);
+                (start, end, aspect, m * (self.origin + self.hilight))
+            }
+        };
         if !(start.is_finite() && end.is_finite()) || start.distance(end) < 1e-9 {
             return None;
         }
-        // Across the vector, for an elliptical radial gradient.
-        let across = m * (self.origin + Vec2::new(-dir.y, dir.x));
-        let aspect = (across.distance(start) / start.distance(end)).clamp(0.01, 100.0);
-        let focal = (self.hilight.hypot() > 1e-9).then(|| m * (self.origin + self.hilight)).filter(|p| p.is_finite());
-        let radial = gradient.kind == GradientKind::Radial;
-        let geom = GradientGeom { start, end, aspect: if radial { aspect } else { 1.0 }, focal: if radial { focal } else { None } };
+        let aspect = aspect.clamp(0.01, 100.0);
+        let focal = (self.hilight.hypot() > 1e-9).then_some(focal).filter(|p| p.is_finite());
+        let geom = GradientGeom { start, end, aspect, focal: if radial { focal } else { None } };
         let angle = -(end - start).atan2().to_degrees();
         Some(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), angle, swatch: Some(name.clone()), ..GradientPaint::new(gradient) })))
     }
+}
+
+/// The semi-axes of the ellipse the unit circle maps to under the linear map with columns `u` and `v`,
+/// the major one first.
+fn principal_axes(u: Vec2, v: Vec2) -> (Vec2, Vec2) {
+    let (xx, yy, xy) = (u.x * u.x + v.x * v.x, u.y * u.y + v.y * v.y, u.x * u.y + v.x * v.y);
+    let angle = 0.5 * (2.0 * xy).atan2(xx - yy);
+    let spread = (0.25 * (xx - yy).powi(2) + xy * xy).sqrt();
+    let (major, minor) = ((0.5 * (xx + yy) + spread).sqrt(), (0.5 * (xx + yy) - spread).max(0.0).sqrt());
+    let axis = Vec2::new(angle.cos(), angle.sin());
+    (axis * major, Vec2::new(-axis.y, axis.x) * minor)
 }
 
 #[cfg(test)]
@@ -298,7 +374,7 @@ mod tests {
         let defs = HashMap::from([(name, g)]);
         let mut i = Instance::begin(&[]);
         let mut bg = vec![V::Num(1.0), V::Str(b"G".to_vec())];
-        bg.extend(nums(&[0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+        bg.extend(nums(&[100.0, 100.0, 0.0, 50.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
         i.bg(&bg);
         i.bm(&nums(&[50.0, 0.0, 0.0, -50.0, 100.0, 100.0]));
         let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
@@ -307,5 +383,44 @@ mod tests {
         assert_eq!(geom.end, Point::new(150.0, 100.0));
         assert!((geom.aspect - 1.0).abs() < 1e-9);
         assert!(i.paint(&HashMap::new(), Affine::IDENTITY).is_none());
+        // Newer files give the matrix with `Xm`; the `Bm`s after it are bands of a cached ramp.
+        let mut i = Instance::begin(&[]);
+        i.bg(&bg);
+        i.xm(&nums(&[40.0, 0.0, 0.0, -40.0, 10.0, 10.0]));
+        i.bm(&nums(&[5.0, 0.0, 0.0, -40.0, 30.0, 10.0]));
+        let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
+        let geom = gp.geom.unwrap();
+        assert_eq!((geom.start, geom.end), (Point::new(10.0, 10.0), Point::new(50.0, 10.0)));
+    }
+
+    /// A linear gradient of three stops as newer files place it: `Bg` with numbers that aren't in
+    /// art space, `Xm` for the whole ramp and a `Bm` for each pair of stops.
+    #[test]
+    fn a_linear_gradient_runs_its_whole_ramp_not_its_last_part() {
+        let mut d = GradientDef::begin(&[V::Str(b"L".to_vec()), V::Num(0.0), V::Num(3.0)]).unwrap();
+        for ramp in [100.0, 60.0, 20.0] {
+            d.stop(&nums(&[0.2, 0.4, 0.6, 0.0, 1.0, 1.0, 6.0, 50.0, ramp]), &mut vec![]);
+        }
+        let defs = HashMap::from([d.finish().unwrap()]);
+        let instance = |xm: bool| {
+            let mut i = Instance::begin(&[]);
+            let mut bg = vec![V::Num(1.0), V::Str(b"L".to_vec())];
+            bg.extend(nums(&[0.3, -0.2, -90.0, 0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]));
+            i.bg(&bg);
+            if xm {
+                i.xm(&nums(&[0.0, -200.0, -30.0, 0.0, 10.0, 300.0]));
+            }
+            // From the stop at 20 to the one at 60, then on to the one at 100.
+            i.bm(&nums(&[0.0, -80.0, -30.0, 0.0, 10.0, 260.0]));
+            i.bm(&nums(&[0.0, -80.0, -30.0, 0.0, 10.0, 180.0]));
+            let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
+            gp.geom.unwrap()
+        };
+        for xm in [true, false] {
+            let geom = instance(xm);
+            // (The stops' offsets are `f32`.)
+            assert!(geom.start.distance(Point::new(10.0, 300.0)) < 1e-5 && geom.end.distance(Point::new(10.0, 100.0)) < 1e-5, "{xm}: {geom:?}");
+            assert_eq!((geom.aspect, geom.focal), (1.0, None));
+        }
     }
 }

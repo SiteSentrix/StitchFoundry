@@ -27,7 +27,7 @@ const MAX_SUBPATHS: usize = 200;
 
 /// Ink/Stitch's settings on `n`, by name.
 fn settings(n: &Node) -> Vec<(&str, &str)> {
-    n.attrs.as_deref().map_or_else(Vec::new, |a| a.data.iter().filter_map(|(k, v)| Some((k.strip_prefix(PREFIX)?, v.as_str()))).collect())
+    n.extras().attrs.as_deref().map_or_else(Vec::new, |a| a.data.iter().filter_map(|(k, v)| Some((k.strip_prefix(PREFIX)?, v.as_str()))).collect())
 }
 
 fn get<'a>(s: &[(&str, &'a str)], key: &str) -> Option<&'a str> {
@@ -46,7 +46,7 @@ fn flag(s: &[(&str, &str)], key: &str) -> Option<bool> {
 /// Whether `doc` is an Ink/Stitch design: some object carries Ink/Stitch settings.
 pub fn is_inkstitch(doc: &Document) -> bool {
     let mut found = false;
-    doc.walk(|n| found |= n.attrs.as_deref().is_some_and(|a| a.data.iter().any(|(k, _)| k.starts_with(PREFIX))));
+    doc.walk(|n| found |= n.extras().attrs.as_deref().is_some_and(|a| a.data.iter().any(|(k, _)| k.starts_with(PREFIX))));
     found
 }
 

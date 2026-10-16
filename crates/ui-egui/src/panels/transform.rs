@@ -1,6 +1,7 @@
 //! Transform panel: reference point, X/Y/W/H with the constrain link, rotate and shear, flips,
 //! live-shape properties and the Scale Corners / Scale Strokes & Effects options. While the
-//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead.
+//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead, and with only
+//! ruler guides selected their X (vertical guides) and Y (horizontal ones).
 
 use egui::Ui;
 use serde_json::json;
@@ -52,6 +53,7 @@ pub fn artboard_rect(r: Rect, refi: usize, x: Option<f64>, y: Option<f64>, w: Op
 /// The Artboard tool's view of the panel: the active artboard's position and size.
 fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect) {
     let units = app.session.general_unit();
+    let origin = app.ruler_origin();
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
     let link = app.session.prefs.constrain_proportions;
     let rp = vectorcraft_geom::reference_point(r, refi);
@@ -71,8 +73,8 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
         ui.add_space(4.0);
         egui::Grid::new("xfp-ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             widgets::dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field(ui, "xfp-ab-x", Some(rp.x), units, 80.0) {
-                set(app, Some(v), None, None, None);
+            if let Some(v) = widgets::num_field(ui, "xfp-ab-x", Some(rp.x - origin.x), units, 80.0) {
+                set(app, Some(v + origin.x), None, None, None);
             }
             widgets::dim_label(ui, "W:");
             if let Some(v) = widgets::num_field(ui, "xfp-ab-w", Some(r.width()), units, 80.0) {
@@ -80,8 +82,8 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
             }
             ui.end_row();
             widgets::dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field(ui, "xfp-ab-y", Some(rp.y), units, 80.0) {
-                set(app, None, Some(v), None, None);
+            if let Some(v) = widgets::num_field(ui, "xfp-ab-y", Some(rp.y - origin.y), units, 80.0) {
+                set(app, None, Some(v + origin.y), None, None);
             }
             widgets::dim_label(ui, "H:");
             if let Some(v) = widgets::num_field(ui, "xfp-ab-h", Some(r.height()), units, 80.0) {
@@ -90,6 +92,39 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
             ui.end_row();
         });
         constrain_link(app, ui);
+    });
+}
+
+/// With ruler guides selected and no art: the X of the vertical ones and the Y of the horizontal
+/// ones (the least of each; none where no such guide is selected).
+fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Option<f64>)> {
+    let st = app.session.active()?;
+    if !st.selection.objects.is_empty() || st.selection.guides.is_empty() {
+        return None;
+    }
+    let least = |vertical: bool| {
+        st.selection.guides.iter().filter_map(|i| st.doc.guides.get(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
+    };
+    Some((least(true), least(false)))
+}
+
+/// The selected ruler guides' view of the panel (#1597): X moves the vertical ones and Y the
+/// horizontal ones, together.
+fn guide_fields(app: &mut VectorcraftApp, ui: &mut Ui, (x, y): (Option<f64>, Option<f64>)) {
+    let units = app.session.general_unit();
+    let origin = app.ruler_origin();
+    egui::Grid::new("xfp-guide-grid").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+        for (label, id, pos, origin, by) in [("X:", "xfp-guide-x", x, origin.x, "dx"), ("Y:", "xfp-guide-y", y, origin.y, "dy")] {
+            widgets::dim_label(ui, label);
+            ui.add_enabled_ui(pos.is_some(), |ui| {
+                if let (Some(v), Some(pos)) = (widgets::num_field(ui, id, pos.map(|p| p - origin), units, 80.0), pos)
+                    && let Err(e) = app.run("guide.move", json!({ by: v + origin - pos }))
+                {
+                    app.status(e);
+                }
+            });
+            ui.end_row();
+        }
     });
 }
 
@@ -103,13 +138,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         artboard_fields(app, ui, i, r);
         return;
     }
+    if let Some(guides) = selected_guides(app) {
+        guide_fields(app, ui, guides);
+        return;
+    }
     let units = app.session.general_unit();
+    let origin = app.ruler_origin();
     // The bounding box, rotated with rotated objects: W/H are its own sides, X/Y its reference
     // point on the page.
     let bx = app.selection_box();
     let bounds = bx.map(|b| b.rect);
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
     let link = app.session.prefs.constrain_proportions;
+    let copy = alt_enter_copies(app, ui);
     let has = bounds.is_some();
     let rp = bx.map(|b| b.reference_point(refi));
     ui.horizontal(|ui| {
@@ -120,21 +161,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_enabled_ui(has, |ui| {
             egui::Grid::new("xfp-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
                 widgets::dim_label(ui, "X:");
-                if let Some(v) = widgets::num_field(ui, "xfp-x", rp.map(|p| p.x), units, 80.0) {
-                    app.run("object.setBounds", json!({"x": v, "reference": refi})).ok();
+                if let Some(v) = widgets::num_field(ui, "xfp-x", rp.map(|p| p.x - origin.x), units, 80.0) {
+                    app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
                 }
                 widgets::dim_label(ui, "W:");
                 if let Some(v) = widgets::num_field(ui, "xfp-w", bounds.map(|b| b.width()), units, 80.0) {
-                    app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link})).ok();
+                    app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
                 }
                 ui.end_row();
                 widgets::dim_label(ui, "Y:");
-                if let Some(v) = widgets::num_field(ui, "xfp-y", rp.map(|p| p.y), units, 80.0) {
-                    app.run("object.setBounds", json!({"y": v, "reference": refi})).ok();
+                if let Some(v) = widgets::num_field(ui, "xfp-y", rp.map(|p| p.y - origin.y), units, 80.0) {
+                    app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
                 }
                 widgets::dim_label(ui, "H:");
                 if let Some(v) = widgets::num_field(ui, "xfp-h", bounds.map(|b| b.height()), units, 80.0) {
-                    app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link})).ok();
+                    app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
                 }
                 ui.end_row();
             });
@@ -152,7 +193,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if let Some(a) = widgets::spin_plain(ui, "xfp-rot", angle, "°", 2, 96.0, 15.0, -360.0, &ANGLE_PRESETS)
                 && a != angle
             {
-                app.run("object.rotate", json!({"angle": a, "absolute": true, "origin": origin})).ok();
+                app.run("object.rotate", json!({"angle": a, "absolute": true, "origin": origin, "copy": copy})).ok();
             }
             ui.add_space(4.0);
             let icon = icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
@@ -162,7 +203,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 && a != 0.0
                 && a.abs() < 90.0
             {
-                app.run("object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin})).ok();
+                app.run("object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy})).ok();
             }
         });
     });
@@ -179,10 +220,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Live shape properties (a path with live corners is no shape).
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
-        && !matches!(live, vectorcraft_doc::LiveShape::Path { .. })
+        && !matches!(**live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
-        match live {
+        match &**live {
             vectorcraft_doc::LiveShape::Rectangle { .. } => {
                 widgets::subheader(ui, tl!("Rectangle Properties:"));
                 corner_radius_row(app, ui, &n, "xfp-radius");
@@ -298,6 +339,13 @@ pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tl!("Constrain Width and Height Proportions"), on, 22.0).clicked() {
         set_pref(app, "constrainProportions", !on);
     }
+}
+
+/// The `copy` param of a command that a field of the Transform panel, the Properties panel's
+/// Transform section or the Control bar runs: true when Alt+Enter (Option+Return) applied the value
+/// and no anchors are selected with Direct Selection.
+pub fn alt_enter_copies(app: &VectorcraftApp, ui: &Ui) -> bool {
+    widgets::enter_modifiers(ui).is_some_and(|m| m.alt) && app.session.active().is_some_and(|st| st.selection.anchors.is_empty())
 }
 
 /// Toggle a boolean preference (through `prefs.set`, as agents do).
@@ -422,6 +470,51 @@ mod tests {
             assert!(shown.iter().any(|t| t == v), "{v} in {shown:?}");
         }
         assert!(!shown.iter().any(|t| t == "40 pt" || t == "0°"), "{shown:?}");
+    }
+
+    /// #1597: with only ruler guides selected the panel shows their X or Y, and nothing of the art.
+    #[test]
+    fn selected_guides_show_their_position() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("guide.add", json!({"vertical": true, "pos": 120})).unwrap();
+        app.run("guide.add", json!({"vertical": false, "pos": 45})).unwrap();
+        app.run("guide.select", json!({"indexes": [0]})).unwrap();
+        assert_eq!(selected_guides(&app), Some((Some(120.0), None)));
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "120 pt") && !shown.iter().any(|t| t == "W:" || t == "45 pt"), "{shown:?}");
+        app.run("guide.select", json!({"indexes": [0, 1]})).unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "120 pt") && shown.iter().any(|t| t == "45 pt"), "{shown:?}");
+        // The field's edit: the vertical guide moves, the horizontal one stays.
+        app.run("guide.move", json!({"dx": 30})).unwrap();
+        assert_eq!(selected_guides(&app), Some((Some(150.0), Some(45.0))));
+        // Art selected with them: the art's box, as before.
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
+        assert_eq!(selected_guides(&app), None);
+    }
+
+    /// #1824: with an anchor selected with Direct Selection the panel shows that anchor's position,
+    /// and a new X moves it alone.
+    #[test]
+    fn an_anchor_selection_shows_and_moves_its_own_box() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let square = json!({"anchors": [{"x": 20, "y": 30}, {"x": 120, "y": 30}, {"x": 120, "y": 130}, {"x": 20, "y": 130}], "closed": true});
+        let id = app.run("path.create", square).unwrap()["id"].as_u64().unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "70 pt") && shown.iter().any(|t| t == "100 pt"), "the whole path: {shown:?}");
+        app.run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
+        let shown = texts(&mut app, show);
+        for v in ["120 pt", "30 pt", "0 pt"] {
+            assert!(shown.iter().any(|t| t == v), "{v} in {shown:?}");
+        }
+        assert!(!shown.iter().any(|t| t == "70 pt" || t == "100 pt"), "{shown:?}");
+        app.run("object.setBounds", json!({"x": 150, "reference": 4})).unwrap();
+        let n = first_selected(&app).unwrap();
+        let Some(path) = n.path_data() else { panic!("a path") };
+        let xs: Vec<f64> = path.subpaths[0].anchors.iter().map(|a| a.p.x).collect();
+        assert_eq!(xs, [20.0, 150.0, 120.0, 20.0]);
     }
 
     #[test]

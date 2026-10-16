@@ -229,6 +229,14 @@ impl Tokens {
     }
 }
 
+/// Selected text in the text fields `ui` draws from here on is in the strong text colour. egui
+/// paints it in the selection stroke's colour, the accent, which is hard to read on the selection's
+/// accent tint (#1465). For fields that draw their own frame: egui's frame takes its focus ring from
+/// the same stroke.
+pub fn strong_selected_text(ui: &mut egui::Ui) {
+    ui.visuals_mut().selection.stroke.color = Tokens::get(ui.ctx()).text_strong;
+}
+
 pub const FONT_UI: &str = "ui";
 pub const FONT_UI_SEMIBOLD: &str = "ui-semibold";
 pub const FONT_MONO: &str = "mono";
@@ -341,5 +349,16 @@ mod tests {
             assert_eq!(Brightness::parse(b.label()), Some(b));
         }
         assert!(!Tokens::for_brightness(Brightness::Light).dark);
+    }
+
+    /// #1662: a slider's rail (`button_border`, see `widgets::slider`) stands out from the panel
+    /// in every brightness.
+    #[test]
+    fn slider_rails_show_on_every_panel() {
+        for b in [Brightness::Dark, Brightness::MediumDark, Brightness::MediumLight, Brightness::Light] {
+            let t = Tokens::for_brightness(b);
+            let gap = (i32::from(t.button_border.r()) - i32::from(t.panel.r())).abs();
+            assert!(gap >= 24, "{b:?}: rail {:?} on panel {:?}", t.button_border, t.panel);
+        }
     }
 }

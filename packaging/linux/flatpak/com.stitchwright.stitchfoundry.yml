@@ -27,6 +27,7 @@ finish-args:
   # path from the command line.
   - --filesystem=xdg-pictures
   - --share=network
+  - --filesystem=~/.fonts:ro
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
 modules:

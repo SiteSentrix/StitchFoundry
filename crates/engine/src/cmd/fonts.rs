@@ -3,9 +3,12 @@
 //! available (the bundled and installed ones) and rescanning the installed fonts.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_color::Paint;
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextRun};
+use vectorcraft_geom::Rect;
 
 use super::typecmd::refresh_bounds;
 use super::*;
@@ -53,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Refresh Font List",
             [],
             None,
-            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it (no fonts are installed on the web) → {families, faces} (families listed, installed faces found)",
+            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it, and text in a family that was removed redraws in the fallback font (no fonts are installed on the web) → {families, faces} (families listed, installed faces found)",
             always,
             rescan
         ),
@@ -111,11 +114,168 @@ pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
     fonts
 }
 
+/// The fonts (family, style, version) of the type of `d` that prints on pages showing `areas`
+/// (document space): visible type on `layers` (the layers that print) but not on a template layer
+/// (of area type and type on a path that don't fit, the runs that their layout draws),
+/// where what it paints ([`vectorcraft_render::painted_bounds`], its effects applied) meets an area
+/// inside the clipping paths around it, the type in the opacity masks and patterns of the objects
+/// that print and in the pieces their brushes draw, and the type of the symbols that their
+/// instances and inline graphics show.
+/// The objects of a blend, envelope, repeat or compound path, or of a layer or group with effects,
+/// fills or strokes of its own, are taken with it when what it paints meets an area, and so is the
+/// art of a placed document (`d` as [`Document::with_placed_art`] gives it, for that art's
+/// resources).
+pub(super) fn printed_fonts(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> BTreeSet<UsedFont> {
+    let mut walk = Printed { d, fonts: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    for l in layers {
+        walk.node(l, Some(areas));
+    }
+    walk.fonts
+}
+
+/// The walk of [`printed_fonts`].
+struct Printed<'a> {
+    d: &'a Document,
+    fonts: BTreeSet<UsedFont>,
+    /// The symbols and patterns whose art was walked.
+    symbols: BTreeSet<String>,
+    patterns: BTreeSet<String>,
+}
+
+impl Printed<'_> {
+    /// Adds the fonts of `n` and its descendants that print: those whose bounds meet one of `areas`,
+    /// or with `None` (in the art of a symbol, opacity mask, pattern or placed document, in brush
+    /// pieces, or in a live object) all of them but those outside the clipping path of a clip group.
+    fn node(&mut self, n: &Node, areas: Option<&[Rect]>) {
+        if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. }) {
+            return;
+        }
+        // A layer or group with effects, fills or strokes of its own prints where they paint (moved,
+        // shadowed…), drawn from its members' shapes.
+        let moved = vectorcraft_render::effects::has_container_appearance(n);
+        let open = !moved && matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. });
+        if let Some(a) = areas
+            && !open
+            && !self.meets(n, a)
+        {
+            return;
+        }
+        // The art that its opacity mask, pattern paints and brushed strokes draw.
+        let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
+        let runs = match &n.kind {
+            NodeKind::Text(t) => drawn_runs(t),
+            _ => vec![],
+        };
+        let items: Vec<&AppearanceItem> =
+            n.appearance.items.iter().filter(|i| i.visible() && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0)).collect();
+        let patterns: Vec<&str> = items
+            .iter()
+            .map(|i| i.paint())
+            .chain(runs.iter().flat_map(|r| [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)]).flatten())
+            .filter_map(|p| match p {
+                Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
+                _ => None,
+            })
+            .collect();
+        let brushed = vectorcraft_brush::has_brush(n);
+        if (mask.is_some() || !patterns.is_empty() || brushed) && areas.is_none_or(|a| !open || self.meets(n, a)) {
+            if let Some(m) = mask {
+                self.node(&m.art, None);
+            }
+            let d = self.d;
+            for name in patterns {
+                if self.patterns.insert(name.to_string())
+                    && let Some(p) = d.pattern(name)
+                {
+                    for art in &p.art {
+                        self.node(art, None);
+                    }
+                }
+            }
+            // The pieces its brushes draw along the path (art and pattern brushes leave type out).
+            if brushed {
+                for piece in vectorcraft_brush::node_pieces(d, n).unwrap_or_default() {
+                    self.node(&piece, None);
+                }
+            }
+        }
+        match &n.kind {
+            NodeKind::Text(_) => {
+                for r in runs {
+                    self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
+                    // Inline graphics draw their symbols' art.
+                    if let Some(art) = &r.inline {
+                        self.symbol(&art.symbol);
+                    }
+                }
+            }
+            NodeKind::SymbolInstance { symbol, .. } => self.symbol(symbol),
+            NodeKind::PlacedDocument(p) => {
+                for art in p.art(n) {
+                    self.node(&art, None);
+                }
+            }
+            NodeKind::Layer { children, clip, .. } | NodeKind::Group { children, clip } if !moved => {
+                // Each object prints where it lies, inside the clipping path of a clip group.
+                let clipped = match (clip, areas) {
+                    (false, _) => None,
+                    (true, Some(a)) => Some(self.clip(n, a)),
+                    (true, None) => vectorcraft_render::painted_bounds(self.d, n).map(|c| vec![c]),
+                };
+                for c in children {
+                    self.node(c, clipped.as_deref().or(areas));
+                }
+            }
+            _ => {
+                for c in n.children().map(Vec::as_slice).unwrap_or_default() {
+                    self.node(c, None);
+                }
+            }
+        }
+    }
+
+    /// Adds the fonts of symbol `name`'s art, the first time it is shown.
+    fn symbol(&mut self, name: &str) {
+        let d = self.d;
+        if self.symbols.insert(name.to_string())
+            && let Some(s) = d.symbols.iter().find(|s| s.name == name)
+        {
+            self.node(&s.art, None);
+        }
+    }
+
+    /// Whether what `n` paints, its effects applied, meets one of `areas`.
+    fn meets(&self, n: &Node, areas: &[Rect]) -> bool {
+        vectorcraft_render::painted_bounds(self.d, n).is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
+    }
+
+    /// The parts of `areas` inside the bounds of clip group `n` (its clipping path's).
+    fn clip(&self, n: &Node, areas: &[Rect]) -> Vec<Rect> {
+        let Some(c) = vectorcraft_render::painted_bounds(self.d, n) else { return areas.to_vec() };
+        areas.iter().filter(|r| c.intersect(**r).area() > 0.0 || r.contains_rect(c)).map(|r| r.intersect(c)).collect()
+    }
+}
+
+/// The runs of `t` that print: all of them, or of area type and type on a path that don't fit, the
+/// runs that their layout draws glyphs or inline graphics of.
+fn drawn_runs(t: &vectorcraft_doc::TextObject) -> Vec<&TextRun> {
+    let drawn: Option<BTreeSet<usize>> = (!matches!(t.kind, TextKind::Point))
+        .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t))
+        .filter(|lay| lay.overflow)
+        .map(|lay| lay.glyphs.iter().map(|g| g.run).chain(lay.inlines.iter().map(|i| i.run)).collect());
+    t.runs.iter().enumerate().filter(|(i, _)| drawn.as_ref().is_none_or(|d| d.contains(i))).map(|(_, r)| r).collect()
+}
+
 /// What an export that draws type (as outlines, embedded fonts or pixels) says when `d` uses font
 /// families that aren't available: their type is drawn in the fallback font, not the font it names.
 pub(super) fn substitution_warning(d: &Document) -> Option<String> {
+    substitution_warning_of(used_fonts(d))
+}
+
+/// [`substitution_warning`] for type set in `fonts`.
+pub(super) fn substitution_warning_of(fonts: BTreeSet<UsedFont>) -> Option<String> {
     let db = vectorcraft_text::FontDb::global();
-    let mut missing: Vec<String> = used_fonts(d)
+    let mut missing: Vec<String> = fonts
         .into_iter()
         .filter(|(family, style, _)| db.resolve(family, style).is_none_or(|(_, m)| m == vectorcraft_text::FontMatch::Missing))
         .map(|(family, _, _)| family)

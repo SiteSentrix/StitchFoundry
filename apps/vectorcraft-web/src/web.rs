@@ -17,6 +17,7 @@ use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
 
 use crate::locks::WebLocks;
+use crate::pencil::SharedPointers;
 
 type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
@@ -47,6 +48,8 @@ struct Host {
     place_inbox: PlaceInbox,
     drag: DragPos,
     pasted: Rc<RefCell<Pasted>>,
+    /// Pen and finger input read from the page's Pointer Events (`crate::pencil`).
+    pointers: SharedPointers,
     /// The page's Web Locks for Data Recovery, started once before the first frame: a graphics
     /// restart keeps them, so the tab stays the owner of its recovery area.
     locks: Option<WebLocks>,
@@ -73,6 +76,7 @@ pub fn start() {
             place_inbox: Arc::default(),
             drag: DragPos::default(),
             pasted: Rc::default(),
+            pointers: SharedPointers::default(),
             locks,
             restarts: 0,
         };
@@ -96,6 +100,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
     // The app until the new runner takes it (still here if starting fails before).
     let slot = Rc::new(RefCell::new(moving.map(|m| m.app)));
     let (runner, taken, page) = (host.runner.clone(), slot.clone(), canvas.clone());
+    let (pointers, pen_canvas) = (host.pointers.clone(), canvas.clone());
     let result = runner
         .start(
             canvas,
@@ -131,6 +136,9 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
         .await;
     match (result, kept) {
         (Ok(()), _) => {
+            if let Err(e) = crate::pencil::install(&runner, &pen_canvas, &pointers) {
+                log::error!("vectorcraft-web: no pen input: {}", js_err(e));
+            }
             if let Some(el) = element(LOADING_ID) {
                 el.remove();
             }
@@ -209,7 +217,8 @@ fn track_paste(pasted: &Rc<RefCell<Pasted>>) {
         let Some(data) = e.clipboard_data() else { return };
         let Some(files) = data.files().filter(|f| f.length() > 0) else { return };
         // Text is egui's, but for the address a browser's Copy Image puts next to the picture.
-        if data.get_data("text").is_ok_and(|t| !t.is_empty() && !is_address(&t)) {
+        // Blank text is not a caption. A picture pasted with it is still the picture.
+        if data.get_data("text").is_ok_and(|t| !t.trim().is_empty() && !is_address(&t)) {
             return;
         }
         e.prevent_default();
@@ -313,7 +322,7 @@ fn notice(lines: &[&str]) {
 
 /// Wraps the app to read dropped files asynchronously (browsers can't read them synchronously)
 /// and feed them through the inboxes: placed where they were dropped on the canvas, else opened
-/// (libraries, presets and plug-ins open wherever they are dropped).
+/// (libraries, presets, plug-ins and shortcut sets open wherever they are dropped).
 /// When the graphics are lost it hands the app to a new runner on a new canvas.
 struct WebShell {
     /// `None` once handed on.
@@ -384,6 +393,7 @@ impl eframe::App for WebShell {
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        raw.events.extend(self.host.pointers.borrow_mut().take());
         if let Some(app) = &mut self.app {
             app.raw_input_hook(raw);
         }
@@ -400,13 +410,17 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
     let open_inbox = inbox.clone();
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
+    let screen_color = eye_dropper(ctx.clone());
     Services {
         // File → Place…: the picked files go to the Place dialog.
         place_async: Some(Box::new(move || {
             let inbox = picked.clone();
             let ctx = place_ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let dialog = fileio::place_filters().fold(rfd::AsyncFileDialog::new().set_title("Place"), |d, (name, exts)| d.add_filter(name, exts));
+                let dialog =
+                    fileio::place_filters().fold(rfd::AsyncFileDialog::new().set_title(vectorcraft_ui_egui::i18n::t("Place")), |d, (name, exts)| {
+                        d.add_filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts)
+                    });
                 let Some(files) = dialog.pick_files().await else {
                     return;
                 };
@@ -423,7 +437,9 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
             let inbox = open_inbox.clone();
             let ctx = ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let dialog = fileio::open_filters().fold(rfd::AsyncFileDialog::new(), |d, (name, exts)| d.add_filter(name, exts));
+                let dialog = fileio::open_filters().fold(rfd::AsyncFileDialog::new(), |d, (name, exts)| {
+                    d.add_filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts)
+                });
                 let Some(file) = dialog.pick_file().await else {
                     return;
                 };
@@ -432,17 +448,51 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
                 ctx.request_repaint();
             });
         })),
-        download: Some(Box::new(|name: &str, bytes: &[u8]| {
-            if let Err(e) = download(name, bytes) {
-                log::error!("download of {name} failed: {e}");
-            }
-        })),
+        // Sample Color from Screen: the browser's EyeDropper, where it has one.
+        screen_color,
+        // A download that couldn't be started fails the save or export it is for (#1693).
+        download: Some(Box::new(|name: &str, bytes: &[u8]| download(name, bytes).inspect_err(|e| log::error!("download of {name} failed: {e}")))),
         inbox: Some(inbox),
         recovery_store: Some(Arc::new(BrowserStore { locks })),
         // File → Print: the browser's print dialog.
         print: Some(Box::new(BrowserPrint)),
         ..Default::default()
     }
+}
+
+/// Sample Color from Screen in the browser: the EyeDropper API
+/// (<https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper>), which only some browsers have,
+/// on secure (HTTPS) pages; `None` without it, and the command is then gray. `open()` needs a
+/// transient user activation (otherwise it fails with a `NotAllowedError`) and resolves with the
+/// picked color's `sRGBHex`; Escape rejects it with an `AbortError`.
+fn eye_dropper(ctx: egui::Context) -> Option<vectorcraft_ui_egui::screen_color::StartSampler> {
+    use js_sys::{Function, Promise, Reflect};
+    use wasm_bindgen::JsValue;
+    let window = web_sys::window()?;
+    let constructor = Reflect::get(&window, &JsValue::from_str("EyeDropper")).ok()?.dyn_into::<Function>().ok()?;
+    Some(Box::new(move || {
+        let eye = Reflect::construct(&constructor, &js_sys::Array::new()).map_err(js_err)?;
+        let open = Reflect::get(&eye, &JsValue::from_str("open")).map_err(js_err)?.dyn_into::<Function>().map_err(js_err)?;
+        let promise = open.call0(&eye).map_err(js_err)?.dyn_into::<Promise>().map_err(js_err)?;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let answer = match wasm_bindgen_futures::JsFuture::from(promise).await {
+                Ok(result) => Reflect::get(&result, &JsValue::from_str("sRGBHex"))
+                    .ok()
+                    .and_then(|hex| hex.as_string())
+                    .and_then(|hex| vectorcraft_ui_egui::screen_color::srgb_from_hex(&hex))
+                    .map(Some)
+                    .ok_or_else(|| "the browser's EyeDropper answered no color".to_string()),
+                Err(e) if Reflect::get(&e, &JsValue::from_str("name")).ok().and_then(|n| n.as_string()).as_deref() == Some("AbortError") => Ok(None),
+                Err(e) => Err(js_err(e)),
+            };
+            // The UI may be gone (the page closing): nothing waits for the color then.
+            let _ = tx.send(answer);
+            ctx.request_repaint();
+        });
+        Ok(rx)
+    }))
 }
 
 /// Data Recovery's store on the web: the browser's local storage (kept across visits and shared by
@@ -544,7 +594,8 @@ fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
     let revoke = wasm_bindgen::closure::Closure::once_into_js(move || {
         web_sys::Url::revoke_object_url(&url).ok();
     });
-    window.set_timeout_with_callback_and_timeout_and_arguments_0(revoke.unchecked_ref(), 10_000).map_err(js)?;
+    // The download has started: a timer that can't be set leaves the URL allocated, no more.
+    let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(revoke.unchecked_ref(), 10_000);
     Ok(())
 }
 

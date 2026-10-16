@@ -4,10 +4,10 @@
 //! stitchfoundry-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
 //! stitchfoundry-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
 //! stitchfoundry-cli commands
-//! stitchfoundry-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--replace-lossy]
+//! stitchfoundry-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! stitchfoundry-cli info FILE
 //! stitchfoundry-cli bench FILE [--size 2880x1800] [--iters 5]
-//! stitchfoundry-cli perf [--paths 50000]
+//! stitchfoundry-cli perf [--paths 50000] [--deep]
 //! ```
 // Denied, not forbidden: the font listers shared with the desktop app allow it for their
 // DirectWrite (Windows) and CoreText (macOS) calls, and nothing else may.
@@ -84,14 +84,22 @@ USAGE:
   stitchfoundry-cli commands
       Print the command catalogue as JSON.
 
-  stitchfoundry-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--replace-lossy]
+  stitchfoundry-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
       unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
       Live effects are kept, and hidden layers and objects (written hidden in SVG and PSD), with
-      SVG's data-* attributes; --outline-text writes SVG text as paths. OUT may not be IN when reading
+      SVG's data-* attributes; --outline-text writes SVG text as paths, --decimals sets SVG's coordinate
+      precision (1–7, default 3). OUT may not be IN when reading
       IN left things out (hidden text, art or layers it could not read; the notes say which) unless
-      --replace-lossy is given.
+      --replace-lossy is given. --editing-data opens a .ai from its editing copy even where that
+      draws differently from its PDF part (which can be older), as long as it can be read. The
+      result has the export's warnings, and importWarnings for what reading IN left out.
+      --ai-version 7 writes a .ai as the legacy version 7 (layers, groups and type kept; one file
+      per artboard, OUT-<artboard>.ai when there are several; default pdf, PDF-compatible), with
+      --hidden-objects (default layer: a hidden layer above each layer's hidden objects; omit;
+      visible), --transparent-images (default flatten, with the art under them; omit) and
+      --outline-text (type as outlines instead of text).
 
   stitchfoundry-cli info FILE
       Print a JSON summary: the import warnings (what didn't come in as it was, such as an EPS
@@ -102,9 +110,12 @@ USAGE:
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
 
-  stitchfoundry-cli perf [--paths N]
-      Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder) on a
-      synthetic N-path document (default 50000). Exits non-zero if a budget is exceeded.
+  stitchfoundry-cli perf [--paths N] [--deep]
+      Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder, handle
+      and segment drags) on a synthetic N-path document (default 50000). Exits non-zero if a
+      budget is exceeded, unless the report says the machine is busy. --deep also times work with
+      no budget yet and prints memory use (the working set on Windows), with the peak so far on
+      Windows and Linux.
 ";
 
 /// The usage text plus the formats `document.open` reads and `document.export` writes.
@@ -215,7 +226,12 @@ fn commands() -> Result<(), String> {
 
 fn convert(args: &[String]) -> Result<(), String> {
     let mut files = vec![];
-    let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy) = (1.0f64, None::<u64>, None::<String>, false, false);
+    let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data) =
+        (1.0f64, None::<u64>, None::<String>, false, false, false);
+    let mut decimals = None::<u64>;
+    // Legacy `.ai` options, passed on as the export's own (`aiVersion`, `hiddenObjects`,
+    // `transparentImages`); the engine checks their values.
+    let mut legacy: Vec<(&str, String)> = vec![];
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -223,17 +239,38 @@ fn convert(args: &[String]) -> Result<(), String> {
             "--artboard" | "-a" => artboard = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--artboard needs an index")?),
             "--range" | "-r" => range = Some(it.next().cloned().ok_or("--range needs artboards such as 1-3,5")?),
             "--outline-text" => outline_text = true,
+            "--decimals" => decimals = Some(it.next().and_then(|v| v.parse::<u64>().ok()).ok_or("--decimals needs a number")?),
             "--replace-lossy" => replace_lossy = true,
+            "--editing-data" => editing_data = true,
+            "--ai-version" => legacy.push(("aiVersion", it.next().cloned().ok_or("--ai-version needs 7 or pdf")?)),
+            "--hidden-objects" => legacy.push(("hiddenObjects", it.next().cloned().ok_or("--hidden-objects needs layer, omit or visible")?)),
+            "--transparent-images" => legacy.push(("transparentImages", it.next().cloned().ok_or("--transparent-images needs flatten or omit")?)),
             f => files.push(f.to_string()),
         }
     }
     let [input, output] = <[String; 2]>::try_from(files).map_err(|_| "convert needs IN and OUT")?;
     let mut h = Headless::new();
-    h.call("app.open", json!({"path": input})).map_err(|e| format!("open {input}: {e}"))?;
+    let opened = if editing_data {
+        let params = json!({"path": input, "editingData": "always"});
+        h.call("engine.execute", json!({"command": "document.open", "params": params})).map_err(|e| format!("open {input}: {e}"))?
+    } else {
+        h.call("app.open", json!({"path": input})).map_err(|e| format!("open {input}: {e}"))?
+    };
     // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
     // PSD).
-    let params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
-    let r = h.call("engine.execute", json!({"command": "document.export", "params": params})).map_err(|e| format!("export {output}: {e}"))?;
+    let mut params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
+    if let Some(decimals) = decimals {
+        params["decimals"] = json!(decimals);
+    }
+    for (key, value) in legacy {
+        params[key] = json!(value);
+    }
+    let mut r = h.call("engine.execute", json!({"command": "document.export", "params": params})).map_err(|e| format!("export {output}: {e}"))?;
+    // What reading the input left out (a missing linked file, an unsupported filter…) matters as
+    // much as what writing the output did.
+    if let (Some(w), Some(out)) = (opened.get("warnings").filter(|w| w.as_array().is_some_and(|a| !a.is_empty())), r.as_object_mut()) {
+        out.insert("importWarnings".into(), w.clone());
+    }
     outln!("{r}");
     Ok(())
 }

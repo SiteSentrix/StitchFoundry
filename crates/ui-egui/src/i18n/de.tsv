@@ -39,6 +39,10 @@
 	Draft	Entwurf
 	Good	Gut
 	Best	Sehr gut
+	Mode	Modus
+	Blur Mode	Weichzeichnermodus
+	Edge Only	Nur Kanten
+	Overlay Edge	Kanten überlagern
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the
@@ -202,7 +206,6 @@
 	Art	Bild
 	Art using a deleted global swatch keeps its colour.	Grafiken, die ein gelöschtes globales Farbfeld verwenden, behalten ihre Farbe.
 	Artboard Options	Zeichenflächenoptionen
-	Artboard Options: edit with the Artboard tool	Zeichenflächenoptionen: mit dem Zeichenflächen-Werkzeug bearbeiten
 	Artboard Options…	Zeichenflächenoptionen…
 	Artboard Tool	Zeichenflächen-Werkzeug
 	Artboard {number}	Zeichenfläche {number}
@@ -225,6 +228,7 @@
 	Author Title:	Titel des Autors:
 	Author:	Autor:
 	Auto	Auto
+	Auto Color	Automatische Farbe
 	Automatic	Automatisch
 	Auto Size New Area Type	Größe von neuem Flächentext automatisch anpassen
 	Auto Spell Check	Automatische Rechtschreibprüfung
@@ -346,6 +350,59 @@
 	Character Style Options	Zeichenformatoptionen
 	Character Styles	Zeichenformate
 	Check Links	Verknüpfungen prüfen
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Skript prüfen
+	Check Script…	Skript prüfen…
+	Copy Report	Bericht kopieren
+	StitchFoundry read this script without running it.	StitchFoundry hat dieses Skript gelesen, ohne es auszuführen.
+	Needs nothing beyond plain JavaScript	Braucht nur einfaches JavaScript
+	Needs the script language's own objects or directives	Braucht eigene Objekte oder Direktiven der Skriptsprache
+	Needs the document model	Braucht das Dokumentmodell
+	Needs files	Braucht Dateien
+	Needs menu commands	Braucht Menübefehle
+	Needs dialogs	Braucht Dialogfelder
+	Needs features only the reference app has	Braucht Funktionen, die nur die Referenzanwendung hat
+	Outside the document	Außerhalb des Dokuments
+	Writes, moves or deletes files	Schreibt, verschiebt oder löscht Dateien
+	Opens files in other apps	Öffnet Dateien in anderen Apps
+	Opens network connections	Öffnet Netzwerkverbindungen
+	Loads native code	Lädt nativen Code
+	Sends messages to other apps	Sendet Nachrichten an andere Apps
+	Reads or sets environment variables	Liest oder setzt Umgebungsvariablen
+	Runs code the checker can't read	Führt Code aus, den die Prüfung nicht lesen kann
+	Changes the reference app's preferences	Ändert die Voreinstellungen der Referenzanwendung
+	Menu commands	Menübefehle
+	Names the script builds as it runs: {count}	Namen, die das Skript bei der Ausführung bildet: {count}
+	Document model	Dokumentmodell
+	Object types: {names}	Objekttypen: {names}
+	Directives	Direktiven
+	Includes	Eingebundene Dateien
+	Checked	Geprüft
+	Not followed: outside the script's folder	Übersprungen: außerhalb des Skriptordners
+	Includes itself	Bindet sich selbst ein
+	Not read	Nicht gelesen
+	Not read: a limit was reached	Nicht gelesen: ein Grenzwert wurde erreicht
+	Compiled or not text	Kompiliert oder kein Text
+	Problems	Probleme
+	String not closed	Zeichenkette nicht geschlossen
+	Comment not closed	Kommentar nicht geschlossen
+	Regular expression not closed	Regulärer Ausdruck nicht geschlossen
+	Template literal not closed	Template-Literal nicht geschlossen
+	XML literal not closed	XML-Literal nicht geschlossen
+	Bracket never closed	Klammer nie geschlossen
+	Closing bracket with no opening one	Schließende Klammer ohne öffnende
+	Syntax newer than ES3	Neuere Syntax als ES3
+	Unknown directive	Unbekannte Direktive
+	Not valid UTF-8: unreadable bytes were replaced	Kein gültiges UTF-8: unlesbare Bytes wurden ersetzt
+	Mixed line endings	Gemischte Zeilenenden
+	Nesting too deep to follow	Verschachtelung zu tief zum Verfolgen
+	line {line}	Zeile {line}
+	lines {lines}	Zeilen {lines}
+	{file}, line {line}	{file}, Zeile {line}
+	Compiled script: ask its author for the .jsx file	Kompiliertes Skript: Bitten Sie den Autor um die .jsx-Datei
+	Too large to check	Zu groß zum Prüfen
+	Not a script for the reference app	Kein Skript für die Referenzanwendung
+	Some lists were cut short at their limit.	Einige Listen wurden an ihrem Grenzwert abgeschnitten.
 	Check Spelling…	Rechtschreibprüfung…
 	Choose a folder	Ordner wählen
 	Choose…	Wählen…
@@ -411,6 +468,7 @@
 	Color bars	Farbkontrollstreifen
 	Color blindness – Deuteranopia-type	Farbenblindheit – Deuteranopie
 	Color blindness – Protanopia-type	Farbenblindheit – Protanopie
+	Color blindness – Tritanopia-type	Farbenblindheit – Tritanopie
 	Color Burn	Farbig nachbelichten
 	Color conversion:	Farbkonvertierung:
 	Color Dodge	Farbig abwedeln
@@ -580,6 +638,7 @@
 	Cyan	Cyan
 	Dark	Dunkel
 	Darken	Abdunkeln
+	Darkness	Dunkelheit
 	dash	Strich
 	Dash Pattern	Strichmuster
 	Dashed	Gestrichelt
@@ -695,6 +754,8 @@
 	Do Not Move	Nicht verschieben
 	Do you want to save the changes you made to “{name}”?	Möchten Sie die Änderungen an „{name}“ speichern?
 	Can't open “{name}”.	„{name}“ kann nicht geöffnet werden.
+	Can't save “{name}”.	„{name}“ kann nicht gespeichert werden.
+	Can't export “{name}”.	„{name}“ kann nicht exportiert werden.
 	Document	Dokument
 	Document Color Mode	Dokumentfarbmodus
 	Document Info	Dokumentinformationen
@@ -928,6 +989,9 @@
 	Export…	Exportieren…
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
 	Eyedropper	Pipette
+	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
+	This system has no screen color sampler	Dieses System hat keine Farbaufnahme vom Bildschirm
+	The active document changed while the screen color sampler was open	Das aktive Dokument hat sich geändert, während die Farbaufnahme vom Bildschirm geöffnet war
 	Eyedropper Applies:	Pipette wendet an:
 	Eyedropper Options	Pipettenoptionen
 	Eyedropper Picks Up:	Pipette nimmt auf:
@@ -959,6 +1023,7 @@
 	Fill (X), double-click for the Color Picker	Fläche (X), Doppelklick öffnet den Farbwähler
 	Fill and Stroke	Fläche und Kontur
 	Fill new strokes	Neue Striche füllen
+	Keep selected	Ausgewählt lassen
 	Fill Color	Flächenfarbe
 	Fill New Type Objects With Placeholder Text	Neue Textobjekte mit Platzhaltertext füllen
 	Fill Rule	Füllregel
@@ -982,6 +1047,7 @@
 	Fit Headline	Überschrift einpassen
 	Decrease Font Size	Schriftgrad verringern
 	Increase Font Size	Schriftgrad erhöhen
+	Reset Tracking and Kerning	Laufweite und Kerning zurücksetzen
 	Spacing	Abstand
 	Step Type	Text schrittweise ändern
 	Fit in View	In Ansicht einpassen
@@ -1099,12 +1165,31 @@
 	Graph	Diagramm
 	Graph Data	Diagrammdaten
 	Graph Type	Diagrammtyp
+	Graph Design	Diagrammdesign
+	Graph Marker	Diagrammmarkierung
+	New Design	Neues Design
+	Delete Design	Design löschen
+	Paste Design	Design einfügen
+	Select Unused	Nicht verwendete auswählen
+	Import Data…	Daten importieren…
+	Transpose	Transponieren
+	Switch x/y	x/y vertauschen
+	Number of Decimals:	Anzahl Dezimalstellen:
+	Column Width:	Spaltenbreite:
+	No Legend	Keine Legende
+	Standard Legend	Standardlegende
+	Legends in Wedges	Legenden in Segmenten
+	Ratio	Verhältnis
+	Even	Gleich
+	Stacked	Gestapelt
 	Graphic Style	Grafikstil
 	Graphic Style Libraries	Grafikstil-Bibliotheken
 	Graphic Style Libraries Menu	Menü „Grafikstil-Bibliotheken“
 	Graphic Style Library	Grafikstil-Bibliothek
 	Graphic Style Options	Grafikstiloptionen
 	Graphic Style Options…	Grafikstiloptionen…
+	Symbol Options	Symboloptionen
+	Symbol Options…	Symboloptionen…
 	Graphic Styles	Grafikstile
 	Graphic Styles Options	Optionen für Grafikstile
 	Graphics	Grafik
@@ -1163,6 +1248,7 @@
 	Hide Print Tiling	Druckaufteilung ausblenden
 	Hide Rulers	Lineale ausblenden
 	Hide Slices	Slices ausblenden
+	Hide Template	Vorlage ausblenden
 	Hide Text Threads	Textverkettungen ausblenden
 	Hide Thumbnail	Miniatur ausblenden
 	Hide Thumbnails	Miniaturen ausblenden
@@ -1204,6 +1290,9 @@
 	Identify Objects By	Objekte identifizieren nach
 	Ignore	Ignorieren
 	Ignore Artboards (all the art as one page)	Zeichenflächen ignorieren (gesamte Grafik als eine Seite)
+	Auto Grouping	Automatisch gruppieren
+	Enhanced	Erweitert
+	Ignore Color	Farbe ignorieren
 	Ignore White	Weiß ignorieren
 	Palette:	Palette:
 	Limited	Begrenzt
@@ -1263,6 +1352,8 @@
 	Internal CSS	Internes CSS
 	Internet Standard RGB (sRGB)	Internet-Standard-RGB (sRGB)
 	Intersect	Schnittmenge bilden
+	Intertwine	Verflechten
+	Arrange Intertwine Area	Überlappungsbereich verflechten
 	Inverse	Auswahl umkehren
 	Invert	Umkehren
 	Invert Colors	Farben umkehren
@@ -1293,6 +1384,44 @@
 	Keyboard Shortcut Conflicts	Konflikte bei Tastaturbefehlen
 	Keyboard Shortcut Set	Tastaturbefehlssatz
 	Keyboard Shortcuts…	Tastaturbefehle…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Tastaturbefehlssatz importieren
+	Import Shortcut Set…	Tastaturbefehlssatz importieren…
+	Each entry of the file is matched to a StitchFoundry tool, command or panel. Check the matches and answer what is left.	Jeder Eintrag der Datei wird einem Werkzeug, einem Befehl oder einem Bedienfeld von StitchFoundry zugeordnet. Prüfen Sie die Zuordnungen und beantworten Sie, was noch offen ist.
+	Keys	Tasten
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Die Datei speichert Tasten und Sondertasten als Codes. Prüfen Sie die vorgeschlagenen Bedeutungen und beantworten Sie die Codes, die noch nicht bekannt sind.
+	Click, then press the key this code stands for (Esc cancels)	Klicken Sie und drücken Sie dann die Taste, für die dieser Code steht (Esc bricht ab)
+	Press a key…	Taste drücken…
+	from your earlier imports	aus Ihren früheren Importen
+	from the format's public description	aus der öffentlichen Beschreibung des Formats
+	not known yet	noch nicht bekannt
+	Shortcuts	Tastaturbefehle
+	Shortcut	Tastaturbefehl
+	In the File	In der Datei
+	In StitchFoundry	In StitchFoundry
+	Needs Attention Only	Nur Einträge mit Handlungsbedarf
+	Ready	Bereit
+	Needs a choice	Auswahl erforderlich
+	Needs a key	Taste erforderlich
+	No equivalent	Keine Entsprechung
+	Tools take a single key (optionally with Shift)	Werkzeuge verwenden eine einzelne Taste (optional mit Shift)
+	A later row takes this shortcut	Eine spätere Zeile übernimmt diesen Tastaturbefehl
+	Same item as a later row	Gleiches Element wie eine spätere Zeile
+	Start from StitchFoundry Defaults	Von den StitchFoundry-Standardwerten ausgehen
+	Add to the Current Shortcuts	Zu den aktuellen Tastaturbefehlen hinzufügen
+	Remember My Choices	Meine Auswahl merken
+	{ready} of {total} ready	{ready} von {total} bereit
+	The file is too large to read in full, so only its first part is listed.	Die Datei ist zu groß, um sie vollständig zu lesen. Daher wird nur ihr erster Teil aufgeführt.
+	Report copied	Bericht kopiert
+	Line {line}	Zeile {line}
+	Line {line}: {name}: {status}	Zeile {line}: {name}: {status}
+	Imported. Press OK to keep the imported set.	Importiert. Klicken Sie auf „OK“, um den importierten Satz zu behalten.
+	Read Shortcut Set File	Tastaturbefehlssatz-Datei lesen
+	Import Matches	Import-Zuordnungen
+	Remember Import Matches	Import-Zuordnungen merken
+	Forget Import Matches	Import-Zuordnungen vergessen
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	stimmt mit {n} Standard-Tastaturbefehl überein|stimmt mit {n} Standard-Tastaturbefehlen überein
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} Teil der Datei wurde nicht gelesen|{n} Teile der Datei wurden nicht gelesen
 	Keywords:	Stichwörter:
 	Knife	Messer
 	Knockout Group	Aussparungsgruppe
@@ -1337,6 +1466,20 @@
 	Left:	Links:
 	Legacy Macintosh RGB (Gamma 1.8)	Älteres Macintosh-RGB (Gamma 1,8)
 	Legacy vector clipboard	Ältere Vektorzwischenablage
+	Legacy (version 7)	Älter (Version 7)
+	Transparent Images:	Transparente Bilder:
+	Flatten	Reduzieren
+	Omit	Weglassen
+	Legacy .ai Options	Optionen für ältere .ai-Datei
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Eine ältere .ai-Datei enthält eine Zeichenfläche: Jede aktivierte Zeichenfläche wird als eigene Datei gespeichert.
+	{count} of {total} artboards	{count} von {total} Zeichenflächen
+	Check an artboard to save.	Aktivieren Sie eine Zeichenfläche zum Speichern.
+	Hidden Objects:	Ausgeblendete Objekte:
+	Hidden Layer	Ausgeblendete Ebene
+	Make Visible	Einblenden
+	Text:	Text:
+	Editable	Bearbeitbar
+	PDF-compatible	PDF-kompatibel
 	Legacy vector clipboard (no transparency)	Ältere Vektorzwischenablage (ohne Transparenz)
 	Less	Weniger
 	Letter	Letter
@@ -1829,6 +1972,7 @@
 	Panel menu	Bedienfeldmenü
 	Panel Options…	Bedienfeldoptionen…
 	Panels	Bedienfelder
+	Panels Except Tools and Control	Bedienfelder außer Werkzeugen und Steuerung
 	Paragraph	Absatz
 	Paragraph Style	Absatzformat
 	Paragraph Style Options	Absatzformatoptionen
@@ -1852,6 +1996,7 @@
 	Pathfinder Options…	Pathfinder-Optionen…
 	Pathfinders:	Pathfinder:
 	Paths	Pfade
+	Path Length	Pfadlänge
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Pfade: {paths}    Ankerpunkte: {anchors}    Farben: {colors}
 	Pattern	Muster
 	Pattern Editing	Musterbearbeitung
@@ -2086,6 +2231,9 @@
 	Rectangle: Sunshine	Rechteck: Sonnenschein
 	Rectangle…	Rechteck…
 	Rectangular Grid	Rechteckiges Raster
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	Horizontale Trennlinien:
+	Vertical Dividers:	Vertikale Trennlinien:
 	Rectangular Grid Tool	Rechteckiges-Raster-Werkzeug
 	Red	Rot
 	Redefine Character Style	Zeichenformat neu definieren
@@ -2149,6 +2297,13 @@
 	Relinked {n} image(s); not in that folder: {}	{n} Bild(er) neu verknüpft; nicht in diesem Ordner: {}
 	Relinked {} image(s)	{} Bild(er) neu verknüpft
 	Relink…	Neu verknüpfen…
+	Find Linked Files	Verknüpfte Dateien suchen
+	Find Linked Files in Folder…	Verknüpfte Dateien in Ordner suchen…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Wählen Sie für jede verknüpfte Datei die Datei aus, mit der sie neu verknüpft werden soll. Dateien mit der Größe und dem Inhalt, die mit der Verknüpfung gespeichert sind, stehen oben.
+	Same file	Gleiche Datei
+	Same size	Gleiche Größe
+	Don't Relink	Nicht neu verknüpfen
+	Copy into the document's folder	In den Ordner des Dokuments kopieren
 	Reload Plug-ins	Plug-ins neu laden
 	Remove	Entfernen
 	Remove Anchor Points	Ankerpunkte entfernen
@@ -2197,6 +2352,7 @@
 	Reset Panel	Bedienfeld zurücksetzen
 	Reset Preferences	Voreinstellungen zurücksetzen
 	Reset Profiles	Profile zurücksetzen
+	Rotate View	Ansicht drehen
 	Reset Rotate View	Ansichtsdrehung zurücksetzen
 	Reset the rows to the artwork's colors	Zeilen auf die Farben der Grafik zurücksetzen
 	Reset to Default	Auf Standard zurücksetzen
@@ -2396,6 +2552,17 @@
 	Scripts	Skripte
 	Search	Suchen
 	Search All	Alle durchsuchen
+	Filter	Filter
+	Clear All	Alle aufheben
+	By Object	Nach Objekt
+	By Layer	Nach Ebene
+	Images	Bilder
+	Groups	Gruppen
+	Linked Files	Verknüpfte Dateien
+	Locked	Gesperrt
+	Hidden	Ausgeblendet
+	Filter Layers Panel Rows	Zeilen im Ebenenbedienfeld filtern
+@msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands and tools	Befehle und Werkzeuge suchen
 	Search commands and tools…	Befehle und Werkzeuge suchen…
 	Search Commands…	Befehle suchen…
@@ -2416,6 +2583,7 @@
 	Select an image to see its Link Info.	Wählen Sie ein Bild aus, um seine Verknüpfungsinformationen anzuzeigen.
 	Select an image to trace	Bild zum Nachzeichnen auswählen
 	Select Anchors	Ankerpunkte auswählen
+	Select Segments	Segmente auswählen
 	Select Appearance Item	Aussehenselement auswählen
 	Select Art	Grafik auswählen
 	Select art and choose Object › Pattern › Make.	Wählen Sie eine Grafik aus und wählen Sie „Objekt › Muster › Erstellen“.
@@ -2461,7 +2629,6 @@
 	Set base color to the current color	Aktuelle Farbe als Grundfarbe festlegen
 	Set Bounds	Begrenzung festlegen
 	Set Current Layer	Aktuelle Ebene festlegen
-	Set Key Object	Basisobjekt festlegen
 	Set Keyboard Shortcut	Tastaturbefehl festlegen
 	Set Mesh Point Color	Farbe des Gitterpunkts festlegen
 	Set Preference	Voreinstellung festlegen
@@ -2533,6 +2700,7 @@
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Color Panel Options	Optionen für das Farbbedienfeld
 	Show Package	Paket anzeigen
 	Show Panel	Bedienfeld einblenden
 	Show Pattern Swatches	Musterfelder einblenden
@@ -2545,6 +2713,7 @@
 	Show Slices	Slices einblenden
 	Show Swatch Bounds	Farbfeldbegrenzung einblenden
 	Show Swatch Kinds	Farbfeldarten einblenden
+	Show Template	Vorlage einblenden
 	Show Text Threads	Textverkettungen einblenden
 	Show The Home Screen When No Documents Are Open	Startbildschirm anzeigen, wenn keine Dokumente geöffnet sind
 	Show Thumbnail	Miniatur einblenden
@@ -2626,6 +2795,7 @@ effect	Points	Punkte
 	Snap to Glyph	An Glyphe ausrichten
 	Snap to Grid	Am Raster ausrichten
 	Snap to Pixel	An Pixel ausrichten
+	Precise Cursors	Präzise Cursor
 	Snap to Point	An Punkt ausrichten
 	Snapping Tolerance	Einrasttoleranz
 	Social Square Post 1080×1080	Quadratischer Social-Media-Beitrag 1080×1080
@@ -2651,6 +2821,8 @@ effect	Points	Punkte
 	Spiral Tool	Spirale-Werkzeug
 	Split Freeform Line	Freiformlinie teilen
 	Split Into Grid	In Raster teilen
+	Total:	Gesamt:
+	Add Guides	Hilfslinien hinzufügen
 	Split Into Grid…	In Raster teilen…
 	Split Path	Pfad teilen
 	spot	Vollton
@@ -2999,6 +3171,7 @@ effect	Points	Punkte
 	Vertical %	Vertikal %
 	Vertical Align Bottom	Vertikal unten ausrichten
 	Vertical Align Center	Vertikal zentriert ausrichten
+	Horizontal & Vertical Align Center	Horizontal und vertikal zentriert ausrichten
 	Vertical Align Top	Vertikal oben ausrichten
 	Vertical Area Type Tool	Vertikaler-Flächentext-Werkzeug
 	Vertical Distribute Bottom	Vertikal unten verteilen
@@ -3085,6 +3258,7 @@ effect	Points	Punkte
 	{warning}: click to correct to the closest color ({hex})	{warning}: Klicken korrigiert auf die nächstliegende Farbe ({hex})
 	“{file}” is protected by a password.	„{file}“ ist durch ein Kennwort geschützt.
 	● Recording	● Aufzeichnung
+imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} Element|{n} Elemente
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Farbtabelle ({n} Farbe)|Farbtabelle ({n} Farben)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Diesen {n} Grafikstil löschen?|Diese {n} Grafikstile löschen?
@@ -3157,6 +3331,7 @@ effect	Points	Punkte
 	 to set spacing and orientation	 legt Abstand und Ausrichtung fest
 	:	:
 	Isolate Selected Group	Ausgewählte Gruppe isolieren
+	Isolate Selected Object	Ausgewähltes Objekt isolieren
 	Release Clipping Mask	Schnittmaske zurückwandeln
 	Make Compound Path	Zusammengesetzten Pfad erstellen
 	Release Compound Path	Zusammengesetzten Pfad zurückwandeln
@@ -3242,6 +3417,9 @@ theme	Appearance	Erscheinungsbild
 @msg	its page has text, and its layers have no text objects to put it in	seine Seite enthält Text, und seine Ebenen haben keine Textobjekte, die ihn aufnehmen könnten
 @msg	its type is to come in as outlines, which only its page has	sein Text soll als Pfade übernommen werden, die nur seine Seite enthält
 @msg	the art on them differs from the page's in {_1}% of it	die Grafik darauf weicht in {_1} % von der der Seite ab
+@msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	die Grafik darauf weicht in {_1} % von der der Seite ab: sie stammen trotzdem aus seinen Bearbeitungsdaten
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	die Ebenen der Datei wurden nicht gelesen ({_1}): sie wird als ihre Seite in einer Ebene geöffnet
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	die Ebenen der Datei wurden nicht aus ihren Bearbeitungsdaten gelesen ({_1}): sie stammen aus ihrem PDF-Teil
 @msg	`to` must be "corner" or "smooth"	`to` muss "corner" oder "smooth" sein
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-Dateien sind RGB oder Graustufen: colorModel rgb oder gray
 @msg	Blend colors: select at least three objects with filled colours	Farben angleichen: Wählen Sie mindestens drei Objekte mit Flächenfarbe aus
@@ -3249,6 +3427,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Convert to Artboards: selection has no area	In Zeichenflächen umwandeln: Die Auswahl hat keine Fläche
 @msg	Convert to Shape: no rectangles or ellipses selected	In Form umwandeln: keine Rechtecke oder Ellipsen ausgewählt
 @msg	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
+@msg	Copied the script report	Skriptbericht kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads
 @msg	Couldn't copy to the system clipboard: {e}	In die Systemzwischenablage konnte nicht kopiert werden: {e}
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
@@ -3284,6 +3463,7 @@ theme	Appearance	Erscheinungsbild
 @msg	No saved selections (Select → Save Selection…)	Keine gespeicherten Auswahlen (Auswahl → Auswahl speichern…)
 @msg	No saved views (View → New View…)	Keine gespeicherten Ansichten (Ansicht → Neue Ansicht…)
 @msg	Offset Path: select paths	Pfad verschieben: Wählen Sie Pfade aus
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Pfad verschieben: Der Versatz lässt von den ausgewählten Pfaden nichts übrig (ein Versatz nach innen, der größer ist als die Formen)
 @msg	Opened with {_1} note(s): {_2}	Mit {_1} Hinweis(en) geöffnet: {_2}
 @msg	Opened {url}	{url} geöffnet
 @msg	Outline Stroke: no stroked paths selected	Konturlinie: keine Pfade mit Kontur ausgewählt
@@ -3310,6 +3490,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Split Into Grid: select paths large enough for the grid	In Raster teilen: Wählen Sie Pfade aus, die groß genug für das Raster sind
 @msg	Targa files are RGB: colorModel rgb	Targa-Dateien sind RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textumfluss: Wählen Sie ein Umflussobjekt aus
+@msg	This shortcut file is in a form StitchFoundry can't read.	Diese Tastaturbefehlsdatei liegt in einem Format vor, das StitchFoundry nicht lesen kann.
 @msg	`aspect` must be a number (%)	`aspect` muss eine Zahl sein (%)
 @msg	`at` must be [x, y]	`at` muss [x, y] sein
 @msg	`color` must be a colour	`color` muss eine Farbe sein
@@ -3336,6 +3517,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})
 @msg	`{key}` must be one of {_1}	`{key}` muss einer der folgenden Werte sein: {_1}
 @msg	`{key}` must be true or false	`{key}` muss true oder false sein
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` muss grayscale, rgb, hsb, cmyk oder websafe sein
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` ist ein integrierter Arbeitsbereich; wählen Sie einen anderen Namen
@@ -3381,6 +3563,9 @@ theme	Appearance	Erscheinungsbild
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis muss "vertical", "horizontal" oder ein Winkel in Grad sein, nicht `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
+@msg	the Color Picker is not open	der Farbwähler ist nicht geöffnet
+@msg	the screen color sampler is already open	die Farbaufnahme vom Bildschirm ist bereits geöffnet
+@msg	this system has no screen color sampler	dieses System hat keine Farbaufnahme vom Bildschirm
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
 @msg	bad page tree	fehlerhafter Seitenbaum
 @msg	bad shortcut	ungültiger Tastaturbefehl
@@ -3538,6 +3723,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a DXF drawing	keine DXF-Zeichnung
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
 @msg	not a graphic style library (format `{_1}`)	keine Grafikstil-Bibliothek (Format `{_1}`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	kein Tastaturbefehlssatz: Der Text beginnt nicht mit einem Namen mit Schrägstrich und einer öffnenden geschweiften Klammer
 @msg	not a stored central record	kein gespeicherter zentraler Eintrag
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
@@ -3557,6 +3743,7 @@ theme	Appearance	Erscheinungsbild
 @msg	nothing to wrap	nichts zu umfließen
 @msg	object {0} cannot have children	Objekt {0} kann keine untergeordneten Objekte haben
 @msg	object {id} is not a path	Objekt {id} ist kein Pfad
+@msg	object {id} is not a selected top-level object	Objekt {id} ist kein ausgewähltes Objekt der obersten Stufe
 @msg	page size {w} × {h}	Seitengröße {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	Seite {0} ist nicht vorhanden (die PDF-Datei hat {1})
 @msg	paste unavailable	Einfügen nicht verfügbar
@@ -3584,6 +3771,8 @@ theme	Appearance	Erscheinungsbild
 @msg	recovery copy `{file}`: {e}	Wiederherstellungskopie `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	Auflösungen müssen zwischen 1 und 2400 ppi liegen
 @msg	result would exceed the canvas (coordinates out of range)	das Ergebnis würde die Arbeitsfläche überschreiten (Koordinaten außerhalb des Bereichs)
+@msg	objects can't be nested more than 32 deep	Objekte können nicht tiefer als 32 Ebenen verschachtelt werden
+@msg	the SVG's elements are nested more than {0} deep	die Elemente der SVG-Datei sind tiefer als {0} Ebenen verschachtelt
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale muss eine Zahl von {_1} bis {_2} sein, nicht {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale muss eine Zahl von {_1} bis {_2} sein, nicht {s}
 @msg	select (or target) objects whose appearance isn't basic	wählen Sie Objekte aus (oder als Ziel), deren Aussehen nicht einfach ist
@@ -3593,6 +3782,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select a gradient mesh	wählen Sie ein Verlaufsgitter aus
 @msg	select a linked image: an embedded one has no file	wählen Sie ein verknüpftes Bild aus: Ein eingebettetes hat keine Datei
 @msg	select a repeat	wählen Sie eine Wiederholung aus
+@msg	select an Intertwine group	wählen Sie eine Verflechtungsgruppe aus
 @msg	select a stroke with a variable width	wählen Sie eine Kontur mit variabler Breite aus
 @msg	select a symbol instance	wählen Sie eine Symbolinstanz aus
 @msg	select an Image Trace object	wählen Sie ein Bildnachzeichner-Objekt aus
@@ -3683,7 +3873,7 @@ theme	Appearance	Erscheinungsbild
 @msg	this file's PostScript couldn't be read ({why}): {what}	das PostScript dieser Datei konnte nicht gelesen werden ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	dieses Format fasst eine Zeichenfläche: Exportieren Sie mehrere als PDF oder mit document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	dies ist eine DWG-Zeichnung, die nicht gelesen werden kann: Speichern Sie sie in der CAD-App als ASCII-DXF und öffnen Sie diese Datei
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	dies ist eine PostScript-Datei (eine .ai-Datei in einem älteren Format oder ohne PDF-Kompatibilität oder eine EPS-Datei), die noch nicht geöffnet werden kann: Speichern Sie sie als PDF, als PDF-kompatible .ai-Datei oder als SVG
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	dies ist eine PostScript-Datei (eine .ai-Datei in einem älteren Format oder ohne PDF-Kompatibilität oder eine EPS-Datei), keine PDF-Datei: Datei › Öffnen und Datei › Platzieren lesen sie als EPS
 @msg	this is not a PostScript file	dies ist keine PostScript-Datei
 @msg	tool shortcuts must be a single key (optionally with Shift)	Tastaturbefehle für Werkzeuge müssen aus einer einzelnen Taste bestehen (optional mit Shift)
 @msg	truncated	abgeschnitten
@@ -3732,6 +3922,7 @@ theme	Appearance	Erscheinungsbild
 @msg	{name}: no such recovery entry	{name}: kein solcher Wiederherstellungseintrag
 @msg	{path} can't be found: relink it first	{path} wurde nicht gefunden: Verknüpfen Sie die Datei zuerst neu
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: Hier gibt es kein Dateisystem (übergeben Sie dataBase64 zum Öffnen; lassen Sie den Pfad weg, um dataBase64 zu erhalten)
+@msg	{path}: not a file	{path}: keine Datei
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} konnte nicht platziert werden: {e}
@@ -3757,6 +3948,11 @@ theme	Appearance	Erscheinungsbild
 @msg	Sent to {_1}	An {_1} gesendet
 @msg	{_1} files	{_1}-Dateien
 @msg	The graphics were lost and have been restarted	Die Grafikausgabe ging verloren und wurde neu gestartet
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde StitchFoundry auf {summary} neu gestartet
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Der letzte Start von StitchFoundry endete auf {name}, bevor das Fenster erschien, daher wurde StitchFoundry auf {summary} gestartet. Um diesen Grafikprozessor erneut zu versuchen, ändern Sie Voreinstellungen › Leistung › Grafikprozessor oder starten Sie mit gesetzter Variable WGPU_BACKEND
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Der letzte Start von StitchFoundry endete beim Auflisten der Grafikprozessoren, daher wurde StitchFoundry auf {summary} nur mit OpenGL gestartet. Um die anderen Grafikschnittstellen erneut zu versuchen, ändern Sie Voreinstellungen › Leistung › Grafikprozessor oder starten Sie mit gesetzter Variable WGPU_BACKEND
+@msg	Loading StitchFoundry…	StitchFoundry wird geladen…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry konnte nicht gestartet werden: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Ein Browser mit WebGPU oder WebGL2 ist erforderlich.
 @msg	The graphics were lost and couldn't be restarted.	Die Grafikausgabe ging verloren und konnte nicht neu gestartet werden.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Ihre ungespeicherten Änderungen bleiben in diesem Browser erhalten: Laden Sie die Seite neu, um sie zurückzuholen.
@@ -3783,6 +3979,8 @@ theme	Appearance	Erscheinungsbild
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	Objekte mit mehreren Flächen oder Konturen, Effekten oder Pinseln wurden so übernommen, wie sie gezeichnet aussehen ({_1}): Ihr Aussehen ist noch nicht bearbeitbar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
+@msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
+@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})
 @msg	No fonts are missing in this document	In diesem Dokument fehlen keine Schriften
@@ -3800,6 +3998,9 @@ theme	Appearance	Erscheinungsbild
 @msg	larger than 256 MB	größer als 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	die Dateien sind zusammen größer als 1 GB: Fügen Sie weniger auf einmal hinzu
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
+@msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
+@msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} Bild(er) neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
@@ -3949,6 +4150,9 @@ theme	Appearance	Erscheinungsbild
 	Blocks	Blöcke
 	Frosted	Mattiert
 	Tiny Lens	Kleine Linsen
+	Loaded Texture	Geladene Struktur
+	Load Texture…	Struktur laden…
+	Texture Image	Strukturbild
 	Canvas	Leinwand
 	Highlight Variable	Variable hervorheben
 	New Variable	Neue Variable
@@ -4016,13 +4220,10 @@ theme	Appearance	Erscheinungsbild
 @msg	{key} must be a finite coordinate	{key} muss eine endliche Koordinate sein
 @msg	invalid restored panel group	Ungültige wiederhergestellte Bedienfeldgruppe
 # 3D and Materials › Revolve: its options dialog and gizmos.
-	Ambient	Umgebungslicht
 	Axis side	Achsenseite
-	Direction	Richtung
 	Drag rings to rotate. Shift snaps to 15°.	Ziehen Sie die Ringe, um zu drehen. Mit Shift in 15°-Schritten.
 	Drag the light, or its rings. Shift snaps to 15°.	Ziehen Sie das Licht oder seine Ringe. Mit Shift in 15°-Schritten.
 	Drag values or labels. Double-click a value to type.	Ziehen Sie Werte oder Beschriftungen. Doppelklicken Sie auf einen Wert, um ihn einzugeben.
-	Elevation	Höhe
 	Intensity	Intensität
 	Keep visible surfaces only when expanding	Beim Umwandeln nur sichtbare Flächen behalten
 	Lighting	Beleuchtung
@@ -4088,9 +4289,6 @@ theme	Appearance	Erscheinungsbild
 @msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt
 @msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt, in {procs}
 @msg	not a StitchFoundry shortcut set (missing `overrides`)	kein StitchFoundry-Tastaturbefehlssatz (`overrides` fehlt)
-@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde StitchFoundry auf {summary} neu gestartet
-@msg	Loading StitchFoundry…	StitchFoundry wird geladen…
-@msg	StitchFoundry failed to start: {e}	StitchFoundry konnte nicht gestartet werden: {e}
 @msg	it has {_1}, which StitchFoundry doesn't read from it yet	es enthält {_1}, was StitchFoundry daraus noch nicht liest
 @msg	an image StitchFoundry can't read was left out	ein Bild, das StitchFoundry nicht lesen kann, wurde ausgelassen
 @msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry durchsucht keine Ordner anderer Apps oder des Systems: {path}
@@ -4160,7 +4358,6 @@ theme	Appearance	Erscheinungsbild
 	Fits the hoop	Passt in den Stickrahmen
 	Give objects a stitch type in the Embroidery panel.	Weisen Sie Objekten im Bedienfeld „Stickerei“ eine Stichart zu.
 	Gradient to	Verlauf bis
-	Hidden	Ausgeblendet
 	Hide Digitizing Widget	Digitalisierungs-Widget ausblenden
 	Hoop	Stickrahmen
 	Inclination Tool	Neigungslinien-Werkzeug
@@ -4479,7 +4676,7 @@ machine	Stop	Stopp
 	Hand stitch	Handstich
 	Gap	Lücke
 	Jagged edges	Gezackte Kanten
-	Both sides	Beide Seiten
+	Both sides	Beidseitig
 	Side 1	Seite 1
 	Side 2	Seite 2
 	Jag depth	Zackentiefe
@@ -4502,7 +4699,6 @@ machine	Stop	Stopp
 
 # Embroidery (StitchFoundry): spacing profiles and blends
 	Spacing profile	Abstandsprofil
-	Even	Gleichmäßig
 	Accordion	Akkordeon
 	Fade out	Ausblenden
 	Fade in	Einblenden
@@ -4545,7 +4741,7 @@ machine	Stop	Stopp
 	Bean Ring	Dreifachstich-Ring
 	Hexagons	Sechsecke
 	Chevrons	Winkelstreifen
-	Ogee	Zwiebelmuster
+	Ogee	Karnies
 	Basket weave	Korbgeflecht
 	Stars	Sterne
 	Hearts	Herzen
@@ -4727,7 +4923,6 @@ machine	Stop	Stopp
 @msg	the machine file didn't encode	die Maschinendatei ließ sich nicht kodieren
 	Worksheet	Arbeitsblatt
 	Outline Around	Umriss außen herum
-	Stacked	Gestapelt
 	Oval	Oval
 	Octagon	Achteck
 	Shield	Wappen
@@ -5135,8 +5330,8 @@ machine	Stop	Stopp
 	Make a Design…	Motiv erstellen…
 	Make a Design, Step by Step	Motiv Schritt für Schritt erstellen
 	Step by step: words, a shape, appliqué, a picture or a sample	Schritt für Schritt: Worte, eine Form, Applikation, ein Bild oder ein Beispiel
-	Step	Schritt
-	Back	Zurück
+	Step	Stufe
+	Back	Hinten
 	What would you like to make?	Was möchten Sie machen?
 	A name or some words	Einen Namen oder ein paar Worte
 	For towels, bags, pillows and gifts	Für Handtücher, Taschen, Kissen und Geschenke
@@ -5354,3 +5549,154 @@ machine	Stop	Stopp
 	Top thread (m)	Oberfaden (m)
 	Width (mm)	Breite (mm)
 	same	gleich
+	Ruler Origin	Linealursprung
+	Reset Ruler Origin	Linealursprung zurücksetzen
+	Artistic	Kunstfilter
+	Film Grain…	Filmkörnung…
+	Grain	Körnung
+	Highlight Area	Lichterbereich
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	die komprimierte Datei entpackt sich auf mehr, als StitchFoundry liest ({_1} MB Dokument, {_2} MB pro Bild)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	das Dokument ist zu groß, um komprimiert gespeichert zu werden ({0}): speichern Sie es mit deaktivierter Option „Komprimierung verwenden“
+@msg	the file stopped being read (please report this bug)	das Lesen der Datei wurde abgebrochen (bitte melden Sie diesen Fehler)
+	Concentric Dividers:	Konzentrische Trennlinien:
+	Radial Dividers:	Radiale Trennlinien:
+	Skew:	Neigung:
+	Inside	Innen
+	Outside	Außen
+	Use Outside Rectangle As Frame	Äußeres Rechteck als Rahmen verwenden
+	Create Compound Path From Ellipses	Zusammengesetzten Pfad aus Ellipsen erstellen
+	Fill Grid	Raster füllen
+	Select two or more objects, or a group	Wählen Sie zwei oder mehr Objekte oder eine Gruppe aus
+	Cove	Hohlkehle
+	Depth	Tiefe
+	Front	Vorne
+	Isometric Bottom	Isometrisch unten
+	Isometric Left	Isometrisch links
+	Isometric Right	Isometrisch rechts
+	Isometric Top	Isometrisch oben
+	Off-Axis Back	Schräg hinten
+	Off-Axis Bottom	Schräg unten
+	Off-Axis Front	Schräg vorne
+	Off-Axis Left	Schräg links
+	Off-Axis Right	Schräg rechts
+	Off-Axis Top	Schräg oben
+	Reset all 3D settings to their defaults.	Alle 3D-Einstellungen auf ihre Standardwerte zurücksetzen.
+	Taper	Verjüngung
+	Twist	Verdrehung
+	Volume	Volumen
+3d	Cap	Deckflächen
+3d	Solid	Massiv
+3d	Hollow	Hohl
+3d	Bevel	Abgeflachte Kante
+3d	Rounded	Abgerundet
+3d	Space	Abstand
+	Bevel Shape	Form der abgeflachten Kante
+	Bevel Inside	Abgeflachte Kante nach innen
+	Bevel both sides	Abgeflachte Kante beidseitig
+	Presets	Vorgaben
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ein Objekt kann nur einen 3D-Effekt haben. Bearbeiten Sie die Optionen des vorhandenen Effekts oder entfernen Sie ihn zuerst.
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} erfordert derzeit einen Pfad oder zusammengesetzten Pfad. Wandeln Sie Text, Bilder und Gruppen zuerst in Pfade um.
+@msg	{label} requires a shape with at least two anchors	{label} erfordert eine Form mit mindestens zwei Ankerpunkten
+@msg	The shape is too complex for a 3D effect	Die Form ist für einen 3D-Effekt zu komplex
+@msg	The 3D surface is too complex; simplify the shape	Die 3D-Oberfläche ist zu komplex; vereinfachen Sie die Form
+	Transform Objects	Objekte transformieren
+@msg	unknown parameter `{key}`; did you mean `{near}`?	unbekannter Parameter `{key}`; meinten Sie `{near}`?
+@msg	unknown parameter `{key}`; the command takes no parameters	unbekannter Parameter `{key}`; der Befehl hat keine Parameter
+@msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
+	Load EPS into Clipboard	EPS in die Zwischenablage laden
+@msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+@msg	the image can't be read as a texture	das Bild kann nicht als Struktur gelesen werden
+	Basic	Basis
+	Fill and Stroke Controls	Steuerelemente für Fläche und Kontur
+	Coloring Controls	Steuerelemente für Farbe
+	Draw Mode Controls	Steuerelemente für Zeichenmodus
+	Screen Mode Controls	Steuerelemente für Bildschirmmodus
+	Drawer menu	Menü der Werkzeugschublade
+	Toolbar: Show Controls	Werkzeugleiste: Steuerelemente einblenden
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control muss fillStroke, coloring, drawMode oder screenMode sein
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	unbekanntes Steuerelement `{name}`: fillStroke, coloring, drawMode oder screenMode
+@msg	give a fraction `t` from 0 to 1	geben Sie einen Wert `t` von 0 bis 1 an
+@msg	give the path `id`	geben Sie die `id` des Pfads an
+@msg	invalid stroke widths	ungültige Konturbreiten
+@msg	object has no weighted stroke	das Objekt hat keine Kontur mit einer gültigen positiven Stärke
+	Top Left	Oben links
+	Top Right	Oben rechts
+	Bottom Right	Unten rechts
+	Bottom Left	Unten links
+	Single Corner Radius	Einheitlicher Eckenradius
+	Top Left:	Oben links:
+	Top Right:	Oben rechts:
+	Bottom Left:	Unten links:
+	Bottom Right:	Unten rechts:
+	Softness	Weichheit
+	Ambient Light	Umgebungslicht
+	Light behind the object	Licht hinter dem Objekt
+	Registration:	Registrierung:
+	Dimension	Bemaßung
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Zeichnung : reale Größe — 1:10 beschriftet 1 Einheit auf der Seite als 10.
+	Preview (1 inch on the page)	Vorschau (1 Zoll auf der Seite)
+	Set as Default	Als Standard festlegen
+	 out from a highlighted edge to place its dimension  |  	 von einer hervorgehobenen Kante nach außen, um ihre Bemaßung zu platzieren  |  
+	 cancels  |  Double-click the tool for options	 bricht ab  |  Doppelklick auf das Werkzeug für Optionen
+	Linear	Linear
+	Angular	Winkel
+	Away from the Line	Abseits der Linie
+	Between Line and Object	Zwischen Linie und Objekt
+	Drag out from a segment, or click two points, then click to place.	Von einem Segment nach außen ziehen oder zwei Punkte anklicken, dann zum Platzieren klicken.
+	Drag out from a corner, or click two straight lines, then click to place.	Von einer Ecke nach außen ziehen oder zwei gerade Linien anklicken, dann zum Platzieren klicken.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Von einem Kreis oder Bogen nach außen ziehen für den Radius, nach innen für den Durchmesser.
+@msg	Choose a circle or a perfect arc	Wählen Sie einen Kreis oder einen perfekten Bogen
+@msg	Choose a precision from 0 to 6	Wählen Sie eine Genauigkeit von 0 bis 6
+	Create Dimension	Bemaßung erstellen
+	Dimension Tool	Bemaßungswerkzeug
+	Dimension Tool Options	Optionen für Bemaßungswerkzeug
+	Display	Anzeige
+	Font Family:	Schriftfamilie:
+	Font Style:	Schriftschnitt:
+	Precision:	Genauigkeit:
+	Update Dimensions	Bemaßungen aktualisieren
+	X:	X:
+	Y:	Y:
+@msg	Angles require two straight segments	Winkel erfordern zwei gerade Segmente
+@msg	Choose two different points	Wählen Sie zwei verschiedene Punkte
+@msg	Choose two non-parallel straight segments	Wählen Sie zwei nicht parallele gerade Segmente
+@msg	Choose two nonzero angle arms	Wählen Sie zwei Winkelschenkel mit einer Länge ungleich null
+@msg	Dimension point is outside the canvas	Der Bemaßungspunkt liegt außerhalb der Arbeitsfläche
+@msg	Dimension size is outside its supported range	Die Bemaßungsgröße liegt außerhalb des unterstützten Bereichs
+@msg	First measured segment no longer exists	Das erste gemessene Segment existiert nicht mehr
+@msg	Invalid dimension distance	Ungültiger Bemaßungsabstand
+@msg	Invalid dimension font name	Ungültiger Schriftname für die Bemaßung
+@msg	Invalid drawing scale	Ungültiger Zeichnungsmaßstab
+@msg	Invalid real scale	Ungültiger realer Maßstab
+@msg	Measured anchor no longer exists	Der gemessene Ankerpunkt existiert nicht mehr
+@msg	Measured segment no longer exists	Das gemessene Segment existiert nicht mehr
+@msg	Non-finite dimension	Die Bemaßung ist keine endliche Zahl
+@msg	Scale must be drawing:real, for example 1:10	Der Maßstab muss Zeichnung:Realität sein, zum Beispiel 1:10
+@msg	Scale ratio must be between 1:1000000 and 1000000:1	Das Maßstabsverhältnis muss zwischen 1:1000000 und 1000000:1 liegen
+@msg	Second measured segment no longer exists	Das zweite gemessene Segment existiert nicht mehr
+@msg	Unknown dimension mode	Unbekannter Bemaßungsmodus
+@msg	Unknown dimension option {k}	Unbekannte Bemaßungsoption {k}
+@msg	Unknown dimension style	Unbekannter Bemaßungsstil
+@msg	Unknown unit	Unbekannte Einheit
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung bleiben die Schnittseiten offen.
+	Distance	Abstand
+@msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" platziert einen linearen oder radialen Verlauf, keinen Freiform-Verlauf
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
+	Make Image Dynamic	Bild dynamisch machen
+	Import Data Sets…	Datensätze importieren…
+	Export Data Sets…	Datensätze exportieren…
+	Make Graph Dynamic	Diagramm dynamisch machen
+	Batch…	Stapelverarbeitung…
+	Source Folder:	Quellordner:
+	Destination Folder:	Zielordner:
+	Overrides	Überschreibungen
+	Uses every data set of the open document.	Verwendet jeden Datensatz des geöffneten Dokuments.
+@msg	Batch: {count} processed	Stapelverarbeitung: {count} verarbeitet
+@msg	Batch: {count} processed, {failed} failed	Stapelverarbeitung: {count} verarbeitet, {failed} fehlgeschlagen
+@msg	choose a destination folder	wählen Sie einen Zielordner
+@msg	choose a source folder	wählen Sie einen Quellordner
+@msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
+@msg	the action has no steps	die Aktion hat keine Schritte

@@ -27,6 +27,14 @@ pub struct FamilyTool {
     pub rows: u32,
     /// Columns / radial dividers.
     pub columns: u32,
+    /// The grids' divider skews in percent: rows / concentric, then columns / radial.
+    pub skew: [f64; 2],
+    /// Rectangular Grid: the outside is one rectangle (else its four sides).
+    pub frame: bool,
+    /// Polar Grid: the ellipses pair up into compound paths.
+    pub compound: bool,
+    /// The grids take the current fill.
+    pub fill: bool,
     snap: DrawSnap,
 }
 
@@ -50,6 +58,10 @@ impl FamilyTool {
             clockwise: true,
             rows: 5,
             columns: 5,
+            skew: [0.0; 2],
+            frame: true,
+            compound: false,
+            fill: false,
             snap: DrawSnap::default(),
         }
     }
@@ -79,19 +91,14 @@ impl FamilyTool {
                     json!({"cx": start.x, "cy": start.y, "radius": r, "decay": self.decay, "segments": self.segments, "clockwise": self.clockwise}),
                 )
             }
-            "rectangularGrid" => {
+            // The grids: the dragged box with the tool's options.
+            "rectangularGrid" | "polarGrid" => {
                 let r = drag_rect(start, p, m);
-                (
-                    "shape.rectangularGrid".into(),
-                    json!({"x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "rows": self.rows, "columns": self.columns}),
-                )
-            }
-            "polarGrid" => {
-                let r = drag_rect(start, p, m);
-                (
-                    "shape.polarGrid".into(),
-                    json!({"x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "concentric": self.rows, "radial": self.columns}),
-                )
+                let mut params = self.options();
+                if let Some(o) = params.as_object_mut() {
+                    o.extend([("x", r.x0), ("y", r.y0), ("width", r.width()), ("height", r.height())].map(|(k, v)| (k.to_string(), json!(v))));
+                }
+                (format!("shape.{}", self.id), params)
             }
             _ => {
                 let d = if m.shift { square(p - start) } else { p - start };
@@ -206,8 +213,12 @@ impl Tool for FamilyTool {
     fn options(&self) -> Value {
         match self.id {
             "spiral" => json!({"decay": self.decay, "segments": self.segments, "clockwise": self.clockwise}),
-            "rectangularGrid" => json!({"rows": self.rows, "columns": self.columns}),
-            "polarGrid" => json!({"concentric": self.rows, "radial": self.columns}),
+            "rectangularGrid" => json!({
+                "rows": self.rows, "columns": self.columns, "rowSkew": self.skew[0], "columnSkew": self.skew[1], "frame": self.frame, "fill": self.fill,
+            }),
+            "polarGrid" => json!({
+                "concentric": self.rows, "radial": self.columns, "concentricSkew": self.skew[0], "radialSkew": self.skew[1], "compound": self.compound, "fill": self.fill,
+            }),
             _ => json!({"closed": self.closed}),
         }
     }
@@ -219,9 +230,20 @@ impl Tool for FamilyTool {
             "clockwise" => self.clockwise = v.as_bool().unwrap_or(self.clockwise),
             "rows" | "concentric" => self.rows = v.as_u64().unwrap_or(5).min(999) as u32,
             "columns" | "radial" => self.columns = v.as_u64().unwrap_or(5).min(999) as u32,
+            "rowSkew" | "concentricSkew" => self.skew[0] = grid_skew(v, self.skew[0]),
+            "columnSkew" | "radialSkew" => self.skew[1] = grid_skew(v, self.skew[1]),
+            "frame" => self.frame = v.as_bool().unwrap_or(self.frame),
+            "compound" => self.compound = v.as_bool().unwrap_or(self.compound),
+            "fill" => self.fill = v.as_bool().unwrap_or(self.fill),
             _ => {}
         }
     }
+}
+
+/// A grid divider skew from option value `v`: a finite number within the range, else `current`.
+fn grid_skew(v: &Value, current: f64) -> f64 {
+    let max = vectorcraft_geom::shapes::GRID_SKEW_MAX;
+    v.as_f64().filter(|s| s.is_finite()).map_or(current, |s| s.clamp(-max, max))
 }
 
 #[cfg(test)]
@@ -243,7 +265,10 @@ mod tests {
         assert_eq!(a[0], Action::Begin("Rectangular Grid".into()));
         assert_eq!(
             a[1],
-            Action::Preview("shape.rectangularGrid".into(), json!({"x": 10.0, "y": 10.0, "width": 50.0, "height": 30.0, "rows": 5, "columns": 5}))
+            Action::Preview(
+                "shape.rectangularGrid".into(),
+                json!({"x": 10.0, "y": 10.0, "width": 50.0, "height": 30.0, "rows": 5, "columns": 5, "rowSkew": 0.0, "columnSkew": 0.0, "frame": true, "fill": false})
+            )
         );
         let a = t.key(&cx, ToolKey::Right, Mods::default());
         assert!(matches!(&a[0], Action::Preview(_, v) if v["columns"] == 6));
@@ -254,6 +279,36 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 60.0));
         assert!(matches!(&a[..], [Action::Preview(_, v)] if v["x"] == 30.0 && v["width"] == 60.0 && v["height"] == 40.0), "{a:?}");
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 60.0)), vec![Action::Commit]);
+    }
+
+    /// #1377: a drag draws with the tool's stored options, which keep to their types and range.
+    #[test]
+    fn a_grid_drag_uses_the_stored_options() {
+        let mut t = FamilyTool::new("polarGrid");
+        for (key, value) in [
+            ("concentric", json!(2)),
+            ("concentricSkew", json!(-40)),
+            ("radialSkew", json!(9000)),
+            ("compound", json!(true)),
+            ("fill", json!(true)),
+            // Not this tool's, and not values: ignored.
+            ("frame", json!("no")),
+            ("concentricSkew", json!("far")),
+            ("fill", json!(null)),
+        ] {
+            t.set_option(key, &value);
+        }
+        let options = json!({"concentric": 2, "radial": 5, "concentricSkew": -40.0, "radialSkew": 500.0, "compound": true, "fill": true});
+        assert_eq!(t.options(), options);
+        let (command, params) = t.command(Point::new(10.0, 20.0), Point::new(40.0, 80.0), Mods::default());
+        assert_eq!(command, "shape.polarGrid");
+        let mut want = options;
+        want.as_object_mut().unwrap().extend(json!({"x": 10.0, "y": 20.0, "width": 30.0, "height": 60.0}).as_object().unwrap().clone());
+        assert_eq!(params, want);
+        let mut t = FamilyTool::new("rectangularGrid");
+        t.set_option("frame", &json!(false));
+        t.set_option("rowSkew", &json!(12.5));
+        assert_eq!(t.options(), json!({"rows": 5, "columns": 5, "rowSkew": 12.5, "columnSkew": 0.0, "frame": false, "fill": false}));
     }
 
     #[test]
