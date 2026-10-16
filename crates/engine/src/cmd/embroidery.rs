@@ -2196,7 +2196,7 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
         // a hoop chosen: the page follows it (the first artboard takes the hoop's size about its
         // middle, so the design stays where it is)
         let follow = p.get("page").and_then(Value::as_bool).unwrap_or(true);
-        let page = p.get("hoop").filter(|_| follow).and_then(|_| cfg.hoop.as_ref()).map(|h| (h.width * PT_PER_MM, h.height * PT_PER_MM));
+        let page = (follow && p.get("hoop").is_some()).then_some(cfg.hoop.as_ref()).flatten().map(|h| (h.width * PT_PER_MM, h.height * PT_PER_MM));
         s.edit("Embroidery Settings", |d, _| {
             d.embroidery = Some(Box::new(new));
             if let Some((w, h)) = page.filter(|(w, h)| w.is_finite() && h.is_finite() && *w > 0.0 && *h > 0.0)
