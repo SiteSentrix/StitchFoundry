@@ -5700,3 +5700,4 @@ machine	Stop	Stopp
 @msg	choose a source folder	wählen Sie einen Quellordner
 @msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
 @msg	the action has no steps	die Aktion hat keine Schritte
+	Direction	Richtung

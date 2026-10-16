@@ -714,7 +714,7 @@ mod tests {
         let (mut app, written) = web();
         app.run("file.saveAsTemplate", json!({})).unwrap();
         assert_eq!((heading(dialog(&app)).as_str(), dialog(&app).str("format").as_str()), ("Save as Template", "template"));
-        assert_eq!(template_labels(), ["VectorCraft Template", "PDF-compatible .ait template"]);
+        assert_eq!(template_labels(), ["StitchFoundry Template", "PDF-compatible .ait template"]);
         frame(&mut app, false);
         let mut d = app.ui.dialog.take().unwrap();
         switch_format(&mut app, &mut d, "ait");

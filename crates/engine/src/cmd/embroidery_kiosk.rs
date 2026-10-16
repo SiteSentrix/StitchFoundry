@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Kiosk Lettering",
             [],
             None,
-            "{text: up to 4 lines, template?: a design template (the kiosk's first), font?: an embroidery font (the kiosk's first, else the first loaded), color?: \"#rrggbb\" (the kiosk's first thread), size?: mm, the capitals' height (as large as fits)} a new design from the template with the text set in the font, centred in the template's area and made to fit it, in the thread → {id, title, template, font, color, size, widthMm, heightMm}",
+            "{text: up to 4 lines, template?: a design template (the kiosk's first), font?: an embroidery font (the kiosk's first, else the first loaded), color?: \"#rrggbb\" (the kiosk's first thread), size?: mm (the capitals' height; as large as fits)} a new design from the template with the text set in the font, centred in the template's area and made to fit it, in the thread → {id, title, template, font, color, size, widthMm, heightMm}",
             always,
             order
         ),

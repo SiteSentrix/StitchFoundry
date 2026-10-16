@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "In-the-Hoop Cutting Templates",
             [],
             None,
-            "{the same as embroidery.ith.make} cutting templates for the project's pieces (fabric, batting, backing, vinyl, the trimmed panel, borders, the envelope back): a new Letter document, each piece life size with its name and size, as many pages as they need (a piece bigger than a page drawn smaller, its size written); print at 100% → {pages, pieces}",
+            "{…the same as embroidery.ith.make} cutting templates for the project's pieces (fabric, batting, backing, vinyl, the trimmed panel, borders, the envelope back): a new Letter document, each piece life size with its name and size, as many pages as they need (a piece bigger than a page drawn smaller, its size written); print at 100% → {pages, pieces}",
             always,
             templates
         ),

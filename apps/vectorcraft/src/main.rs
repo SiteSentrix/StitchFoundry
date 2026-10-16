@@ -695,7 +695,7 @@ fn main() -> std::process::ExitCode {
         None => match automation_args::env_control_port(std::env::var_os("VECTORCRAFT_CONTROL_PORT")) {
             Ok(port) => port,
             Err(e) => {
-                eprintln!("vectorcraft: {e}");
+                eprintln!("stitchfoundry: {e}");
                 return std::process::ExitCode::FAILURE;
             }
         },

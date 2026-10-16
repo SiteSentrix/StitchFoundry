@@ -189,7 +189,7 @@ fn bundled_catalogs_are_consistent() {
 #[test]
 fn partial_catalogs_only_translate_strings_the_ui_shows() {
     let known: std::collections::BTreeSet<String> = crate::menus::menu_strings().into_iter().chain(tl_literals()).collect();
-    for l in LANGUAGES.iter().filter(|l| !l.complete_menus && !l.source.is_empty()) {
+    for l in LANGUAGES.iter().filter(|l| !l.complete_menus && !l.source.is_empty() && !COMPLETE_UPSTREAM.contains(&l.code)) {
         let (entries, _) = parse_entries(l.source);
         let unknown: Vec<_> = entries.iter().filter(|(ctx, src, _)| ctx.is_empty() && !known.contains(src)).map(|(_, src, _)| src).collect();
         assert!(unknown.is_empty(), "{}: not UI strings: {unknown:?}", l.code);
@@ -481,7 +481,10 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 16] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
+const KEEPS_MENU_NAMES: [&str; 9] = ["cs", "de", "es", "fr", "it", "ja", "pt-br", "ru", "uk"];
+/// StitchFoundry: the languages VectorCraft completed that wait for the embroidery strings here.
+/// Their catalogs are VectorCraft's complete ones, so they hold strings this app doesn't show.
+const COMPLETE_UPSTREAM: [&str; 9] = ["bg", "el", "fi", "hu", "ko", "pl", "pt-br", "sv", "vi"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).

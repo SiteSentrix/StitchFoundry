@@ -92,5 +92,5 @@ fn control_without_a_valid_port_fails_before_startup() {
 fn version_wins_over_a_bad_control_port_variable() {
     let out = Command::new(BIN).arg("--version").env("VECTORCRAFT_CONTROL_PORT", "abc").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("stitchfoundry {}\n", env!("CARGO_PKG_VERSION")));
 }

@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Embroidery Font",
             ["Embroidery", "Embroidery Fonts"],
             None,
-            "{name?: (My Font), chars?: the glyphs, one a character (A–Z, a–z, 0–9 and .,!?'-&), size?: mm, the capitals' height as digitized (25; 5–200), descent?: mm below the baseline (0.4 × size)} the font creator: a new document for an embroidery font, one artboard per glyph, named after it and as wide as its advance (resize it to change that), with guides at the baseline and the capitals' height: digitize each glyph on its artboard, then embroidery.fontDoc.save; opens a new document → {glyphs}",
+            "{name?: (My Font), chars?: the glyphs (one a character; A–Z, a–z, 0–9 and .,!?'-&), size?: mm (the capitals' height as digitized; 25; 5–200), descent?: mm below the baseline (0.4 × size)} the font creator: a new document for an embroidery font, one artboard per glyph, named after it and as wide as its advance (resize it to change that), with guides at the baseline and the capitals' height: digitize each glyph on its artboard, then embroidery.fontDoc.save; opens a new document → {glyphs}",
             always,
             new_font
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Glyphs",
             [],
             None,
-            "{chars: one glyph a character, or names: [glyph, …] (ligatures such as \"fi\")} add artboards for glyphs the font document hasn't yet, below the others → {added}",
+            "{chars: one glyph a character | names: [glyph, …] (ligatures such as \"fi\")} add artboards for glyphs the font document hasn't yet, below the others → {added}",
             has_doc,
             add_glyphs
         ),
@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Embroidery Font from Type",
             [],
             None,
-            "{family: an installed font family, style?: (Regular), name?: the font's name (the family's), chars?: the glyphs (A–Z, a–z, 0–9 and .,!?'-&), size?: mm, the capitals' height (25; 5–200)} the font creator from type: a font document whose glyphs are the family's outlines, each digitized as Convert Artwork would (satin where the strokes are thin enough, fill where they're wide) on its artboard at the family's own advance, to refine and save; opens a new document → {glyphs, family}",
+            "{family: an installed font family, style?: (Regular), name?: the font's name (the family's), chars?: the glyphs (A–Z, a–z, 0–9 and .,!?'-&), size?: mm (the capitals' height; 25; 5–200)} the font creator from type: a font document whose glyphs are the family's outlines, each digitized as Convert Artwork would (satin where the strokes are thin enough, fill where they're wide) on its artboard at the family's own advance, to refine and save; opens a new document → {glyphs, family}",
             always,
             from_type
         ),
@@ -118,7 +118,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Embroidery Font",
             [],
             None,
-            "{folder?: write the font folder there (font.json and glyphs.stitchfoundry), remembered like any font folder} make the font document's glyphs an embroidery font, loaded for lettering at once (without a folder, only for this session): each glyph the art on its artboard (its middle inside it), its advance the artboard's width → {name, glyphs, missing, folder}",
+            "{folder?: write the font folder there (font.json and glyphs.stitchfoundry; remembered like any font folder)} make the font document's glyphs an embroidery font, loaded for lettering at once (without a folder, only for this session): each glyph the art on its artboard (its middle inside it), its advance the artboard's width → {name, glyphs, missing, folder}",
             has_doc,
             save
         ),

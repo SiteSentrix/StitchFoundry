@@ -4604,14 +4604,19 @@ fn warped_lettering_sews_as_it_looks_and_stays_lettering() {
         let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.x), hi.max(p.x)));
         hi - lo
     };
-    // a warp bends the stitches with the letters (an arc spreads this line wider, as the art), still sewn
+    let height = |pts: &[sf_core::Point]| {
+        let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.y), hi.max(p.y)));
+        hi - lo
+    };
+    // a warp bends the stitches with the letters (an arc curves this line up, as the art), still sewn
     for style in ["arc", "flag", "bulge"] {
         s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
         s.execute("object.envelope.makeWithWarp", &json!({"style": style, "bend": 50})).unwrap();
         let warped = all(&s);
         assert!(!warped.is_empty() && warped != flat, "{style}");
         if style == "arc" {
-            assert!(width(&warped) > width(&flat) * 1.2, "{style}: {} vs {}", width(&warped), width(&flat));
+            assert!(height(&warped) > height(&flat) * 1.2, "{style}: {} vs {}", height(&warped), height(&flat));
+            assert!(width(&warped) > width(&flat) * 0.6, "{style}: {} vs {}", width(&warped), width(&flat));
         }
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(all(&s), flat, "{style}: undone");

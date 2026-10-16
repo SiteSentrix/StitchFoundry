@@ -13,7 +13,7 @@ fn run(s: &mut Session, id: &str, p: Value) -> Value {
     s.execute(id, &p).unwrap_or_else(|e| panic!("{id} {p}: {e}"))
 }
 
-/// A saved document `dir/poster.vectorcraft` with two linked files (in `dir/art`) and a line of
+/// A saved document `dir/poster.stitchfoundry` with two linked files (in `dir/art`) and a line of
 /// type.
 fn poster(dir: &Folder) -> Session {
     let (a, b) = (dir.file("art/red.png"), dir.file("art/blue.png"));
@@ -23,7 +23,7 @@ fn poster(dir: &Folder) -> Session {
     place(&mut s, &a);
     place(&mut s, &b);
     run(&mut s, "text.create", json!({"x": 10, "y": 40, "text": "Poster"}));
-    save(&mut s, &dir.file("poster.vectorcraft"));
+    save(&mut s, &dir.file("poster.stitchfoundry"));
     s
 }
 
@@ -147,7 +147,7 @@ fn options_leave_out_links_fonts_and_the_report() {
 fn a_package_never_replaces_its_source_or_its_links() {
     let dir = Folder::new("package-overwrite");
     let mut s = poster(&dir);
-    let doc = dir.file("poster.vectorcraft");
+    let doc = dir.file("poster.stitchfoundry");
     let (saved, red) = (std::fs::read(&doc).unwrap(), std::fs::read(dir.file("art/red.png")).unwrap());
     let parent = dir.0.parent().unwrap();
     let name = dir.0.file_name().unwrap().to_string_lossy().into_owned();

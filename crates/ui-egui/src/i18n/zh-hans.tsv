@@ -5241,3 +5241,4 @@ machine	Stop	停止
 	Destination Folder:	目标文件夹：
 	Overrides	覆盖
 	Uses every data set of the open document.	使用打开文档的每个数据集。
+	Direction	方向

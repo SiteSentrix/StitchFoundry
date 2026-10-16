@@ -5721,3 +5721,4 @@ machine	Stop	Зупинка
 @msg	choose a source folder	виберіть вихідну папку
 @msg	open a document with data sets	відкрийте документ із наборами даних
 @msg	the action has no steps	у дії немає кроків
+	Direction	Напрямок

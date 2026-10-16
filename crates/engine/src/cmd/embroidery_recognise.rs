@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Convert Stitches to Objects",
         ["Embroidery"],
         None,
-        "{ids?: manual-stitch objects, an opened machine file's threads (the selected ones; all of them with nothing selected)} recognise the stitches as runs (the needle following a line), satin columns (it swings from side to side every stitch) and tatami fills (rows of stitches back and forth), and make them objects of those types in the same thread, in the same order, in the manual stitches' place; one undo step → {ids, runs, satins, fills}",
+        "{ids?: manual-stitch objects (an opened machine file's threads; the selected ones, all of them with nothing selected)} recognise the stitches as runs (the needle following a line), satin columns (it swings from side to side every stitch) and tatami fills (rows of stitches back and forth), and make them objects of those types in the same thread, in the same order, in the manual stitches' place; one undo step → {ids, runs, satins, fills}",
         has_doc,
         convert
     )]
