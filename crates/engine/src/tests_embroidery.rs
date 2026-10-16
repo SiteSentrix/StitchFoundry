@@ -5657,3 +5657,47 @@ fn a_line_across_a_shape_sets_its_stitch_direction() {
     let d = &s.doc().unwrap().doc;
     assert!(d.node(NodeId(line)).is_some() && d.node(NodeId(shape)).unwrap().embroidery.as_ref().unwrap().guides.is_empty(), "one step");
 }
+
+/// Two touching shapes of one thread: the thread runs hidden under the second instead of a trim
+/// (hideTravel, on by default); apart, or with hideTravel off, a trim as before.
+#[test]
+fn touching_shapes_of_one_thread_need_no_trim() {
+    let trims = |s: &mut Session| s.execute("embroidery.info", &json!({})).unwrap()["trims"].as_u64().unwrap();
+    let mut s = Session::new();
+    s.execute("embroidery.newDesign", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 60, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 160, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#1f3a93"})).unwrap();
+    // their sewn order puts the end of the first well away from the start of the second
+    let hidden = trims(&mut s);
+    s.execute("embroidery.settings", &json!({"hideTravel": false})).unwrap();
+    let cut = trims(&mut s);
+    assert!(hidden < cut, "hidden travel {hidden} trims, cut {cut}");
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["settings"]["hideTravel"], false);
+    // apart: a trim either way
+    s.execute("embroidery.settings", &json!({"hideTravel": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("object.move", &json!({"dx": 60, "dy": 0})).unwrap();
+    assert_eq!(trims(&mut s), cut, "apart");
+}
+
+/// Add Words in an arc up, an arc down or a circle: the words on a curve made for them, sewn,
+/// all of them on it.
+#[test]
+fn words_go_in_an_arc_or_a_circle() {
+    for shape in ["arcUp", "arcDown", "circle"] {
+        let mut s = Session::new();
+        s.execute("embroidery.newDesign", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+        let r = s.execute("embroidery.addWords", &json!({"text": "Grandma's Kitchen", "height": 12, "shape": shape})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert!(matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. })), "{shape}");
+        assert!(crate::cmd::typecmd::with_overflow(&s, &[id], json!({})).get("overflow").is_none(), "{shape}: all on the curve");
+        assert!(s.embroidery_plan().unwrap().pattern().stitch_count() > 300, "{shape}");
+    }
+    let mut s = Session::new();
+    s.execute("embroidery.newDesign", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+    assert!(s.execute("embroidery.addWords", &json!({"text": "x", "shape": "zigzag"})).is_err());
+}

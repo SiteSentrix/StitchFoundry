@@ -6095,7 +6095,6 @@ mark-style	Japanese	Japonesas
 @msg	the action has no steps	la acción no tiene pasos
 	Direction	Dirección
 	Along the selected line	A lo largo de la línea seleccionada
-	To curve the words, draw a line first, select it, then Add Words.	Para curvar las palabras, dibuja primero una línea, selecciónala y luego elige Añadir palabras.
 	Add to Design	Añadir al diseño
 	Colors and Order	Colores y orden
 	Paint	Pintura
@@ -6104,3 +6103,6 @@ mark-style	Japanese	Japonesas
 	Split Lines	Líneas de división
 	Stitch Direction	Dirección de puntada
 	Use Line as Direction	Usar línea como dirección
+	Arc Up	Arco hacia arriba
+	Arc Down	Arco hacia abajo
+	To follow a line of your own, draw it first, select it, then Add Words.	Para seguir una línea propia, dibújala primero, selecciónala y luego elige Añadir palabras.

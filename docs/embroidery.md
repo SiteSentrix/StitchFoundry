@@ -1210,7 +1210,10 @@ designs over their maker's own wireless link are not reached directly; send to a
 **Embroidery › Add Words…** (in every way of working) asks what to say and how tall, and adds the
 words in the middle of the design, sewn as satin. With a line selected (any path: draw one with
 the Pen, Curvature or Arc tool, or use a shape's outline), **Along the selected line** makes the
-words follow it, centred along it (`embroidery.addWords {text, height?, color?, path?}`).
+words follow it, centred along it; words longer than the line are made smaller to fit. Without
+a line, **Straight**, **Arc Up** (a rainbow), **Arc Down** (a smile, read the right way up) or
+**Circle** (round the middle, along the top) sets the words on a curve made for them
+(`embroidery.addWords {text, height?, color?, path? | shape?: straight|arcUp|arcDown|circle}`).
 
 In an embroidery design (one with a hoop), type made with the Type tools, including Type on a
 Path, sews at once as satin, in the same undo step; type in an ordinary document stays type until

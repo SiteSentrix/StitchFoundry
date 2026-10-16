@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Words",
             [],
             None,
-            "{text, height?: mm the capital letters are tall (20; 5–150), color?: \"#rrggbb\" (dark blue), path?: id (a line the words follow, centred along it: a path, open or closed; words longer than the line are made smaller to fit)} words that sew: text in a clean built-in font, the given height, in the middle of the design or along the line, sewn as satin → {id, widthMm, heightMm}",
+            "{text, height?: mm the capital letters are tall (20; 5–150), color?: \"#rrggbb\" (dark blue), path?: id (a line the words follow, centred along it: a path, open or closed; words longer than the line are made smaller to fit), shape?: straight (default) | arcUp (a rainbow) | arcDown (a smile, read the right way up) | circle (round the middle, reading along the top; instead of a path)} words that sew: text in a clean built-in font, the given height, in the middle of the design or along the line, sewn as satin → {id, widthMm, heightMm}",
             has_doc,
             add_words
         ),
@@ -96,8 +96,29 @@ fn make_words(s: &mut Session, p: &Value) -> Result<Value> {
     sf_core::Rgb::from_hex(color).ok_or_else(|| bad(CMD, "`color` is \"#rrggbb\""))?;
     // capital letters are about seven tenths of the type size
     let size = height * PT_PER_MM / 0.7;
+    // a shape asked for: the line made for the words, about the page's middle
+    let made_line = match str_param(p, "shape").unwrap_or("straight") {
+        "straight" => None,
+        shape @ ("arcUp" | "arcDown" | "circle") => {
+            let r = page(s)?;
+            let (c, w) = (r.center(), r.width().min(r.height()) * 0.75);
+            let d = match shape {
+                // a circular arc a quarter as deep as it is wide, over the top or under the bottom
+                "arcUp" => format!("M {} {} A {} {} 0 0 1 {} {}", c.x - w / 2.0, c.y + w / 8.0, w * 0.625, w * 0.625, c.x + w / 2.0, c.y + w / 8.0),
+                "arcDown" => format!("M {} {} A {} {} 0 0 0 {} {}", c.x - w / 2.0, c.y - w / 8.0, w * 0.625, w * 0.625, c.x + w / 2.0, c.y - w / 8.0),
+                // from the bottom round by the left: the words centred on it read along the top
+                _ => {
+                    let rad = w / 2.0;
+                    format!("M {cx} {b} A {rad} {rad} 0 0 1 {cx} {t} A {rad} {rad} 0 0 1 {cx} {b} Z", cx = c.x, b = c.y + rad, t = c.y - rad)
+                }
+            };
+            let id = s.execute("path.create", &json!({ "d": d }))?["id"].as_u64().ok_or_else(|| bad(CMD, "the line for the words wasn't made"))?;
+            Some(id)
+        }
+        other => return Err(bad(CMD, format!("`shape` is straight, arcUp, arcDown or circle, not `{other}`"))),
+    };
     // along a line: type on that path, centred on it
-    if let Some(v) = p.get("path").filter(|v| !v.is_null()) {
+    if let Some(v) = made_line.map(Value::from).or_else(|| p.get("path").filter(|v| !v.is_null()).cloned()) {
         let path = v.as_u64().ok_or_else(|| bad(CMD, "`path` is the id of the line the words follow"))?;
         let line = s.doc()?.doc.node(vectorcraft_doc::NodeId(path)).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }));
         if !line {

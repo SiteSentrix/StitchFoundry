@@ -5703,7 +5703,6 @@ machine	Stop	Stopp
 @msg	the action has no steps	die Aktion hat keine Schritte
 	Direction	Richtung
 	Along the selected line	Entlang der ausgewählten Linie
-	To curve the words, draw a line first, select it, then Add Words.	Um die Worte zu biegen, zuerst eine Linie zeichnen, auswählen und dann Worte hinzufügen wählen.
 	Add to Design	Zum Entwurf hinzufügen
 	Colors and Order	Farben und Reihenfolge
 	Paint	Malen
@@ -5712,3 +5711,6 @@ machine	Stop	Stopp
 	Split Lines	Trennlinien
 	Stitch Direction	Stichrichtung
 	Use Line as Direction	Linie als Richtung verwenden
+	Arc Up	Bogen nach oben
+	Arc Down	Bogen nach unten
+	To follow a line of your own, draw it first, select it, then Add Words.	Um einer eigenen Linie zu folgen, zuerst die Linie zeichnen, auswählen und dann Worte hinzufügen wählen.

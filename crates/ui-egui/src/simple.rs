@@ -29,6 +29,8 @@ pub struct SimpleState {
     pub words: Option<(String, f64)>,
     /// The line selected when Add Words opened (a path), and whether the words follow it.
     pub words_along: Option<(u64, bool)>,
+    /// The shape Add Words sets the words in without a line: straight, arcUp, arcDown or circle.
+    pub words_shape: &'static str,
     /// The shape picker is open, for appliqué or not.
     pub shapes: Option<bool>,
     /// Start Over is asking to be sure.
@@ -478,6 +480,7 @@ pub fn open_words(app: &mut VectorcraftApp) -> Value {
     });
     app.simple.words = Some((String::new(), 20.0));
     app.simple.words_along = line.map(|id| (id, true));
+    app.simple.words_shape = "straight";
     json!({ "open": true, "along": line })
 }
 
@@ -496,14 +499,29 @@ pub fn words_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui.label(RichText::new(tl!("How tall")).size(15.0));
-            ui.add(egui::Slider::new(&mut height, 8.0..=80.0).suffix(" mm").fixed_decimals(0));
+            // a long slider with its filled part shown, so it reads as one in every theme
+            ui.spacing_mut().slider_width = 200.0;
+            ui.add(egui::Slider::new(&mut height, 8.0..=80.0).suffix(" mm").fixed_decimals(0).trailing_fill(true));
         });
         ui.label(RichText::new(format!("≈ {:.1} in", height / 25.4)).size(12.0));
         if let Some((_, follow)) = &mut along {
             ui.add_space(4.0);
             ui.checkbox(follow, RichText::new(tl!("Along the selected line")).size(15.0));
-        } else {
-            ui.label(RichText::new(tl!("To curve the words, draw a line first, select it, then Add Words.")).size(12.0));
+        }
+        // without a line to follow: straight, or round a curve made for the words
+        if !matches!(along, Some((_, true))) {
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                for (id, label) in [("straight", tl!("Straight")), ("arcUp", tl!("Arc Up")), ("arcDown", tl!("Arc Down")), ("circle", tl!("Circle"))]
+                {
+                    if ui.selectable_label(app.simple.words_shape == id, RichText::new(label).size(15.0)).clicked() {
+                        app.simple.words_shape = id;
+                    }
+                }
+            });
+            if along.is_none() {
+                ui.label(RichText::new(tl!("To follow a line of your own, draw it first, select it, then Add Words.")).size(12.0));
+            }
         }
         ui.add_space(8.0);
         ui.horizontal(|ui| {
@@ -522,6 +540,8 @@ pub fn words_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let mut p = json!({ "text": text, "height": height });
             if let Some((line, true)) = along {
                 p["path"] = json!(line);
+            } else if app.simple.words_shape != "straight" {
+                p["shape"] = json!(app.simple.words_shape);
             }
             if let Err(e) = app.run("embroidery.addWords", p) {
                 app.status(e);

@@ -5784,7 +5784,6 @@ machine	Stop	停止
 @msg	open a document with data sets	データセットのあるドキュメントを開いてください
 @msg	the action has no steps	アクションにステップがありません
 	Along the selected line	選択した線に沿って
-	To curve the words, draw a line first, select it, then Add Words.	文字を曲げるには、先に線を描いて選択してから、文字を追加を選びます。
 	Add to Design	デザインに追加
 	Colors and Order	色と順序
 	Paint	ペイント
@@ -5793,3 +5792,6 @@ machine	Stop	停止
 	Split Lines	分割線
 	Stitch Direction	ステッチの方向
 	Use Line as Direction	線を方向として使用
+	Arc Up	上向きのアーチ
+	Arc Down	下向きのアーチ
+	To follow a line of your own, draw it first, select it, then Add Words.	自分で描いた線に沿わせるには、先に線を描いて選択してから、文字を追加を選びます。
