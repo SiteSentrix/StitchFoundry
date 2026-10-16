@@ -1857,13 +1857,30 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, l
     }
 }
 
-/// The Home screen (`app.home`; with no document open, unless its preference is off).
+/// The Home screen (`app.home`; with no document open, unless its preference is off). It
+/// scrolls when it is taller than the window (a small window, a tablet, a bigger text size).
 fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let t = Tokens::get(ui.ctx());
     ui.painter().rect_filled(rect, 0.0, t.panel_darker);
-    let inner = rect.shrink2(vec2((rect.width() - 820.0).max(40.0) / 2.0, 60.0));
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(egui::Align::Min)));
-    let ui = &mut child;
+    let side = (rect.width() - 820.0).max(40.0) / 2.0;
+    let width = (rect.width() - 2.0 * side).max(200.0);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::top_down(egui::Align::Min)));
+    egui::ScrollArea::vertical().id_salt("home-scroll").auto_shrink([false, false]).show(&mut child, |ui| {
+        ui.add_space(60.0);
+        ui.horizontal(|ui| {
+            ui.add_space(side);
+            ui.vertical(|ui| {
+                ui.set_width(width);
+                home_body(app, ui);
+            });
+        });
+        ui.add_space(60.0);
+    });
+}
+
+/// The Home screen's content, top to bottom.
+fn home_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(tl!("Welcome to StitchFoundry")).font(theme::semibold(26.0)).color(t.text));
     ui.add_space(4.0);
     ui.label(egui::RichText::new(tl!("Machine embroidery digitizing — fast, open, scriptable.")).size(14.0).color(t.text_dim));
