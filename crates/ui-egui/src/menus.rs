@@ -167,6 +167,9 @@ fn embroidery_menu() -> Vec<Item> {
         sub(
             "Stitch Direction",
             vec![
+                cp("Inclination Tool", "tool.select", json!({ "tool": "embroideryDirection" })),
+                c("Use Line as Direction", "embroidery.lineAsDirection"),
+                Sep,
                 c("Auto Direction", "embroidery.autoDirection"),
                 c("Reverse Stitch Direction", "embroidery.reverse"),
                 c("Swap Satin Sides", "embroidery.swapSides"),

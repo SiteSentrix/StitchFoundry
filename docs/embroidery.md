@@ -345,15 +345,21 @@ ordinary editable data:
 
 Editing:
 
-- **Inclination tool** (Embroidery section of the toolbar): drag across a shape to add a
-  line, drag a line's ends to move them, click a line and press Delete to remove it.
+- **Inclination tool** (Embroidery section of the toolbar, **Embroidery › Stitch Direction ›
+  Inclination Tool** or Shift+I): drag across a shape to add a line, drag a line's ends to move
+  them, click a line and press Delete to remove it.
+- **Embroidery › Stitch Direction › Use Line as Direction**: select stitched shapes and lines drawn
+  across them (with the Pen, the Line Segment tool or any path tool, or brought in with the art);
+  each line becomes a direction line of the shapes it crosses and the drawn line goes, in one undo
+  step (`embroidery.lineAsDirection {ids?, keep?}`). Several lines across one shape make its
+  stitches turn from one to the next.
 - The **green bead** (where sewing starts) and the **red bead** (where it stops) of the selected
   object can be dragged too. **Reset Start and Stop** in the panel restores the automatic closest
   joins. A fill honours both: its underlay runs out from the start and back to it, then the top
   stitching begins at the start and sews towards the stop, the piece of the shape that can end
   nearest the stop sewn last, so it finishes there instead of travelling back over sewn rows.
-- **Embroidery › Stitch Direction › Auto Direction** places the automatic lines again; **Embroidery › Clear
-  Inclination Lines** goes back to the automatic direction.
+- **Embroidery › Stitch Direction › Auto Direction** places the automatic lines again; **Embroidery › Stitch
+  Direction › Clear Inclination Lines** goes back to the automatic direction.
 - Inclination lines, beads and fill angles move, rotate, scale and mirror with their object.
 - A click selects a stitched object where its stitches are, not only on its art: inside a fill,
   appliqué or filled satin even when the art has no fill colour, across the whole width of a satin

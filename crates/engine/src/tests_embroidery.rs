@@ -5624,3 +5624,36 @@ fn the_page_follows_the_hoop() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(page(&s), before, "undone with the hoop");
 }
+
+/// Use Line as Direction: a line drawn across a stitched shape becomes its direction line and
+/// goes; a line crossing nothing is refused; one undo step.
+#[test]
+fn a_line_across_a_shape_sets_its_stitch_direction() {
+    let mut s = Session::new();
+    s.execute("embroidery.newDesign", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+    let shape = s.execute("shape.ellipse", &json!({"x": 60, "y": 100, "width": 240, "height": 240})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [shape]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let line = s.execute("shape.line", &json!({"x1": 180, "y1": 120, "x2": 180, "y2": 320})).unwrap()["id"].as_u64().unwrap();
+    let far = s.execute("shape.line", &json!({"x1": 500, "y1": 500, "x2": 520, "y2": 560})).unwrap()["id"].as_u64().unwrap();
+    // only a line far away: refused
+    s.execute("select.set", &json!({"ids": [shape, far]})).unwrap();
+    assert!(s.execute("embroidery.lineAsDirection", &json!({})).is_err());
+    s.execute("select.set", &json!({"ids": [shape, line]})).unwrap();
+    let r = s.execute("embroidery.lineAsDirection", &json!({})).unwrap();
+    assert_eq!((r["ids"].clone(), r["lines"].as_u64()), (json!([shape]), Some(1)), "{r}");
+    let d = &s.doc().unwrap().doc;
+    let e = d.node(NodeId(shape)).unwrap().embroidery.clone().unwrap();
+    assert_eq!(e.guides.len(), 1);
+    let g = &e.guides[0];
+    assert!((g.a.x - g.b.x).abs() < 0.5 && (g.a.y - g.b.y).abs() > 100.0, "upright: {g:?}");
+    assert!(d.node(NodeId(line)).is_none(), "the line is the direction now");
+    // the rows run upright: stitches mostly move up and down
+    let pts: Vec<sf_core::Point> =
+        s.embroidery_plan().unwrap().pattern().stitches.iter().filter(|st| st.cmd == sf_core::Cmd::Stitch).map(|st| st.pos()).collect();
+    let (dx, dy) = pts.windows(2).fold((0.0, 0.0), |(x, y), w| (x + (w[1].x - w[0].x).abs(), y + (w[1].y - w[0].y).abs()));
+    assert!(dy > dx * 3.0, "rows up and down: {dx} across, {dy} up and down");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(NodeId(line)).is_some() && d.node(NodeId(shape)).unwrap().embroidery.as_ref().unwrap().guides.is_empty(), "one step");
+}
