@@ -999,6 +999,7 @@ mod tests {
         assert_eq!(humanize("offsetX"), "Offset X");
         assert_eq!(humanize("blur"), "Blur");
         assert!(!effect_label("stylize.dropShadow").contains('…'));
+        assert_eq!(effect_label("path.outlineObject"), "Outline Object");
         assert_eq!(effect_label("x.unknownThing"), "unknownThing");
         // Only our own effects are interface labels; a plug-in's name is its own.
         assert!(built_in_effect("stylize.dropShadow") && !built_in_effect("plugin.example.glow"));

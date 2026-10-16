@@ -102,7 +102,7 @@
 	A new preset starting from the selected one	Thiết lập sẵn mới bắt đầu từ thiết lập đang chọn
 	A saved copy of the selected preset	Bản sao đã lưu của thiết lập đang chọn
 	About	Giới thiệu
-	About VectorCraft	Giới thiệu VectorCraft
+	About StitchFoundry	Giới thiệu StitchFoundry
 	above	phía trên
 	Above Text	Phía trên văn bản
 	Absolute	Tuyệt đối
@@ -217,7 +217,7 @@
 	Appearance of Black	Diện mạo màu đen
 	Appearance Panel	Bảng Diện mạo
 	Appearance panel	Bảng diện mạo
-	Applies the next time VectorCraft starts.	Áp dụng vào lần tiếp theo VectorCraft khởi động.
+	Applies the next time StitchFoundry starts.	Áp dụng vào lần tiếp theo StitchFoundry khởi động.
 	Applies when the linked file is relinked or updated.	Áp dụng khi tệp liên kết được liên kết lại hoặc cập nhật.
 	Apply	Áp dụng
 	Apply Brush	Áp dụng cọ
@@ -665,6 +665,7 @@
 	Convert to RGB	Chuyển sang RGB
 	Convert to Shape	Chuyển thành hình dạng
 	Convert to sRGB	Chuyển sang sRGB
+	Convert to Straight Lines	Chuyển thành đường thẳng
 	Convert:	Chuyển đổi:
 	Copied the CSS of {rules} object(s)	Đã sao chép CSS của {rules} đối tượng
 	Copies:	Bản sao:
@@ -687,6 +688,7 @@
 	Copyright Status:	Trạng thái bản quyền:
 	Copyright Symbol	Ký hiệu bản quyền
 	Corner	Góc
+	Corner Point Angle Threshold:	Ngưỡng góc của điểm góc:
 	Corner Radius	Bán kính góc
 	Corner Radius:	Bán kính góc:
 	Corner:	Góc:
@@ -779,6 +781,7 @@
 	Decimal:	Thập phân:
 	Decorative	Trang trí
 	Decrease Font Size	Giảm cỡ chữ
+	Decrease Font Size by Five Steps	Giảm cỡ chữ năm bước
 	Default	Mặc định
 	Default Actions	Hành động mặc định
 	Default Figure	Chữ số mặc định
@@ -1129,6 +1132,32 @@
 	Export All…	Xuất tất cả…
 	Export and Clipboard Transparency Flattener Settings	Cài đặt làm phẳng độ trong suốt khi xuất và dán
 	Export Artboard	Xuất bảng vẽ
+	A File per Object	Mỗi đối tượng một tệp
+	Example: {name}	Ví dụ: {name}
+	Export Preset:	Cài đặt sẵn xuất:
+	Folders:	Thư mục:
+	Insert	Chèn
+	Nothing is selected. Select the art to export, then open this tab again.	Chưa chọn gì. Hãy chọn hình cần xuất rồi mở lại thẻ này.
+	One File of the Selection	Một tệp cho vùng chọn
+	Start at:	Bắt đầu từ:
+	{n} objects selected	Đã chọn {n} đối tượng
+	Delete Export Preset	Xóa cài đặt sẵn xuất
+	Export Presets	Cài đặt sẵn xuất
+	Save Export Preset	Lưu cài đặt sẵn xuất
+	Export Layer	Xuất lớp
+	Export Selection	Xuất vùng chọn
+	All in One Folder	Tất cả trong một thư mục
+	By Size or Row	Theo kích thước hoặc hàng
+	By Format	Theo định dạng
+	By Artboard or Item	Theo bảng vẽ hoặc mục
+	By Item, Then Format	Theo mục, rồi theo định dạng
+	Document Name	Tên tài liệu
+	Artboard or Item Name	Tên bảng vẽ hoặc mục
+	Number (####)	Số (####)
+	Date (YYYYMMDD)	Ngày (YYYYMMDD)
+	Date (YYYY-MM-DD)	Ngày (YYYY-MM-DD)
+	Time (hhmmss)	Giờ (hhmmss)
+	PDF Print	PDF in ấn
 	Export As	Xuất thành
 	Export As PNG…	Xuất thành PNG…
 	Export As SVG…	Xuất thành SVG…
@@ -1206,6 +1235,7 @@
 	Fill Grid	Tô lưới
 	Fill new strokes	Tô nét mới
 	Keep selected	Giữ trạng thái đã chọn
+	Merge only with selection	Chỉ hợp nhất với vùng chọn
 	Fill New Type Objects With Placeholder Text	Tô đối tượng chữ mới bằng văn bản giữ chỗ
 	Fill Rule	Quy tắc tô
 	Fill with Placeholder Text	Tô bằng văn bản giữ chỗ
@@ -1449,7 +1479,7 @@
 	Hide Thumbnail	Ẩn hình thu nhỏ
 	Hide Thumbnails	Ẩn các hình thu nhỏ
 	Hide Transparency Grid	Ẩn lưới trong suốt
-	Hide VectorCraft	Ẩn VectorCraft
+	Hide StitchFoundry	Ẩn StitchFoundry
 	High	Cao
 	High (300 ppi)	Cao (300 ppi)
 	High Performance (discrete)	Hiệu suất cao (rời rạc)
@@ -1491,6 +1521,14 @@
 	Hyphenate	Gạch nối
 	Hyphenation	Gạch nối từ
 	Hyphenation…	Gạch nối từ…
+	Words Longer Than:	Từ dài hơn:
+	After First:	Sau số chữ đầu:
+	Before Last:	Trước số chữ cuối:
+	Hyphen Limit:	Giới hạn gạch nối:
+	Hyphenation Zone:	Vùng gạch nối:
+	letters	chữ cái
+	hyphens	gạch nối
+	Hyphenate Capitalized Words	Gạch nối từ viết hoa chữ đầu
 	ICC Profile	Hồ sơ ICC
 	ICF Bottom/Left	ICF Dưới/Trái
 	ICF Top/Right	ICF Trên/Phải
@@ -1576,6 +1614,7 @@
 	Include SVG Code	Bao gồm mã SVG
 	Include Swatches for Tints	Bao gồm mẫu màu cho sắc pha
 	Increase Font Size	Tăng cỡ chữ
+	Increase Font Size by Five Steps	Tăng cỡ chữ năm bước
 	Inflate…	Phình…
 	Info	Thông tin
 	Ink	Mực
@@ -2198,7 +2237,7 @@
 	Open Swatch Library	Mở thư viện mẫu màu
 	Open the URL in the web browser	Mở URL trong trình duyệt web
 	Opened with {} note(s): {}	Mở với {} ghi chú: {}
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Khi mở, những phần VectorCraft chưa đọc được ({what}) đã bị bỏ qua, nên thay thế sẽ mất chúng vĩnh viễn. Hãy lưu với tên khác để giữ lại.
+	Opening it left out what StitchFoundry can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Khi mở, những phần StitchFoundry chưa đọc được ({what}) đã bị bỏ qua, nên thay thế sẽ mất chúng vĩnh viễn. Hãy lưu với tên khác để giữ lại.
 	Open…	Mở…
 	Optical Margin Alignment	Căn lề quang học
 	Optimize for fast web view	Tối ưu để xem web nhanh
@@ -2225,6 +2264,7 @@
 	Outer Corner Tile	Ô góc ngoài
 	Outer Glow…	Phát sáng ngoài…
 	Outline	Đường bao
+	Outline Object	Đường bao đối tượng
 	Outline Others	Đường bao các mục khác
 	Outline Stroke	Đường bao nét
 	Outline Text	Chuyển chữ thành đường bao
@@ -2475,7 +2515,7 @@
 	Quarter Space	Khoảng cách một phần tư
 	Quick Actions	Hành động nhanh
 	Quickly start a new file	Tạo nhanh tệp mới
-	Quit VectorCraft	Thoát VectorCraft
+	Quit StitchFoundry	Thoát StitchFoundry
 	Radar Graph Tool	Công cụ Biểu đồ radar
 	Radial	Hướng tâm
 	Radial Blur	Mờ hướng tâm
@@ -2653,6 +2693,7 @@
 	Reset Envelope Mesh	Đặt lại lưới Envelope
 	Reset Envelope Shape	Đặt lại hình dạng Envelope
 	Reset Essentials	Đặt lại Essentials
+	Reset Horizontal Scale	Đặt lại tỷ lệ ngang
 	Reset Keyboard Shortcuts	Đặt lại phím tắt
 	Reset OpenType Features	Đặt lại tính năng OpenType
 	Reset Panel	Đặt lại bảng
@@ -2660,6 +2701,7 @@
 	Reset Profiles	Đặt lại hồ sơ màu
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
+	Rotate View to Selection	Xoay chế độ xem theo vùng chọn
 	Reset Ruler Origin	Đặt lại gốc thước
 	Reset the rows to the artwork's colors	Đặt lại các hàng về màu của tác phẩm
 	Reset to Default	Đặt lại về mặc định
@@ -2799,6 +2841,7 @@
 	Save Save for Web Preset	Lưu thiết lập sẵn Lưu cho Web
 	Save selected colors as swatches	Lưu màu đã chọn thành mẫu màu
 	Save Selection…	Lưu vùng chọn…
+	Update Selection	Cập nhật vùng chọn
 	Save Swatch Library	Lưu thư viện mẫu màu
 	Save Swatch Library…	Lưu thư viện mẫu màu…
 	Save the current layout under this name	Lưu bố cục hiện tại với tên này
@@ -3062,6 +3105,7 @@
 	Show Modified	Hiện đã sửa đổi
 	Show Note	Hiện ghi chú
 	Show Options	Hiện tùy chọn
+	Show Original Path	Hiện đường dẫn gốc
 	Color Panel Options	Tùy chọn bảng màu
 	Show Package	Hiện gói
 	Show Panel	Hiện bảng
@@ -3580,11 +3624,11 @@
 	Vector Halftone	Halftone vector
 	Vector Halftone…	Halftone vector…
 	Vector illustration — fast, open, scriptable.	Minh họa vector — nhanh, mở, có thể lập trình.
-	VectorCraft copies the fonts to {folder}.	VectorCraft sao chép phông chữ vào {folder}.
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft không thoát bình thường lần trước. Các tài liệu này có thay đổi chưa lưu:
-	VectorCraft documents: one locked object, updated when the file changes.	Tài liệu VectorCraft: một đối tượng bị khóa, cập nhật khi tệp thay đổi.
-	VectorCraft Help…	Trợ giúp VectorCraft…
-	VectorCraft on GitHub	VectorCraft trên GitHub
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry sao chép phông chữ vào {folder}.
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry không thoát bình thường lần trước. Các tài liệu này có thay đổi chưa lưu:
+	StitchFoundry documents: one locked object, updated when the file changes.	Tài liệu StitchFoundry: một đối tượng bị khóa, cập nhật khi tệp thay đổi.
+	StitchFoundry Help…	Trợ giúp StitchFoundry…
+	StitchFoundry on GitHub	StitchFoundry trên GitHub
 	Vectors	Vector
 	Version	Phiên bản
 	Version {version} — open-source vector illustration in pure Rust.	Phiên bản {version} — minh họa vector mã nguồn mở bằng Rust thuần túy.
@@ -3630,7 +3674,7 @@
 	Web Snap:	Khớp màu Web:
 	Weight	Độ dày
 	Weight:	Độ dày:
-	Welcome to VectorCraft	Chào mừng đến với VectorCraft
+	Welcome to StitchFoundry	Chào mừng đến với StitchFoundry
 	When pasting text	Khi dán văn bản
 	White	Trắng
 	White Intensity	Cường độ trắng
@@ -3795,7 +3839,7 @@ theme	Appearance	Giao diện
 @msg	action is required	action là bắt buộc
 @msg	add a format to export	thêm định dạng để xuất
 @msg	already editing a pattern	đang chỉnh sửa họa tiết
-@msg	an image VectorCraft can't read was left out	một ảnh VectorCraft không đọc được đã bị bỏ qua
+@msg	an image StitchFoundry can't read was left out	một ảnh StitchFoundry không đọc được đã bị bỏ qua
 @msg	an image whose data is cut short was left out	một ảnh bị cắt ngắn dữ liệu đã bị bỏ qua
 @msg	an object can't be read	không thể đọc một đối tượng
 @msg	an object in perspective would leave the edited grid	đối tượng trong phối cảnh sẽ rời khỏi lưới đang chỉnh sửa
@@ -3835,12 +3879,14 @@ theme	Appearance	Giao diện
 @msg	can't encode the document: {0}	không thể mã hóa tài liệu: {0}
 @msg	can't parse shortcut `{c}`	không thể phân tích phím tắt `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	không thể phân tích phím tắt `{s}` cho `{k}`
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	không thể lưu phiên bản {0}: VectorCraft ghi phiên bản {MIN_VERSION} đến {VERSION}
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	không thể lưu phiên bản {0}: StitchFoundry ghi phiên bản {MIN_VERSION} đến {VERSION}
 @msg	can't write .{ext} images	không thể ghi ảnh .{ext}
 @msg	cannot distort a zero-size bounding box	không thể làm méo khung giới hạn kích thước bằng không
 @msg	cannot read PDF: {0}	không thể đọc PDF: {0}
 @msg	cannot split an open path at its end point	không thể tách đường dẫn mở tại điểm cuối
 @msg	check an asset to export	hãy chọn một asset để xuất
+@msg	check a layer to export	hãy đánh dấu một lớp để xuất
+@msg	select the art to export first	hãy chọn hình cần xuất trước
 @msg	choice must be "merge" or "add", not `{choice}`	lựa chọn phải là "merge" hoặc "add", không phải `{choice}`
 @msg	choose a direction to divide in	hãy chọn hướng để chia
 @msg	choose a folder to export to	hãy chọn thư mục để xuất vào
@@ -3901,7 +3947,7 @@ theme	Appearance	Giao diện
 @msg	Exported {what}	Đã xuất {what}
 @msg	Exported {what} with {_1} note(s): {first}	Đã xuất {what} với {_1} ghi chú: {first}
 @msg	Exporting {_1}	Đang xuất {_1}
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	phiên bản tệp {0} mới hơn VectorCraft hỗ trợ ({VERSION})
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	phiên bản tệp {0} mới hơn StitchFoundry hỗ trợ ({VERSION})
 @msg	Flatten Transparency: select objects to flatten	Dẹp phẳng độ trong suốt: hãy chọn đối tượng để dẹp phẳng
 @msg	Flatten Transparency: {e}	Dẹp phẳng độ trong suốt: {e}
 @msg	freeform line {i} must be an array of point indices	đường tự do {i} phải là mảng chỉ mục điểm
@@ -3934,7 +3980,7 @@ theme	Appearance	Giao diện
 @msg	invalid parameters for `{cmd}`: {msg}	tham số không hợp lệ cho `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
 @msg	invalid restored panel group	nhóm bảng được phục hồi không hợp lệ
-@msg	is not an image VectorCraft reads	không phải ảnh mà VectorCraft đọc được
+@msg	is not an image StitchFoundry reads	không phải ảnh mà StitchFoundry đọc được
 @msg	it ends inside a layer	nó kết thúc bên trong một lớp
 @msg	it has art outside its layers	nó có tác phẩm ngoài các lớp
 @msg	it has more than one artboard	nó có nhiều hơn một bảng vẽ
@@ -3944,9 +3990,9 @@ theme	Appearance	Giao diện
 @msg	it has too many text objects	nó có quá nhiều đối tượng văn bản
 @msg	it has too many values in a row	nó có quá nhiều giá trị liên tiếp
 @msg	it has too much text	nó có quá nhiều văn bản
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	nó có {_1}, VectorCraft chưa đọc được từ đó
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	nó dùng `{at}`, trình đọc PostScript của VectorCraft không hỗ trợ
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	nó dùng `{at}`, trình đọc PostScript của VectorCraft không hỗ trợ, trong {procs}
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	nó có {_1}, StitchFoundry chưa đọc được từ đó
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	nó dùng `{at}`, trình đọc PostScript của StitchFoundry không hỗ trợ
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	nó dùng `{at}`, trình đọc PostScript của StitchFoundry không hỗ trợ, trong {procs}
 @msg	its editing data doesn't say where its art is	dữ liệu chỉnh sửa không cho biết vị trí tác phẩm
 @msg	its editing data doesn't say where its artboard is	dữ liệu chỉnh sửa không cho biết vị trí bảng vẽ
 @msg	its editing data has no layers	dữ liệu chỉnh sửa không có lớp
@@ -3967,7 +4013,7 @@ theme	Appearance	Giao diện
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Hợp nhất tô trực tiếp: chọn nhóm tô trực tiếp và các đường dẫn để thêm
 @msg	Live Paint: select paths or compound paths	Tô trực tiếp: chọn đường dẫn hoặc đường dẫn phức
 @msg	Live Paint: these paths are too degenerate to paint	Tô trực tiếp: các đường dẫn này quá suy biến để tô
-@msg	Loading VectorCraft…	Đang tải VectorCraft…
+@msg	Loading StitchFoundry…	Đang tải StitchFoundry…
 @msg	Make Guides: select paths	Tạo đường căn: hãy chọn đường dẫn
 @msg	missing `folder`	thiếu `folder`
 @msg	missing `id` (see plugin.list)	thiếu `id` (xem plugin.list)
@@ -4043,6 +4089,7 @@ theme	Appearance	Giao diện
 @msg	no saved presets	không có thiết lập sẵn đã lưu
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	không có thiết lập sẵn in đã lưu tên `{name}` ({DEFAULT_PRESET} được bảo vệ: tạo mới từ nó)
 @msg	no saved profiles	không có hồ sơ đã lưu
+@msg	no saved selection recalled	chưa khôi phục vùng chọn đã lưu nào
 @msg	no saved selections	không có vùng chọn đã lưu
 @msg	No saved selections (Select → Save Selection…)	Không có vùng chọn đã lưu (Chọn → Lưu vùng chọn…)
 @msg	no saved themes	chưa có bộ màu nào được lưu
@@ -4081,8 +4128,8 @@ theme	Appearance	Giao diện
 @msg	not a PSD file	không phải tệp PSD
 @msg	not a stored central record	không phải bản ghi trung tâm đã lưu
 @msg	not a valid plug-in module: {0}	không phải mô-đun plug-in hợp lệ: {0}
-@msg	not a VectorCraft file: {0}	không phải tệp VectorCraft: {0}
-@msg	not a VectorCraft shortcut set (missing `overrides`)	không phải bộ phím tắt VectorCraft (thiếu `overrides`)
+@msg	not a StitchFoundry file: {0}	không phải tệp StitchFoundry: {0}
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	không phải bộ phím tắt StitchFoundry (thiếu `overrides`)
 @msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	không phải bộ phím tắt: văn bản không bắt đầu bằng một tên có dấu gạch chéo và một dấu ngoặc nhọn mở
 @msg	This shortcut file is in a form StitchFoundry can't read.	Tệp phím tắt này có dạng mà StitchFoundry không đọc được.
 @msg	not an EMF or WMF file	không phải tệp EMF hoặc WMF
@@ -4227,7 +4274,7 @@ theme	Appearance	Giao diện
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	không đọc được các lớp của tệp từ dữ liệu chỉnh sửa ({_1}): chúng được lấy từ phần PDF
 @msg	the artboard to fit must be a positive size up to {_1} pt	bảng vẽ cần khớp phải có kích thước dương tối đa {_1} pt
 @msg	the background worker stopped	tiến trình nền đã dừng
-@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	tệp nén giải nén ra nhiều hơn VectorCraft đọc ({_1} MB tài liệu, {_2} MB mỗi ảnh)
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	tệp nén giải nén ra nhiều hơn StitchFoundry đọc ({_1} MB tài liệu, {_2} MB mỗi ảnh)
 @msg	the compressed file unpacks to more than {_1} MB	tệp nén giải nén ra hơn {_1} MB
 @msg	the document has never been saved	tài liệu chưa bao giờ được lưu
 @msg	the document has no artboard	tài liệu không có bảng vẽ
@@ -4249,9 +4296,9 @@ theme	Appearance	Giao diện
 @msg	the file was read up to an error ({why}): what follows it was left out	tệp được đọc đến khi gặp lỗi ({why}): phần sau đó bị bỏ qua
 @msg	the file's preview header points outside the file	tiêu đề xem trước của tệp trỏ ra ngoài tệp
 @msg	the files come to more than 1 GB: add fewer at a time	các tệp tổng cộng hơn 1 GB: thêm ít hơn mỗi lần
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Bộ xử lý đồ họa thử trước không hiển thị được cửa sổ, VectorCraft đã khởi động lại trên {summary}
-@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Lần khởi động trước của VectorCraft đã dừng trên {name} trước khi cửa sổ xuất hiện, nên VectorCraft đã khởi động trên {summary}. Để thử lại bộ xử lý đồ họa đó, hãy đổi Tùy chọn › Hiệu suất › Bộ xử lý đồ họa hoặc khởi động với biến WGPU_BACKEND được đặt
-@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Lần khởi động trước của VectorCraft đã dừng khi đang liệt kê các bộ xử lý đồ họa, nên VectorCraft đã khởi động trên {summary} chỉ với OpenGL. Để thử lại các giao diện đồ họa khác, hãy đổi Tùy chọn › Hiệu suất › Bộ xử lý đồ họa hoặc khởi động với biến WGPU_BACKEND được đặt
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Bộ xử lý đồ họa thử trước không hiển thị được cửa sổ, StitchFoundry đã khởi động lại trên {summary}
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Lần khởi động trước của StitchFoundry đã dừng trên {name} trước khi cửa sổ xuất hiện, nên StitchFoundry đã khởi động trên {summary}. Để thử lại bộ xử lý đồ họa đó, hãy đổi Tùy chọn › Hiệu suất › Bộ xử lý đồ họa hoặc khởi động với biến WGPU_BACKEND được đặt
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Lần khởi động trước của StitchFoundry đã dừng khi đang liệt kê các bộ xử lý đồ họa, nên StitchFoundry đã khởi động trên {summary} chỉ với OpenGL. Để thử lại các giao diện đồ họa khác, hãy đổi Tùy chọn › Hiệu suất › Bộ xử lý đồ họa hoặc khởi động với biến WGPU_BACKEND được đặt
 @msg	The graphics were lost and couldn't be restarted.	Đồ họa đã mất và không thể khởi động lại.
 @msg	The graphics were lost and have been restarted	Đồ họa đã mất và đã được khởi động lại
 @msg	the guide is on a hidden or locked layer	đường căn nằm trên lớp ẩn hoặc bị khóa
@@ -4339,10 +4386,10 @@ theme	Appearance	Giao diện
 @msg	unsupported: {0}	không được hỗ trợ: {0}
 @msg	Updated {_1} image(s)	Đã cập nhật {_1} ảnh
 @msg	Updated {_1} linked file(s) changed on disk	Đã cập nhật {_1} tệp liên kết đã thay đổi trên đĩa
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft không tìm kiếm trong thư mục của ứng dụng khác hoặc hệ thống: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft không tìm kiếm thư mục Shared hoặc Public trong Users: {path}
-@msg	VectorCraft failed to start: {e}	VectorCraft khởi động thất bại: {e}
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Thư mục Phông chữ của VectorCraft chưa được đặt ở đây: ứng dụng máy tính và vectorcraft-cli đặt nó
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry không tìm kiếm trong thư mục của ứng dụng khác hoặc hệ thống: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry không tìm kiếm thư mục Shared hoặc Public trong Users: {path}
+@msg	StitchFoundry failed to start: {e}	StitchFoundry khởi động thất bại: {e}
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Thư mục Phông chữ của StitchFoundry chưa được đặt ở đây: ứng dụng máy tính và vectorcraft-cli đặt nó
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	tệp phiên bản {0} không thể nén: chỉ phiên bản {COMPRESSED_SINCE} trở lên mới mở tệp nén
 @msg	width and height are at least 1 pixel	chiều rộng và chiều cao phải ít nhất 1 pixel
 @msg	workspace name can't be empty	tên không gian làm việc không được để trống
@@ -4480,3 +4527,24 @@ theme	Appearance	Giao diện
 @msg	choose a source folder	hãy chọn thư mục nguồn
 @msg	open a document with data sets	hãy mở một tài liệu có tập dữ liệu
 @msg	the action has no steps	hành động không có bước nào
+
+# User Interface › Accent Color
+	Accent Color	Màu nhấn
+	Amber	Hổ phách
+	Coral	San hô
+	Violet	Tím
+	Pink	Hồng
+	Sketch	Phác thảo
+	Halftone Pattern…	Mẫu bán sắc…
+	Halftone Pattern	Mẫu bán sắc
+	Pattern Type	Loại mẫu
+	Dot	Chấm
+# User Interface › Color Scheme
+	Color Scheme	Bảng phối màu
+	Modern	Hiện đại
+
+# Symbol Options › Export Type
+	Export Type:	Kiểu xuất:
+	Movie Clip	Clip phim
+@msg	name is empty	tên trống
+@msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`

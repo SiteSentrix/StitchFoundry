@@ -557,6 +557,7 @@
 	Convert to RGB	In RGB konvertieren
 	Convert to Shape	In Form umwandeln
 	Convert to sRGB	In sRGB konvertieren
+	Convert to Straight Lines	In gerade Linien umwandeln
 	Convert:	Konvertieren:
 	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
 	Copies:	Kopien:
@@ -575,6 +576,7 @@
 	Copyright Notice:	Copyright-Vermerk:
 	Copyright Status:	Copyright-Status:
 	Copyright Symbol	Copyright-Symbol
+	Corner Point Angle Threshold:	Winkelschwelle für Eckpunkte:
 	Corner Radius	Eckenradius
 	Corner Radius:	Eckenradius:
 	Corner:	Ecke:
@@ -952,6 +954,32 @@
 	Export All…	Alle exportieren…
 	Export and Clipboard Transparency Flattener Settings	Einstellungen für die Transparenzreduzierung bei Export und Zwischenablage
 	Export Artboard	Zeichenfläche exportieren
+	A File per Object	Eine Datei pro Objekt
+	Example: {name}	Beispiel: {name}
+	Export Preset:	Exportvorgabe:
+	Folders:	Ordner:
+	Insert	Einfügen
+	Nothing is selected. Select the art to export, then open this tab again.	Nichts ausgewählt. Wählen Sie das zu exportierende Bildmaterial aus und öffnen Sie diese Registerkarte erneut.
+	One File of the Selection	Eine Datei der Auswahl
+	Start at:	Beginnen bei:
+	{n} objects selected	{n} Objekte ausgewählt
+	Delete Export Preset	Exportvorgabe löschen
+	Export Presets	Exportvorgaben
+	Save Export Preset	Exportvorgabe speichern
+	Export Layer	Ebene exportieren
+	Export Selection	Auswahl exportieren
+	All in One Folder	Alles in einem Ordner
+	By Size or Row	Nach Größe oder Zeile
+	By Format	Nach Format
+	By Artboard or Item	Nach Zeichenfläche oder Element
+	By Item, Then Format	Nach Element, dann Format
+	Document Name	Dokumentname
+	Artboard or Item Name	Name der Zeichenfläche oder des Elements
+	Number (####)	Nummer (####)
+	Date (YYYYMMDD)	Datum (JJJJMMTT)
+	Date (YYYY-MM-DD)	Datum (JJJJ-MM-TT)
+	Time (hhmmss)	Uhrzeit (hhmmss)
+	PDF Print	PDF Druck
 	Export As	Exportieren als
 	Export As PNG…	Als PNG exportieren…
 	Export As SVG…	Als SVG exportieren…
@@ -1024,6 +1052,7 @@
 	Fill and Stroke	Fläche und Kontur
 	Fill new strokes	Neue Striche füllen
 	Keep selected	Ausgewählt lassen
+	Merge only with selection	Nur mit Auswahl zusammenfügen
 	Fill Color	Flächenfarbe
 	Fill New Type Objects With Placeholder Text	Neue Textobjekte mit Platzhaltertext füllen
 	Fill Rule	Füllregel
@@ -1046,8 +1075,11 @@
 	Fit dashes to corners and ends	Striche an Ecken und Enden anpassen
 	Fit Headline	Überschrift einpassen
 	Decrease Font Size	Schriftgrad verringern
+	Decrease Font Size by Five Steps	Schriftgrad um fünf Schritte verringern
 	Increase Font Size	Schriftgrad erhöhen
+	Increase Font Size by Five Steps	Schriftgrad um fünf Schritte erhöhen
 	Reset Tracking and Kerning	Laufweite und Kerning zurücksetzen
+	Reset Horizontal Scale	Horizontale Skalierung zurücksetzen
 	Spacing	Abstand
 	Step Type	Text schrittweise ändern
 	Fit in View	In Ansicht einpassen
@@ -1286,6 +1318,14 @@
 	Hyphenate	Silbentrennung
 	Hyphenation	Silbentrennung
 	Hyphenation…	Silbentrennung…
+	Words Longer Than:	Wörter länger als:
+	After First:	Nach den ersten:
+	Before Last:	Vor den letzten:
+	Hyphen Limit:	Trennstrichgrenze:
+	Hyphenation Zone:	Trennzone:
+	letters	Buchstaben
+	hyphens	Trennstriche
+	Hyphenate Capitalized Words	Großgeschriebene Wörter trennen
 	ICC Profile	ICC-Profil
 	Identify Objects By	Objekte identifizieren nach
 	Ignore	Ignorieren
@@ -1928,6 +1968,7 @@
 	Out Tangent Handles	Ausgehende Tangentengriffe
 	Outer Glow…	Schein nach außen…
 	Outline	Pfadansicht
+	Outline Object	Objekt in Pfade umwandeln
 	Outline Others	Andere in Pfadansicht
 	Outline Stroke	Konturlinie
 	Outline Text	Text in Pfade umwandeln
@@ -2354,6 +2395,7 @@
 	Reset Profiles	Profile zurücksetzen
 	Rotate View	Ansicht drehen
 	Reset Rotate View	Ansichtsdrehung zurücksetzen
+	Rotate View to Selection	Ansicht nach Auswahl drehen
 	Reset the rows to the artwork's colors	Zeilen auf die Farben der Grafik zurücksetzen
 	Reset to Default	Auf Standard zurücksetzen
 	Reset to White, Black	Auf Weiß, Schwarz zurücksetzen
@@ -2462,6 +2504,7 @@
 	Save Save for Web Preset	Vorgabe für „Für Web speichern“ speichern
 	Save selected colors as swatches	Ausgewählte Farben als Farbfelder speichern
 	Save Selection…	Auswahl speichern…
+	Update Selection	Auswahl aktualisieren
 	Save Swatch Library	Farbfeldbibliothek speichern
 	Save Swatch Library…	Farbfeldbibliothek speichern…
 	Save the current layout under this name	Das aktuelle Layout unter diesem Namen speichern
@@ -2700,6 +2743,7 @@
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Show Original Path	Originalpfad einblenden
 	Color Panel Options	Optionen für das Farbbedienfeld
 	Show Package	Paket anzeigen
 	Show Panel	Bedienfeld einblenden
@@ -3583,6 +3627,8 @@ theme	Appearance	Erscheinungsbild
 @msg	cannot split an open path at its end point	ein offener Pfad kann nicht an seinem Endpunkt geteilt werden
 @msg	closing needs three anchors	zum Schließen sind drei Ankerpunkte nötig
 @msg	check an asset to export	markieren Sie ein Asset für den Export
+@msg	check a layer to export	wählen Sie eine Ebene für den Export
+@msg	select the art to export first	wählen Sie zuerst das zu exportierende Bildmaterial aus
 @msg	choice must be "merge" or "add", not `{choice}`	choice muss "merge" oder "add" sein, nicht `{choice}`
 @msg	choose a direction to divide in	wählen Sie eine Richtung für die Unterteilung
 @msg	choose a folder to export to	wählen Sie einen Ordner für den Export
@@ -3691,6 +3737,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no saved presets	keine gespeicherten Vorgaben
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	keine gespeicherte Druckvorgabe namens `{name}` ({DEFAULT_PRESET} ist geschützt: Erstellen Sie daraus eine neue)
 @msg	no saved profiles	keine gespeicherten Profile
+@msg	no saved selection recalled	keine gespeicherte Auswahl abgerufen
 @msg	no saved selections	keine gespeicherten Auswahlen
 @msg	no saved themes	keine gespeicherten Themen
 @msg	no segment {segment} on line {line}	kein Segment {segment} auf Linie {line}
@@ -5714,3 +5761,18 @@ machine	Stop	Stopp
 	Arc Up	Bogen nach oben
 	Arc Down	Bogen nach unten
 	To follow a line of your own, draw it first, select it, then Add Words.	Um einer eigenen Linie zu folgen, zuerst die Linie zeichnen, auswählen und dann Worte hinzufügen wählen.
+	Accent Color	Akzentfarbe
+	Amber	Bernstein
+	Violet	Violett
+	Pink	Pink
+	Sketch	Zeichenfilter
+	Halftone Pattern…	Rasterungseffekt…
+	Halftone Pattern	Rasterungseffekt
+	Pattern Type	Musterart
+	Dot	Punkt
+	Color Scheme	Farbschema
+	Modern	Modern
+	Export Type:	Exporttyp:
+	Movie Clip	Movieclip
+@msg	name is empty	Name ist leer
+@msg	no symbol named `{n}`	kein Symbol namens `{n}`

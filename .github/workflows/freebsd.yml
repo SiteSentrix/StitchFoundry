@@ -1,19 +1,25 @@
-# Builds and tests the workspace on FreeBSD, inside a FreeBSD VM on a Linux runner
-# (GitHub has no FreeBSD runners). GPU tests skip themselves when the VM has no adapter.
-# The `package` job checks packaging/freebsd/package.sh (the release job runs it for real).
+# FreeBSD build and package check in a QEMU VM.
 name: FreeBSD
 
 on:
   push:
     branches: [main]
-  pull_request:
     paths:
-      - Cargo.toml
-      - Cargo.lock
-      - "**/Cargo.toml"
-      - .github/workflows/freebsd.yml
-      - packaging/freebsd/**
-      - packaging/env.sh
+      - ".github/workflows/freebsd.yml"
+      - "packaging/freebsd/**"
+      - "packaging/env.sh"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/freebsd.yml"
+      - "packaging/freebsd/**"
+      - "packaging/env.sh"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
   workflow_dispatch:
 
 concurrency:

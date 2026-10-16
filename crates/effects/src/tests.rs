@@ -573,6 +573,18 @@ fn outline_stroke_uses_context_stroke() {
 }
 
 #[test]
+fn outline_object_is_a_geometry_effect_that_keeps_the_path() {
+    let info = effect_info("path.outlineObject").unwrap();
+    assert_eq!((info.label, info.menu, &info.defaults, info.raster), ("Outline Object", &["Effect", "Path"][..], &json!({}), false));
+    assert!(is_geometry("path.outlineObject"));
+    assert_eq!(run("path.outlineObject", json!({}), &square()), square());
+    // The effects after it reshape the same geometry.
+    let b = square().bounds().unwrap();
+    let offset = fx("path.offsetPath", json!({"offset": 5}));
+    assert_eq!(apply_geometry(&[fx("path.outlineObject", json!({})), offset.clone()], &square(), b), apply_geometry(&[offset], &square(), b));
+}
+
+#[test]
 fn convert_to_shape_sizes() {
     let r = run("convertToShape.rectangle", json!({"extraW": 20, "extraH": 10}), &square()).bounds().unwrap();
     assert!(close(r.width(), 120.0, 1e-9) && close(r.height(), 110.0, 1e-9));

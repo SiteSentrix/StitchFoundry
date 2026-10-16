@@ -150,7 +150,9 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     assert!(has(&texts, LABEL), "context menu: {texts:?}");
     let texts = click_canvas(&mut app, &ctx, at(&texts, LABEL), PointerButton::Primary);
     assert_eq!(anchor_count(&app, id), 3);
-    assert!(!has(&texts, LABEL), "the menu closes after the command");
+    assert!(!has(&texts, "Cut Path at Selected Anchor Points"), "the menu closes after the command");
+    // The next anchor along is selected (#2241), so the task bar offers the command again.
+    assert_eq!(texts.iter().filter(|(t, _)| t == LABEL).count(), 1, "task bar: {texts:?}");
 }
 
 #[test]

@@ -632,6 +632,33 @@ fn images_with_alpha_channels() {
     assert!(art(&r.doc).is_empty() && r.warnings.iter().any(|w| w.contains("cut short")));
 }
 
+/// The raster matrix `[a b c d tx ty]` is an art-space matrix (y up) applied to the image's pixels
+/// with their rows running downwards, `(u, -v)`: art x = a·u − c·v + tx, art y = b·u − d·v + ty.
+/// Without rotation (b = c = 0) that is the same as flipping the matrix's result; a rotated image
+/// tells the two apart (#2269).
+#[test]
+fn a_rotated_image_is_placed_as_its_matrix_maps_it() {
+    // Turned 90° counter-clockwise: in art space each row runs upwards, the next row to its right.
+    let doc = read(&image("[ 0 10 -10 0 50 50 ]", (2, 1), ("DeviceRGB", 3, 0), &[255, 0, 0, 0, 0, 255], 6)).unwrap().doc;
+    let xf = pixels(&doc).1;
+    // Art (x, y) is (x, 100 - y) on the page.
+    let page = |x: f64, y: f64| Point::new(x, 100.0 - y);
+    assert_eq!(xf * Point::ZERO, page(50.0, 50.0), "the top left pixel's corner stays at the matrix's origin");
+    assert_eq!(xf * Point::new(2.0, 0.0), page(50.0, 70.0), "the first row runs up");
+    assert_eq!(xf * Point::new(0.0, 1.0), page(60.0, 50.0), "the next row is to its right");
+    // Any rotation and scale: the same formula.
+    let (s, c) = 30f64.to_radians().sin_cos();
+    let m = [3.0 * c, 3.0 * s, -2.0 * s, 2.0 * c, 40.0, 60.0];
+    let matrix = format!("[ {} ]", m.map(|v| v.to_string()).join(" "));
+    let doc = read(&image(&matrix, (2, 1), ("DeviceRGB", 3, 0), &[255, 0, 0, 0, 0, 255], 6)).unwrap().doc;
+    let xf = pixels(&doc).1;
+    for (u, v) in [(0.0, 0.0), (2.0, 0.0), (0.0, 1.0), (2.0, 1.0)] {
+        let want = page(m[0] * u - m[2] * v + m[4], m[1] * u - m[3] * v + m[5]);
+        let got = xf * Point::new(u, v);
+        assert!((got - want).hypot() < 1e-9, "pixel ({u}, {v}): {got:?}, want {want:?}");
+    }
+}
+
 /// CMYK images keep their ink amounts, as the file's PDF part keeps them, and an alpha channel
 /// becomes their opacity mask: a grayscale image over the image.
 #[test]

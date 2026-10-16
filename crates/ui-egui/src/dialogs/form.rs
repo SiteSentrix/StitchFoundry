@@ -55,7 +55,6 @@ fn lengths(kind: &str) -> &'static [&'static str] {
         "star" => &["radius1", "radius2"],
         "lineSegment" => &["length"],
         "offsetPath" => &["offset"],
-        "simplify" => &["tolerance"],
         _ => &[],
     }
 }

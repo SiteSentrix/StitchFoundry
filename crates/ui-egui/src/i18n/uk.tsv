@@ -566,6 +566,7 @@
 	Convert to RGB	Перетворити на RGB
 	Convert to Shape	Перетворити на фігуру
 	Convert to sRGB	Перетворити на sRGB
+	Convert to Straight Lines	Перетворити на прямі лінії
 	Convert:	Перетворити:
 	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
 	Copies:	Копії:
@@ -584,6 +585,7 @@
 	Copyright Notice:	Повідомлення про авторські права:
 	Copyright Status:	Статус авторських прав:
 	Copyright Symbol	Символ авторського права
+	Corner Point Angle Threshold:	Пороговий кут кутових точок:
 	Corner Radius	Радіус кута
 	Corner Radius:	Радіус кута:
 	Corner:	Кут:
@@ -962,6 +964,32 @@
 	Export All…	Експортувати все…
 	Export and Clipboard Transparency Flattener Settings	Параметри зведення прозорості для експорту та буфера обміну
 	Export Artboard	Експортувати монтажну область
+	A File per Object	Окремий файл для кожного об’єкта
+	Example: {name}	Приклад: {name}
+	Export Preset:	Набір параметрів експорту:
+	Folders:	Теки:
+	Insert	Вставити
+	Nothing is selected. Select the art to export, then open this tab again.	Нічого не виділено. Виділіть об’єкти для експорту й знову відкрийте цю вкладку.
+	One File of the Selection	Один файл із виділення
+	Start at:	Почати з:
+	{n} objects selected	Виділено об’єктів: {n}
+	Delete Export Preset	Видалити набір параметрів експорту
+	Export Presets	Набори параметрів експорту
+	Save Export Preset	Зберегти набір параметрів експорту
+	Export Layer	Експортувати шар
+	Export Selection	Експортувати виділення
+	All in One Folder	Усе в одну теку
+	By Size or Row	За розміром або рядком
+	By Format	За форматом
+	By Artboard or Item	За монтажною областю або елементом
+	By Item, Then Format	За елементом, потім за форматом
+	Document Name	Назва документа
+	Artboard or Item Name	Назва монтажної області або елемента
+	Number (####)	Номер (####)
+	Date (YYYYMMDD)	Дата (РРРРММДД)
+	Date (YYYY-MM-DD)	Дата (РРРР-ММ-ДД)
+	Time (hhmmss)	Час (ггххсс)
+	PDF Print	PDF для друку
 	Export As	Експортувати як
 	Export As PNG…	Експортувати як PNG…
 	Export As SVG…	Експортувати як SVG…
@@ -1034,6 +1062,7 @@
 	Fill and Stroke	Заливка та обведення
 	Fill new strokes	Заповнювати нові обведення
 	Keep selected	Залишати вибраним
+	Merge only with selection	Об’єднувати лише з виділеним
 	Fill Color	Колір заливки
 	Fill New Type Objects With Placeholder Text	Заповнювати нові текстові об’єкти текстом-заповнювачем
 	Fill Rule	Правило заливки
@@ -1056,8 +1085,11 @@
 	Fit dashes to corners and ends	Підганяти штрихи до кутів та кінців
 	Fit Headline	Підігнати заголовок
 	Decrease Font Size	Зменшити розмір шрифту
+	Decrease Font Size by Five Steps	Зменшити розмір шрифту на п’ять кроків
 	Increase Font Size	Збільшити розмір шрифту
+	Increase Font Size by Five Steps	Збільшити розмір шрифту на п’ять кроків
 	Reset Tracking and Kerning	Скинути трекінг і кернінг
+	Reset Horizontal Scale	Скинути масштаб по горизонталі
 	Spacing	Інтервал
 	Step Type	Підганяти текст кроками
 	Fit in View	Вписати у вигляд
@@ -1297,6 +1329,14 @@
 	Hyphenate	Розставляти переноси
 	Hyphenation	Розміщення переносів
 	Hyphenation…	Розміщення переносів…
+	Words Longer Than:	Слова, довші за:
+	After First:	Після перших:
+	Before Last:	Перед останніми:
+	Hyphen Limit:	Межа переносів:
+	Hyphenation Zone:	Зона переносу:
+	letters	літер
+	hyphens	переносів
+	Hyphenate Capitalized Words	Переносити слова з великої літери
 	ICC Profile	Профіль ICC
 	Identify Objects By	Визначати об’єкти по
 	Ignore	Ігнорувати
@@ -1971,6 +2011,7 @@
 	Out Tangent Handles	Маркери вихідної дотичної
 	Outer Glow…	Зовнішнє свічення…
 	Outline	Контур
+	Outline Object	Обвести об’єкт
 	Outline Others	Обвести інші
 	Outline Stroke	Обвести обведення
 	Outline Text	Обвести текст
@@ -2397,6 +2438,7 @@
 	Reset Profiles	Скинути профілі
 	Rotate View	Повернути вид
 	Reset Rotate View	Скинути поворот виду
+	Rotate View to Selection	Повернути вид за виділенням
 	Reset the rows to the artwork's colors	Скинути рядки до кольорів малюнка
 	Reset to Default	Скинути до значень за замовчуванням
 	Reset to White, Black	Скинути до білого, чорного
@@ -2505,6 +2547,7 @@
 	Save Save for Web Preset	Зберегти набір «Зберегти для Інтернету»
 	Save selected colors as swatches	Зберегти вибрані кольори як зразки
 	Save Selection…	Зберегти виділення…
+	Update Selection	Оновити виділення
 	Save Swatch Library	Зберегти бібліотеку зразків
 	Save Swatch Library…	Зберегти бібліотеку зразків…
 	Save the current layout under this name	Зберегти поточний макет під цим ім’ям
@@ -2743,6 +2786,7 @@
 	Show Modified	Показати змінені
 	Show Note	Показати примітку
 	Show Options	Показати параметри
+	Show Original Path	Показати початковий контур
 	Color Panel Options	Параметри панелі «Колір»
 	Show Package	Показати пакет
 	Show Panel	Показати панель
@@ -3667,6 +3711,8 @@ axis	Both	Обидві
 @msg	cannot split an open path at its end point	не можна розділити відкритий контур у його кінцевій точці
 @msg	closing needs three anchors	для замикання потрібні три опорні точки
 @msg	check an asset to export	позначте ресурс для експорту
+@msg	check a layer to export	позначте шар для експорту
+@msg	select the art to export first	спочатку виділіть об’єкти для експорту
 @msg	choice must be "merge" or "add", not `{choice}`	choice має бути "merge" або "add", а не `{choice}`
 @msg	choose a direction to divide in	виберіть напрямок для поділу
 @msg	choose a folder to export to	виберіть папку для експорту
@@ -3774,6 +3820,7 @@ axis	Both	Обидві
 @msg	no saved presets	немає збережених наборів
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	немає збереженого набору друку з іменем `{name}` ({DEFAULT_PRESET} захищений: створіть новий на його основі)
 @msg	no saved profiles	немає збережених профілів
+@msg	no saved selection recalled	збережене виділення не відновлено
 @msg	no saved selections	немає збережених виділень
 @msg	no saved themes	немає збережених тем
 @msg	no segment {segment} on line {line}	немає сегмента {segment} на рядку {line}
@@ -5735,3 +5782,18 @@ machine	Stop	Зупинка
 	Arc Up	Дуга вгору
 	Arc Down	Дуга вниз
 	To follow a line of your own, draw it first, select it, then Add Words.	Щоб слова йшли по власній лінії, спочатку намалюйте її, виділіть, а потім виберіть «Додати слова».
+	Accent Color	Колір акценту
+	Amber	Бурштиновий
+	Violet	Фіолетовий
+	Pink	Рожевий
+	Sketch	Ескіз
+	Halftone Pattern…	Напівтоновий візерунок…
+	Halftone Pattern	Напівтоновий візерунок
+	Pattern Type	Тип візерунка
+	Dot	Крапка
+	Color Scheme	Колірна схема
+	Modern	Сучасна
+	Export Type:	Тип експорту:
+	Movie Clip	Кліп
+@msg	name is empty	ім’я порожнє
+@msg	no symbol named `{n}`	немає символу з назвою `{n}`

@@ -357,11 +357,13 @@ pub(crate) fn click_selection(ui: &Ui, anchor_key: &str, mut sel: Vec<String>, o
 /// A drag released on the panel.
 enum Drop {
     /// Swatches (or colour groups) dropped before or `after` row `target`, into folder `target`, or
-    /// at the end (`None`).
-    Move { names: Vec<String>, target: Option<String>, after: bool },
+    /// at the end (`None`). With Alt held, `with` names the swatch grabbed: dropped on swatch
+    /// `target` of its kind (neither None, Registration nor a tint swatch; see [`replaces`]), it
+    /// gives that swatch its paint instead of moving.
+    Move { names: Vec<String>, target: Option<String>, after: bool, with: Option<String> },
     /// A paint from elsewhere (a Fill/Stroke proxy, the Gradient panel's thumbnail) dropped on row
     /// `target` (or between rows) becomes a swatch; with Alt held (`replace`) it replaces swatch
-    /// `target` when that is of its kind.
+    /// `target` when that is of its kind and not a tint swatch.
     New { paint: Paint, target: Option<String>, replace: bool },
     /// Art dragged off the canvas becomes a pattern swatch made of a copy of it (the art stays).
     Pattern { ids: Vec<u64> },
@@ -369,11 +371,15 @@ enum Drop {
 
 impl Drop {
     /// What releasing `d` before or `after` row `target` (`None`: at the end) does: move the rows
-    /// it carries, make a swatch of a paint dragged from elsewhere, or a pattern swatch of art dragged
-    /// off the canvas (appearances: nothing).
+    /// it carries (with Alt held, `replace`, a swatch grabbed may replace `target`), make a swatch of
+    /// a paint dragged from elsewhere, or a pattern swatch of art dragged off the canvas (appearances:
+    /// nothing).
     fn of(d: &PanelDrag, target: Option<String>, after: bool, replace: bool) -> Option<Self> {
         match d {
-            PanelDrag::Paint { rows: Some(r), .. } => Some(Drop::Move { names: r.names.clone(), target, after }),
+            PanelDrag::Paint { rows: Some(r), .. } => {
+                let with = (replace && !r.groups).then(|| r.grabbed.clone());
+                Some(Drop::Move { names: r.names.clone(), target, after, with })
+            }
             PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace }),
             PanelDrag::Art(ids) => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect() }),
             _ => None,
@@ -532,17 +538,30 @@ fn same_kind(a: &Paint, b: &Paint) -> bool {
     std::mem::discriminant(a) == std::mem::discriminant(b) && !a.is_none()
 }
 
-/// Run a drop on the panel: move the swatches or make a swatch of the proxy's paint (a colour
-/// dropped on a folder or a grouped swatch joins that group).
+/// Can swatch `with` give its paint to swatch `target`? Both are swatches of one kind, neither is
+/// None or Registration, and `target` is not a tint swatch (a tint swatch only takes a new name).
+fn replaces(d: &Document, with: &str, target: &str) -> bool {
+    match (d.swatch(with), d.swatch(target)) {
+        (Some(w), Some(t)) => with != target && !w.is_reserved() && !t.is_reserved() && t.tint_of().is_none() && same_kind(&t.paint, &w.paint),
+        _ => false,
+    }
+}
+
+/// Run a drop on the panel: move the swatches, give the paint of a swatch Alt-dropped on another of
+/// its kind to that one, or make a swatch of the proxy's paint (a color dropped on a folder or a
+/// grouped swatch joins that group).
 fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
     let Some(d) = app.session.active().map(|st| &st.doc) else { return };
     let (cmd, params) = match drop {
-        Drop::Move { names, target, after } => match move_params(d, &names, target.as_deref(), after) {
+        // Alt: the swatch grabbed replaces the color, gradient or pattern of the swatch of its kind
+        // it is dropped on, which keeps its name and place.
+        Drop::Move { with: Some(w), target: Some(t), .. } if replaces(d, &w, &t) => ("swatch.edit", json!({"name": t, "paint": {"swatch": w}})),
+        Drop::Move { names, target, after, .. } => match move_params(d, &names, target.as_deref(), after) {
             Some(p) => ("swatch.move", p),
             None => return,
         },
         // Alt: an edited gradient (or colour) replaces the swatch it is dropped on.
-        Drop::New { paint, target: Some(t), replace: true } if d.swatch(&t).is_some_and(|w| same_kind(&w.paint, &paint)) => {
+        Drop::New { paint, target: Some(t), replace: true } if d.swatch(&t).is_some_and(|w| w.tint_of().is_none() && same_kind(&w.paint, &paint)) => {
             ("swatch.edit", json!({"name": t, "paint": super::paint_params(&paint)}))
         }
         Drop::New { paint, target, .. } => {
@@ -1483,11 +1502,16 @@ mod tests {
 
     /// Press at `from`, drag to `to` and release there, a frame per step from `time`.
     fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, time: f64) {
-        let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
-        frame(app, ctx, vec![Event::PointerMoved(from), button(from, true)], time, show);
-        frame(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], time + 0.1, show);
-        frame(app, ctx, vec![Event::PointerMoved(to)], time + 0.2, show);
-        frame(app, ctx, vec![Event::PointerMoved(to), button(to, false)], time + 0.3, show);
+        drag_with(app, ctx, from, to, Modifiers::NONE, time);
+    }
+
+    /// [`drag`] with `modifiers` held.
+    fn drag_with(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, modifiers: Modifiers, time: f64) {
+        let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers };
+        frame_with(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time, show);
+        frame_with(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.1, show);
+        frame_with(app, ctx, vec![Event::PointerMoved(to)], modifiers, time + 0.2, show);
+        frame_with(app, ctx, vec![Event::PointerMoved(to), button(to, false)], modifiers, time + 0.3, show);
     }
 
     fn names_of(app: &VectorcraftApp, group: Option<&str>) -> Vec<String> {
@@ -1629,6 +1653,58 @@ mod tests {
         drop_on(&mut app, "Red", grad("#00ff00"), Modifiers::ALT, 3.0);
         assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 1);
         assert!(app.session.doc().unwrap().doc.swatch("Red").is_some_and(|w| w.paint.color().is_some()));
+        // A tint swatch only takes a new name, so a color Alt-dropped on one becomes a new swatch.
+        app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+        app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+        frame(&mut app, &ctx, vec![], 4.0, show);
+        frame(&mut app, &ctx, vec![], 4.5, show);
+        drop_on(&mut app, "Orange 40%", Paint::solid(Color::from_hex("#123456").unwrap()), Modifiers::ALT, 5.0);
+        let d = &app.session.doc().unwrap().doc;
+        assert_eq!(d.swatches_iter().count(), count + 3, "{}", app.ui.status);
+        assert!(d.swatch("Orange 40%").is_some_and(|w| w.tint_of().is_some()));
+    }
+
+    #[test]
+    fn alt_dragging_a_swatch_onto_another_of_its_kind_replaces_its_color() {
+        let mut app = app();
+        let ctx = context();
+        app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+        app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"ids": [id], "swatch": "Orange"})).unwrap();
+        frame(&mut app, &ctx, vec![], 0.0, show);
+        frame(&mut app, &ctx, vec![], 0.5, show);
+        let doc = |app: &VectorcraftApp| app.session.doc().unwrap().doc.clone();
+        let (before, undo) = (names_of(&app, None), app.session.doc().unwrap().history.undo.len());
+        let red = doc(&app).swatch("Red").and_then(|w| w.paint.color()).unwrap();
+        drag_with(&mut app, &ctx, tile_center(&ctx, "Red"), tile_center(&ctx, "Orange"), Modifiers::ALT, 1.0);
+        let d = doc(&app);
+        let orange = d.swatch("Orange").expect("Orange keeps its name");
+        assert_eq!((orange.paint.color(), orange.global), (Some(red), true), "Orange takes Red's color");
+        assert_eq!(names_of(&app, None), before, "Red stays and Orange keeps its place");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+        let fill = d.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+        assert_eq!(fill.color(), Some(red), "art linked to Orange takes the new color");
+        // A gradient dropped on a color, and a swatch dropped without Alt, move as before.
+        frame(&mut app, &ctx, vec![], 2.0, show);
+        frame(&mut app, &ctx, vec![], 2.5, show);
+        drag_with(&mut app, &ctx, tile_center(&ctx, "Sunset"), tile_center(&ctx, "Amber") - vec2(4.0, 0.0), Modifiers::ALT, 3.0);
+        let n = names_of(&app, None);
+        assert_eq!(n[n.iter().position(|x| x == "Amber").unwrap() - 1], "Sunset");
+        assert!(doc(&app).swatch("Amber").is_some_and(|w| w.paint.color().is_some()));
+        frame(&mut app, &ctx, vec![], 4.0, show);
+        frame(&mut app, &ctx, vec![], 4.5, show);
+        drag(&mut app, &ctx, tile_center(&ctx, "Lime"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), 5.0);
+        let n = names_of(&app, None);
+        assert_eq!(n[n.iter().position(|x| x == "Red").unwrap() - 1], "Lime");
+        assert_ne!(doc(&app).swatch("Red").and_then(|w| w.paint.color()), doc(&app).swatch("Lime").and_then(|w| w.paint.color()));
+        // A tint swatch only takes a new name, so a swatch Alt-dropped on one moves.
+        frame(&mut app, &ctx, vec![], 6.0, show);
+        frame(&mut app, &ctx, vec![], 6.5, show);
+        drag_with(&mut app, &ctx, tile_center(&ctx, "Lime"), tile_center(&ctx, "Orange 40%") - vec2(4.0, 0.0), Modifiers::ALT, 7.0);
+        let n = names_of(&app, None);
+        assert_eq!(n[n.iter().position(|x| x == "Orange 40%").unwrap() - 1], "Lime", "{}", app.ui.status);
+        assert_eq!(doc(&app).swatch("Orange 40%").and_then(|w| w.tint_of().map(|(base, _)| base.to_string())).as_deref(), Some("Orange"));
     }
 
     #[test]

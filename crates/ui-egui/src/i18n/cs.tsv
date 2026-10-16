@@ -209,6 +209,7 @@
 	Join	Spojit
 	Average…	Zprůměrovat…
 	Outline Stroke	Převést tah na obrys
+	Outline Object	Převést objekt na obrys
 	Offset Path…	Odsadit cestu…
 	Reverse Path Direction	Obrátit směr cesty
 	Simplify…	Zjednodušit…
@@ -388,6 +389,7 @@
 	Area Text Objects	Textové objekty v oblasti
 	Start Global Edit	Zahájit globální úpravy
 	Save Selection…	Uložit výběr…
+	Update Selection	Aktualizovat výběr
 	Edit Selection…	Upravit výběr…
 	Effect	Efekt
 	Apply Last Effect	Použít poslední efekt
@@ -487,6 +489,7 @@
 	Fit All in Window	Přizpůsobit vše oknu
 	Actual Size	Skutečná velikost
 	Reset Rotate View	Obnovit otočení zobrazení
+	Rotate View to Selection	Otočit zobrazení podle výběru
 	Hide Edges	Skrýt okraje
 	Show Edges	Zobrazit okraje
 	Hide Artboards	Skrýt pracovní plochy
@@ -1573,6 +1576,9 @@ lighting	Light	Světlo
 	Updated {} image(s)	Aktualizováno obrázků: {}
 	Break Link	Zrušit propojení
 	Tolerance:	Tolerance:
+	Corner Point Angle Threshold:	Prahový úhel rohových bodů:
+	Convert to Straight Lines	Převést na přímé čáry
+	Show Original Path	Zobrazit původní cestu
 	Transparency Options	Možnosti průhlednosti
 	Color Mixer (Shift-click the chip)	Míchání barev (Shift+kliknutí na políčko)
 	Fill: click for swatches, Shift-click for the color mixer	Výplň: kliknutím otevřete vzorník, Shift+kliknutím míchání barev
@@ -1597,6 +1603,14 @@ lighting	Light	Světlo
 	Every-line Composer	Sazba všech řádků
 	First-line Left Indent	Odsazení prvního řádku zleva
 	Hyphenation…	Dělení slov…
+	Words Longer Than:	Slova delší než:
+	After First:	Po prvních:
+	Before Last:	Před posledními:
+	Hyphen Limit:	Limit spojovníků:
+	Hyphenation Zone:	Zóna dělení slov:
+	letters	písmen
+	hyphens	spojovníků
+	Hyphenate Capitalized Words	Dělit slova s velkým počátečním písmenem
 	Justification…	Zarovnání do bloku…
 	Justify with last line aligned center	Do bloku, poslední řádek na střed
 	Justify with last line aligned right	Do bloku, poslední řádek vpravo
@@ -2100,6 +2114,7 @@ lighting	Light	Světlo
 	Fidelity:	Věrnost:
 	Fill new strokes	Vyplňovat nové tahy
 	Keep selected	Ponechat vybrané
+	Merge only with selection	Sloučit jen s výběrem
 	The document has no colour swatches.	Dokument nemá ve vzorníku žádné barvy.
 	Style Name:	Název stylu:
 	Crop To	Oříznout na
@@ -2643,6 +2658,32 @@ lighting	Light	Světlo
 	Summary	Souhrn
 	Download	Stáhnout
 	Export Artboard	Exportovat pracovní plochu
+	A File per Object	Jeden soubor na objekt
+	Example: {name}	Příklad: {name}
+	Export Preset:	Přednastavení exportu:
+	Folders:	Složky:
+	Insert	Vložit
+	Nothing is selected. Select the art to export, then open this tab again.	Nic není vybráno. Vyberte kresbu k exportu a znovu otevřete tuto kartu.
+	One File of the Selection	Jeden soubor z výběru
+	Start at:	Začít od:
+	{n} objects selected	Vybráno objektů: {n}
+	Delete Export Preset	Odstranit přednastavení exportu
+	Export Presets	Přednastavení exportu
+	Save Export Preset	Uložit přednastavení exportu
+	Export Layer	Exportovat vrstvu
+	Export Selection	Exportovat výběr
+	All in One Folder	Vše v jedné složce
+	By Size or Row	Podle velikosti nebo řádku
+	By Format	Podle formátu
+	By Artboard or Item	Podle kreslicí plochy nebo položky
+	By Item, Then Format	Podle položky, pak formátu
+	Document Name	Název dokumentu
+	Artboard or Item Name	Název kreslicí plochy nebo položky
+	Number (####)	Číslo (####)
+	Date (YYYYMMDD)	Datum (RRRRMMDD)
+	Date (YYYY-MM-DD)	Datum (RRRR-MM-DD)
+	Time (hhmmss)	Čas (hhmmss)
+	PDF Print	PDF pro tisk
 	Encoding:	Kódování:
 	UTF-16 (Unicode)	UTF-16 (Unicode)
 	Line Endings:	Konce řádků:
@@ -3471,8 +3512,11 @@ axis	Both	Obě
 	Duplicate Artboard	Duplikovat pracovní plochu
 	Area / Path Type	Text v oblasti / na cestě
 	Decrease Font Size	Zmenšit velikost písma
+	Decrease Font Size by Five Steps	Zmenšit velikost písma o pět kroků
 	Increase Font Size	Zvětšit velikost písma
+	Increase Font Size by Five Steps	Zvětšit velikost písma o pět kroků
 	Reset Tracking and Kerning	Obnovit prostrkání a vyrovnání párů
+	Reset Horizontal Scale	Obnovit vodorovnou změnu velikosti
 	Step Type	Krokovat text
 	Get Text Range	Získat rozsah textu
 	Punctuation	Interpunkce
@@ -3984,6 +4028,8 @@ imageTrace	Outline	Obrys
 @msg	cannot split an open path at its end point	otevřenou cestu nelze rozdělit v jejím koncovém bodu
 @msg	closing needs three anchors	uzavření vyžaduje tři kotevní body
 @msg	check an asset to export	zaškrtněte prvek k exportu
+@msg	check a layer to export	zaškrtněte vrstvu k exportu
+@msg	select the art to export first	nejprve vyberte kresbu k exportu
 @msg	choice must be "merge" or "add", not `{choice}`	volba musí být "merge" nebo "add", ne `{choice}`
 @msg	choose a direction to divide in	zvolte směr rozdělení
 @msg	choose a folder to export to	zvolte složku pro export
@@ -4095,6 +4141,7 @@ imageTrace	Outline	Obrys
 @msg	no saved presets	žádná uložená přednastavení
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	uložené přednastavení tisku s názvem `{name}` neexistuje ({DEFAULT_PRESET} je chráněné: vytvořte z něj nové)
 @msg	no saved profiles	žádné uložené profily
+@msg	no saved selection recalled	není vyvolán žádný uložený výběr
 @msg	no saved selections	žádné uložené výběry
 @msg	no saved themes	žádné uložené motivy
 @msg	no segment {segment} on line {line}	na čáře {line} není segment {segment}
@@ -6153,3 +6200,17 @@ mark-style	Japanese	Japonské
 	Arc Up	Oblouk nahoru
 	Arc Down	Oblouk dolů
 	To follow a line of your own, draw it first, select it, then Add Words.	Chcete-li slova vést po vlastní čáře, nejprve ji nakreslete, vyberte a pak zvolte Přidat slova.
+	Accent Color	Barva zvýraznění
+	Amber	Jantarová
+	Violet	Fialová
+	Sketch	Skica
+	Halftone Pattern…	Polotónový vzorek…
+	Halftone Pattern	Polotónový vzorek
+	Pattern Type	Typ vzorku
+	Dot	Tečka
+	Color Scheme	Barevné schéma
+	Modern	Moderní
+	Export Type:	Typ exportu:
+	Movie Clip	Filmový klip
+@msg	name is empty	název je prázdný
+@msg	no symbol named `{n}`	žádný symbol s názvem `{n}`

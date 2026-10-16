@@ -6,6 +6,45 @@ What Image Trace (`crates/trace`) makes of images whose right answer is known, m
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
 with any other product except the open tracer named under [Yardstick](#4-yardstick).
 
+
+## Noise threshold stability (local development, 2026-10-14)
+
+Noise must merge whole 4-connected regions, including pixels absorbed by an earlier merge.
+A count of regions alone cannot establish this: one old region may split while others disappear.
+The repeated-pass implementation at `a0671777` fails a partition regression at case 0, Noise 3.
+
+The replacement discovers the initial regions, processes them in deterministic increasing-area
+order, and keeps their membership current. All adjacent regions of the chosen colour join the
+merge, with ties resolved by label and region id. Increasing Noise continues the same merge
+sequence: every lower-threshold region remains wholly inside one higher-threshold region.
+Regions exactly at the threshold stay; an opaque island surrounded by transparency stays;
+transparent pixels are never recoloured. A merged region is tested at its current area, so a
+1-pixel speck joining a 2-pixel region meets Noise 3 and is retained as one 3-pixel region.
+
+Tests generate 64 multicolour 7 × 7 grids with transparent barriers and check every threshold
+from 0 through 24 with an independent component traversal. They assert nested partitions,
+non-increasing region counts and unchanged transparency. Separate cases check the strict
+threshold, isolated opaque islands and invalid or overflowing grid dimensions. The existing
+no-small-region and traced-path regressions remain active.
+
+This uses region and heap bookkeeping instead of repeated full-image passes, so memory and
+photo quality must also be checked. Local photo/scan validation uses fixed hashed inputs and
+identical settings on unchanged current source and the candidate, including separate portrait
+crops and white-composited PNG comparisons. These local fixtures are not repository assets.
+The parity score is unchanged.
+
+## Pieces returning to a junction
+An outline piece can return to its starting junction while being fitted as an open chain. At loose
+Corners/Paths settings, a nonzero positioned boundary could collapse to one cubic and lose a small
+corner-touching mark. Fixed-end pieces with identical endpoints and fewer than two fitted segments
+now retain their positioned boundary when its area is finite and nonzero. Fitting the shared piece
+this way also gives an abutting fill exactly the reversed boundary, including within a compound path.
+Six source-generated regressions check 1- and 2-pixel regions through four rotations, both windings
+and large translations; fixed junctions; zero positioned area; free ends; Noise controls; and shared
+edges through four rotations and black/white inversion. Noise 2 still removes the 1-pixel mark.
+The white-hole Noise check is a control, not a reproduced returning-hole case. Defaults are unchanged;
+these tests establish survival and edge consistency, not a new artistic-quality or parity score.
+This is separate from the closed-contour recovery in #2012 and straightening guard in #2025.
 ## Thin closed outlines with Snap Curves To Lines
 
 A four-pixel stair-step mark can fit as two straight cubics along the same diagonal, leaving a closed path with zero area. The outline-distance checks accept this because both sides are close to the chord. Closed fitting now checks analytic curve area after straightening and upright levelling; if a nondegenerate source loop has lost its interior, it retains the positioned boundary as an unsimplified polygon. The area integral is translated to a local origin to reduce cancellation. This numerical degeneracy check is not a new Noise or minimum-feature-area setting.
@@ -36,6 +75,7 @@ anti-aliasing):
 
 | kind | inputs |
 |:--|:--|
+| 2026-10-15 | Fixed-end pieces returning to their junction retain their positioned nonzero boundary when fitted to fewer than two cubics; source-generated tests cover survival, winding, shared-edge equality, translations and Noise controls. Defaults and parity scores unchanged. |
 | curved shapes | a circle; two ellipses; a rounded badge with a round hole; a letter D with its counter |
 | polygons | a triangle, a turned square and a hexagon; a five-pointed star; a letter A with its counter |
 | thin lines | five lines 0.5, 1, 2, 3 and 5 units wide (of a 256-unit square), a few degrees off the pixel grid |

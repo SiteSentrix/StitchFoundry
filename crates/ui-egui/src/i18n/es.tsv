@@ -572,6 +572,7 @@
 	Convert to RGB	Convertir a RGB
 	Convert to Shape	Convertir en forma
 	Convert to sRGB	Convertir a sRGB
+	Convert to Straight Lines	Convertir en líneas rectas
 	Convert:	Convertir:
 	Copied the CSS of {rules} object(s)	Se copió el CSS de {rules} objeto(s)
 	Copies:	Copias:
@@ -590,6 +591,7 @@
 	Copyright Notice:	Aviso de copyright:
 	Copyright Status:	Estado de copyright:
 	Copyright Symbol	Símbolo de copyright
+	Corner Point Angle Threshold:	Umbral de ángulo de los puntos de esquina:
 	Corner Radius	Radio de esquina
 	Corner Radius:	Radio de esquina:
 	Corner:	Esquina:
@@ -968,6 +970,32 @@
 	Export All…	Exportar todo…
 	Export and Clipboard Transparency Flattener Settings	Ajustes del acoplador de transparencia para exportar y portapapeles
 	Export Artboard	Exportar mesa de trabajo
+	A File per Object	Un archivo por objeto
+	Example: {name}	Ejemplo: {name}
+	Export Preset:	Ajuste de exportación:
+	Folders:	Carpetas:
+	Insert	Insertar
+	Nothing is selected. Select the art to export, then open this tab again.	No hay nada seleccionado. Seleccione la ilustración que desea exportar y vuelva a abrir esta pestaña.
+	One File of the Selection	Un archivo de la selección
+	Start at:	Empezar en:
+	{n} objects selected	{n} objetos seleccionados
+	Delete Export Preset	Eliminar ajuste de exportación
+	Export Presets	Ajustes de exportación
+	Save Export Preset	Guardar ajuste de exportación
+	Export Layer	Exportar capa
+	Export Selection	Exportar selección
+	All in One Folder	Todo en una carpeta
+	By Size or Row	Por tamaño o fila
+	By Format	Por formato
+	By Artboard or Item	Por mesa de trabajo o elemento
+	By Item, Then Format	Por elemento y luego formato
+	Document Name	Nombre del documento
+	Artboard or Item Name	Nombre de la mesa de trabajo o del elemento
+	Number (####)	Número (####)
+	Date (YYYYMMDD)	Fecha (AAAAMMDD)
+	Date (YYYY-MM-DD)	Fecha (AAAA-MM-DD)
+	Time (hhmmss)	Hora (hhmmss)
+	PDF Print	PDF para imprenta
 	Export As	Exportar como
 	Export As PNG…	Exportar como PNG…
 	Export As SVG…	Exportar como SVG…
@@ -1040,6 +1068,7 @@
 	Fill and Stroke	Relleno y trazo
 	Fill new strokes	Rellenar trazos nuevos
 	Keep selected	Mantener seleccionado
+	Merge only with selection	Combinar solo con la selección
 	Fill Color	Color de relleno
 	Fill New Type Objects With Placeholder Text	Rellenar nuevos objetos de texto con texto de muestra
 	Fill Rule	Regla de relleno
@@ -1063,8 +1092,11 @@
 	Fit dashes to corners and ends	Ajustar guiones a esquinas y extremos
 	Fit Headline	Ajustar titular
 	Decrease Font Size	Reducir tamaño de fuente
+	Decrease Font Size by Five Steps	Reducir tamaño de fuente en cinco incrementos
 	Increase Font Size	Aumentar tamaño de fuente
+	Increase Font Size by Five Steps	Aumentar tamaño de fuente en cinco incrementos
 	Reset Tracking and Kerning	Restablecer espaciado e interletraje
+	Reset Horizontal Scale	Restablecer escala horizontal
 	Spacing	Espaciado
 	Step Type	Ajustar texto por incrementos
 	Fit in View	Encajar en la vista
@@ -1304,6 +1336,14 @@
 	Hyphenate	Separar con guiones
 	Hyphenation	Separación con guiones
 	Hyphenation…	Separación con guiones…
+	Words Longer Than:	Palabras de más de:
+	After First:	Después de las primeras:
+	Before Last:	Antes de las últimas:
+	Hyphen Limit:	Límite de guiones:
+	Hyphenation Zone:	Zona de separación:
+	letters	letras
+	hyphens	guiones
+	Hyphenate Capitalized Words	Separar palabras con mayúscula inicial
 	ICC Profile	Perfil ICC
 	Identify Objects By	Identificar objetos por
 	Ignore	Ignorar
@@ -1977,6 +2017,7 @@
 	Out Tangent Handles	Manejadores de tangente de salida
 	Outer Glow…	Resplandor exterior…
 	Outline	Contorno
+	Outline Object	Contornear objeto
 	Outline Others	Contornear otros
 	Outline Stroke	Contornear trazo
 	Outline Text	Contornear texto
@@ -2402,6 +2443,7 @@
 	Reset Preferences	Restablecer preferencias
 	Reset Profiles	Restablecer perfiles
 	Reset Rotate View	Restablecer rotación de vista
+	Rotate View to Selection	Rotar vista según la selección
 	Reset the rows to the artwork's colors	Restablecer las filas a los colores de la ilustración
 	Reset to Default	Restablecer valores predeterminados
 	Reset to White, Black	Restablecer a blanco, negro
@@ -2510,6 +2552,7 @@
 	Save Save for Web Preset	Guardar preajuste de Guardar para web
 	Save selected colors as swatches	Guardar los colores seleccionados como muestras
 	Save Selection…	Guardar selección…
+	Update Selection	Actualizar selección
 	Save Swatch Library	Guardar biblioteca de muestras
 	Save Swatch Library…	Guardar biblioteca de muestras…
 	Save the current layout under this name	Guardar el diseño actual con este nombre
@@ -2748,6 +2791,7 @@
 	Show Modified	Mostrar modificados
 	Show Note	Mostrar nota
 	Show Options	Mostrar opciones
+	Show Original Path	Mostrar trazado original
 	Color Panel Options	Opciones del panel Color
 	Show Package	Mostrar paquete
 	Show Panel	Mostrar panel
@@ -3680,6 +3724,8 @@ axis	Both	Ambos
 @msg	cannot split an open path at its end point	no se puede dividir un trazado abierto en su punto final
 @msg	closing needs three anchors	cerrar necesita tres puntos de ancla
 @msg	check an asset to export	marca un recurso para exportar
+@msg	check a layer to export	marque una capa para exportar
+@msg	select the art to export first	seleccione primero la ilustración que desea exportar
 @msg	choice must be "merge" or "add", not `{choice}`	choice debe ser "merge" o "add", no `{choice}`
 @msg	choose a direction to divide in	elige una dirección en la que dividir
 @msg	choose a folder to export to	elige una carpeta a la que exportar
@@ -3787,6 +3833,7 @@ axis	Both	Ambos
 @msg	no saved presets	no hay preajustes guardados
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	no hay ningún preajuste de impresión guardado llamado `{name}` ({DEFAULT_PRESET} está protegido: crea uno nuevo a partir de él)
 @msg	no saved profiles	no hay perfiles guardados
+@msg	no saved selection recalled	no se ha recuperado ninguna selección guardada
 @msg	no saved selections	no hay selecciones guardadas
 @msg	no saved themes	no hay temas guardados
 @msg	no segment {segment} on line {line}	no existe el segmento {segment} en la línea {line}
@@ -6106,3 +6153,17 @@ mark-style	Japanese	Japonesas
 	Arc Up	Arco hacia arriba
 	Arc Down	Arco hacia abajo
 	To follow a line of your own, draw it first, select it, then Add Words.	Para seguir una línea propia, dibújala primero, selecciónala y luego elige Añadir palabras.
+	Accent Color	Color de acento
+	Amber	Ámbar
+	Violet	Violeta
+	Sketch	Bosquejar
+	Halftone Pattern…	Trama de semitonos…
+	Halftone Pattern	Trama de semitonos
+	Pattern Type	Tipo de trama
+	Dot	Punto
+	Color Scheme	Esquema de color
+	Modern	Moderno
+	Export Type:	Tipo de exportación:
+	Movie Clip	Clip de película
+@msg	name is empty	el nombre está vacío
+@msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`

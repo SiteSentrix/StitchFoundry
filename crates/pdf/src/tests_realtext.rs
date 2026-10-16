@@ -269,6 +269,21 @@ fn fonts_whose_licence_forbids_embedding_fall_back_to_outlines() {
 }
 
 #[test]
+fn type_with_outline_object_is_written_as_paths_with_no_font() {
+    let mut d = doc(vec![TextObject::point(Point::new(20.0, 60.0), "Hello World", style(24.0))]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "path.outlineObject".into(), params: json!({}), visible: true });
+    let r = pdf(&d, false);
+    let text = String::from_utf8_lossy(&r.bytes);
+    assert!(!text.contains("/FontFile") && !text.contains("/Font"), "no font");
+    // Reopened, it is paths, even when type is asked for.
+    let back = import_as(&r.bytes, TextAs::Text);
+    assert!(texts(&back).is_empty());
+    let b = ink(&back);
+    assert!(b.width() > 50.0 && b.height() > 10.0, "{b:?}");
+}
+
+#[test]
 fn subset_thresholds_below_100_percent_are_accepted_with_a_warning() {
     let d = doc(vec![TextObject::point(Point::new(20.0, 60.0), "Subset", style(24.0))]);
     let settings: PdfSettings = serde_json::from_value(json!({"advanced": {"outlineText": false, "fontSubsetPercent": 40}})).unwrap();

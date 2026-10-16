@@ -260,7 +260,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Fit to Artwork Bounds"), n > 0, false) {
-        app.run("artboard.fitToArt", json!({"index": sel})).ok();
+        app.run("artboard.fitToArt", json!({ "indices": picked(app, n) })).ok();
     }
 }
 
@@ -328,16 +328,38 @@ mod tests {
         for id in ["artboard.fitToArt", "artboard.fitToSelection"] {
             let mut app = VectorcraftApp::new(Session::new(), Default::default());
             app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
-            app.session.execute("shape.rectangle", &json!({"x": 130, "y": 10, "width": 20, "height": 30})).unwrap();
+            // Partly on artboard 1 and partly on artboard 2.
+            app.session.execute("shape.rectangle", &json!({"x": 90, "y": 10, "width": 60, "height": 30})).unwrap();
             app.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
             let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
-            let (first, art) = (boards(&app)[0], vectorcraft_geom::Rect::new(130.0, 10.0, 150.0, 40.0));
+            let (first, art) = (boards(&app)[0], vectorcraft_geom::Rect::new(90.0, 10.0, 150.0, 40.0));
             select(&mut app, 1);
             crate::menus::invoke(&mut app, id, json!({}));
             assert_eq!(boards(&app), [first, art], "{id} resizes Artboard 2, the active one");
             crate::menus::invoke(&mut app, id, json!({"index": 0}));
             assert_eq!(boards(&app), [art, art], "{id} with an index resizes that artboard");
         }
+    }
+
+    /// With artboards 1 and 3 selected with the Artboard tool, Object › Artboards › Fit to Artwork
+    /// Bounds fits each of them to the art on it and leaves artboard 2 as it was.
+    #[test]
+    fn fit_to_artwork_bounds_fits_each_selected_artboard_to_its_own_art() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+        for (x, h) in [(10, 30), (130, 20), (250, 40)] {
+            app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
+        }
+        app.session.execute("select.all", &json!({})).unwrap();
+        app.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+        let was = boards(&app);
+        app.select_tool("artboard");
+        select(&mut app, 0);
+        app.session.set_tool_option("selected", &json!([0, 2]));
+        crate::menus::invoke(&mut app, "artboard.fitToArt", json!({}));
+        let rect = vectorcraft_geom::Rect::new;
+        assert_eq!(boards(&app), [rect(10.0, 10.0, 30.0, 40.0), was[1], rect(250.0, 10.0, 270.0, 50.0)]);
     }
 
     /// With the Artboard tool, Shift-click on a row adds its artboard to the tool's selection or

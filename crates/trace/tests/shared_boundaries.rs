@@ -460,7 +460,6 @@ fn an_outline_returning_to_its_junction_is_shared() {
 /// and its neighbour keeps a single curve from the junction back to itself, so a hole the size of
 /// the region is left uncovered (1 to 6.7 px wide here, 0.3 to 108 px²).
 #[test]
-#[ignore = "a piece returning to its own junction collapses at Paths 0 / Corners 0 (fit.rs fit_piece and fit_loop): the region is dropped and its area left uncovered; draft #2205 (retain pieces returning to a junction) fixes it"]
 fn an_outline_returning_to_its_junction_survives_the_loosest_fit() {
     let mut wrong = vec![];
     for art in returning_arts() {

@@ -506,6 +506,33 @@ fn delete_duplicate_and_replace_symbols() {
 }
 
 #[test]
+fn symbol_export_type_defaults_to_movie_clip_and_round_trips() {
+    let mut s = session();
+    let (_, name, _) = make_symbol(&mut s);
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    assert_eq!(list["symbols"][0]["exportType"], "movieClip");
+    assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_EXPORT_TYPE).is_none());
+    s.execute("symbol.options", &json!({"name": name, "exportType": "graphic"})).unwrap();
+    assert_eq!(s.execute("symbol.list", &json!({})).unwrap()["symbols"][0]["exportType"], "graphic");
+    assert_eq!(s.doc().unwrap().doc.unknown[vectorcraft_doc::SYMBOL_EXPORT_TYPE][&name], json!("graphic"));
+    let copy = s.execute("symbol.duplicate", &json!({"name": name})).unwrap();
+    assert_eq!(copy["exportType"], "graphic");
+    s.execute("symbol.options", &json!({"name": name, "newName": "Renamed", "exportType": "movieClip"})).unwrap();
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    let renamed = list["symbols"].as_array().unwrap().iter().find(|x| x["name"] == "Renamed").unwrap();
+    assert_eq!(renamed["exportType"], "movieClip");
+    assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_EXPORT_TYPE).and_then(|m| m.get("Renamed")).is_none());
+    assert_eq!(s.doc().unwrap().doc.unknown[vectorcraft_doc::SYMBOL_EXPORT_TYPE]["Box copy"], json!("graphic"));
+    s.execute("symbol.delete", &json!({"name": "Box copy"})).unwrap();
+    assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_EXPORT_TYPE).is_none());
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let r = s.execute("symbol.new", &json!({"name": "Icon", "exportType": "graphic"})).unwrap();
+    assert_eq!(r["exportType"], "graphic");
+    assert!(s.execute("symbol.new", &json!({"exportType": "bogus"})).is_err());
+    assert!(s.execute("symbol.options", &json!({"name": "Renamed"})).is_err());
+}
+
+#[test]
 fn sprayer_command_creates_a_symbol_set_and_alt_removes() {
     let mut s = session();
     make_symbol(&mut s);

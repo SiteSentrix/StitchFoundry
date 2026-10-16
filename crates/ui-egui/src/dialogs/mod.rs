@@ -47,6 +47,7 @@ pub mod graph_design;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod help;
+pub mod hyphenation;
 pub mod import_pdf;
 pub mod layer_options;
 pub mod layers_panel_options;
@@ -268,6 +269,7 @@ registry! {
     TransformEach: [transform_each::KIND] => transform_each::SPEC,
     WidthPoint: [width_point::KIND] => width_point::SPEC,
     Corners: [corners::KIND] => corners::SPEC,
+    Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,

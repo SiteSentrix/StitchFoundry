@@ -186,6 +186,61 @@ fn paintbrush_uses_stroke_blob_brush_fills() {
     assert!(area(&ps[1].1) > 1500.0);
 }
 
+/// Merge only with selection: a Blob Brush stroke merges with the selected blobs it touches and
+/// leaves the others. Keep selected, off by default: the blob a stroke draws or merges into is not
+/// selected afterwards, and the rest of the selection stays; on, it is selected.
+#[test]
+fn blob_brush_merges_only_with_the_selection_and_keep_selected_off_deselects() {
+    let mut s = session();
+    let r = rect(&mut s, 600.0, 400.0, 50.0, 50.0);
+    let selected = |s: &Session| s.doc().unwrap().selection.objects.clone();
+    let blob = |s: &mut Session, p: serde_json::Value| NodeId(s.execute("path.blob", &p).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+    let a = blob(&mut s, json!({"points": [[100, 60], [100, 140]], "size": 20}));
+    assert_eq!(selected(&s), vec![r], "Keep selected is off by default: the new blob is not selected");
+    let b = blob(&mut s, json!({"points": [[200, 60], [200, 140]], "size": 20, "keepSelected": true}));
+    assert_eq!(selected(&s), vec![b], "Keep selected on: the new blob is selected");
+    let n = paths(&s).len();
+    let (area_a, area_b) = (area(&path(&s, a)), area(&path(&s, b)));
+    // Only `b` is selected: the stroke across both merges into `b` alone.
+    let undo = undo_steps(&s);
+    let across = json!({"points": [[50, 100], [250, 100]], "size": 10, "mergeOnlySelection": true, "keepSelected": false});
+    assert_eq!(blob(&mut s, across.clone()), b);
+    assert_eq!(paths(&s).len(), n);
+    assert_eq!(area(&path(&s, a)), area_a, "a is left as it was");
+    assert!(area(&path(&s, b)) > area_b + 500.0, "the stroke joined b");
+    assert!(selected(&s).is_empty());
+    assert_eq!(undo_steps(&s), undo + 1);
+    // With nothing selected, the stroke merges with nothing, and Keep selected off leaves the new
+    // blob unselected.
+    let new = blob(&mut s, across);
+    assert!(new != a && new != b && paths(&s).len() == n + 1, "a new blob");
+    assert!(selected(&s).is_empty());
+    // A selection that holds no blob: a new blob, and the selection stays.
+    s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+    let other = blob(&mut s, json!({"points": [[50, 300], [250, 300]], "size": 10, "mergeOnlySelection": true, "keepSelected": false}));
+    assert_eq!(paths(&s).len(), n + 2);
+    assert_eq!(selected(&s), vec![r]);
+    // Without the options, a stroke merges with every touching blob, selected or not, and the
+    // blob it merges into is not selected.
+    let all = blob(&mut s, json!({"points": [[50, 100], [250, 100]], "size": 10}));
+    assert!([a, b, new].contains(&all) && paths(&s).len() == n, "one blob of a, b and the new one");
+    assert_eq!(selected(&s), vec![r]);
+    // Keep selected on: the blob a stroke merges into is selected.
+    assert_eq!(blob(&mut s, json!({"points": [[150, 80], [150, 120]], "size": 10, "keepSelected": true})), all);
+    assert_eq!(paths(&s).len(), n);
+    assert_eq!(selected(&s), vec![all]);
+    // The tool passes both options; Keep selected is off by default.
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    s.select_tool("blobBrush", view()).unwrap();
+    assert_eq!(s.tool_options()["keepSelected"], json!(false));
+    s.set_tool_option("mergeOnlySelection", &json!(true));
+    drag(&mut s, "blobBrush", &[(150.0, 50.0), (150.0, 320.0)], Mods::default());
+    assert_eq!(paths(&s).len(), n, "merged into the selected blob only");
+    assert!(selected(&s).is_empty());
+    assert!(s.doc().unwrap().doc.node(all).is_some() && s.doc().unwrap().doc.node(other).is_some());
+}
+
 /// Three points already curve in the saved path: both ends carry a handle into the curve.
 #[test]
 fn path_curvature_with_three_points_saves_end_handles() {
@@ -428,6 +483,25 @@ fn anchor_point_tool_converts() {
     let p = path(&s, id);
     let (_, _, _, q, d) = p.nearest(Point::new(150.0, 240.0)).unwrap();
     assert!(d < 0.5, "{q:?}");
+}
+
+/// #2267: clicking one handle end with the Anchor Point tool retracts that handle alone, as one
+/// undo step.
+#[test]
+fn anchor_point_tool_click_on_a_handle_retracts_it() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    drag(&mut s, "anchorPoint", &[(100.0, 100.0), (130.0, 80.0)], Mods::default());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let smooth = path(&s, id).subpaths[0].anchors[0];
+    let undo = undo_steps(&s);
+    click(&mut s, "anchorPoint", 130.0, 80.0);
+    let a = path(&s, id).subpaths[0].anchors[0];
+    assert!(!a.has_out());
+    assert_eq!((a.p, a.h_in, a.kind), (smooth.p, smooth.h_in, vectorcraft_geom::AnchorKind::Corner));
+    assert_eq!(undo_steps(&s), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors[0], smooth);
 }
 
 #[test]
@@ -879,6 +953,99 @@ fn remove_anchor_points_keeps_the_paths_closed() {
     assert_eq!(path(&s, c).subpaths[0].anchors.len(), 3);
     let spec = find_command("path.removeAnchors").unwrap();
     assert_eq!(spec.menu, &["Object", "Path"][..]);
+}
+
+fn selected_anchors(s: &Session, id: NodeId) -> Vec<(usize, usize)> {
+    s.doc().unwrap().selection.anchors.get(&id).map(|set| set.iter().copied().collect()).unwrap_or_default()
+}
+
+fn anchor_points(s: &Session, id: NodeId) -> Vec<Point> {
+    path(s, id).subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect()
+}
+
+#[test]
+fn remove_anchor_points_selects_the_next_anchor_so_it_can_go_on_along_the_path() {
+    // #2241: after Remove Anchor Points the next anchor along is selected, so running it again
+    // removes that one without picking it first. The path stays selected the whole way.
+    let mut s = session();
+    let anchors: Vec<_> = (0..5).map(|i| json!({"x": 100 * i, "y": 100 * (i % 2)})).collect();
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let original = anchor_points(&s, id);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    for (remaining, next) in [(4, 2), (3, 3), (2, 4)] {
+        assert_eq!(s.execute("path.removeAnchors", &json!({})).unwrap()["removedObjects"], 0);
+        assert_eq!(path(&s, id).subpaths[0].anchors.len(), remaining);
+        assert_eq!(selected_anchors(&s, id), [(0, 1)], "anchor {next} of the original is selected");
+        assert_eq!(path(&s, id).subpaths[0].anchors[1].p, original[next]);
+        assert_eq!(s.doc().unwrap().selection.objects, [id]);
+    }
+    // One anchor can't make a path: the last run removes it, and nothing is left selected.
+    assert_eq!(s.execute("path.removeAnchors", &json!({})).unwrap()["removedObjects"], 1);
+    assert!(s.doc().unwrap().doc.node(id).is_none());
+    assert!(s.doc().unwrap().selection.is_empty());
+}
+
+#[test]
+fn remove_anchor_points_selects_the_anchor_before_an_open_end_and_wraps_a_closed_path() {
+    // An open path's last anchor has nothing after it: the one before is selected.
+    let mut s = session();
+    let anchors: Vec<_> = (0..4).map(|i| json!({"x": 100 * i, "y": 0})).collect();
+    let open = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let original = anchor_points(&s, open);
+    s.execute("select.anchors", &json!({"id": open.0, "anchors": [[0, 3]]})).unwrap();
+    s.execute("path.removeAnchors", &json!({})).unwrap();
+    assert_eq!(selected_anchors(&s, open), [(0, 2)]);
+    assert_eq!(anchor_points(&s, open)[2], original[2]);
+
+    // A closed path goes round: removing its last anchor selects its first.
+    let r = rect(&mut s, 0.0, 200.0, 100.0, 80.0);
+    let corners = anchor_points(&s, r);
+    s.execute("select.anchors", &json!({"id": r.0, "anchors": [[0, 3]]})).unwrap();
+    s.execute("path.removeAnchors", &json!({})).unwrap();
+    assert_eq!(selected_anchors(&s, r), [(0, 0)]);
+    assert_eq!(anchor_points(&s, r)[0], corners[0]);
+}
+
+#[test]
+fn remove_anchor_points_selects_one_next_anchor_per_subpath_and_per_path() {
+    // Several anchors of one subpath: the anchor after the last of them. Each path and each
+    // subpath gets its own, at its index once a subpath left too short to keep is gone.
+    let mut s = session();
+    let made = s.execute("path.create", &json!({"d": "M0 0 L50 0 M0 100 L50 100 L100 100 L150 100 L200 100 L250 100"})).unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    let original = anchor_points(&s, id);
+    let anchors: Vec<_> = (0..4).map(|i| json!({"x": 100 * i, "y": 400})).collect();
+    let other = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0], [1, 1], [1, 2]]})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    assert_eq!(s.execute("path.removeAnchors", &json!({})).unwrap()["removedObjects"], 0);
+    let sp = &path(&s, id).subpaths;
+    assert_eq!(sp.len(), 1, "the first subpath, down to one anchor, is gone");
+    assert_eq!(selected_anchors(&s, id), [(0, 1)]);
+    assert_eq!(sp[0].anchors[1].p, original[5], "the anchor after the two removed ones");
+    assert_eq!(selected_anchors(&s, other), [(0, 0)]);
+
+    // One undo step brings back the anchors and the selection they were removed from.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(anchor_points(&s, id), original);
+    assert_eq!(selected_anchors(&s, id), [(0, 0), (1, 1), (1, 2)]);
+    assert_eq!(selected_anchors(&s, other), [(0, 0)]);
+}
+
+#[test]
+fn remove_anchor_point_tool_and_delete_still_select_the_remainder_whole() {
+    // Only Remove Anchor Points moves the selection on. The Delete Anchor Point tool leaves the
+    // path selected whole, and so does the Delete key, so that a second Delete removes the rest.
+    for command in ["path.removeAnchor", "path.deleteAnchors"] {
+        let mut s = session();
+        let anchors: Vec<_> = (0..4).map(|i| json!({"x": 100 * i, "y": 0})).collect();
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+        let params = if command == "path.removeAnchor" { json!({"id": id.0, "subpath": 0, "anchor": 1}) } else { json!({}) };
+        s.execute(command, &params).unwrap();
+        assert!(selected_anchors(&s, id).is_empty(), "{command}");
+        assert_eq!(s.doc().unwrap().selection.objects, [id], "{command}");
+    }
 }
 
 fn undo_steps(s: &Session) -> usize {

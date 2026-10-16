@@ -77,7 +77,7 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	По-ниската стойност следва щриха отблизо; по-високата дава по-малко опорни точки и по-плавни криви.
 	A new preset starting from the selected one	Нова предварителна настройка въз основа на избраната
 	A saved copy of the selected preset	Запазено копие на избраната предварителна настройка
-	About VectorCraft	Относно VectorCraft
+	About StitchFoundry	Относно StitchFoundry
 	above	над
 	Absolute Position	Абсолютна позиция
 	Accurate	Точно
@@ -180,7 +180,7 @@
 	Appearance Panel	Панел „Външен вид“
 	Appearance panel	Панел „Външен вид“
 	Applies when the linked file is relinked or updated.	Прилага се, когато свързаният файл бъде пресвързан или актуализиран.
-	Applies the next time VectorCraft starts.	Прилага се при следващото стартиране на VectorCraft.
+	Applies the next time StitchFoundry starts.	Прилага се при следващото стартиране на StitchFoundry.
 	Apply	Прилагане
 	Apply Brush	Прилагане на четка
 	Apply Character Style	Прилагане на стил на знаци
@@ -559,6 +559,7 @@
 	Convert to RGB	Конвертиране в RGB
 	Convert to Shape	Конвертиране в фигура
 	Convert to sRGB	Конвертиране в sRGB
+	Convert to Straight Lines	Преобразуване в прави линии
 	Convert:	Конвертиране:
 	Copied the CSS of {rules} object(s)	Копиран е CSS кодът на {rules} обект(а)
 	Copies:	Копия:
@@ -577,6 +578,7 @@
 	Copyright Notice:	Бележка за авторското право:
 	Copyright Status:	Статус на авторското право:
 	Copyright Symbol	Символ за авторско право
+	Corner Point Angle Threshold:	Праг на ъгъла при ъгловите точки:
 	Corner Radius	Радиус на ъгъла
 	Corner Radius:	Радиус на ъгъла:
 	Corner:	Ъгъл:
@@ -953,6 +955,32 @@
 	Export All…	Експортиране на всичко…
 	Export and Clipboard Transparency Flattener Settings	Настройки за сплескване на прозрачността за експортиране и клипборд
 	Export Artboard	Експортиране на работна област
+	A File per Object	Отделен файл за всеки обект
+	Example: {name}	Пример: {name}
+	Export Preset:	Набор за експортиране:
+	Folders:	Папки:
+	Insert	Вмъкване
+	Nothing is selected. Select the art to export, then open this tab again.	Нищо не е избрано. Изберете графиката за експортиране и отворете този раздел отново.
+	One File of the Selection	Един файл от избраното
+	Start at:	Начало от:
+	{n} objects selected	Избрани обекти: {n}
+	Delete Export Preset	Изтриване на набор за експортиране
+	Export Presets	Набори за експортиране
+	Save Export Preset	Запазване на набор за експортиране
+	Export Layer	Експортиране на слой
+	Export Selection	Експортиране на избраното
+	All in One Folder	Всичко в една папка
+	By Size or Row	По размер или ред
+	By Format	По формат
+	By Artboard or Item	По монтажна област или елемент
+	By Item, Then Format	По елемент, после по формат
+	Document Name	Име на документа
+	Artboard or Item Name	Име на монтажната област или елемента
+	Number (####)	Номер (####)
+	Date (YYYYMMDD)	Дата (ГГГГММДД)
+	Date (YYYY-MM-DD)	Дата (ГГГГ-ММ-ДД)
+	Time (hhmmss)	Час (ччммсс)
+	PDF Print	PDF за печат
 	Export As	Експортиране като
 	Export As PNG…	Експортиране като PNG…
 	Export As SVG…	Експортиране като SVG…
@@ -1043,7 +1071,9 @@
 	Fit dashes to corners and ends	Напасване на тиретата към ъглите и краищата
 	Fit Headline	Напасване на заглавие
 	Decrease Font Size	Намаляване размера на шрифта
+	Decrease Font Size by Five Steps	Намаляване размера на шрифта с пет стъпки
 	Increase Font Size	Увеличаване размера на шрифта
+	Increase Font Size by Five Steps	Увеличаване размера на шрифта с пет стъпки
 	Spacing	Разстояние
 	Step Type	Тип стъпка
 	Fit in View	Побиране в изгледа
@@ -1282,6 +1312,14 @@
 	Hyphenate	Пренасяне на думи
 	Hyphenation	Пренасяне
 	Hyphenation…	Пренасяне…
+	Words Longer Than:	Думи, по-дълги от:
+	After First:	След първите:
+	Before Last:	Преди последните:
+	Hyphen Limit:	Лимит на тиретата:
+	Hyphenation Zone:	Зона за пренасяне:
+	letters	букви
+	hyphens	тирета
+	Hyphenate Capitalized Words	Пренасяне на думи с главна буква
 	ICC Profile	ICC профил
 	Identify Objects By	Идентифициране на обектите по
 	Ignore	Игнориране
@@ -1938,6 +1976,7 @@
 	Out Tangent Handles	Външни тангентни дръжки
 	Outer Glow…	Външно разсейване…
 	Outline	Контур
+	Outline Object	Преобразуване на обекта в контур
 	Outline Others	Контуриране на другите
 	Outline Stroke	Преобразуване на щриха в контур
 	Outline Text	Преобразуване на текста в контури
@@ -2164,7 +2203,7 @@
 	Quarter Space	Четвъртинка интервал
 	Quick Actions	Бързи действия
 	Quickly start a new file	Бързо стартиране на нов файл
-	Quit VectorCraft	Изход от VectorCraft
+	Quit StitchFoundry	Изход от StitchFoundry
 	Radar Graph Tool	Инструмент „Радарна диаграма“
 	Radial	Радиален
 	Radial Glows	Лъчисти сияния
@@ -2287,7 +2326,7 @@
 	{count} folder(s) or file(s) couldn't be read	{count} папки или файла не можаха да бъдат прочетени
 	The search stopped at its limit: search a smaller folder.	Търсенето спре поради достигане на лимита: потърсете в по-малка папка.
 	Copy only fonts you own or are licensed to install.	Копирайте само шрифтове, които притежавате или имате лиценз да инсталирате.
-	VectorCraft copies the fonts to {folder}.	VectorCraft копира шрифтовете в {folder}.
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry копира шрифтовете в {folder}.
 	Registered Trademark Symbol	Символ за регистрирана търговска марка
 	Registration marks	Знаци за регистрация
 	Registry name:	Име на системния регистър:
@@ -2363,6 +2402,7 @@
 	Reset Preferences	Нулиране на настройките
 	Reset Profiles	Нулиране на профилите
 	Reset Rotate View	Нулиране на изгледа на завъртане
+	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
 	Reset to Default	Връщане към стандартните
 	Reset to White, Black	Нулиране към бяло, черно
@@ -2394,7 +2434,7 @@
 	Revert	Връщане към запазеното
 	Revert to the saved version of “{name}”?	Връщане към запазената версия на „{name}“?
 	Replace “{name}”, the file this document was opened from?	Замяна на „{name}“, файла, от който беше отворен този документ?
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Отварянето му пропусна това, което VectorCraft все още не може да прочете ({what}), така че замяната му го губи завинаги. Запазете под друго име, за да го запазите.
+	Opening it left out what StitchFoundry can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Отварянето му пропусна това, което StitchFoundry все още не може да прочете ({what}), така че замяната му го губи завинаги. Запазете под друго име, за да го запазите.
 	Revolve…	Завъртане…
 	RGB Color	RGB цвят
 	Right	Вдясно
@@ -2472,6 +2512,7 @@
 	Save Save for Web Preset	Запази предварителна настройка за „Запази за уеб“
 	Save selected colors as swatches	Запази избраните цветове като образци
 	Save Selection…	Запази селекцията…
+	Update Selection	Актуализиране на селекцията
 	Save Swatch Library	Запази библиотека с образци
 	Save Swatch Library…	Запази библиотека с образци…
 	Save the current layout under this name	Запази текущото разположение под това име
@@ -2699,6 +2740,7 @@
 	Show Modified	Показване на променените
 	Show Note	Показване на бележка
 	Show Options	Показване на опциите
+	Show Original Path	Показване на оригиналния път
 	Show Package	Показване на пакет
 	Show Panel	Показване на панел
 	Show Pattern Swatches	Показване на образци за мостра
@@ -3212,9 +3254,9 @@
 	Vector Halftone	Векторен полутон
 	Vector Halftone…	Векторен полутон…
 	Vector illustration — fast, open, scriptable.	Векторна илюстрация — бърза, отворена, скриптуема.
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft не се затвори нормално последния път. Тези документи съдържаха незапазени промени:
-	VectorCraft Help…	Помощ за VectorCraft…
-	VectorCraft on GitHub	VectorCraft в GitHub
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry не се затвори нормално последния път. Тези документи съдържаха незапазени промени:
+	StitchFoundry Help…	Помощ за StitchFoundry…
+	StitchFoundry on GitHub	StitchFoundry в GitHub
 	Vectors	Вектори
 	Version {version} — open-source vector illustration in pure Rust.	Версия {version} — векторна илюстрация с отворен код на чист Rust.
 	Version:	Версия:
@@ -3254,7 +3296,7 @@
 	Web Snap:	Прилепване в уеб:
 	Weight	Дебелина
 	Weight:	Дебелина:
-	Welcome to VectorCraft	Добре дошли във VectorCraft
+	Welcome to StitchFoundry	Добре дошли във StitchFoundry
 	When pasting text	При поставяне на текст
 	White	Бяло
 	Widget Position:	Позиция на джаджата:
@@ -3613,13 +3655,15 @@ axis	Both	И двете
 @msg	can't encode the document: {0}	документът не може да бъде кодиран: {0}
 @msg	can't parse shortcut `{c}`	клавишният бърз път `{c}` не може да бъде разпознат
 @msg	can't parse shortcut `{s}` for `{k}`	клавишният бърз път `{s}` за `{k}` не може да бъде разпознат
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	версия {0} не може да бъде запазена: VectorCraft записва версии от {MIN_VERSION} до {VERSION}
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	версия {0} не може да бъде запазена: StitchFoundry записва версии от {MIN_VERSION} до {VERSION}
 @msg	can't write .{ext} images	не могат да се записват .{ext} изображения
 @msg	cannot distort a zero-size bounding box	не може да се деформира ограничителна кутия с нулев размер
 @msg	cannot read PDF: {0}	PDF файлът не може да бъде прочетен: {0}
 @msg	cannot split an open path at its end point	отворен път не може да бъде разделен в крайната му точка
 @msg	closing needs three anchors	затварянето изисква три опорни точки
 @msg	check an asset to export	изберете актив за експортиране
+@msg	check a layer to export	отметнете слой за експортиране
+@msg	select the art to export first	първо изберете графиката за експортиране
 @msg	choice must be "merge" or "add", not `{choice}`	изборът трябва да бъде "merge" или "add", а не `{choice}`
 @msg	choose a direction to divide in	изберете посока за разделяне
 @msg	choose a folder to export to	изберете папка за експортиране
@@ -3637,7 +3681,7 @@ axis	Both	И двете
 @msg	empty brush stroke	празен щрих с четка
 @msg	empty cutter	празен нож
 @msg	empty path	празен път
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	версия на файла {0} е по-нова от поддържаната от този VectorCraft ({VERSION})
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	версия на файла {0} е по-нова от поддържаната от този StitchFoundry ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	свободна точка {i} се нуждае от `at` [x, y] и валиден `color`
 @msg	freeform line {i} must be an array of point indices	свободна линия {i} трябва да бъде масив от индекси на точки
 @msg	give both `start` and `end` [x, y] (or neither)	задайте както `start`, така и `end` [x, y] (или нито едното)
@@ -3656,9 +3700,9 @@ axis	Both	И двете
 @msg	invalid PDF setting: {0}	невалидна настройка за PDF: {0}
 @msg	invalid image data for `{0}`	невалидни данни за изображение за `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	невалидни параметри за `{cmd}`: {msg}
-@msg	is not an image VectorCraft reads	не е изображение, което VectorCraft разчита
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	използва `{at}`, който четецът на PostScript на VectorCraft не разпознава
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	използва `{at}`, който четецът на PostScript на VectorCraft не разпознава, в {procs}
+@msg	is not an image StitchFoundry reads	не е изображение, което StitchFoundry разчита
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	използва `{at}`, който четецът на PostScript на StitchFoundry не разпознава
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	използва `{at}`, който четецът на PostScript на StitchFoundry не разпознава, в {procs}
 @msg	its Windows metafile preview was opened instead, which may simplify the art	вместо това беше отворен неговият преглед на Windows метафайл, което може да опрости илюстрацията
 @msg	its preview was placed instead, at screen resolution	вместо това беше поставен неговият преглед с разделителна способност за екран
 @msg	join needs open paths	обединяването изисква отворени пътища
@@ -3731,6 +3775,7 @@ axis	Both	И двете
 @msg	no saved presets	няма запазени предварителни настройки
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име „{name}“ ({DEFAULT_PRESET} е защитена: създайте нова от нея)
 @msg	no saved profiles	няма запазени профили
+@msg	no saved selection recalled	няма възстановена запазена селекция
 @msg	no saved selections	няма запазени селекции
 @msg	no saved themes	няма запазени теми
 @msg	no segment {segment} on line {line}	няма сегмент {segment} на ред {line}
@@ -3761,8 +3806,8 @@ axis	Both	И двете
 @msg	no user workspace `{from}`	няма потребителско работно пространство „{from}“
 @msg	node {_1} is not text	възелът {_1} не е текст
 @msg	not a DXF drawing	не е DXF чертеж
-@msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
-@msg	not a VectorCraft shortcut set (missing `overrides`)	не е набор от клавишни комбинации на VectorCraft (липсват `overrides`)
+@msg	not a StitchFoundry file: {0}	не е файл на StitchFoundry: {0}
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	не е набор от клавишни комбинации на StitchFoundry (липсват `overrides`)
 @msg	not a graphic style library (format `{_1}`)	не е библиотека със стилове на графики (формат `{_1}`)
 @msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	 не е набор от преки пътища: текстът не започва с име със слъш и отваряща скоба
 @msg	not a stored central record	не е съхранен централен запис
@@ -3990,11 +4035,11 @@ axis	Both	И двете
 @msg	Sent to {_1}	Изпратено към {_1}
 @msg	{_1} files	{_1} файла
 @msg	The graphics were lost and have been restarted	Графиката беше загубена и рестартирана
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Първият опит на графичния процесор да покаже прозореца не успя, затова VectorCraft стартира отново на {summary}
-@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Последното стартиране на VectorCraft прекъсна на {name}, преди прозорецът да се появи, затова VectorCraft стартира на {summary}. За да опитате отново с този графичен процесор, променете Настройки › Производителност › Графичен процесор или стартирайте със зададена променлива WGPU_BACKEND
-@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Последното стартиране на VectorCraft прекъсна, докато се изброяваха графичните процесори, затова VectorCraft стартира на {summary} само с OpenGL. За да опитате отново другите графични интерфейси, променете Настройки › Производителност › Графичен процесор или стартирайте със зададена променлива WGPU_BACKEND
-@msg	Loading VectorCraft…	Зареждане на VectorCraft…
-@msg	VectorCraft failed to start: {e}	VectorCraft не успя да стартира: {e}
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Първият опит на графичния процесор да покаже прозореца не успя, затова StitchFoundry стартира отново на {summary}
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Последното стартиране на StitchFoundry прекъсна на {name}, преди прозорецът да се появи, затова StitchFoundry стартира на {summary}. За да опитате отново с този графичен процесор, променете Настройки › Производителност › Графичен процесор или стартирайте със зададена променлива WGPU_BACKEND
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Последното стартиране на StitchFoundry прекъсна, докато се изброяваха графичните процесори, затова StitchFoundry стартира на {summary} само с OpenGL. За да опитате отново другите графични интерфейси, променете Настройки › Производителност › Графичен процесор или стартирайте със зададена променлива WGPU_BACKEND
+@msg	Loading StitchFoundry…	Зареждане на StitchFoundry…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry не успя да стартира: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Изисква се браузър с поддръжка на WebGPU или WebGL2.
 @msg	The graphics were lost and couldn't be restarted.	Графиката беше загубена и не можа да бъде рестартирана.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Незаписаните ви промени се пазят в този браузър: презаредете страницата, за да ги си върнете.
@@ -4016,25 +4061,25 @@ axis	Both	И двете
 @msg	it has more than {MAX_NODES} objects	той има повече от {MAX_NODES} обекта
 @msg	it has no layers	той няма слоеве
 @msg	it has too many values in a row	той има твърде много стойности на ред
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	той съдържа {_1}, който VectorCraft все още не може да разчете
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	той съдържа {_1}, който StitchFoundry все още не може да разчете
 @msg	its objects are nested too deeply	обектите му са вложени твърде дълбоко
 @msg	its section ending with `%{end}` doesn't end	разделът му, завършващ на `%{end}`, няма край
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
-@msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
+@msg	an image StitchFoundry can't read was left out	изображение, което StitchFoundry не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	този файл е записан без съвместимост с PDF и данните му за редактиране не могат да бъдат прочетени ({why})
 @msg	No fonts are missing in this document	В този документ няма липсващи шрифтове
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не търси в папките на други приложения или на системата: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не търси в папките Shared или Public в Users: {path}
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry не търси в папките на други приложения или на системата: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry не търси в папките Shared или Public в Users: {path}
 @msg	{path} is not a folder	{path} не е папка
 @msg	the search couldn't start: try again in a moment	търсенето не можа да стартира: опитайте отново след малко
 @msg	searching a folder isn't available on the web	търсенето в папка не е достъпно в уеб версията
 @msg	every search thread stopped on an internal error (please report this bug)	всяка нишка за търсене спря поради вътрешна грешка (моля, докладвайте този бъг)
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папката със шрифтове на VectorCraft не е зададена тук: десктоп приложението и vectorcraft-cli я задават
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папката със шрифтове на StitchFoundry не е зададена тук: десктоп приложението и vectorcraft-cli я задават
 @msg	choose the font files to add	изберете шрифтовите файлове за добавяне
 @msg	{n} font file(s) are now in {folder}	{n} шрифтов(и) файл(а) вече са в {folder}
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов(и) файл(а) вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
@@ -4049,7 +4094,7 @@ axis	Both	И двете
 @msg	No linked files to look for	Няма свързани файлове за търсене
 @msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Превързани са {n} изображения; {name} не можа да бъде превързан: {reason}
 	Services	Услуги
-	Hide VectorCraft	Скриване на VectorCraft
+	Hide StitchFoundry	Скриване на StitchFoundry
 	Zoom	Мащабиране
 	Bring All to Front	Извеждане на всички отпред
 	Settings	Настройки
@@ -4057,7 +4102,7 @@ axis	Both	И двете
 	On: one locked object showing the document, updated when it changes.	Вкл.: един заключен обект, показващ документа, който се обновява при промяна.
 	Off: an editable copy of its art, embedded in this document.	Изкл.: редактируемо копие на неговата графика, вградено в този документ.
 	Images: link to the file instead of only embedding it.	Изображения: връзка към файла вместо само вграждане.
-	VectorCraft documents: one locked object, updated when the file changes.	Документи на VectorCraft: един заключен обект, който се обновява при промяна на файла.
+	StitchFoundry documents: one locked object, updated when the file changes.	Документи на StitchFoundry: един заключен обект, който се обновява при промяна на файла.
 	A file dialog is open: choose there first	Диалоговият прозорец за файл е отворен: изберете първо там
 	The document was closed while its file dialog was open	Документът беше затворен, докато диалоговият му прозорец за файл беше отворен
 	The dialog was closed before its file dialog answered	Диалоговият прозорец беше затворен, преди диалоговият прозорец за файл да отговори
@@ -4279,7 +4324,7 @@ lighting	Light	Светлина
 	Artistic	Художествени
 	Film Grain…	Филмова зърнистост…
 	Highlight Area	Зона на осветяване
-@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	компресираният файл се разпакетира до повече, отколкото VectorCraft чете ({_1} МБ документ, {_2} МБ на изображение)
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	компресираният файл се разпакетира до повече, отколкото StitchFoundry чете ({_1} МБ документ, {_2} МБ на изображение)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	документът е твърде голям за запазване в компресиран вид ({0}): запазете го с изключена опция „Използване на компресия“
 @msg	the file stopped being read (please report this bug)	четенето на файла беше прекъснато (моля, докладвайте тази грешка)
 	Concentric Dividers:	Концентрични делители:
@@ -4427,7 +4472,7 @@ lighting	Light	Светлина
 	DWG (use DXF)	DWG (използване на DXF)
 	Default Graphic Style	Стил на графика по подразбиране
 	Diamond (open)	Диамант (отворен)
-	Differences from VectorCraft Default:	Разлики от настройките по подразбиране на VectorCraft:
+	Differences from StitchFoundry Default:	Разлики от настройките по подразбиране на StitchFoundry:
 	Differences from [Default]:	Разлики от [По подразбиране]:
 	Diffusion	Дифузия
 	Direct Selection	Директно избиране
@@ -4495,7 +4540,7 @@ lighting	Light	Светлина
 	Inserting, deleting and rotating pages	Вмъкване, изтриване и завъртане на страници
 	Joins:	Съединения:
 	Justify	Двустранно подравняване
-	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	Запазва документа редактируем: VectorCraft отваря PDF файла отново без загуба на данни. За файлове, които ще редактирате отново.
+	Keeps the document editable: StitchFoundry reopens the PDF with nothing lost. For files you'll edit again.	Запазва документа редактируем: StitchFoundry отваря PDF файла отново без загуба на данни. За файлове, които ще редактирате отново.
 	Keyboard Shortcuts	Клавишни комбинации
 	Kite	Хвърчило
 	LF (macOS, Linux)	LF (macOS, Linux)
@@ -4682,10 +4727,10 @@ lighting	Light	Светлина
 	Up (right reading)	Нагоре (четливо отдясно)
 	Use Default	Използване по подразбиране
 	Variation	Вариант
-	VectorCraft Default	По подразбиране за VectorCraft
-	VectorCraft Defaults	Стандартни настройки на VectorCraft
-	VectorCraft Generic CMYK (SWOP-like)	Общ CMYK за VectorCraft (подобен на SWOP)
-	VectorCraft Swatches (.vcswatches)	Образци на VectorCraft (.vcswatches)
+	StitchFoundry Default	По подразбиране за StitchFoundry
+	StitchFoundry Defaults	Стандартни настройки на StitchFoundry
+	StitchFoundry Generic CMYK (SWOP-like)	Общ CMYK за StitchFoundry (подобен на SWOP)
+	StitchFoundry Swatches (.vcswatches)	Образци на StitchFoundry (.vcswatches)
 	Vertical Align	Вертикално подравняване
 	Vertical Area Type	Вертикално въвеждане в област
 	Vertical Type	Вертикален текст
@@ -4722,7 +4767,7 @@ lighting	Light	Светлина
 	[PDF/X-4:2010]	[PDF/X-4:2010]
 	[Press Quality]	[Качество за печат]
 	[Smallest File Size]	[Най-малък размер на файл]
-	[VectorCraft Default]	[По подразбиране за VectorCraft]
+	[StitchFoundry Default]	[По подразбиране за StitchFoundry]
 	of	от
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	Височина на x
@@ -4750,7 +4795,7 @@ file-filter	Print presets	Предварителни настройки за п�
 file-filter	SVG Compressed	Компресиран SVG
 file-filter	Swatch libraries	Библиотеки с образци
 file-filter	Templates	Шаблони
-file-filter	VectorCraft Template	Шаблон на VectorCraft
+file-filter	StitchFoundry Template	Шаблон на StitchFoundry
 gradient-kind	Radial	Радиален
 mark-style	Japanese	Японски
 theme	Appearance	Външен вид
@@ -4786,7 +4831,7 @@ theme	Appearance	Външен вид
 	Printing and Proofing	Печат и пробно отпечатване
 	Tracing	Трасиране
 	Typography	Типография
-	VectorCraft	VectorCraft
+	StitchFoundry	StitchFoundry
 	Web	Уеб
 	[1P-High View]	[Висок изглед (1P)]
 	[1P-Low View]	[Нисък изглед (1P)]
@@ -4861,6 +4906,7 @@ theme	Appearance	Външен вид
 	Darkness	Затъмняване
 	Isolate Selected Object	Изолиране на избрания обект
 	Keep selected	Запазване на избора
+	Merge only with selection	Сливане само с избраното
 	Sample Color from Screen	Взимане на цвят от екрана
 	The active document changed while the screen color sampler was open	Активният документ се промени, докато взимането на цвят от екрана беше отворено
 	This system has no screen color sampler	Тази система няма инструмент за взимане на цвят от екрана
@@ -4869,6 +4915,7 @@ theme	Appearance	Външен вид
 
 # Type › Reset Tracking and Kerning
 	Reset Tracking and Kerning	Нулиране на разредката и кернинга
+	Reset Horizontal Scale	Нулиране на хоризонталния мащаб
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" поставя `gradient`, а не мостра
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" поставя градиент: задайте `gradient`
@@ -4905,3 +4952,23 @@ theme	Appearance	Външен вид
 # View › Hide Template / Show Template
 	Hide Template	Скриване на шаблона
 	Show Template	Показване на шаблона
+
+# User Interface › Accent Color
+	Accent Color	Цвят на акцента
+	Amber	Кехлибарен
+	Coral	Коралов
+	Violet	Виолетов
+	Sketch	Скица
+	Halftone Pattern…	Полутонов шаблон…
+	Halftone Pattern	Полутонов шаблон
+	Pattern Type	Тип шаблон
+	Dot	Точка
+# User Interface › Color Scheme
+	Color Scheme	Цветова схема
+	Modern	Модерна
+
+# Symbol Options › Export Type
+	Export Type:	Тип на експортиране:
+	Movie Clip	Филмов клип
+@msg	name is empty	името е празно
+@msg	no symbol named `{n}`	няма символ с име `{n}`

@@ -523,6 +523,7 @@
 	Convert to RGB	Converter para RGB
 	Convert to Shape	Converter em Forma
 	Convert to sRGB	Converter para sRGB
+	Convert to Straight Lines	Converter em Linhas Retas
 	Copies:	Cópias:
 	Copy	Copiar
 	Copy (make a transformed copy)	Copiar (fazer uma cópia transformada)
@@ -536,6 +537,7 @@
 	Copyright Notice:	Aviso de Direitos Autorais:
 	Copyright Status:	Status de Direitos Autorais:
 	Copyright Symbol	Símbolo de Direitos Autorais
+	Corner Point Angle Threshold:	Limite de Ângulo dos Pontos de Canto:
 	Corner Radius	Raio do Canto
 	Corner Radius:	Raio do Canto:
 	Corner:	Canto:
@@ -862,6 +864,32 @@
 	Export	Exportar
 	Export All…	Exportar Tudo…
 	Export Artboard	Exportar Mesa de Trabalho
+	A File per Object	Um arquivo por objeto
+	Example: {name}	Exemplo: {name}
+	Export Preset:	Predefinição de exportação:
+	Folders:	Pastas:
+	Insert	Inserir
+	Nothing is selected. Select the art to export, then open this tab again.	Nada selecionado. Selecione a arte a exportar e abra esta guia novamente.
+	One File of the Selection	Um arquivo da seleção
+	Start at:	Começar em:
+	{n} objects selected	{n} objetos selecionados
+	Delete Export Preset	Excluir predefinição de exportação
+	Export Presets	Predefinições de exportação
+	Save Export Preset	Salvar predefinição de exportação
+	Export Layer	Exportar camada
+	Export Selection	Exportar seleção
+	All in One Folder	Tudo em uma pasta
+	By Size or Row	Por tamanho ou linha
+	By Format	Por formato
+	By Artboard or Item	Por prancheta ou item
+	By Item, Then Format	Por item, depois formato
+	Document Name	Nome do documento
+	Artboard or Item Name	Nome da prancheta ou do item
+	Number (####)	Número (####)
+	Date (YYYYMMDD)	Data (AAAAMMDD)
+	Date (YYYY-MM-DD)	Data (AAAA-MM-DD)
+	Time (hhmmss)	Hora (hhmmss)
+	PDF Print	PDF para impressão
 	Export As	Exportar Como
 	Export As PNG…	Exportar Como PNG…
 	Export As SVG…	Exportar Como SVG…
@@ -927,6 +955,7 @@
 	Fill and Stroke	Preenchimento e Traçado
 	Fill new strokes	Preencher novos traçados
 	Keep selected	Manter selecionado
+	Merge only with selection	Mesclar somente com a seleção
 	Fill with Placeholder Text	Preencher com Texto de Placeholder
 	Insert Inline Symbol	Inserir Símbolo no Texto
 	Fill:	Preenchimento:
@@ -944,8 +973,11 @@
 	Fit Artboard in Window	Ajustar Mesa de Trabalho na Janela
 	Fit Headline	Ajustar Manchete
 	Decrease Font Size	Diminuir Tamanho da Fonte
+	Decrease Font Size by Five Steps	Diminuir Tamanho da Fonte em Cinco Incrementos
 	Increase Font Size	Aumentar Tamanho da Fonte
+	Increase Font Size by Five Steps	Aumentar Tamanho da Fonte em Cinco Incrementos
 	Reset Tracking and Kerning	Redefinir Rastreamento e Kerning
+	Reset Horizontal Scale	Redefinir Escala Horizontal
 	Step Type	Ajustar Texto em Incrementos
 	Fit dashes to corners and ends	Ajustar tracejados aos cantos e extremidades
 	Fit in Window	Ajustar na Janela
@@ -1039,6 +1071,9 @@
 	Graphic Style Options…	Opções de Estilo Gráfico…
 	Symbol Options	Opções de Símbolo
 	Symbol Options…	Opções de Símbolo…
+	Export Type:	Tipo de exportação:
+	Movie Clip	Clipe de filme
+	Graphic	Gráfico
 	Graphic Styles	Estilos Gráficos
 	Graphic Styles Options	Opções de Estilos Gráficos
 	Graphics Processor	Processador Gráfico
@@ -1123,6 +1158,14 @@
 	Hyphenate	Hifenizar
 	Hyphenation	Hifenização
 	Hyphenation…	Hifenização…
+	Words Longer Than:	Palavras com Mais de:
+	After First:	Após as Primeiras:
+	Before Last:	Antes das Últimas:
+	Hyphen Limit:	Limite de Hifens:
+	Hyphenation Zone:	Zona de Hifenização:
+	letters	letras
+	hyphens	hifens
+	Hyphenate Capitalized Words	Hifenizar Palavras com Inicial Maiúscula
 	ICC Profile	Perfil ICC
 	Identify Objects By	Identificar Objetos Por
 	Ignore	Ignorar
@@ -1608,6 +1651,7 @@
 	Out Tangent Handles	Alças de Tangente de Saída
 	Outer Glow…	Brilho Externo…
 	Outline	Contorno
+	Outline Object	Contornar Objeto
 	Outline Stroke	Contornar Traçado
 	Outline Text	Contornar Texto
 	Outlines and Rules	Contornos e Regras
@@ -1982,6 +2026,7 @@
 	Reset Profiles	Redefinir Perfis
 	Rotate View	Girar Visualização
 	Reset Rotate View	Redefinir Visualização Girada
+	Rotate View to Selection	Girar Visualização para a Seleção
 	Reset the rows to the artwork's colors	Redefinir as linhas para as cores da arte
 	Reset to Default	Redefinir para o Padrão
 	Reset to White, Black	Redefinir para Branco, Preto
@@ -2065,6 +2110,7 @@
 	Save Recovery Data	Salvar Dados de Recuperação
 	Save Save for Web Preset	Salvar Predefinido de Salvar para Web
 	Save Selection…	Salvar Seleção…
+	Update Selection	Atualizar Seleção
 	Save Swatch Library	Salvar Biblioteca de Amostras
 	Save Swatch Library…	Salvar Biblioteca de Amostras…
 	Save Theme	Salvar Tema
@@ -2255,6 +2301,7 @@
 	Show List View	Mostrar Exibição de Lista
 	Show Note	Mostrar Nota
 	Show Options	Mostrar Opções
+	Show Original Path	Mostrar Caminho Original
 	Show Package	Mostrar Pacote
 	Show Panel	Mostrar Painel
 	Show Perspective Grid	Mostrar Grade de Perspectiva
@@ -3272,6 +3319,8 @@ axis	Both	Ambos
 @msg	cannot split an open path at its end point	não é possível dividir um traçado aberto em sua extremidade
 @msg	closing needs three anchors	fechar exige três âncoras
 @msg	check an asset to export	marque um recurso para exportar
+@msg	check a layer to export	marque uma camada para exportar
+@msg	select the art to export first	selecione primeiro a arte a exportar
 @msg	choice must be "merge" or "add", not `{choice}`	choice deve ser "merge" ou "add", não `{choice}`
 @msg	choose a direction to divide in	escolha uma direção para dividir
 @msg	choose a folder to export to	escolha uma pasta para exportar
@@ -3382,6 +3431,7 @@ axis	Both	Ambos
 @msg	no saved presets	nenhuma predefinição salva
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	nenhuma predefinição de impressão salva chamada `{name}` ({DEFAULT_PRESET} é protegida: crie uma nova a partir dela)
 @msg	no saved profiles	nenhum perfil salvo
+@msg	no saved selection recalled	nenhuma seleção salva relembrada
 @msg	no saved selections	nenhuma seleção salva
 @msg	no saved themes	nenhum tema salvo
 @msg	no segment {segment} on line {line}	nenhum segmento {segment} na linha {line}
@@ -5112,7 +5162,6 @@ machine	Trim	Corte de linha
 	Delete Group	Excluir Grupo
 	Import Library…	Importar Biblioteca…
 	Export Library…	Exportar Biblioteca…
-	Graphic	Gráfico
 	System Layout	Layout do Sistema
 	Tabular Lining	Alinhado Tabular
 	Tabular Oldstyle	Antigo Tabular
@@ -5748,3 +5797,15 @@ mark-style	Japanese	Japonesas
 	Stitch Direction	Direção do ponto
 	Use Line as Direction	Usar linha como direção
 	Inclination Tool	Ferramenta Inclinação
+	Accent Color	Cor de destaque
+	Amber	Âmbar
+	Violet	Violeta
+	Sketch	Esboço
+	Halftone Pattern…	Padrão de meio-tom…
+	Halftone Pattern	Padrão de meio-tom
+	Pattern Type	Tipo de padrão
+	Dot	Ponto
+	Color Scheme	Esquema de cores
+	Modern	Moderno
+@msg	name is empty	o nome está vazio
+@msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`

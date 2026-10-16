@@ -436,14 +436,14 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
         }
         ui.add_space(6.0);
-        let link = app.session.prefs.constrain_proportions;
+        let link = super::transform::proportional(app, ui);
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
             if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x - origin.x), units, fw) {
                 app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "W:");
-            if let Some(v) = widgets::num_field(ui, "tw", Some(b.width()), units, fw) {
+            if let Some(v) = widgets::size_field(ui, "tw", Some(b.width()), units, fw) {
                 app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
@@ -452,7 +452,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "H:");
-            if let Some(v) = widgets::num_field(ui, "th", Some(b.height()), units, fw) {
+            if let Some(v) = widgets::size_field(ui, "th", Some(b.height()), units, fw) {
                 app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();

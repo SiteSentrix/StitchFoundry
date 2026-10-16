@@ -80,7 +80,7 @@ fn clean_name(name: &str) -> Option<String> {
 
 /// Ids of art under `id`: the id itself when it is not a layer, else every non-layer under it
 /// (sublayers unfolded). Layers alone have nothing to collect.
-fn art_under(doc: &vectorcraft_doc::Document, id: NodeId, out: &mut Vec<NodeId>) {
+pub(crate) fn art_under(doc: &vectorcraft_doc::Document, id: NodeId, out: &mut Vec<NodeId>) {
     let Some(n) = doc.node(id) else { return };
     if n.is_layer() {
         if let Some(kids) = n.children() {

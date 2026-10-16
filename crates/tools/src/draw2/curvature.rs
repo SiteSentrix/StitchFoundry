@@ -954,6 +954,19 @@ mod tests {
         assert_eq!(press(&mut t, &cx, 100.0, 0.0, false).len(), 1);
     }
 
+    /// #2120: the dragged end of a slanted straight path keeps to its extension (Smart Guides).
+    #[test]
+    fn a_dragged_end_of_a_straight_path_keeps_to_its_extension() {
+        let (d, id) = doc_with(SubPath::polyline(&[pt(300.0, 400.0), pt(380.0, 340.0)], false));
+        let (s, p) = (selected(id, None), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = CurvatureTool::default();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 380.0, 340.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 421.5, 312.0));
+        let moved = a.get(1).and_then(edit_op).map(|(op, v)| (op, v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap()));
+        assert!(matches!(moved, Some(("move", x, y)) if (x - 420.0).abs() < 1e-9 && (y - 310.0).abs() < 1e-9), "{a:?}");
+    }
+
     #[test]
     fn alt_click_or_double_click_toggles_and_delete_removes() {
         let (d, id) = doc_with(wave());

@@ -541,6 +541,7 @@
 	Convert to RGB	轉換為 RGB
 	Convert to Shape	轉換為形狀
 	Convert to sRGB	轉換為 sRGB
+	Convert to Straight Lines	轉換為直線
 	Convert:	轉換：
 	Copied the CSS of {rules} object(s)	已複製 {rules} 個物件的 CSS
 	Copies:	份數：
@@ -559,6 +560,7 @@
 	Copyright Notice:	著作權聲明：
 	Copyright Status:	著作權狀態：
 	Copyright Symbol	著作權符號
+	Corner Point Angle Threshold:	尖角點角度臨界值：
 	Corner Radius	圓角半徑
 	Corner Radius:	圓角半徑：
 	Corner:	轉角：
@@ -939,6 +941,32 @@
 	Export All…	全部匯出…
 	Export and Clipboard Transparency Flattener Settings	匯出與剪貼簿透明度平面化設定
 	Export Artboard	匯出工作區域
+	A File per Object	每個物件一個檔案
+	Example: {name}	範例：{name}
+	Export Preset:	轉存預設集：
+	Folders:	資料夾：
+	Insert	插入
+	Nothing is selected. Select the art to export, then open this tab again.	未選取任何內容。請選取要轉存的圖稿，然後重新開啟此標籤。
+	One File of the Selection	選取範圍轉存為一個檔案
+	Start at:	起始編號：
+	{n} objects selected	已選取 {n} 個物件
+	Delete Export Preset	刪除轉存預設集
+	Export Presets	轉存預設集
+	Save Export Preset	儲存轉存預設集
+	Export Layer	轉存圖層
+	Export Selection	轉存選取範圍
+	All in One Folder	全部放在一個資料夾
+	By Size or Row	依尺寸或列
+	By Format	依格式
+	By Artboard or Item	依工作區域或項目
+	By Item, Then Format	依項目，再依格式
+	Document Name	文件名稱
+	Artboard or Item Name	工作區域或項目名稱
+	Number (####)	編號（####）
+	Date (YYYYMMDD)	日期（YYYYMMDD）
+	Date (YYYY-MM-DD)	日期（YYYY-MM-DD）
+	Time (hhmmss)	時間（hhmmss）
+	PDF Print	印刷用 PDF
 	Export As	匯出為
 	Export As PNG…	匯出為 PNG…
 	Export As SVG…	匯出為 SVG…
@@ -1012,6 +1040,7 @@
 	Fill Color	填色顏色
 	Fill new strokes	為新筆畫套用填色
 	Keep selected	保持選取狀態
+	Merge only with selection	僅與選取物件合併
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿
@@ -1034,8 +1063,11 @@
 	Fit dashes to corners and ends	讓虛線貼合轉角與端點
 	Fit Headline	符合標題
 	Decrease Font Size	縮小字體大小
+	Decrease Font Size by Five Steps	按五個增量縮小字體大小
 	Increase Font Size	放大字體大小
+	Increase Font Size by Five Steps	按五個增量放大字體大小
 	Reset Tracking and Kerning	重設字距與字距微調
+	Reset Horizontal Scale	重設水平縮放
 	Spacing	間距
 	Step Type	依增量調整文字
 	Fit in View	符合檢視
@@ -1275,6 +1307,14 @@
 	Hyphenate	使用連字號
 	Hyphenation	連字號
 	Hyphenation…	連字號…
+	Words Longer Than:	單字長度超過：
+	After First:	斷開前至少：
+	Before Last:	斷開後至少：
+	Hyphen Limit:	連字號限制：
+	Hyphenation Zone:	連字區：
+	letters	個字母
+	hyphens	個連字號
+	Hyphenate Capitalized Words	大寫單字使用連字號
 	ICC Profile	ICC 描述檔
 	Identify Objects By	識別物件依據
 	Ignore	略過
@@ -1951,6 +1991,7 @@
 	Out Tangent Handles	外切線控制把手
 	Outer Glow…	外光暈…
 	Outline	外框
+	Outline Object	外框物件
 	Outline Others	其他以外框檢視
 	Outline Stroke	外框筆畫
 	Outline Text	外框文字
@@ -2379,6 +2420,7 @@
 	Reset Profiles	重設描述檔
 	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
+	Rotate View to Selection	依選取範圍旋轉檢視
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
@@ -2487,6 +2529,7 @@
 	Save Save for Web Preset	儲存「儲存為網頁用」預設集
 	Save selected colors as swatches	將所選顏色儲存為色票
 	Save Selection…	儲存選取範圍…
+	Update Selection	更新選取範圍
 	Save Swatch Library	儲存色票資料庫
 	Save Swatch Library…	儲存色票資料庫…
 	Save the current layout under this name	以此名稱儲存目前的版面配置
@@ -2724,6 +2767,7 @@
 	Show Modified	顯示已修改
 	Show Note	顯示註解
 	Show Options	顯示選項
+	Show Original Path	顯示原始路徑
 	Color Panel Options	顏色面板選項
 	Show Package	顯示封裝
 	Show Panel	顯示面板
@@ -5046,3 +5090,20 @@ machine	Stop	停止
 	Arc Up	向上拱形
 	Arc Down	向下拱形
 	To follow a line of your own, draw it first, select it, then Add Words.	要沿自己畫的線排列文字，請先畫線並選取它，然後選擇「新增文字」。
+@msg	check a layer to export	請勾選要轉存的圖層
+@msg	select the art to export first	請先選取要轉存的圖稿
+	Accent Color	強調色
+	Amber	琥珀色
+	Violet	紫羅蘭色
+	Pink	粉紅色
+	Sketch	素描
+	Halftone Pattern…	半色調圖樣…
+	Halftone Pattern	半色調圖樣
+	Pattern Type	圖樣類型
+	Dot	網點
+	Color Scheme	配色方案
+	Modern	現代
+	Export Type:	轉存類型:
+	Movie Clip	影片片段
+@msg	name is empty	名稱為空
+@msg	no symbol named `{n}`	沒有名為 `{n}` 的符號

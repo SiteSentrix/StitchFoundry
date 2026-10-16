@@ -1005,7 +1005,7 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, tr
                 Err(why) => return Err(why),
             }
         }
-        None => unmark(&mut doc.layers, true, &mut vec![]),
+        None => unmark(&mut doc.layers, true, true, &mut vec![]),
     }
     doc.limit_depth_noting(&mut notes);
     if small.is_some() {
@@ -1047,12 +1047,13 @@ const UNSEEN_TEXT: &str = "text objects that the file keeps but its page doesn't
 /// How much more of the page (0 to 1) the layers may differ without a text object and still look no worse.
 const UNSEEN_MARGIN: f64 = 5e-5;
 
-/// Clear the marks in `nodes` and say which marked objects show, by id.
-fn unmark(nodes: &mut [Arc<Node>], shown: bool, found: &mut Vec<(NodeId, Option<Rect>)>) {
+/// Clear the marks in `nodes` and say which marked objects show and print, by id.
+fn unmark(nodes: &mut [Arc<Node>], shown: bool, prints: bool, found: &mut Vec<(NodeId, Option<Rect>)>) {
     for n in nodes {
         let shown = shown && n.visible;
+        let prints = prints && !matches!(n.kind, NodeKind::Layer { printable: false, .. });
         if let Some(name) = n.name.as_deref().and_then(|m| m.strip_prefix(MADE)) {
-            if shown {
+            if shown && prints {
                 found.push((n.id, n.visual_bounds()));
             }
             let name = (!name.is_empty()).then(|| name.to_string());
@@ -1060,7 +1061,7 @@ fn unmark(nodes: &mut [Arc<Node>], shown: bool, found: &mut Vec<(NodeId, Option<
         } else if !matches!(n.kind, NodeKind::Compound { .. })
             && let Some(c) = Arc::make_mut(n).children_mut()
         {
-            unmark(c, shown, found);
+            unmark(c, shown, prints, found);
         }
     }
 }
@@ -1080,13 +1081,13 @@ fn take_out(nodes: &mut Vec<Arc<Node>>, id: NodeId, hide: bool) -> bool {
     nodes.iter_mut().any(|n| !matches!(n.kind, NodeKind::Compound { .. }) && Arc::make_mut(n).children_mut().is_some_and(|c| take_out(c, id, hide)))
 }
 
-/// The text objects made from the file's text document that show on the page's area, where the page
-/// has no type to match them, and that the layers look no worse without, are not drawn by the app
-/// that wrote the file (which paints every shown text object; it keeps the type of what was turned
-/// to outlines): they are taken out. How many.
+/// The text objects made from the file's text document that show and print on the page's area,
+/// where the page has no type to match them, and that the layers look no worse without, are not
+/// drawn by the app that wrote the file (which paints every shown text object; it keeps the type
+/// of what was turned to outlines): they are taken out. How many.
 fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Document) -> usize {
     let mut found = vec![];
-    unmark(&mut doc.layers, true, &mut found);
+    unmark(&mut doc.layers, true, true, &mut found);
     let rect = frame.rect;
     if found.is_empty() || found.len() > MAX_WEIGHED {
         return 0;

@@ -1,7 +1,8 @@
 //! Photoshop-style raster effects (Effect › Artistic › Film Grain, Blur › Radial Blur and Smart Blur, Brush Strokes ›
 //! Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes
 //! and Sumi-e, Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone,
-//! Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Stylize › Glowing Edges, Texture
+//! Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Sketch › Halftone Pattern, Stylize ›
+//! Glowing Edges, Texture
 //! › Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, and Video ›
 //! De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
 //!
@@ -20,6 +21,7 @@ mod edges;
 mod loaded;
 mod pixelate;
 mod sharpen;
+mod sketch;
 mod texture;
 mod video;
 
@@ -33,10 +35,11 @@ pub use brushstrokes::{STROKE_DIRECTIONS, StrokeDirection};
 pub use distort::{GLASS_TEXTURES, GLASS_TEXTURES_LOADED, GlassTexture};
 pub use loaded::{LOADED, LoadedTexture, TEXTURE_IMAGE, texture};
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
+pub use sketch::{HALFTONE_TYPES, HalftonePattern};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 28] = [
+pub const PIXEL_EFFECTS: [&str; 29] = [
     "artistic.filmGrain",
     "blur.radial",
     "blur.smart",
@@ -56,6 +59,7 @@ pub const PIXEL_EFFECTS: [&str; 28] = [
     "pixelate.mezzotint",
     "pixelate.pointillize",
     "sharpen.unsharpMask",
+    "sketch.halftonePattern",
     "stylize.glowingEdges",
     "texture.craquelure",
     "texture.grain",
@@ -123,6 +127,9 @@ pub enum PixelFx {
     /// Sharpen › Unsharp Mask: colours pushed away from a Gaussian blur of σ = `radius` by `amount`
     /// (1 = 100 %), where they differ from it by at least `threshold` levels.
     UnsharpMask { amount: f64, radius: f64, threshold: f64 },
+    /// Sketch › Halftone Pattern: black ink on white paper through a `kind` screen of cells `size`
+    /// (1..12) apart, its edges as hard as `contrast` (0..50) says.
+    HalftonePattern { size: f64, contrast: f64, kind: HalftonePattern },
     /// Stylize › Glowing Edges: bright coloured Sobel outlines on black.
     GlowingEdges { width: f64, brightness: f64, smoothness: f64 },
     /// Pixelate › Color Halftone: each colour channel screened at its angle (`angles`° of channels
@@ -277,6 +284,11 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             radius: num(p, "radius", 1.0).clamp(0.1, 250.0),
             threshold: num(p, "threshold", 0.0).clamp(0.0, 255.0),
         },
+        "sketch.halftonePattern" => PixelFx::HalftonePattern {
+            size: num(p, "size", 1.0).clamp(1.0, 12.0),
+            contrast: num(p, "contrast", 5.0).clamp(0.0, 50.0),
+            kind: HalftonePattern::parse(text(p, "patternType", "dot")),
+        },
         "stylize.glowingEdges" => PixelFx::GlowingEdges {
             width: num(p, "edgeWidth", 2.0).clamp(1.0, 14.0),
             brightness: num(p, "edgeBrightness", 6.0).clamp(0.0, 20.0),
@@ -353,7 +365,7 @@ impl PixelFx {
             // Content shifted outwards reaches past the bounds by as much as the shift.
             PixelFx::Glass { distortion, .. } => distort::glass_shift(distortion),
             PixelFx::OceanRipple { size, magnitude } => distort::ripple_shift(size, magnitude),
-            PixelFx::UnsharpMask { .. } => 0.0,
+            PixelFx::UnsharpMask { .. } | PixelFx::HalftonePattern { .. } => 0.0,
             PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
             PixelFx::FilmGrain { .. }
             | PixelFx::ColorHalftone { .. }
@@ -396,7 +408,7 @@ impl PixelFx {
             // The cells around the pixel's, and the cells around theirs.
             PixelFx::ColorHalftone { max_radius, .. } => Some(3.0 * std::f64::consts::SQRT_2 * max_radius),
             PixelFx::Crystallize { cell } => Some(1.5 * cell),
-            PixelFx::FilmGrain { .. } | PixelFx::Mezzotint { .. } => Some(0.0),
+            PixelFx::FilmGrain { .. } | PixelFx::Mezzotint { .. } | PixelFx::HalftonePattern { .. } => Some(0.0),
             // The dots' points, and the softened colour around them.
             PixelFx::Pointillize { cell } => Some(2.5 * cell),
             // The softened tones around the pixel.
@@ -439,6 +451,7 @@ impl PixelFx {
             }
             PixelFx::OceanRipple { size, magnitude } => distort::ocean_ripple(px, w, h, space, size, magnitude),
             PixelFx::UnsharpMask { amount, radius, threshold } => sharpen::unsharp(px, w, h, amount, to_px(radius), threshold),
+            PixelFx::HalftonePattern { size, contrast, kind } => sketch::halftone_pattern(px, w, h, space, size, contrast, kind),
             PixelFx::GlowingEdges { width, brightness, smoothness } => edges::glow(px, w, h, to_px(width), brightness, to_px(smoothness)),
             PixelFx::ColorHalftone { max_radius, angles } => pixelate::color_halftone(px, w, h, space, max_radius, angles),
             PixelFx::Crystallize { cell } => pixelate::crystallize(px, w, h, space, cell),

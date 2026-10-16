@@ -21,7 +21,7 @@
 	Paste Design	Liitä malli
 	Select Unused	Valitse käyttämättömät
 	Glowing Edges…	Hehkuvat reunat…
-	About VectorCraft	Tietoja VectorCraftista
+	About StitchFoundry	Tietoja StitchFoundryista
 	Align to Path	Tasaa polkuun
 	Cut Path at Selected Anchor Points	Leikkaa polku valituista ankkuripisteistä
 	Language	Kieli
@@ -30,7 +30,7 @@
 	Medium Dark	Keskitumma
 	Medium Light	Keskivaalea
 	Light	Vaalea
-	Quit VectorCraft	Lopeta VectorCraft
+	Quit StitchFoundry	Lopeta StitchFoundry
 	File	Tiedosto
 	New…	Uusi…
 	New from Template…	Uusi mallipohjasta…
@@ -208,6 +208,7 @@
 	Join	Liitä
 	Average…	Keskiarvota…
 	Outline Stroke	Ääriviivaa viiva
+	Outline Object	Muunna objekti ääriviivoiksi
 	Offset Path…	Siirrä polkua…
 	Reverse Path Direction	Käännä polun suunta
 	Simplify…	Yksinkertaista…
@@ -387,6 +388,7 @@
 	Area Text Objects	Aluetekstiobjektit
 	Start Global Edit	Aloita yleismuokkaus
 	Save Selection…	Tallenna valinta…
+	Update Selection	Päivitä valinta
 	Edit Selection…	Muokkaa valintaa…
 	Effect	Tehoste
 	Apply Last Effect	Käytä viimeisintä tehostetta
@@ -468,7 +470,7 @@
 	Working CMYK	Työ-CMYK
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
-	VectorCraft Generic CMYK (SWOP-like)	VectorCraftin yleinen CMYK (SWOP-tyyppinen)
+	StitchFoundry Generic CMYK (SWOP-like)	StitchFoundryin yleinen CMYK (SWOP-tyyppinen)
 	Legacy Macintosh RGB (Gamma 1.8)	Vanha Macintosh RGB (gamma 1.8)
 	Internet Standard RGB (sRGB)	Internetin standardi-RGB (sRGB)
 	Monitor RGB	Näytön RGB
@@ -482,6 +484,7 @@
 	Fit All in Window	Sovita kaikki ikkunaan
 	Actual Size	Todellinen koko
 	Reset Rotate View	Palauta näkymän kierto
+	Rotate View to Selection	Kierrä näkymää valinnan mukaan
 	Hide Edges	Piilota reunat
 	Show Edges	Näytä reunat
 	Hide Artboards	Piilota piirtoalustat
@@ -653,9 +656,9 @@
 	Save Swatch Library…	Tallenna värimallikirjasto…
 	Symbol Libraries	Symbolikirjastot
 	Help	Ohje
-	VectorCraft on GitHub	VectorCraft GitHubissa
+	StitchFoundry on GitHub	StitchFoundry GitHubissa
 	Search Commands…	Hae komentoja…
-	VectorCraft Help…	VectorCraft-ohje…
+	StitchFoundry Help…	StitchFoundry-ohje…
 	Auto Color	Automaattinen väri
 	Automatic	Automaattinen
 	Isolate Selected Group	Eristä valittu ryhmä
@@ -705,7 +708,7 @@
 	Dock Panel	Telakoi paneeli
 	Float Tool Group	Kelluta työkaluryhmä
 	Services	Palvelut
-	Hide VectorCraft	Piilota VectorCraft
+	Hide StitchFoundry	Piilota StitchFoundry
 	Hide Others	Piilota muut
 	Minimize	Pienennä
 	Zoom	Zoomaa
@@ -1540,6 +1543,9 @@ lighting	Light	Valo
 	Updated {} image(s)	Päivitetty {} kuva(a)
 	Break Link	Katkaise linkki
 	Tolerance:	Toleranssi:
+	Corner Point Angle Threshold:	Kulmapisteiden kulmakynnys:
+	Convert to Straight Lines	Muunna suoriksi viivoiksi
+	Show Original Path	Näytä alkuperäinen polku
 	Transparency Options	Läpinäkyvyysasetukset
 	Color Mixer (Shift-click the chip)	Värisekoitin (Vaihto-napsauta värilaattaa)
 	Fill: click for swatches, Shift-click for the color mixer	Täyttö: napsauta avataksesi värimallit, Vaihto-napsauta avataksesi värisekoittimen
@@ -1564,6 +1570,14 @@ lighting	Light	Valo
 	Every-line Composer	Kaikkien rivien asettelu
 	First-line Left Indent	Ensimmäisen rivin vasen sisennys
 	Hyphenation…	Tavutus…
+	Words Longer Than:	Sanat, jotka ovat pidempiä kuin:
+	After First:	Ensimmäisten jälkeen:
+	Before Last:	Ennen viimeisiä:
+	Hyphen Limit:	Tavuviivaraja:
+	Hyphenation Zone:	Tavutusalue:
+	letters	kirjainta
+	hyphens	tavuviivaa
+	Hyphenate Capitalized Words	Tavuta isolla alkukirjaimella alkavat sanat
 	Justification…	Tasaus…
 	Justify with last line aligned center	Tasaa molemmat reunat, viimeinen rivi keskelle
 	Justify with last line aligned right	Tasaa molemmat reunat, viimeinen rivi oikealle
@@ -2106,7 +2120,7 @@ lighting	Light	Valo
 	{count} folder(s) or file(s) couldn't be read	{count} kansiota tai tiedostoa ei voitu lukea
 	The search stopped at its limit: search a smaller folder.	Haku pysähtyi rajaansa: hae pienemmästä kansiosta.
 	Copy only fonts you own or are licensed to install.	Kopioi vain fontteja, jotka omistat tai joiden asentamiseen sinulla on lisenssi.
-	VectorCraft copies the fonts to {folder}.	VectorCraft kopioi fontit kansioon {folder}.
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry kopioi fontit kansioon {folder}.
 	Apply to All ({count} more missing)	Käytä kaikkiin ({count} muuta puuttuu)
 	Ignore	Ohita
 	Linked File Not Found	Linkitettyä tiedostoa ei löydy
@@ -2195,7 +2209,7 @@ lighting	Light	Valo
 	On: one locked object showing the document, updated when it changes.	Päällä: yksi lukittu objekti, joka näyttää asiakirjan ja päivittyy sen muuttuessa.
 	Off: an editable copy of its art, embedded in this document.	Pois: muokattava kopio sen kuvituksesta upotettuna tähän asiakirjaan.
 	Images: link to the file instead of only embedding it.	Kuvat: linkitä tiedostoon sen sijaan, että se vain upotetaan.
-	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-asiakirjat: yksi lukittu objekti, joka päivittyy tiedoston muuttuessa.
+	StitchFoundry documents: one locked object, updated when the file changes.	StitchFoundry-asiakirjat: yksi lukittu objekti, joka päivittyy tiedoston muuttuessa.
 	Alignment:	Tasaus:
 	Applies when the linked file is relinked or updated.	Koskee tilannetta, jossa linkitetty tiedosto linkitetään uudelleen tai päivitetään.
 	Bounds (Fill Proportionally)	Rajat (täytä suhteellisesti)
@@ -2276,7 +2290,7 @@ lighting	Light	Valo
 	A new preset starting from the selected one	Uusi esiasetus valitun pohjalta
 	Differences from {preset}:	Erot esiasetukseen {preset}:
 	Differences from [Default]:	Erot esiasetukseen [Oletus]:
-	Differences from VectorCraft Default:	Erot esiasetukseen VectorCraft-oletus:
+	Differences from StitchFoundry Default:	Erot esiasetukseen StitchFoundry-oletus:
 	Edit…	Muokkaa…
 	None.	Ei mitään.
 	Presets:	Esiasetukset:
@@ -2326,7 +2340,7 @@ lighting	Light	Valo
 	3 Color Job	3 värin työ
 	Recover Documents	Palauta asiakirjat
 	Restored documents open unsaved: save them to keep them.	Palautetut asiakirjat avautuvat tallentamattomina: tallenna ne, jos haluat säilyttää ne.
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft ei sulkeutunut normaalisti viime kerralla. Näissä asiakirjoissa oli tallentamattomia muutoksia:
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry ei sulkeutunut normaalisti viime kerralla. Näissä asiakirjoissa oli tallentamattomia muutoksia:
 	Do you want to save the changes you made to “{name}”?	Haluatko tallentaa asiakirjaan ”{name}” tekemäsi muutokset?
 	Don't Save	Älä tallenna
 	Your changes will be lost if you don't save them.	Muutokset menetetään, jos niitä ei tallenneta.
@@ -2393,7 +2407,7 @@ lighting	Light	Valo
 	Color images	Värikuvat
 	Compatibility:	Yhteensopivuus:
 	PDF 1.7	PDF 1.7
-	VectorCraft Default	VectorCraft-oletus
+	StitchFoundry Default	StitchFoundry-oletus
 	High Quality Print	Korkealaatuinen tuloste
 	[High Quality Print]	[Korkealaatuinen tuloste]
 	Press Quality	Painolaatu
@@ -2406,7 +2420,7 @@ lighting	Light	Valo
 	[PDF/X-3:2002]	[PDF/X-3:2002]
 	PDF/X-4:2010	PDF/X-4:2010
 	[PDF/X-4:2010]	[PDF/X-4:2010]
-	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	Pitää asiakirjan muokattavana: VectorCraft avaa PDF:n uudelleen ilman menetyksiä. Tiedostoille, joita muokataan uudelleen.
+	Keeps the document editable: StitchFoundry reopens the PDF with nothing lost. For files you'll edit again.	Pitää asiakirjan muokattavana: StitchFoundry avaa PDF:n uudelleen ilman menetyksiä. Tiedostoille, joita muokataan uudelleen.
 	Compress text and line art	Pakkaa teksti ja viivapiirrokset
 	Compression	Pakkaus
 	Compression › Color › Above Ppi	Pakkaus › Väri › Yli ppi
@@ -2484,7 +2498,7 @@ lighting	Light	Valo
 	A File…	Tiedosto…
 	GPL palettes keep solid colours only, as RGB.	GPL-paletit säilyttävät vain tasavärit RGB-muodossa.
 	Save Swatch Library	Tallenna värimallikirjasto
-	VectorCraft Swatches (.vcswatches)	VectorCraft-värimallit (.vcswatches)
+	StitchFoundry Swatches (.vcswatches)	StitchFoundry-värimallit (.vcswatches)
 	Save To:	Tallenna kohteeseen:
 	Saved to User Defined: {}	Tallennettu käyttäjän määrittämiin: {}
 	Selected Swatches Only	Vain valitut värimallit
@@ -2603,6 +2617,32 @@ lighting	Light	Valo
 	Summary	Yhteenveto
 	Download	Lataa
 	Export Artboard	Vie piirtoalusta
+	A File per Object	Yksi tiedosto objektia kohden
+	Example: {name}	Esimerkki: {name}
+	Export Preset:	Vientiesiasetus:
+	Folders:	Kansiot:
+	Insert	Lisää
+	Nothing is selected. Select the art to export, then open this tab again.	Mitään ei ole valittu. Valitse vietävä kuvitus ja avaa tämä välilehti uudelleen.
+	One File of the Selection	Yksi tiedosto valinnasta
+	Start at:	Aloita luvusta:
+	{n} objects selected	{n} objektia valittu
+	Delete Export Preset	Poista vientiesiasetus
+	Export Presets	Vientiesiasetukset
+	Save Export Preset	Tallenna vientiesiasetus
+	Export Layer	Vie taso
+	Export Selection	Vie valinta
+	All in One Folder	Kaikki yhteen kansioon
+	By Size or Row	Koon tai rivin mukaan
+	By Format	Muodon mukaan
+	By Artboard or Item	Piirtoalueen tai kohteen mukaan
+	By Item, Then Format	Kohteen, sitten muodon mukaan
+	Document Name	Asiakirjan nimi
+	Artboard or Item Name	Piirtoalueen tai kohteen nimi
+	Number (####)	Numero (####)
+	Date (YYYYMMDD)	Päivämäärä (VVVVKKPP)
+	Date (YYYY-MM-DD)	Päivämäärä (VVVV-KK-PP)
+	Time (hhmmss)	Aika (ttmmss)
+	PDF Print	Paino-PDF
 	Encoding:	Koodaus:
 	UTF-16 (Unicode)	UTF-16 (Unicode)
 	Line Endings:	Rivinvaihdot:
@@ -3383,7 +3423,7 @@ axis	Both	Molemmat
 	Print as Bitmap	Tulosta bittikarttana
 	Draft	Vedos
 	Default	Oletus
-	[VectorCraft Default]	[VectorCraft-oletus]
+	[StitchFoundry Default]	[StitchFoundry-oletus]
 	Magenta	Magenta
 	Page	Sivu
 	Print Tiling	Tulostuksen ruudutus
@@ -3411,7 +3451,9 @@ axis	Both	Molemmat
 	Duplicate Artboard	Monista piirtoalusta
 	Area / Path Type	Alue- / polkuteksti
 	Decrease Font Size	Pienennä fonttikokoa
+	Decrease Font Size by Five Steps	Pienennä fonttikokoa viisi askelta
 	Increase Font Size	Suurenna fonttikokoa
+	Increase Font Size by Five Steps	Suurenna fonttikokoa viisi askelta
 	Step Type	Porrasta teksti
 	Get Text Range	Hae tekstialue
 	Punctuation	Välimerkit
@@ -3485,7 +3527,7 @@ effect	Regular	Normaali
 	Quickly start a new file	Aloita uusi tiedosto nopeasti
 	Recent Files	Viimeisimmät tiedostot
 	Vector illustration — fast, open, scriptable.	Vektorikuvitusta – nopea, avoin, skriptattava.
-	Welcome to VectorCraft	Tervetuloa VectorCraftiin
+	Welcome to StitchFoundry	Tervetuloa StitchFoundryiin
 	Source code on GitHub	Lähdekoodi GitHubissa
 	All Tools	Kaikki työkalut
 	Draw	Piirrä
@@ -3530,7 +3572,7 @@ effect	Regular	Normaali
 	Opened with {} note(s): {}	Avattu, huomautuksia {}: {}
 	Revert to the saved version of “{name}”?	Palautetaanko tiedoston ”{name}” tallennettu versio?
 	Replace “{name}”, the file this document was opened from?	Korvataanko ”{name}”, tiedosto, josta tämä asiakirja avattiin?
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Avattaessa jätettiin pois se, mitä VectorCraft ei vielä osaa lukea ({what}), joten korvaaminen hävittää sen pysyvästi. Säilytä se tallentamalla toisella nimellä.
+	Opening it left out what StitchFoundry can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Avattaessa jätettiin pois se, mitä StitchFoundry ei vielä osaa lukea ({what}), joten korvaaminen hävittää sen pysyvästi. Säilytä se tallentamalla toisella nimellä.
 	Saved {path}	Tallennettu {path}
 	Saved {path} with {} note(s): {first}	Tallennettu {path}, huomautuksia {}: {first}
 	Saving	Tallennetaan
@@ -3539,7 +3581,7 @@ effect	Regular	Normaali
 	Dashed Line	Katkoviiva
 	Panel menu	Paneelivalikko
 	Unembed…	Poista upotus…
-	Applies the next time VectorCraft starts.	Tulee voimaan, kun VectorCraft käynnistetään seuraavan kerran.
+	Applies the next time StitchFoundry starts.	Tulee voimaan, kun StitchFoundry käynnistetään seuraavan kerran.
 	Enable Contextual Task Bar	Ota kontekstuaalinen tehtäväpalkki käyttöön
 	Next	Seuraava
 	OK	OK
@@ -3909,13 +3951,15 @@ imageTrace	Outline	Ääriviiva
 @msg	can't encode the document: {0}	asiakirjaa ei voi koodata: {0}
 @msg	can't parse shortcut `{c}`	pikanäppäintä `{c}` ei voi jäsentää
 @msg	can't parse shortcut `{s}` for `{k}`	pikanäppäintä `{s}` kohteelle `{k}` ei voi jäsentää
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	versiota {0} ei voi tallentaa: VectorCraft kirjoittaa versioita {MIN_VERSION}–{VERSION}
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	versiota {0} ei voi tallentaa: StitchFoundry kirjoittaa versioita {MIN_VERSION}–{VERSION}
 @msg	can't write .{ext} images	.{ext}-kuvia ei voi kirjoittaa
 @msg	cannot distort a zero-size bounding box	nollakokoista rajausruutua ei voi vääristää
 @msg	cannot read PDF: {0}	ei voi lukea PDF-tiedostoa: {0}
 @msg	cannot split an open path at its end point	avointa polkua ei voi jakaa sen päätepisteestä
 @msg	closing needs three anchors	sulkeminen vaatii kolme ankkuria
 @msg	check an asset to export	valitse vietävä resurssi
+@msg	check a layer to export	valitse vietävä taso
+@msg	select the art to export first	valitse ensin vietävä kuvitus
 @msg	choice must be "merge" or "add", not `{choice}`	choice-arvon on oltava "merge" tai "add", ei `{choice}`
 @msg	choose a direction to divide in	valitse jakosuunta
 @msg	choose a folder to export to	valitse kansio, johon viedään
@@ -3933,7 +3977,7 @@ imageTrace	Outline	Ääriviiva
 @msg	empty brush stroke	tyhjä sivellinviiva
 @msg	empty cutter	tyhjä leikkaaja
 @msg	empty path	tyhjä polku
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	tiedostoversio {0} on uudempi kuin tämä VectorCraft tukee ({VERSION})
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	tiedostoversio {0} on uudempi kuin tämä StitchFoundry tukee ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	vapaamuotoinen piste {i} tarvitsee arvon `at` [x, y] ja kelvollisen arvon `color`
 @msg	freeform line {i} must be an array of point indices	vapaamuotoisen viivan {i} on oltava pisteindeksien taulukko
 @msg	give both `start` and `end` [x, y] (or neither)	anna sekä `start` että `end` [x, y] (tai ei kumpaakaan)
@@ -3952,9 +3996,9 @@ imageTrace	Outline	Ääriviiva
 @msg	invalid PDF setting: {0}	virheellinen PDF-asetus: {0}
 @msg	invalid image data for `{0}`	virheellinen kuvadata kohteelle `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	virheelliset parametrit kohteelle `{cmd}`: {msg}
-@msg	is not an image VectorCraft reads	ei ole kuva, jota VectorCraft lukee
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	se käyttää kohdetta `{at}`, jota VectorCraftin PostScript-lukija ei tunne
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	se käyttää kohdetta `{at}`, jota VectorCraftin PostScript-lukija ei tunne, proseduurissa {procs}
+@msg	is not an image StitchFoundry reads	ei ole kuva, jota StitchFoundry lukee
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	se käyttää kohdetta `{at}`, jota StitchFoundryin PostScript-lukija ei tunne
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	se käyttää kohdetta `{at}`, jota StitchFoundryin PostScript-lukija ei tunne, proseduurissa {procs}
 @msg	its Windows metafile preview was opened instead, which may simplify the art	sen sijaan avattiin sen Windows-metatiedoston esikatselu, mikä voi yksinkertaistaa kuvitusta
 @msg	its preview was placed instead, at screen resolution	sen sijaan sijoitettiin sen esikatselu näytön tarkkuudella
 @msg	join needs open paths	liittäminen vaatii avoimia polkuja
@@ -4027,6 +4071,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no saved presets	ei tallennettuja esiasetuksia
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	ei tallennettua tulostuksen esiasetusta nimeltä `{name}` ({DEFAULT_PRESET} on suojattu: luo uusi sen pohjalta)
 @msg	no saved profiles	ei tallennettuja profiileja
+@msg	no saved selection recalled	tallennettua valintaa ei ole palautettu
 @msg	no saved selections	ei tallennettuja valintoja
 @msg	no saved themes	ei tallennettuja teemoja
 @msg	no segment {segment} on line {line}	ei segmenttiä {segment} viivalla {line}
@@ -4057,8 +4102,8 @@ imageTrace	Outline	Ääriviiva
 @msg	no user workspace `{from}`	ei käyttäjän työtilaa `{from}`
 @msg	node {_1} is not text	solmu {_1} ei ole tekstiä
 @msg	not a DXF drawing	ei DXF-piirustus
-@msg	not a VectorCraft file: {0}	ei VectorCraft-tiedosto: {0}
-@msg	not a VectorCraft shortcut set (missing `overrides`)	ei VectorCraftin pikanäppäinjoukko (`overrides` puuttuu)
+@msg	not a StitchFoundry file: {0}	ei StitchFoundry-tiedosto: {0}
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	ei StitchFoundryin pikanäppäinjoukko (`overrides` puuttuu)
 @msg	not a graphic style library (format `{_1}`)	ei grafiikkatyylikirjasto (muoto `{_1}`)
 @msg	not a stored central record	ei tallennettu keskushakemistotietue
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
@@ -4283,11 +4328,11 @@ imageTrace	Outline	Ääriviiva
 @msg	Sent to {_1}	Lähetettiin kohteeseen {_1}
 @msg	{_1} files	{_1}-tiedostot
 @msg	The graphics were lost and have been restarted	Grafiikka menetettiin ja se käynnistettiin uudelleen
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Ensin kokeiltu grafiikkasuoritin ei pystynyt näyttämään ikkunaa, joten VectorCraft käynnistyi uudelleen: {summary}
-@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraftin edellinen käynnistys päättyi grafiikkasuorittimella {name} ennen kuin sen ikkuna tuli näkyviin, joten se käynnistyi: {summary}. Jos haluat kokeilla tätä grafiikkasuoritinta uudelleen, muuta kohtaa Asetukset › Suorituskyky › Grafiikkasuoritin tai käynnistä WGPU_BACKEND-muuttuja asetettuna
-@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraftin edellinen käynnistys päättyi grafiikkasuorittimien luetteloinnin aikana, joten se käynnistyi pelkällä OpenGL:llä: {summary}. Jos haluat kokeilla muita grafiikkataustoja uudelleen, muuta kohtaa Asetukset › Suorituskyky › Grafiikkasuoritin tai käynnistä WGPU_BACKEND-muuttuja asetettuna
-@msg	Loading VectorCraft…	Ladataan VectorCraftia…
-@msg	VectorCraft failed to start: {e}	VectorCraftin käynnistys epäonnistui: {e}
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Ensin kokeiltu grafiikkasuoritin ei pystynyt näyttämään ikkunaa, joten StitchFoundry käynnistyi uudelleen: {summary}
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	StitchFoundryin edellinen käynnistys päättyi grafiikkasuorittimella {name} ennen kuin sen ikkuna tuli näkyviin, joten se käynnistyi: {summary}. Jos haluat kokeilla tätä grafiikkasuoritinta uudelleen, muuta kohtaa Asetukset › Suorituskyky › Grafiikkasuoritin tai käynnistä WGPU_BACKEND-muuttuja asetettuna
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	StitchFoundryin edellinen käynnistys päättyi grafiikkasuorittimien luetteloinnin aikana, joten se käynnistyi pelkällä OpenGL:llä: {summary}. Jos haluat kokeilla muita grafiikkataustoja uudelleen, muuta kohtaa Asetukset › Suorituskyky › Grafiikkasuoritin tai käynnistä WGPU_BACKEND-muuttuja asetettuna
+@msg	Loading StitchFoundry…	Ladataan StitchFoundryia…
+@msg	StitchFoundry failed to start: {e}	StitchFoundryin käynnistys epäonnistui: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Vaaditaan selain, joka tukee WebGPU:ta tai WebGL2:ta.
 @msg	The graphics were lost and couldn't be restarted.	Grafiikka menetettiin, eikä sitä voitu käynnistää uudelleen.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Tallentamattomat muutokset säilytetään tässä selaimessa: lataa sivu uudelleen saadaksesi ne takaisin.
@@ -4309,25 +4354,25 @@ imageTrace	Outline	Ääriviiva
 @msg	it has more than {MAX_NODES} objects	siinä on yli {MAX_NODES} objektia
 @msg	it has no layers	siinä ei ole tasoja
 @msg	it has too many values in a row	siinä on liian monta arvoa rivissä
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	siinä on {_1}, jota VectorCraft ei vielä lue siitä
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	siinä on {_1}, jota StitchFoundry ei vielä lue siitä
 @msg	its objects are nested too deeply	sen objektit ovat liian syvällä sisäkkäin
 @msg	its section ending with `%{end}` doesn't end	sen `%{end}`-merkintään päättyvä osio ei pääty
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	liukuväriä “{name}” ei ole määritetty tiedostossa: sen tilalla on tasaväri
-@msg	an image VectorCraft can't read was left out	kuva, jota VectorCraft ei voi lukea, jätettiin pois
+@msg	an image StitchFoundry can't read was left out	kuva, jota StitchFoundry ei voi lukea, jätettiin pois
 @msg	an image whose data is cut short was left out	kuva, jonka data on katkennut, jätettiin pois
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkitetyt kuvat näyttävät tiedostoon tallennetun matalan tarkkuuden esikatselun, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	aluetekstin kehykset, jotka olivat liian matalia yhdelle riville niiden fontilla, korotettiin ({_1}): muuten niiden teksti ei näkyisi
 @msg	its editing data doesn't say where its art is	sen muokkaustiedoista ei selviä kuvituksen sijainti
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tämä tiedosto tallennettiin ilman PDF-yhteensopivuutta, eikä sen muokkaustietoja voi lukea ({why})
 @msg	No fonts are missing in this document	Tästä asiakirjasta ei puutu fontteja
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft ei hae muiden sovellusten tai järjestelmän kansioista: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft ei hae Users-kansion Shared- tai Public-kansiosta: {path}
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry ei hae muiden sovellusten tai järjestelmän kansioista: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry ei hae Users-kansion Shared- tai Public-kansiosta: {path}
 @msg	{path} is not a folder	{path} ei ole kansio
 @msg	the search couldn't start: try again in a moment	hakua ei voitu aloittaa: yritä hetken kuluttua uudelleen
 @msg	searching a folder isn't available on the web	kansion haku ei ole käytettävissä verkossa
 @msg	every search thread stopped on an internal error (please report this bug)	jokainen hakusäie pysähtyi sisäiseen virheeseen (ilmoita tästä virheestä)
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	VectorCraftin Fonts-kansiota ei ole määritetty täällä: työpöytäsovellus ja vectorcraft-cli määrittävät sen
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	StitchFoundryin Fonts-kansiota ei ole määritetty täällä: työpöytäsovellus ja vectorcraft-cli määrittävät sen
 @msg	choose the font files to add	valitse lisättävät fonttitiedostot
 @msg	{n} font file(s) are now in {folder}	{n} fonttitiedosto(a) on nyt kansiossa {folder}
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} fonttitiedosto(a) on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}
@@ -4459,7 +4504,7 @@ imageTrace	Outline	Ääriviiva
 	All shortcuts reset to defaults.	Kaikki pikanäppäimet palautettiin oletuksiin.
 	Imported. Press OK to keep the imported set.	Tuotu. Säilytä tuotu joukko painamalla OK.
 	⚠ {chord} was already used by {names} — it has been removed there.	Huomio: {chord} oli jo käytössä kohteessa {names} — se on poistettu sieltä.
-	VectorCraft Defaults	VectorCraftin oletukset
+	StitchFoundry Defaults	StitchFoundryin oletukset
 @plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	{n} pikanäppäin on määritetty useammin kuin kerran|{n} pikanäppäintä on määritetty useammin kuin kerran
 	Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).	Simuloi tulostaa päällepainatukset siten kuin päällepainatuksen esikatselu ne näyttää; erottelut säilyttävät ne aina. Esiasetus litistää läpinäkyvyyden ennen tulostusta (PostScript-tiedostoissa se litistetään aina).
 	Preserve	Säilytä
@@ -4673,7 +4718,7 @@ file-filter	PDF presets	PDF-esiasetukset
 file-filter	Print presets	Tulostuksen esiasetukset
 file-filter	SVG Compressed	Pakattu SVG
 file-filter	PDF-compatible .ai	PDF-yhteensopiva .ai
-file-filter	VectorCraft Template	VectorCraft-malli
+file-filter	StitchFoundry Template	StitchFoundry-malli
 file-filter	Templates	Mallit
 diagnostics	render	renderöinti
 diagnostics	ui	käyttöliittymä
@@ -4684,7 +4729,7 @@ diagnostics	ui	käyttöliittymä
 @plural	{n} commit|{n} commits	{n} commit|{n} commitia
 gradient-kind	Radial	Säteittäinen
 mark-style	Japanese	Japanilainen
-@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	pakattu tiedosto purkautuu suuremmaksi kuin VectorCraft lukee ({_1} MB asiakirjaa, {_2} MB kuvaa kohden)
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	pakattu tiedosto purkautuu suuremmaksi kuin StitchFoundry lukee ({_1} MB asiakirjaa, {_2} MB kuvaa kohden)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	asiakirja on liian suuri pakattuna tallennettavaksi ({0}): tallenna se Käytä pakkausta -asetus pois päältä
 @msg	the file stopped being read (please report this bug)	tiedoston lukeminen keskeytyi (ilmoita tästä virheestä)
 	Concentric Dividers:	Samankeskiset jakajat:
@@ -4819,6 +4864,7 @@ mark-style	Japanese	Japanilainen
 	Intertwine	Lomita
 	Isolate Selected Object	Eristä valittu objekti
 	Keep selected	Pidä valittuna
+	Merge only with selection	Yhdistä vain valintaan
 	Legacy (version 7)	Vanha (versio 7)
 	Legacy .ai Options	Vanhan .ai-muodon asetukset
 	Linked Files	Linkitetyt tiedostot
@@ -4833,6 +4879,7 @@ mark-style	Japanese	Japanilainen
 	Precision:	Tarkkuus:
 	Preview (1 inch on the page)	Esikatselu (1 tuuma sivulla)
 	Registration:	Kohdistuspiste:
+	Reset Horizontal Scale	Palauta vaakaskaalaus
 	Reset Tracking and Kerning	Palauta merkkiväli ja parivälistys
 	Sample Color from Screen	Poimi väri näytöltä
 	Set as Default	Aseta oletukseksi
@@ -4887,3 +4934,23 @@ mark-style	Japanese	Japanilainen
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	tämä on PostScript-tiedosto (vanhemmassa muodossa tai ilman PDF-yhteensopivuutta tallennettu .ai tai EPS-tiedosto), ei PDF: Tiedosto › Avaa ja Tiedosto › Sijoita lukevat sen EPS-muodossa
 @msg	this system has no screen color sampler	tässä järjestelmässä ei ole värin poimintaa näytöltä
 @msg	the image can't be read as a texture	kuvaa ei voi lukea tekstuurina
+
+# User Interface › Accent Color
+	Accent Color	Korostusväri
+	Amber	Meripihka
+	Coral	Koralli
+	Violet	Violetti
+	Sketch	Luonnos
+	Halftone Pattern…	Rasterikuvio…
+	Halftone Pattern	Rasterikuvio
+	Pattern Type	Kuviotyyppi
+	Dot	Piste
+# User Interface › Color Scheme
+	Color Scheme	Värimalli
+	Modern	Moderni
+
+# Symbol Options › Export Type
+	Export Type:	Vientityyppi:
+	Movie Clip	Elokuvaleike
+@msg	name is empty	nimi on tyhjä
+@msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole

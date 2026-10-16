@@ -35,9 +35,13 @@ pub fn guide_at(cx: &ToolContext, p: Point) -> Option<usize> {
 
 /// What a selection tool's marquee `r` does to the ruler guides, after its action selecting the
 /// art: the guides it crosses join the selection (with a Shift marquee, the selected ones leave
-/// it, as with a Shift-click on a guide).
-pub fn marquee_select(cx: &ToolContext, r: Rect) -> Option<Action> {
-    let guides = guides_in_rect(cx, r);
+/// it, as with a Shift-click on a guide). With `enclosed` (E pressed during the drag), only the
+/// artboard guides that lie entirely inside the marquee are taken; a canvas guide is never taken.
+pub fn marquee_select(cx: &ToolContext, r: Rect, enclosed: bool) -> Option<Action> {
+    let mut guides = guides_in_rect(cx, r);
+    if enclosed {
+        guides.retain(|i| cx.doc.guides.get(*i).is_some_and(|g| guide_inside(cx, r, g)));
+    }
     (!guides.is_empty()).then(|| Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })))
 }
 
@@ -60,6 +64,15 @@ fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
         })
         .map(|(i, _)| i)
         .collect()
+}
+
+/// Does ruler guide `g`, crossed by marquee `r`, run along its line within the marquee? An artboard
+/// guide does when the marquee spans its artboard; a canvas guide runs across the whole canvas and
+/// never does.
+fn guide_inside(cx: &ToolContext, r: Rect, g: &vectorcraft_doc::Guide) -> bool {
+    let Some((a, b)) = cx.doc.guide_span(g) else { return false };
+    let (lo, hi) = if g.vertical { (r.min_y(), r.max_y()) } else { (r.min_x(), r.max_x()) };
+    lo <= a.min(b) && a.max(b) <= hi
 }
 
 /// The pointer for a guide: it moves sideways if vertical, up and down if horizontal.

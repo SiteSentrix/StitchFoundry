@@ -26,12 +26,14 @@ pub mod meshedit;
 pub mod params;
 pub mod pathtype;
 pub mod pen;
+pub mod pie;
 pub mod place;
 pub mod printtiling;
 pub mod rulerguide;
 pub mod select;
 pub mod settings;
 pub mod shape;
+pub mod shaperwidget;
 pub mod slice;
 pub mod symbolism;
 pub mod text;
@@ -131,6 +133,9 @@ pub enum ToolKey {
     /// A digit key 0–9 (5 while dragging with the Perspective Selection tool moves perpendicular
     /// to the plane).
     Digit(u8),
+    /// A letter key a–z, lowercase (E while dragging a Selection or Group Selection marquee makes it
+    /// select only the objects entirely inside it, and E again switches it back).
+    Letter(char),
 }
 
 /// What a tool asks the engine to do.

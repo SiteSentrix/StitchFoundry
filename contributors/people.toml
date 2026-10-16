@@ -115,3 +115,8 @@ sync_github_name = false
 real_name = "Kamil Kwiatkowski"
 display_name = "Kamil Kwiatkowski"
 sync_github_name = false
+
+[people.marcoarnulfo]
+real_name = "Marco Arnulfo"
+display_name = "Marco Arnulfo"
+sync_github_name = false

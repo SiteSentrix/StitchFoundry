@@ -266,6 +266,7 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("brushStrokes.sprayedStrokes", "strokeDirection") => Some(&vectorcraft_effects::pixel::STROKE_DIRECTIONS),
         ("distort.glass", "texture") => Some(&vectorcraft_effects::pixel::GLASS_TEXTURES),
         ("pixelate.mezzotint", "type") => Some(&vectorcraft_effects::pixel::MEZZOTINT_TYPES),
+        ("sketch.halftonePattern", "patternType") => Some(&vectorcraft_effects::pixel::HALFTONE_TYPES),
         ("texture.grain", "grainType") => Some(&vectorcraft_effects::pixel::GRAIN_TYPES),
         ("texture.texturizer", "texture") => Some(&vectorcraft_effects::pixel::TEXTURES),
         ("texture.texturizer", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),

@@ -1,5 +1,5 @@
 //! The Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Brush Strokes,
-//! Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Texture ›
+//! Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Sketch › Halftone Pattern, Texture ›
 //! Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, Video): applied and
 //! edited as commands, listed in the catalogue, drawn on the canvas, and written to PDF and SVG
 //! as images of the effected object.
@@ -41,6 +41,9 @@ const DISTORT: [(&str, &str); 3] =
 /// Effect › Pixelate, at their defaults.
 const PIXELATE: [(&str, &str); 4] =
     [("pixelate.colorHalftone", "{}"), ("pixelate.crystallize", "{}"), ("pixelate.mezzotint", "{}"), ("pixelate.pointillize", "{}")];
+
+/// Effect › Sketch, at their defaults.
+const SKETCH: [(&str, &str); 1] = [("sketch.halftonePattern", "{}")];
 
 /// Effect › Texture, at their defaults.
 const TEXTURE: [(&str, &str); 6] = [
@@ -97,6 +100,7 @@ fn listed_applied_edited_and_undone() {
         (BRUSH_STROKES.as_slice(), "Brush Strokes"),
         (DISTORT.as_slice(), "Distort"),
         (PIXELATE.as_slice(), "Pixelate"),
+        (SKETCH.as_slice(), "Sketch"),
         (TEXTURE.as_slice(), "Texture"),
         (VIDEO.as_slice(), "Video"),
         ([("video.ntscColors", "{}")].as_slice(), "Video"),
@@ -134,7 +138,9 @@ fn listed_applied_edited_and_undone() {
 
 #[test]
 fn each_effect_changes_the_canvas_and_draws_the_same_twice() {
-    for (id, params) in EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
+    for (id, params) in
+        EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(SKETCH).chain(TEXTURE).chain(VIDEO)
+    {
         let (mut s, g) = striped();
         let plain = render(&s);
         let params: Value = serde_json::from_str(params).unwrap();
@@ -147,6 +153,25 @@ fn each_effect_changes_the_canvas_and_draws_the_same_twice() {
         mt.threads = 4;
         let b = mt.render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true);
         assert!(mean_diff(&a, &b) < 0.002, "{id}: multithreaded differs by {}", mean_diff(&a, &b));
+    }
+}
+
+/// Halftone Pattern's Size, Contrast and Pattern Type are saved with the document and draw the same
+/// when it opens again.
+#[test]
+fn halftone_pattern_settings_survive_a_save_and_open() {
+    let (mut s, g) = striped();
+    let set = json!({"size": 7.0, "contrast": 20.0, "patternType": "line"});
+    s.execute("effect.apply", &json!({"effect": "sketch.halftonePattern", "ids": [g], "params": set})).unwrap();
+    let drawn = render(&s);
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, set);
+    assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, drawn.pixels);
+    // Each setting shows: changing any one draws differently.
+    for change in [json!({"size": 3.0}), json!({"contrast": 50.0}), json!({"patternType": "dot"})] {
+        s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": change})).unwrap();
+        assert!(mean_diff(&drawn, &render(&s)) > 0.001, "{change}");
+        s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": set})).unwrap();
     }
 }
 
@@ -251,7 +276,9 @@ fn spin_blur_reaches_past_the_corners() {
 
 #[test]
 fn pdf_and_svg_write_the_effected_object_as_an_image() {
-    for (id, params) in EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
+    for (id, params) in
+        EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(SKETCH).chain(TEXTURE).chain(VIDEO)
+    {
         let (mut s, g) = striped();
         let params: Value = serde_json::from_str(params).unwrap();
         s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": params})).unwrap();

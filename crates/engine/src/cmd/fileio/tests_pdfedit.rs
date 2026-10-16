@@ -139,6 +139,27 @@ fn exports_write_ai_as_save_as_does() {
     assert!(b64(&r).starts_with(b"%PDF"));
 }
 
+/// A `.ai` with an artboard larger than 14,400 pt has its PDF page written with a `UserUnit`,
+/// and reopens at its size from its editing data and from its PDF part.
+#[test]
+fn an_ai_with_an_artboard_past_14400_pt_reopens_at_its_size() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20000, "height": 10000})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 1000, "y": 1000, "width": 5000, "height": 3000})).unwrap();
+    let ai = b64(&s.execute("document.export", &json!({"format": "ai", "compress": false})).unwrap());
+    assert!(String::from_utf8_lossy(&ai).contains("/UserUnit 1.389"), "20,000 / 14,400 rounded up to the next thousandth");
+    let size = |s: &Session| {
+        let r = s.doc().unwrap().doc.artboards[0].rect;
+        (r.width().round(), r.height().round())
+    };
+    assert_eq!(open(&mut s, "big.ai", &ai)["restored"], true);
+    assert_eq!(size(&s), (20_000.0, 10_000.0));
+    // Picking its page opens the PDF part.
+    let r = s.execute("document.open", &json!({"name": "big.ai", "dataBase64": vectorcraft_format::base64_encode(&ai), "pages": "1"})).unwrap();
+    assert_eq!(r["restored"], false, "{r}");
+    assert_eq!(size(&s), (20_000.0, 10_000.0));
+}
+
 #[test]
 fn ait_templates_open_their_document_untitled() {
     let mut s = rich();

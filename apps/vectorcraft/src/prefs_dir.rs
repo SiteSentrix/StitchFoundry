@@ -11,9 +11,10 @@ mod profile;
 /// Support (macOS) or %APPDATA% (Windows), or `lower` in $XDG_CONFIG_HOME or ~/.config (Linux and
 /// BSD).
 pub fn prefs_path_for(name: &str, lower: &str) -> Option<PathBuf> {
-    // Any other app's profile is one StitchFoundry only migrates from (VectorCraft's).
+    // Any other app's profile is one StitchFoundry only migrates from (VectorCraft's): the profile
+    // module knows the two folders (and the portable one, which only StitchFoundry's can be).
     let legacy = (name, lower) != APP_FOLDER;
-    profile::prefs_path(name, lower, legacy)
+    profile::prefs_path(legacy)
 }
 
 /// StitchFoundry's own settings folder: its name on macOS and Windows, and on Linux and BSD.

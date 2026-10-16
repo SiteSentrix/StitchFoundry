@@ -11,7 +11,7 @@ use vectorcraft_doc::{Appearance, Document, Knockout, LiveCorners, LiveShape, No
 use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
 
-use super::edit::{duplicate_in, outermost, selected_roots};
+use super::edit::{duplicate_in, outermost, selected_roots, selected_roots_to_transform};
 use super::opacitymask::percent;
 use super::*;
 use crate::{EngineError, LastTransform};
@@ -252,7 +252,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the selection; \"key\" distributes as \"selection\" does; not used with anchor points selected), artboard?: index (0-based; with to: \"artboard\", the artboard to distribute across; the app passes the active one; default: as object.align's), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} space the objects' left edges, centers or right edges (top edges, centers or bottom edges) evenly, in their order on that line: the first and last objects stay put, and fewer than three objects don't move; with to: \"artboard\", the first one's left (top) edge goes to the artboard's left (top) edge, the last one's right (bottom) edge goes to the artboard's right (bottom) edge, and two objects are enough. With anchor points selected (Direct Selection), the points are spaced evenly between the first and the last along the axis instead (#1636)",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", spacing?: pt (used with a key object, select.key: the key object stays put and the lines are placed this far apart, outward from its line, in their order on that line; 0 puts them all on its line; not used without a key object or with anchor points selected), to?: \"selection\"|\"artboard\"|\"key\" (default: the selection; \"key\" distributes as \"selection\" does; not used with anchor points selected, or with spacing and a key object), artboard?: index (0-based; with to: \"artboard\", the artboard to distribute across; the app passes the active one; default: as object.align's), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} space the objects' left edges, centers or right edges (top edges, centers or bottom edges) in their order on that line: without spacing and a key object they are spaced evenly, the first and last objects stay put, and fewer than three objects don't move; with spacing and a key object, see spacing (two objects are enough); with to: \"artboard\", the first one's left (top) edge goes to the artboard's left (top) edge, the last one's right (bottom) edge goes to the artboard's right (bottom) edge, and two objects are enough. With anchor points selected (Direct Selection), the points are spaced evenly between the first and the last along the axis instead (#1636)",
             can_distribute,
             distribute
         ),
@@ -493,14 +493,14 @@ fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
     let (ids, anchors) = match ids_param(p, "ids") {
         Some(v) => (outermost(&s.doc()?.doc, v), false),
-        None => (selected_roots(s)?, bool_or(p, "anchors", false)),
+        None => (selected_roots_to_transform(s)?, bool_or(p, "anchors", false)),
     };
     apply_transform(s, "Transform", ids, m, p, anchors)
 }
 
 fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.move")?;
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p, true)
 }
 
@@ -524,7 +524,7 @@ fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         }
         return super::docmenu::guide_move(s, &json!({ "dx": dx, "dy": dy, "copy": copy }));
     }
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     apply_transform(s, "Move", ids, Affine::translate((dx, dy)), p, true)
 }
 
@@ -534,7 +534,7 @@ fn about(o: Point, a: Affine) -> Affine {
 
 fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["angle"], "object.rotate")?;
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     let mut angle = f64_or(p, "angle", 0.0);
     if bool_or(p, "absolute", false) {
@@ -547,7 +547,7 @@ fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["sy"], "object.scale")?;
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     let sx = f64_req(p, "sx", "object.scale")? / 100.0;
     let sy = f64_or(p, "sy", sx * 100.0) / 100.0;
@@ -558,7 +558,7 @@ fn scale(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     let m = match p.get("axis") {
         Some(Value::String(a)) if a == "horizontal" => Affine::scale_non_uniform(1.0, -1.0),
@@ -578,7 +578,7 @@ fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["angle"], "object.shear")?;
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
     let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
@@ -602,7 +602,7 @@ fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
     };
     match last {
         LastTransform::Matrix(m, options) => {
-            let ids = selected_roots(s)?;
+            let ids = selected_roots_to_transform(s)?;
             apply_transform(s, "Transform Again", ids, m, &merge(options), true)
         }
         LastTransform::Each(params) => super::menucmds::transform_each_again(s, &merge(params)),
@@ -1232,6 +1232,15 @@ fn direction<'a>(p: &'a Value, cmd: &str) -> Result<(Option<&'a str>, Option<&'a
     Ok((choice(p, cmd, "horizontal", &["left", "center", "right"])?, choice(p, cmd, "vertical", &["top", "center", "bottom"])?))
 }
 
+/// `spacing` of `object.distribute` and `object.distributeSpacing`: a finite number, or `None`
+/// when it is missing or null. Any other value is an error.
+fn spacing(p: &Value, cmd: &str) -> Result<Option<f64>> {
+    p.get("spacing")
+        .filter(|v| !v.is_null())
+        .map(|v| v.as_f64().filter(|g| g.is_finite()).ok_or_else(|| bad(cmd, "`spacing` must be a number")))
+        .transpose()
+}
+
 /// `ids` with their bounds (`preview`: visual bounds).
 fn items_bounds(d: &Document, ids: &[NodeId], preview: bool) -> Vec<(NodeId, Rect)> {
     ids.iter().filter_map(|id| Some((*id, d.bounds_of(&[*id], preview)?))).collect()
@@ -1294,8 +1303,8 @@ fn distribute_to(s: &Session, p: &Value, ids: &[NodeId], preview: bool, cmd: &st
 }
 
 /// Returns the selected root (one of `ids`) that is the key object or contains it, such as the
-/// compound path or selected group the key is in. Align to the key object and Distribute Spacing
-/// with a spacing keep it in place.
+/// compound path or selected group the key is in. Align to the key object, and Distribute and
+/// Distribute Spacing with a spacing, keep it in place.
 fn key_root(s: &Session, ids: &[NodeId]) -> Option<NodeId> {
     let st = s.doc().ok()?;
     let ancestry = st.doc.ancestry(st.selection.key?)?;
@@ -1439,6 +1448,7 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let preview = preview_bounds(s, p, "object.distribute")?;
     let board = distribute_to(s, p, &ids, preview, "object.distribute")?;
+    let spacing = spacing(p, "object.distribute")?;
     // Anchor points selected with Direct Selection are distributed themselves, as Align aligns them.
     if !s.doc()?.selection.anchors.is_empty() {
         return match direction(p, "object.distribute")? {
@@ -1468,8 +1478,14 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     };
     items.sort_by(|a, b| key(&a.1, horiz).total_cmp(&key(&b.1, horiz)));
     let n = items.len();
-    // Two objects are enough on an artboard: they go to its edges.
-    if n < 2 || (n < 3 && board.is_none()) {
+    // With a spacing, the key object (or the compound path or selected group it is in) stays where
+    // it is, and the lines are placed `spacing` apart, outward from its line, in their order.
+    // Without a key object the spacing is not used. `from_key` is the key's index in `items` and
+    // the spacing.
+    let from_key = spacing.zip(key_root(s, &ids)).and_then(|(g, k)| Some((items.iter().position(|(id, _)| *id == k)?, g)));
+    // Two objects are enough on an artboard, where they go to its edges, and when they are spaced
+    // from a key object.
+    if n < 2 || (n < 3 && board.is_none() && from_key.is_none()) {
         return ok();
     }
     let (first_box, last_box) = (&items[0].1, &items[n - 1].1);
@@ -1486,7 +1502,10 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .enumerate()
         .map(|(i, (id, r))| {
-            let target = first + (last - first) * i as f64 / (n - 1) as f64;
+            let target = match from_key {
+                Some((k, g)) => key(&items[k].1, horiz) + g * (i as f64 - k as f64),
+                None => first + (last - first) * i as f64 / (n - 1) as f64,
+            };
             let delta = target - key(r, horiz);
             (*id, if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) })
         })
@@ -1499,11 +1518,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let horiz = choice(p, "object.distributeSpacing", "axis", &["horizontal", "vertical"])? != Some("vertical");
     let preview = preview_bounds(s, p, "object.distributeSpacing")?;
     let board = distribute_to(s, p, &ids, preview, "object.distributeSpacing")?;
-    let spacing = p
-        .get("spacing")
-        .filter(|v| !v.is_null())
-        .map(|v| v.as_f64().filter(|g| g.is_finite()).ok_or_else(|| bad("object.distributeSpacing", "`spacing` must be a number")))
-        .transpose()?;
+    let spacing = spacing(p, "object.distributeSpacing")?;
     if !s.doc()?.selection.anchors.is_empty() {
         return distribute_anchors(s, "Distribute Spacing", horiz, spacing);
     }

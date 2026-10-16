@@ -585,6 +585,142 @@ fn hyphenation_exceptions_keep_listed_words_whole_in_layout() {
     );
 }
 
+/// The width of the frame [`the_language`] makes: "The lan-" and "language" fit, and "The
+/// language" does not.
+fn the_language_width() -> f64 {
+    natural_width("The lan-", 12.0).max(natural_width("Language", 12.0)) + 1.0
+}
+
+/// "The language" (or "The Language") in a frame that holds "The lan-" and not the whole of it,
+/// hyphenated.
+fn the_language(word: &str, composer: Composer) -> TextObject {
+    let text = format!("The {word}");
+    let w = the_language_width();
+    assert!(w < natural_width(&text, 12.0));
+    let mut t = area(&text, style(12.0), Rect::new(0.0, 0.0, w, 400.0), Justify::Left);
+    t.para.hyphenate = true;
+    t.para.composer = composer;
+    t
+}
+
+/// Paragraph panel menu › Hyphenation… › Words Longer Than: an 8-letter word that breaks with
+/// the default (longer than 5 letters) stays whole when only words longer than 10 letters may
+/// break.
+#[test]
+fn hyphenation_words_longer_than_keeps_shorter_words_whole() {
+    let mut t = the_language("language", Composer::SingleLine);
+    assert_eq!(line_texts(&t, &layout(db(), &t)), ["The lan", "guage"]);
+    t.para.hyphenation.words_longer_than = 10;
+    assert_eq!(line_texts(&t, &layout(db(), &t)), ["The", "language"]);
+    let mut t = the_language("language", Composer::EveryLine);
+    t.para.hyphenation.words_longer_than = 10;
+    assert_eq!(line_texts(&t, &layout(db(), &t)), ["The", "language"]);
+}
+
+/// Hyphenation… › After First and Before Last: the fewest letters on each side of the hyphen.
+#[test]
+fn hyphenation_after_first_and_before_last_limit_the_break() {
+    let mut t = the_language("language", Composer::SingleLine);
+    t.para.hyphenation.after_first = 4;
+    assert_eq!(line_texts(&t, &layout(db(), &t)), ["The", "language"]);
+    t.para.hyphenation.after_first = 3;
+    t.para.hyphenation.before_last = 6;
+    assert_eq!(line_texts(&t, &layout(db(), &t)), ["The", "language"]);
+}
+
+/// Hyphenation… › Hyphenate Capitalized Words: when it is off, a word that starts with a capital stays whole.
+#[test]
+fn hyphenation_leaves_capitalized_words_whole_when_off() {
+    for composer in [Composer::SingleLine, Composer::EveryLine] {
+        let mut t = the_language("Language", composer);
+        if composer == Composer::SingleLine {
+            assert_eq!(line_texts(&t, &layout(db(), &t)), ["The Lan", "guage"]);
+        }
+        t.para.hyphenation.capitalized = false;
+        assert_eq!(line_texts(&t, &layout(db(), &t)), ["The", "Language"], "{composer:?}");
+    }
+}
+
+/// Hyphenation… › Hyphenation Zone: with the Single-line Composer, a line whose text before the
+/// next word already ends within the zone breaks before that word; the Every-line Composer
+/// ignores the zone.
+#[test]
+fn hyphenation_zone_breaks_before_the_word_with_the_single_line_composer() {
+    let mut t = the_language("language", Composer::SingleLine);
+    let gap = the_language_width() - natural_width("The", 12.0);
+    t.para.hyphenation.zone = gap - 1.0;
+    assert_eq!(line_texts(&t, &layout(db(), &t)), ["The lan", "guage"]);
+    t.para.hyphenation.zone = gap + 1.0;
+    assert_eq!(line_texts(&t, &layout(db(), &t)), ["The", "language"]);
+    let mut every = the_language("language", Composer::EveryLine);
+    let without = line_texts(&every, &layout(db(), &every));
+    every.para.hyphenation.zone = gap + 1.0;
+    assert_eq!(line_texts(&every, &layout(db(), &every)), without);
+}
+
+/// The default Hyphenation options keep the line breaks of hyphenated text: the copy twice over
+/// at three widths, ragged and justified, with either composer. The constant is an FNV-1a hash of
+/// each line's end and whether it ends with a hyphen.
+#[test]
+fn default_hyphenation_options_keep_the_line_breaks() {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut mix = |v: u64| {
+        for b in v.to_le_bytes() {
+            hash = (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    for width in [150.0, 190.0, 240.0] {
+        for justify in [Justify::Left, Justify::JustifyLeft] {
+            for composer in [Composer::SingleLine, Composer::EveryLine] {
+                let mut t = area(&COPY.repeat(2), style(12.0), Rect::new(0.0, 0.0, width, 4000.0), justify);
+                t.para.hyphenate = true;
+                t.para.composer = composer;
+                let l = layout(db(), &t);
+                for li in &l.lines {
+                    let hyphenated = li.glyph_end > li.glyph_start && l.glyphs.get(li.glyph_end - 1).is_some_and(|g| g.len == 0);
+                    mix(li.end as u64 * 2 + u64::from(hyphenated));
+                }
+            }
+        }
+    }
+    assert_eq!(hash, 8_558_443_895_699_068_077);
+}
+
+/// The longest run of consecutive lines of `l` that end with a hyphen.
+fn hyphen_run(l: &TextLayout) -> usize {
+    let mut run = 0;
+    let mut longest = 0;
+    for li in &l.lines {
+        let hyphenated = li.glyph_end > li.glyph_start && l.glyphs.get(li.glyph_end - 1).is_some_and(|g| g.len == 0);
+        run = if hyphenated { run + 1 } else { 0 };
+        longest = longest.max(run);
+    }
+    longest
+}
+
+/// Hyphenation… › Hyphen Limit: at most that many lines in a row end with a hyphen, with either
+/// composer; 0 sets no limit.
+#[test]
+fn hyphen_limit_caps_consecutive_hyphenated_lines() {
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything. ".repeat(3);
+    for composer in [Composer::SingleLine, Composer::EveryLine] {
+        for justify in [Justify::Left, Justify::JustifyLeft] {
+            let mut t = area(text.trim_end(), style(14.0), Rect::new(0.0, 0.0, 120.0, 2000.0), justify);
+            t.para.hyphenate = true;
+            t.para.composer = composer;
+            let free = layout(db(), &t);
+            assert!(hyphen_run(&free) >= 2, "{composer:?} {justify:?}: lines in a row end with hyphens without a limit");
+            for limit in [1, 2] {
+                t.para.hyphenation.hyphen_limit = limit;
+                let l = layout(db(), &t);
+                assert!(!l.overflow);
+                assert!(hyphen_run(&l) >= 1, "{composer:?} {justify:?} {limit}: still hyphenated");
+                assert!(hyphen_run(&l) <= limit as usize, "{composer:?} {justify:?} {limit}: {}", hyphen_run(&l));
+            }
+        }
+    }
+}
+
 #[test]
 fn soft_hyphen_is_invisible_mid_line() {
     let l = layout(db(), &TextObject::point(Point::ZERO, "co\u{00AD}operate", style(20.0)));

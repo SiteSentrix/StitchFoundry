@@ -28,7 +28,7 @@ use crate::group::{has_own_paint, paints};
 use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_with, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
-    has_pathfinder, is_geometry, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
+    has_item_geometry, has_pathfinder, is_geometry, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
 };
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -106,9 +106,10 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         let m = evaluate_container(&m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
-    // Type, images, symbol instances and live objects: reshaped through their outlines. Type that
+    // Type, images, symbol instances and live objects: reshaped through their outlines, and so is
+    // type whose own fills or strokes have geometry effects ([`has_item_geometry`]). Type that
     // Transform effects only move and copy stays type, moved to each place.
-    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some()) {
+    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n)) {
         if let Some(m) = moved_type_group(n) {
             return Some(bake_pieces(d, m));
         }

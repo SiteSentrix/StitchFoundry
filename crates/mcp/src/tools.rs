@@ -102,8 +102,11 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "command_list",
             "List commands",
-            "Discover command ids, labels, parameter descriptions and enabled state. Returns an array.",
-            obj(json!({"filter": string("Case-insensitive id, label or menu substring"), "enabled_only": {"type":"boolean"}}), &[]),
+            "Discover command ids, labels, parameter descriptions and enabled state. Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief.",
+            obj(
+                json!({"filter": string("Case-insensitive id, label or menu substring"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabled_only": {"type":"boolean"}, "brief": {"type":"boolean", "description": BRIEF}}),
+                &[],
+            ),
             true,
         ),
         tool(
@@ -153,7 +156,7 @@ pub fn tool_definitions() -> Vec<Value> {
             "List commands",
             "List StitchFoundry commands (id, label, menu path, shortcut, parameter description, enabled state). Every editing action is a command; run any of them with run_command. Coordinates are points in document space, y down, origin at the first artboard's top-left.",
             obj(
-                json!({"filter": string("Case-insensitive substring matched against id, label and menu path (e.g. \"align\", \"Object\")"), "enabledOnly": {"type": "boolean", "description": "Only commands that can run right now"}}),
+                json!({"filter": string("Case-insensitive substring matched against id, label and menu path (e.g. \"align\", \"Object\")"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabledOnly": {"type": "boolean", "description": "Only commands that can run right now"}, "brief": {"type": "boolean", "description": BRIEF}}),
                 &[],
             ),
             true,
@@ -838,25 +841,52 @@ fn image_result(png: &[u8], info: Value) -> ToolResult {
     }
 }
 
+/// The `menu` argument of the command listings.
+const MENU_FILTER: &str = "Case-insensitive substring of the menu path, its levels joined with \" > \" (e.g. \"Object\", \"Object > Path\")";
+/// The `brief` argument of the command listings.
+const BRIEF: &str = "Leave out each command's params description (the bulk of the catalogue); run command_list with the id as filter to read it";
+
+/// The command catalogue narrowed by the listing tools' arguments: `filter` (or `query`) on the
+/// id, label and menu path, `menu` on the menu path, `enabledOnly`, and `brief` (no `params`
+/// text: the full catalogue is too large for many clients, #2173).
 fn filter_commands(all: Value, a: &Args) -> Value {
-    let needle = a.get("filter").and_then(Value::as_str).map(str::to_lowercase).filter(|s| !s.is_empty());
+    let text = |k: &str| a.get(k).and_then(Value::as_str).map(str::to_lowercase).filter(|s| !s.is_empty());
+    let needle = text("filter").or_else(|| text("query"));
+    let in_menu = text("menu");
     let enabled_only = a.get("enabledOnly").and_then(Value::as_bool).unwrap_or(false);
+    let brief = a.get("brief").and_then(Value::as_bool).unwrap_or(false);
     let Value::Array(list) = all else { return all };
+    let menu_path = |c: &Value, sep: &str| {
+        c.get("menu")
+            .and_then(Value::as_array)
+            .map(|m| m.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(sep))
+            .unwrap_or_default()
+            .to_lowercase()
+    };
     let hit = |c: &Value| {
         if enabled_only && c.get("enabled").and_then(Value::as_bool) == Some(false) {
             return false;
         }
+        if let Some(m) = &in_menu
+            && !menu_path(c, " > ").contains(m.as_str())
+        {
+            return false;
+        }
         let Some(n) = &needle else { return true };
         let field = |k: &str| c.get(k).and_then(Value::as_str).unwrap_or("").to_lowercase();
-        let menu = c
-            .get("menu")
-            .and_then(Value::as_array)
-            .map(|m| m.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
-            .unwrap_or_default()
-            .to_lowercase();
-        field("id").contains(n) || field("label").contains(n) || menu.contains(n)
+        field("id").contains(n.as_str()) || field("label").contains(n.as_str()) || menu_path(c, " ").contains(n.as_str())
     };
-    Value::Array(list.into_iter().filter(hit).collect())
+    Value::Array(
+        list.into_iter()
+            .filter(hit)
+            .map(|mut c| {
+                if brief && let Some(o) = c.as_object_mut() {
+                    o.remove("params");
+                }
+                c
+            })
+            .collect(),
+    )
 }
 
 fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, String> {

@@ -572,6 +572,7 @@
 	Convert to RGB	Converti in RGB
 	Convert to Shape	Converti in forma
 	Convert to sRGB	Converti in sRGB
+	Convert to Straight Lines	Converti in linee rette
 	Convert:	Converti:
 	Copied the CSS of {rules} object(s)	CSS copiato da {rules} oggetto/i
 	Copies:	Copie:
@@ -590,6 +591,7 @@
 	Copyright Notice:	Nota sul copyright:
 	Copyright Status:	Stato copyright:
 	Copyright Symbol	Simbolo di copyright
+	Corner Point Angle Threshold:	Soglia angolo dei punti d'angolo:
 	Corner Radius	Raggio angolo
 	Corner Radius:	Raggio angolo:
 	Corner:	Angolo:
@@ -968,6 +970,32 @@
 	Export All…	Esporta tutto…
 	Export and Clipboard Transparency Flattener Settings	Impostazioni di appiattimento trasparenza per esportazione e Appunti
 	Export Artboard	Esporta tavola da disegno
+	A File per Object	Un file per oggetto
+	Example: {name}	Esempio: {name}
+	Export Preset:	Predefinito di esportazione:
+	Folders:	Cartelle:
+	Insert	Inserisci
+	Nothing is selected. Select the art to export, then open this tab again.	Nessuna selezione. Seleziona la grafica da esportare, poi riapri questa scheda.
+	One File of the Selection	Un file della selezione
+	Start at:	Inizia da:
+	{n} objects selected	{n} oggetti selezionati
+	Delete Export Preset	Elimina predefinito di esportazione
+	Export Presets	Predefiniti di esportazione
+	Save Export Preset	Salva predefinito di esportazione
+	Export Layer	Esporta livello
+	Export Selection	Esporta selezione
+	All in One Folder	Tutto in una cartella
+	By Size or Row	Per dimensione o riga
+	By Format	Per formato
+	By Artboard or Item	Per tavola o elemento
+	By Item, Then Format	Per elemento, poi formato
+	Document Name	Nome del documento
+	Artboard or Item Name	Nome della tavola o dell’elemento
+	Number (####)	Numero (####)
+	Date (YYYYMMDD)	Data (AAAAMMGG)
+	Date (YYYY-MM-DD)	Data (AAAA-MM-GG)
+	Time (hhmmss)	Ora (hhmmss)
+	PDF Print	PDF per la stampa
 	Export As	Esporta come
 	Export As PNG…	Esporta come PNG…
 	Export As SVG…	Esporta come SVG…
@@ -1040,6 +1068,7 @@
 	Fill and Stroke	Riempimento e traccia
 	Fill new strokes	Riempi nuove tracce
 	Keep selected	Mantieni selezionato
+	Merge only with selection	Unisci solo con la selezione
 	Fill Color	Colore riempimento
 	Fill New Type Objects With Placeholder Text	Riempi i nuovi oggetti di testo con testo segnaposto
 	Fill Rule	Regola di riempimento
@@ -1062,8 +1091,11 @@
 	Fit dashes to corners and ends	Adatta i trattini ad angoli ed estremità
 	Fit Headline	Adatta titolo
 	Decrease Font Size	Riduci dimensione font
+	Decrease Font Size by Five Steps	Riduci dimensione font di cinque incrementi
 	Increase Font Size	Aumenta dimensione font
+	Increase Font Size by Five Steps	Aumenta dimensione font di cinque incrementi
 	Reset Tracking and Kerning	Reimposta spaziatura caratteri e crenatura
+	Reset Horizontal Scale	Reimposta scala orizzontale
 	Spacing	Spaziatura
 	Step Type	Dimensione testo a incrementi
 	Fit in View	Adatta alla vista
@@ -1303,6 +1335,14 @@
 	Hyphenate	Sillaba
 	Hyphenation	Sillabazione
 	Hyphenation…	Sillabazione…
+	Words Longer Than:	Parole con più di:
+	After First:	Dopo le prime:
+	Before Last:	Prima delle ultime:
+	Hyphen Limit:	Limite trattini:
+	Hyphenation Zone:	Zona di sillabazione:
+	letters	lettere
+	hyphens	trattini
+	Hyphenate Capitalized Words	Sillaba parole con iniziale maiuscola
 	ICC Profile	Profilo ICC
 	Identify Objects By	Identifica oggetti per
 	Ignore	Ignora
@@ -1979,6 +2019,7 @@
 	Out Tangent Handles	Maniglie tangente in uscita
 	Outer Glow…	Bagliore esterno…
 	Outline	Contorno
+	Outline Object	Contorna oggetto
 	Outline Others	Altri in contorno
 	Outline Stroke	Contorna traccia
 	Outline Text	Contorna testo
@@ -2405,6 +2446,7 @@
 	Reset Profiles	Reimposta profili
 	Rotate View	Ruota vista
 	Reset Rotate View	Reimposta rotazione vista
+	Rotate View to Selection	Ruota vista in base alla selezione
 	Reset the rows to the artwork's colors	Reimposta le righe sui colori della grafica
 	Reset to Default	Reimposta valori predefiniti
 	Reset to White, Black	Reimposta su bianco, nero
@@ -2513,6 +2555,7 @@
 	Save Save for Web Preset	Salva preset di Salva per il web
 	Save selected colors as swatches	Salva i colori selezionati come campioni
 	Save Selection…	Salva selezione…
+	Update Selection	Aggiorna selezione
 	Save Swatch Library	Salva libreria campioni
 	Save Swatch Library…	Salva libreria campioni…
 	Save the current layout under this name	Salva il layout corrente con questo nome
@@ -2751,6 +2794,7 @@
 	Show Modified	Mostra modificati
 	Show Note	Mostra nota
 	Show Options	Mostra opzioni
+	Show Original Path	Mostra tracciato originale
 	Color Panel Options	Opzioni pannello Colore
 	Show Package	Mostra pacchetto
 	Show Panel	Mostra pannello
@@ -3683,6 +3727,8 @@ axis	Both	Entrambi
 @msg	cannot split an open path at its end point	impossibile dividere un tracciato aperto nel suo punto finale
 @msg	closing needs three anchors	per chiudere servono tre punti di ancoraggio
 @msg	check an asset to export	spunta una risorsa da esportare
+@msg	check a layer to export	seleziona un livello da esportare
+@msg	select the art to export first	seleziona prima la grafica da esportare
 @msg	choice must be "merge" or "add", not `{choice}`	choice deve essere "merge" o "add", non `{choice}`
 @msg	choose a direction to divide in	scegli una direzione in cui dividere
 @msg	choose a folder to export to	scegli una cartella in cui esportare
@@ -3790,6 +3836,7 @@ axis	Both	Entrambi
 @msg	no saved presets	nessun preset salvato
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	nessun preset di stampa salvato denominato `{name}` ({DEFAULT_PRESET} è protetto: creane uno nuovo a partire da esso)
 @msg	no saved profiles	nessun profilo salvato
+@msg	no saved selection recalled	nessuna selezione salvata richiamata
 @msg	no saved selections	nessuna selezione salvata
 @msg	no saved themes	nessun tema salvato
 @msg	no segment {segment} on line {line}	nessun segmento {segment} alla riga {line}
@@ -5755,3 +5802,18 @@ machine	Stop	Arresto
 	Arc Up	Arco in su
 	Arc Down	Arco in giù
 	To follow a line of your own, draw it first, select it, then Add Words.	Per seguire una linea tua, disegnala prima, selezionala e poi scegli Aggiungi parole.
+	Accent Color	Colore di risalto
+	Amber	Ambra
+	Violet	Viola
+	Pink	Rosa
+	Sketch	Schizzo
+	Halftone Pattern…	Pattern mezzetinte…
+	Halftone Pattern	Pattern mezzetinte
+	Pattern Type	Tipo di pattern
+	Dot	Punto
+	Color Scheme	Combinazione colori
+	Modern	Moderno
+	Export Type:	Tipo di esportazione:
+	Movie Clip	Clip filmato
+@msg	name is empty	il nome è vuoto
+@msg	no symbol named `{n}`	nessun simbolo denominato `{n}`

@@ -1875,10 +1875,12 @@ impl<'a> Reader<'a> {
     /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
     /// image.
     fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
-        // The matrix maps pixels (y down) into art space with its y flipped.
+        // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
+        // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
+        // gives the same place only when the image isn't rotated (b = c = 0).
         let [a, b, c, d, tx, ty] = m else { return Ok(()) };
         let to_doc = self.space();
-        let xf = to_doc * FLIP * Affine::new([*a, *b, *c, *d, *tx, -*ty]);
+        let xf = to_doc * Affine::new([*a, *b, *c, *d, *tx, *ty]) * FLIP;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
             return Ok(());
         }

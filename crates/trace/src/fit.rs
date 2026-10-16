@@ -199,6 +199,15 @@ pub(crate) fn fit_piece(pts: &[Point], style: &Style, fixed_ends: bool) -> Vec<C
     if style.upright {
         snap_upright(&mut segs, false, fixed_ends);
     }
+    // A fixed-end piece can return to its junction. Fewer than two cubics
+    // cannot form its own editable closed boundary. Preserve the positioned
+    // edge on both sides, including when it belongs to a larger compound loop.
+    if fixed_ends && first == last && segs.len() < 2 {
+        let area2: f64 = pts.windows(2).map(|p| (p[0] - first).cross(p[1] - first)).sum();
+        if area2.is_finite() && area2.abs() > 1e-8 {
+            segs = pts.windows(2).filter(|p| p[0] != p[1]).map(|p| [p[0], p[0], p[1], p[1]]).collect();
+        }
+    }
     if flip { reversed(segs) } else { segs }
 }
 
@@ -270,6 +279,9 @@ fn polygon(pts: &[Point], tol: f64) -> Vec<Cubic> {
     let kept: Vec<Point> = (0..n).filter(|&i| keep[i]).map(|i| pts[i]).collect();
     (0..kept.len()).map(|i| [kept[i], kept[i], kept[(i + 1) % kept.len()], kept[(i + 1) % kept.len()]]).collect()
 }
+
+#[cfg(test)]
+mod junction_return_tests;
 
 #[cfg(test)]
 mod component_survival_tests {

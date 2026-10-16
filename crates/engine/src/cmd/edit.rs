@@ -324,9 +324,22 @@ pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
     Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
 }
 
+/// [`selected_roots`] for the commands that move or reshape the art (Move, Transform, Rotate…): in
+/// an isolated compound path its paths are objects of their own, so the hole of a ring moves
+/// without the ring. Paint and the rest still go to the compound path, which holds the paint.
+pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
+    let st = s.doc()?;
+    Ok(roots_within(&st.doc, st.selection.in_paint_order(&st.doc), st.isolation))
+}
+
 /// The top-level objects among `ids` (in paint order): compound-path members stand for their
 /// compound, and ids whose ancestor is also listed, and layers, are dropped.
 pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
+    roots_within(doc, ids, None)
+}
+
+/// [`roots_of`], less the swap for the members of `isolation` when it is a compound path.
+fn roots_within(doc: &Document, ids: Vec<NodeId>, isolation: Option<NodeId>) -> Vec<NodeId> {
     // Every id's place in the tree, found in one walk (a lookup per id is a walk per id).
     let paths = doc.index_paths(ids.iter().copied());
     // A compound-path member acts as its compound (compounds are one object).
@@ -336,7 +349,7 @@ pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
             let path = paths.get(&id);
             let parent = path.and_then(|p| p.split_last()).map(|(_, up)| up).filter(|up| !up.is_empty());
             match parent.and_then(|up| doc.node_at(up).map(|n| (up, n))) {
-                Some((up, n)) if matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. }) => (n.id, Some(up.to_vec())),
+                Some((up, n)) if matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. }) && Some(n.id) != isolation => (n.id, Some(up.to_vec())),
                 _ => (id, path.cloned()),
             }
         })

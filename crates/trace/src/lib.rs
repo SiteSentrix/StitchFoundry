@@ -15,8 +15,9 @@
 //!    A continuous-tone image (a photo) is first smoothed within its tones, edges kept (see
 //!    `smooth`): otherwise its noise decides, pixel by pixel, which of two neighbouring tones a
 //!    pixel gets, and every such pixel is a speck.
-//! 2. **Remove noise**: 4-connected same-colour components smaller than `noise` pixels are merged
-//!    into their most common neighbouring colour.
+//! 2. **Remove noise**: whole 4-connected same-colour regions are merged, smallest first, into
+//!    their most common neighbouring colour until no mergeable region is smaller than `noise`.
+//!    Raising Noise continues the same merge sequence without splitting earlier regions.
 //! 3. **Follow boundaries**: for each colour layer, the pixel-crack edges between inside and
 //!    outside are linked into closed loops (inside on the right, right turns at saddles, so
 //!    diagonal pixels stay separate, matching 4-connectivity). Outer loops run clockwise and

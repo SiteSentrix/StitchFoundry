@@ -210,6 +210,14 @@ fn painted_name(n: &Node, name: &str, lang: crate::i18n::Lang) -> String {
     name.to_string()
 }
 
+/// The name the panel shows for `n` in `lang`: its XML ID while Identify Objects By is XML ID,
+/// otherwise [`painted_name`].
+pub(crate) fn shown_name(app: &VectorcraftApp, n: &Node, lang: crate::i18n::Lang) -> String {
+    let xml_id = app.session.prefs.identify_objects_by == "xmlId";
+    let label = n.identify_label(xml_id);
+    if xml_id { label } else { painted_name(n, &label, lang) }
+}
+
 /// Whether `n` gets rows for what it holds (a compound path's paths are one object).
 fn opens(n: &Node, opts: &PanelOptions) -> bool {
     match n.kind {

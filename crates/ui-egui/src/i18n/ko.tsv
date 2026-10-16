@@ -10,7 +10,7 @@
 	Edge Width	가장자리 너비
 	Edge Brightness	가장자리 밝기
 	Smoothness	부드러움
-	About VectorCraft	VectorCraft 정보
+	About StitchFoundry	StitchFoundry 정보
 	All Scripts	모든 스크립트
 	Anchors:	앵커:
 	Any Kind	모든 종류
@@ -64,7 +64,7 @@
 	Medium Dark	약간 어둡게
 	Medium Light	약간 밝게
 	Light	밝게
-	Quit VectorCraft	VectorCraft 종료
+	Quit StitchFoundry	StitchFoundry 종료
 	File	파일
 	New…	새로 만들기…
 	New from Template…	템플릿에서 새로 만들기…
@@ -205,6 +205,7 @@
 	Join	결합
 	Average…	평균…
 	Outline Stroke	선 윤곽선화
+	Outline Object	개체 윤곽선화
 	Offset Path…	패스 오프셋…
 	Reverse Path Direction	패스 방향 반전
 	Simplify…	단순화…
@@ -323,8 +324,11 @@
 	Remove Threading	연결 제거
 	Fit Headline	제목에 맞추기
 	Decrease Font Size	글꼴 크기 줄이기
+	Decrease Font Size by Five Steps	글꼴 크기 5단계 줄이기
 	Increase Font Size	글꼴 크기 키우기
+	Increase Font Size by Five Steps	글꼴 크기 5단계 키우기
 	Reset Tracking and Kerning	자간 및 커닝 재설정
+	Reset Horizontal Scale	가로 비율 재설정
 	Step Type	단계별 문자
 	Find Font…	글꼴 찾기…
 	Change Case	대소문자 변경
@@ -388,6 +392,7 @@
 	Area Text Objects	영역 문자 개체
 	Start Global Edit	전체 편집 시작
 	Save Selection…	선택 영역 저장…
+	Update Selection	선택 영역 업데이트
 	Edit Selection…	선택 영역 편집…
 	Effect	효과
 	Apply Last Effect	마지막 효과 적용
@@ -482,6 +487,7 @@
 	Actual Size	실제 크기
 	Rotate View	보기 회전
 	Reset Rotate View	회전 보기 재설정
+	Rotate View to Selection	선택 영역에 맞춰 보기 회전
 	Hide Edges	가장자리 숨기기
 	Hide Artboards	아트보드 숨기기
 	Show Print Tiling	인쇄 타일 표시
@@ -648,9 +654,9 @@
 	Save Swatch Library…	견본 라이브러리 저장…
 	Symbol Libraries	심볼 라이브러리
 	Help	도움말
-	VectorCraft on GitHub	GitHub의 VectorCraft
+	StitchFoundry on GitHub	GitHub의 StitchFoundry
 	Search Commands…	명령 검색…
-	VectorCraft Help…	VectorCraft 도움말…
+	StitchFoundry Help…	StitchFoundry 도움말…
 	Preview	미리 보기
 	Show Edges	가장자리 표시
 	Show Corner Widget	모퉁이 위젯 표시
@@ -834,7 +840,7 @@
 	Appearance Panel	모양새 패널
 	Appearance of Black	검정 표시 방식
 	Appearance panel	모양새 패널
-	Applies the next time VectorCraft starts.	다음에 VectorCraft를 시작할 때 적용됩니다.
+	Applies the next time StitchFoundry starts.	다음에 StitchFoundry를 시작할 때 적용됩니다.
 	Applies when the linked file is relinked or updated.	링크된 파일을 다시 연결하거나 업데이트할 때 적용됩니다.
 	Apply Brush	브러시 적용
 	Apply Character Style	문자 스타일 적용
@@ -1080,6 +1086,7 @@
 	Convert Process to Global	프로세스 색상을 글로벌로 변환
 	Convert text to outlines	문자를 윤곽선으로 변환
 	Convert to sRGB	sRGB로 변환
+	Convert to Straight Lines	직선으로 변환
 	Copies:	매수:
 	Copy (make a transformed copy)	복사(변형된 복사본 만들기)
 	Copy All Styles	모든 스타일 복사
@@ -1091,6 +1098,7 @@
 	Copyright Info URL:	저작권 정보 URL:
 	Copyright Notice:	저작권 고지:
 	Copyright Status:	저작권 상태:
+	Corner Point Angle Threshold:	모퉁이 포인트 각도 임계값:
 	Corner Radius	모퉁이 반지름
 	Corner Radius:	모퉁이 반지름:
 	Corner:	모퉁이:
@@ -1353,6 +1361,32 @@
 	Expand:	확장:
 	Export All…	모두 내보내기…
 	Export Artboard	아트보드 내보내기
+	A File per Object	오브젝트마다 파일 1개
+	Example: {name}	예: {name}
+	Export Preset:	내보내기 사전 설정:
+	Folders:	폴더:
+	Insert	삽입
+	Nothing is selected. Select the art to export, then open this tab again.	선택된 항목이 없습니다. 내보낼 아트를 선택한 다음 이 탭을 다시 여십시오.
+	One File of the Selection	선택 영역을 파일 1개로
+	Start at:	시작 번호:
+	{n} objects selected	오브젝트 {n}개 선택됨
+	Delete Export Preset	내보내기 사전 설정 삭제
+	Export Presets	내보내기 사전 설정
+	Save Export Preset	내보내기 사전 설정 저장
+	Export Layer	레이어 내보내기
+	Export Selection	선택 영역 내보내기
+	All in One Folder	모두 폴더 하나에
+	By Size or Row	크기 또는 행별
+	By Format	형식별
+	By Artboard or Item	대지 또는 항목별
+	By Item, Then Format	항목별, 그다음 형식별
+	Document Name	문서 이름
+	Artboard or Item Name	대지 또는 항목 이름
+	Number (####)	번호(####)
+	Date (YYYYMMDD)	날짜(YYYYMMDD)
+	Date (YYYY-MM-DD)	날짜(YYYY-MM-DD)
+	Time (hhmmss)	시간(hhmmss)
+	PDF Print	인쇄용 PDF
 	Export As	다른 형식으로 내보내기
 	Export Assets	에셋 내보내기
 	Export CSS	CSS 내보내기
@@ -1408,6 +1442,7 @@
 	Fill and Stroke	칠과 선
 	Fill new strokes	새 선 칠하기
 	Keep selected	선택 유지
+	Merge only with selection	선택 영역과만 병합
 	Fill:	칠:
 	Find	찾기
 	Find Font	글꼴 찾기
@@ -1539,6 +1574,14 @@
 	Hyphenate	하이픈 넣기
 	Hyphenation	하이픈 넣기
 	Hyphenation…	하이픈 넣기…
+	Words Longer Than:	다음보다 긴 단어:
+	After First:	앞부분 최소:
+	Before Last:	뒷부분 최소:
+	Hyphen Limit:	연속 하이픈 제한:
+	Hyphenation Zone:	하이픈 넣기 영역:
+	letters	글자
+	hyphens	개
+	Hyphenate Capitalized Words	대문자로 시작하는 단어에 하이픈 넣기
 	ICC Profile	ICC 프로파일
 	Identify Objects By	개체 식별 기준
 	Ignore	무시
@@ -2308,7 +2351,7 @@
 	{count} folder(s) or file(s) couldn't be read	폴더 또는 파일 {count}개를 읽을 수 없음
 	The search stopped at its limit: search a smaller folder.	검색이 한도에서 중단됨: 더 작은 폴더를 검색하세요.
 	Copy only fonts you own or are licensed to install.	소유했거나 설치 라이선스가 있는 글꼴만 복사하세요.
-	VectorCraft copies the fonts to {folder}.	VectorCraft가 글꼴을 {folder}에 복사합니다.
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry가 글꼴을 {folder}에 복사합니다.
 	Registry name:	등록 이름:
 	Release Compound Shape	컴파운드 모양 해제
 	Release Opacity Mask	불투명 마스크 해제
@@ -2384,7 +2427,7 @@
 	Reverse Path Direction On	패스 방향 반전 켜기
 	Revert to the saved version of “{name}”?	“{name}”을(를) 저장된 버전으로 되돌리시겠습니까?
 	Replace “{name}”, the file this document was opened from?	이 문서를 연 원본 파일 “{name}”을(를) 바꾸시겠습니까?
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	파일을 열 때 VectorCraft가 아직 읽지 못하는 내용({what})이 제외되어, 덮어쓰면 해당 내용이 영구적으로 사라집니다. 보존하려면 다른 이름으로 저장하세요.
+	Opening it left out what StitchFoundry can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	파일을 열 때 StitchFoundry가 아직 읽지 못하는 내용({what})이 제외되어, 덮어쓰면 해당 내용이 영구적으로 사라집니다. 보존하려면 다른 이름으로 저장하세요.
 	Right Grid:	오른쪽 격자:
 	Right Indent	오른쪽 들여쓰기
 	Right Plane	오른쪽 평면
@@ -2568,6 +2611,7 @@
 	Show List View	목록 보기 표시
 	Show Note	메모 표시
 	Show Options	옵션 표시
+	Show Original Path	원래 패스 표시
 	Color Panel Options	색상 패널 옵션
 	Show Package	패키지 표시
 	Show Panel	패널 표시
@@ -2903,7 +2947,7 @@
 	Variation:	변형:
 	Vector Halftone	벡터 하프톤
 	Vector illustration — fast, open, scriptable.	벡터 일러스트레이션 — 빠르고 개방적이며 스크립트 지원.
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft가 지난번에 정상적으로 종료되지 않았습니다. 다음 문서에 저장되지 않은 변경 사항이 있었습니다:
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry가 지난번에 정상적으로 종료되지 않았습니다. 다음 문서에 저장되지 않은 변경 사항이 있었습니다:
 	Vectors	벡터
 	Version {version} — open-source vector illustration in pure Rust.	버전 {version} — 순수 Rust로 만든 오픈 소스 벡터 일러스트레이션.
 	Version:	버전:
@@ -2924,7 +2968,7 @@
 	Web Shift	웹 이동
 	Web Snap:	웹 스냅:
 	Weight:	두께:
-	Welcome to VectorCraft	VectorCraft에 오신 것을 환영합니다
+	Welcome to StitchFoundry	StitchFoundry에 오신 것을 환영합니다
 	When pasting text	텍스트를 붙여넣을 때
 	White	흰색
 	Widget Position:	위젯 위치:
@@ -3442,7 +3486,7 @@ axis	Both	양쪽
 	Drag to the window's left edge to dock	창 왼쪽 가장자리로 드래그하여 고정
 	Float Tool Group	도구 그룹 분리
 	Services	서비스
-	Hide VectorCraft	VectorCraft 숨기기
+	Hide StitchFoundry	StitchFoundry 숨기기
 	Zoom	확대/축소
 	Bring All to Front	모두 앞으로 가져오기
 	Settings	설정
@@ -3451,7 +3495,7 @@ theme	Appearance	외관
 	On: one locked object showing the document, updated when it changes.	켬: 문서를 보여 주는 잠긴 개체 하나로, 문서가 바뀌면 업데이트됩니다.
 	Off: an editable copy of its art, embedded in this document.	끔: 이 문서에 포함된 편집 가능한 아트웍 복사본입니다.
 	Images: link to the file instead of only embedding it.	이미지: 포함만 하지 않고 파일에 연결합니다.
-	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 문서: 잠긴 개체 하나로, 파일이 바뀌면 업데이트됩니다.
+	StitchFoundry documents: one locked object, updated when the file changes.	StitchFoundry 문서: 잠긴 개체 하나로, 파일이 바뀌면 업데이트됩니다.
 	A file dialog is open: choose there first	파일 대화상자가 열려 있습니다. 먼저 그곳에서 선택하세요
 	The document was closed while its file dialog was open	파일 대화상자가 열려 있는 동안 문서가 닫혔습니다
 	The dialog was closed before its file dialog answered	파일 대화상자가 응답하기 전에 대화상자가 닫혔습니다
@@ -3518,15 +3562,15 @@ theme	Appearance	외관
 @msg	its type is to come in as outlines, which only its page has	문자를 윤곽선으로 가져오도록 되어 있으나, 이는 해당 페이지에만 있습니다
 @msg	{_1} files	{_1} 파일
 @msg	A browser with WebGPU or WebGL2 is required.	WebGPU 또는 WebGL2를 지원하는 브라우저가 필요합니다.
-@msg	Loading VectorCraft…	VectorCraft 불러오는 중…
+@msg	Loading StitchFoundry…	StitchFoundry 불러오는 중…
 @msg	Reload the page to go on (changes not saved yet may be lost).	계속하려면 페이지를 새로 고치세요(아직 저장하지 않은 변경 내용은 사라질 수 있습니다).
 @msg	The graphics were lost and couldn't be restarted.	그래픽을 잃었으며 다시 시작할 수 없습니다.
 @msg	The graphics were lost and have been restarted	그래픽을 잃어 다시 시작했습니다
-@msg	VectorCraft failed to start: {e}	VectorCraft를 시작하지 못했습니다: {e}
+@msg	StitchFoundry failed to start: {e}	StitchFoundry를 시작하지 못했습니다: {e}
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	저장하지 않은 변경 내용은 이 브라우저에 보관되어 있습니다. 페이지를 새로 고치면 복원할 수 있습니다.
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	처음 시도한 그래픽 프로세서가 창을 표시하지 못해 {summary}에서 VectorCraft를 다시 시작했습니다
-@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 VectorCraft 시작이 창이 나타나기 전에 {name}에서 끝나서 {summary}에서 시작했습니다. 이 그래픽 프로세서를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
-@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 VectorCraft 시작이 그래픽 프로세서 목록을 가져오는 중에 끝나서 OpenGL만 사용해 {summary}에서 시작했습니다. 다른 그래픽 백엔드를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	처음 시도한 그래픽 프로세서가 창을 표시하지 못해 {summary}에서 StitchFoundry를 다시 시작했습니다
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 StitchFoundry 시작이 창이 나타나기 전에 {name}에서 끝나서 {summary}에서 시작했습니다. 이 그래픽 프로세서를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 StitchFoundry 시작이 그래픽 프로세서 목록을 가져오는 중에 끝나서 OpenGL만 사용해 {summary}에서 시작했습니다. 다른 그래픽 백엔드를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
 @msg	not a DXF drawing	DXF 도면이 아닙니다
 @msg	scale must be a number from {_1} to {_2}, not {s}	배율은 {_1}에서 {_2} 사이의 숫자여야 합니다: {s}
 @msg	the artboard to fit must be a positive size up to {_1} pt	맞출 아트보드는 최대 {_1} pt까지의 양수 크기여야 합니다
@@ -3587,6 +3631,7 @@ theme	Appearance	외관
 @msg	Make Guides: select paths	안내선 만들기: 패스를 선택하세요
 @msg	Release Guides: no guides	안내선 해제: 안내선이 없습니다
 @msg	guides are locked	안내선이 잠겨 있습니다
+@msg	no saved selection recalled	불러온 저장된 선택 영역이 없습니다
 @msg	no saved selections	저장된 선택 영역이 없습니다
 @msg	no such artboard	해당 아트보드가 없습니다
 @msg	cannot split an open path at its end point	열린 패스는 끝점에서 나눌 수 없습니다
@@ -3798,10 +3843,10 @@ theme	Appearance	외관
 @msg	it has more than {MAX_NODES} objects	개체가 {MAX_NODES}개를 넘습니다
 @msg	it has no layers	레이어가 없습니다
 @msg	it has too many values in a row	한 줄에 값이 너무 많습니다
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	{_1}이(가) 있으며, VectorCraft는 아직 이를 읽지 못합니다
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	{_1}이(가) 있으며, StitchFoundry는 아직 이를 읽지 못합니다
 @msg	its objects are nested too deeply	개체가 너무 깊게 중첩되어 있습니다
 @msg	its section ending with `%{end}` doesn't end	`%{end}`로 끝나는 구역이 끝나지 않습니다
-@msg	an image VectorCraft can't read was left out	VectorCraft가 읽을 수 없는 이미지는 제외했습니다
+@msg	an image StitchFoundry can't read was left out	StitchFoundry가 읽을 수 없는 이미지는 제외했습니다
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
@@ -3818,7 +3863,7 @@ theme	Appearance	외관
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript 오류({name}, `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	PostScript 오류({name}, `{op}`: {at}), 위치: {procs}
 @msg	a PostScript error ({name})	PostScript 오류({name})
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	`{at}`을(를) 사용하며, VectorCraft의 PostScript 판독기는 이를 알지 못합니다
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	`{at}`을(를) 사용하며, StitchFoundry의 PostScript 판독기는 이를 알지 못합니다
 @msg	the file was read up to an error ({why}): what follows it was left out	오류({why})까지 파일을 읽었으며, 그 뒤의 내용은 제외했습니다
 @msg	this file's PostScript couldn't be read ({why}): {what}	이 파일의 PostScript를 읽을 수 없습니다({why}): {what}
 @msg	it has no page	페이지가 없습니다
@@ -3835,7 +3880,7 @@ theme	Appearance	외관
 @msg	its Windows metafile preview was opened instead, which may simplify the art	대신 Windows 메타파일 미리 보기를 열었으며, 아트웍이 단순화될 수 있습니다
 @msg	its preview was placed instead, at screen resolution	대신 미리 보기를 화면 해상도로 가져왔습니다
 @msg	shadings of more than 4096 patches or triangles were left out	패치나 삼각형이 4096개를 넘는 셰이딩은 제외했습니다
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	`{at}`을(를) 사용하며({procs}), VectorCraft의 PostScript 판독기는 이를 알지 못합니다
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	`{at}`을(를) 사용하며({procs}), StitchFoundry의 PostScript 판독기는 이를 알지 못합니다
 @msg	the export region is not finite	내보내기 영역이 유한하지 않습니다
 @msg	a page out of range	범위를 벗어난 페이지
 @msg	a page's placement is not finite	페이지 배치가 유한하지 않습니다
@@ -3844,10 +3889,10 @@ theme	Appearance	외관
 @msg	the preview image is empty	미리 보기 이미지가 비어 있습니다
 @msg	the thumbnail image is malformed	섬네일 이미지가 올바르지 않습니다
 @msg	can't encode the document: {0}	문서를 인코딩할 수 없습니다: {0}
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	버전 {0}(으)로 저장할 수 없습니다: VectorCraft는 버전 {MIN_VERSION}~{VERSION}을(를) 기록합니다
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	파일 버전 {0}은(는) 이 VectorCraft가 지원하는 버전({VERSION})보다 높습니다
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	버전 {0}(으)로 저장할 수 없습니다: StitchFoundry는 버전 {MIN_VERSION}~{VERSION}을(를) 기록합니다
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	파일 버전 {0}은(는) 이 StitchFoundry가 지원하는 버전({VERSION})보다 높습니다
 @msg	invalid image data for `{0}`	`{0}`의 이미지 데이터가 올바르지 않습니다
-@msg	not a VectorCraft file: {0}	VectorCraft 파일이 아닙니다: {0}
+@msg	not a StitchFoundry file: {0}	StitchFoundry 파일이 아닙니다: {0}
 @msg	the compressed file unpacks to more than {_1} MB	압축된 파일의 압축을 풀면 {_1}MB를 넘습니다
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	버전 {0} 파일은 압축할 수 없습니다: 버전 {COMPRESSED_SINCE} 이상만 압축 파일을 엽니다
 @msg	a bitmap is empty	비트맵이 비어 있습니다
@@ -3894,7 +3939,7 @@ theme	Appearance	외관
 @msg	plug-in output: {0}	플러그인 출력: {0}
 @msg	plug-in parameters: {0}	플러그인 매개변수: {0}
 @msg	plug-in trapped: {0}	플러그인 중단됨: {0}
-@msg	is not an image VectorCraft reads	VectorCraft가 읽는 이미지가 아닙니다
+@msg	is not an image StitchFoundry reads	StitchFoundry가 읽는 이미지가 아닙니다
 @msg	not found	찾을 수 없습니다
 @msg	SVG parse error: {0}	SVG 구문 분석 오류: {0}
 @msg	decimals must be {_1}–{_2} (got {_3})	소수 자릿수는 {_1}~{_2}이어야 합니다({_3} 입력됨)
@@ -3929,6 +3974,8 @@ theme	Appearance	외관
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	내보낼 항목이 없습니다: 문서에 보이는 아트웍이 없습니다(또는 아트보드 사용을 켜세요)
 @msg	add a format to export	내보낼 형식을 추가하세요
 @msg	check an asset to export	내보낼 자산을 체크하세요
+@msg	check a layer to export	내보낼 레이어를 선택하십시오
+@msg	select the art to export first	먼저 내보낼 아트를 선택하십시오
 @msg	`{tool}` isn't a freehand tool	`{tool}`은(는) 프리핸드 도구가 아닙니다
 @msg	bad colour `{hex}` (#rrggbb)	잘못된 색상 `{hex}`(#rrggbb)
 @msg	no gradient stop or freeform point is selected	선택된 그레이디언트 정지점이나 자유형 점이 없습니다
@@ -4075,7 +4122,7 @@ theme	Appearance	외관
 @msg	no dialog open	열린 대화상자가 없습니다
 @msg	no file reader	파일 판독기가 없습니다
 @msg	no file writer	파일 기록기가 없습니다
-@msg	not a VectorCraft shortcut set (missing `overrides`)	VectorCraft 단축키 세트가 아닙니다(`overrides`가 없음)
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	StitchFoundry 단축키 세트가 아닙니다(`overrides`가 없음)
 @msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	단축키 세트가 아닙니다: 텍스트가 슬래시 이름과 여는 중괄호로 시작하지 않습니다
 @msg	This shortcut file is in a form StitchFoundry can't read.	이 단축키 파일은 StitchFoundry가 읽을 수 없는 형식입니다.
 @msg	shortcut for `{k}` must be a string	`{k}`의 단축키는 문자열이어야 합니다
@@ -4097,13 +4144,13 @@ theme	Appearance	외관
 @msg	unknown workspace (one of {_1})	알 수 없는 작업 영역({_1} 중 하나)
 @msg	workspace name can't be empty	작업 영역 이름은 비워 둘 수 없습니다
 @msg	No fonts are missing in this document	이 문서에는 누락된 글꼴이 없습니다
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft는 다른 앱이나 시스템의 폴더를 검색하지 않습니다: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft는 사용자 폴더의 공유 또는 공용 폴더를 검색하지 않습니다: {path}
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry는 다른 앱이나 시스템의 폴더를 검색하지 않습니다: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry는 사용자 폴더의 공유 또는 공용 폴더를 검색하지 않습니다: {path}
 @msg	{path} is not a folder	{path}은(는) 폴더가 아닙니다
 @msg	the search couldn't start: try again in a moment	검색을 시작할 수 없습니다: 잠시 후 다시 시도하세요
 @msg	searching a folder isn't available on the web	웹에서는 폴더 검색을 사용할 수 없습니다
 @msg	every search thread stopped on an internal error (please report this bug)	내부 오류로 모든 검색 스레드가 중지되었습니다(이 버그를 신고해 주세요)
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	여기에는 VectorCraft의 글꼴 폴더가 설정되어 있지 않습니다: 데스크톱 앱과 vectorcraft-cli가 설정합니다
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	여기에는 StitchFoundry의 글꼴 폴더가 설정되어 있지 않습니다: 데스크톱 앱과 vectorcraft-cli가 설정합니다
 @msg	choose the font files to add	추가할 글꼴 파일을 선택하세요
 @msg	{n} font file(s) are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
@@ -4313,7 +4360,7 @@ lighting	Light	광원
 	Artistic	예술 효과
 	Film Grain…	필름 그레인…
 	Highlight Area	하이라이트 영역
-@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	압축된 파일의 압축을 풀면 VectorCraft가 읽을 수 있는 한도를 넘습니다(문서 {_1}MB, 이미지당 {_2}MB)
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	압축된 파일의 압축을 풀면 StitchFoundry가 읽을 수 있는 한도를 넘습니다(문서 {_1}MB, 이미지당 {_2}MB)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	문서가 너무 커서 압축 저장할 수 없습니다({0}): 압축 사용을 끄고 저장하세요
 @msg	the file stopped being read (please report this bug)	파일 읽기가 중단되었습니다(이 버그를 신고해 주세요)
 	Concentric Dividers:	동심원 구분선:
@@ -4464,3 +4511,24 @@ lighting	Light	광원
 @msg	choose a source folder	소스 폴더를 선택하세요
 @msg	open a document with data sets	데이터 세트가 있는 문서를 여세요
 @msg	the action has no steps	액션에 단계가 없습니다
+
+# User Interface › Accent Color
+	Accent Color	강조 색상
+	Amber	호박색
+	Coral	코럴
+	Violet	보라
+	Pink	분홍
+	Sketch	스케치
+	Halftone Pattern…	하프톤 패턴…
+	Halftone Pattern	하프톤 패턴
+	Pattern Type	패턴 유형
+	Dot	점
+# User Interface › Color Scheme
+	Color Scheme	색 구성표
+	Modern	모던
+
+# Symbol Options › Export Type
+	Export Type:	내보내기 유형:
+	Movie Clip	무비 클립
+@msg	name is empty	이름이 비어 있습니다
+@msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다

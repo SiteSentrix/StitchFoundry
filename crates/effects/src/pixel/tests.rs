@@ -1893,3 +1893,119 @@ fn brush_strokes_follow_the_object_at_any_resolution() {
         assert_eq!(shifted, one, "{id}");
     }
 }
+
+/// Halftone Pattern of `p` over `w` × `h` pixels of `src`, laid out by `s`.
+fn halftone(p: serde_json::Value, src: &[u8], w: usize, h: usize, s: &PixelSpace) -> Vec<u8> {
+    let mut out = src.to_vec();
+    fx("sketch.halftonePattern", p).apply(&mut out, w, h, s);
+    out
+}
+
+/// The smallest period of `values` (their length when they don't repeat).
+fn period(values: &[u8]) -> usize {
+    (1..values.len()).find(|p| values.iter().zip(&values[*p..]).all(|(a, b)| a == b)).unwrap_or(values.len())
+}
+
+#[test]
+fn halftone_pattern_params_take_defaults_and_stay_in_range() {
+    assert_eq!(fx("sketch.halftonePattern", json!({})), PixelFx::HalftonePattern { size: 1.0, contrast: 5.0, kind: HalftonePattern::Dot });
+    assert_eq!(
+        fx("sketch.halftonePattern", json!({"size": 1e9, "contrast": -3, "patternType": "LINE"})),
+        PixelFx::HalftonePattern { size: 12.0, contrast: 0.0, kind: HalftonePattern::Line }
+    );
+    assert_eq!(
+        fx("sketch.halftonePattern", json!({"size": 0, "contrast": 1e9, "patternType": "circle"})),
+        PixelFx::HalftonePattern { size: 1.0, contrast: 50.0, kind: HalftonePattern::Circle }
+    );
+    for junk in [json!({"patternType": 2}), json!({"patternType": "nonsense"})] {
+        assert_eq!(fx("sketch.halftonePattern", junk), fx("sketch.halftonePattern", json!({})));
+    }
+    let doc = crate::effect_info("sketch.halftonePattern").unwrap().params;
+    let kinds: Vec<HalftonePattern> = HALFTONE_TYPES.iter().map(|(_, v)| HalftonePattern::parse(v)).collect();
+    assert_eq!(kinds, [HalftonePattern::Circle, HalftonePattern::Dot, HalftonePattern::Line]);
+    assert!(HALFTONE_TYPES.iter().all(|(_, v)| doc.contains(&format!("\"{v}\""))), "{doc}");
+    let f = fx("sketch.halftonePattern", json!({"size": 12}));
+    assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), 0.0);
+    assert_eq!(f.reach(), Some(0.0));
+}
+
+/// Line's rows repeat every Size points: Size pixels at 72 ppi, twice as many at 144 ppi.
+#[test]
+fn halftone_line_period_is_the_size_at_any_resolution() {
+    let p = json!({"size": 4, "contrast": 50, "patternType": "line"});
+    let (w, h) = (48, 48);
+    let out = halftone(p.clone(), &image(w, h, |_, _| grey(128)), w, h, &space(w, h));
+    let column: Vec<u8> = (0..h).map(|y| at(&out, w, 0, y)[0]).collect();
+    assert!(column.contains(&0) && column.contains(&255), "{column:?}");
+    assert_eq!(period(&column), 4, "{column:?}");
+    let fine = PixelSpace { to_doc: Affine::scale(0.5), px: 0.5, ..space(w, h) };
+    let out = halftone(p, &image(2 * w, 2 * h, |_, _| grey(128)), 2 * w, 2 * h, &fine);
+    let column: Vec<u8> = (0..2 * h).map(|y| at(&out, 2 * w, 0, y)[0]).collect();
+    assert_eq!(period(&column), 8, "{column:?}");
+}
+
+/// Circle draws rings round the object's centre, Line rows that don't change along them, and
+/// Dot neither.
+#[test]
+fn halftone_pattern_type_changes_the_pattern() {
+    let (w, h) = (64, 64);
+    let src = image(w, h, |_, _| grey(100));
+    // The centre on a pixel's centre: pixel (32 + dx, 32 + dy) lies at (dx, dy) from it.
+    let s = PixelSpace { center: Point::new(32.5, 32.5), ..space(w, h) };
+    let draw = |kind: &str| halftone(json!({"size": 8, "contrast": 50, "patternType": kind}), &src, w, h, &s);
+    let (circle, dot, line) = (draw("circle"), draw("dot"), draw("line"));
+    assert!(circle != dot && dot != line && line != circle);
+    // Pixels at the same distance from the centre in different directions.
+    let same_radius: [&[(i64, i64)]; 6] = [
+        &[(5, 0), (3, 4), (-4, 3), (0, -5), (-3, -4)],
+        &[(10, 0), (6, 8), (-8, -6), (0, 10)],
+        &[(13, 0), (5, 12), (-12, 5), (0, -13)],
+        &[(15, 0), (9, 12), (-12, 9)],
+        &[(17, 0), (8, 15), (-15, -8)],
+        &[(25, 0), (7, 24), (-15, 20), (-20, -15), (24, -7)],
+    ];
+    let value = |d: &[u8], (dx, dy): (i64, i64)| at(d, w, (32 + dx) as usize, (32 + dy) as usize)[0];
+    let radial = |d: &[u8]| same_radius.iter().all(|ring| ring.iter().all(|q| value(d, *q) == value(d, ring[0])));
+    assert!(radial(&circle), "Circle is the same all round");
+    assert!(!radial(&dot) && !radial(&line));
+    for y in 0..h {
+        assert!((0..w).all(|x| at(&line, w, x, y) == at(&line, w, 0, y)), "row {y} of Line is uniform");
+    }
+}
+
+#[test]
+fn halftone_contrast_sharpens_the_screen() {
+    let (w, h) = (64, 32);
+    let src = image(w, h, |x, _| grey((x * 4) as u8));
+    let mid = |d: &[u8]| share(d, |p| p[0] != 0 && p[0] != 255);
+    let soft = halftone(json!({"size": 6, "contrast": 0}), &src, w, h, &space(w, h));
+    let hard = halftone(json!({"size": 6, "contrast": 50}), &src, w, h, &space(w, h));
+    assert!(mid(&soft) > 0.3, "{}", mid(&soft));
+    assert_eq!(mid(&hard), 0.0);
+}
+
+/// Halftone Pattern redraws in black ink on white paper, whatever the object's colours, and
+/// keeps its coverage.
+#[test]
+fn halftone_draws_in_black_and_white_only() {
+    let (w, h) = (48, 48);
+    let src = image(w, h, |x, y| {
+        let c = [[230u8, 20, 20], [20, 200, 40], [30, 60, 220], [240, 220, 30]][(x / 12) % 4];
+        let a: u16 = if y < 24 { 255 } else { 128 };
+        [c[0], c[1], c[2]].map(|v| (u16::from(v) * a / 255) as u8).into_iter().chain([a as u8]).collect::<Vec<_>>().try_into().unwrap()
+    });
+    for kind in ["circle", "dot", "line"] {
+        let out = halftone(json!({"size": 6, "contrast": 50, "patternType": kind}), &src, w, h, &space(w, h));
+        for (p, q) in out.as_chunks::<4>().0.iter().zip(src.as_chunks::<4>().0) {
+            assert_eq!(p[3], q[3], "{kind}: coverage kept");
+            assert!(p[0] == p[1] && p[1] == p[2] && (p[0] == 0 || p[0] == p[3]), "{kind}: {p:?} from {q:?}");
+        }
+        assert!(share(&out, |p| p[0] == 0) > 0.1 && share(&out, |p| p[0] == p[3]) > 0.1, "{kind}: ink and paper");
+        let soft = halftone(json!({"size": 6, "contrast": 0, "patternType": kind}), &src, w, h, &space(w, h));
+        assert!(soft.as_chunks::<4>().0.iter().all(|p| p[0] == p[1] && p[1] == p[2]), "{kind}: greys only");
+        for (tone, expect) in [(0, 0), (255, 255)] {
+            let out = halftone(json!({"size": 6, "contrast": 0, "patternType": kind}), &image(w, h, |_, _| grey(tone)), w, h, &space(w, h));
+            assert!(out.as_chunks::<4>().0.iter().all(|p| p[0] == expect), "{kind}: {tone} stays {expect}");
+        }
+    }
+}

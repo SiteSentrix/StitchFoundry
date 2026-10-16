@@ -29,7 +29,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 44/50, Photoshop effects 29/57, 3D 4/4 (initial types, no materials) |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 44/50, Photoshop effects 30/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
@@ -80,7 +80,7 @@ The dimension hours overlap (feature rows hold some UI, format and AI work), so 
 | 3D and Materials | ~25% | 30–55 |
 | Type core — [type-parity.md](docs/type-parity.md) | 80% | 14–19 |
 | Type advanced (CJK, spelling, Touch Type) | 50% | 20–28 |
-| Symbols, blends, envelopes, Repeat, perspective | 85% | 6–10 |
+| Symbols, blends, envelopes, Repeat, perspective | 87% | 5–9 |
 | Image Trace, graphs, image tools | 75% | 5–8 |
 | Layers, artboards, document setup | 78% | 5–8 |
 | View & navigation | 70% | 9–14 |
@@ -134,6 +134,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 | Date | What landed |
 |---|---|
+| 2026-10-16 | Symbol Options › Export Type (Graphic or Movie Clip, default Movie Clip) with Registration; `symbol.options` / `symbol.list` (G5).
 | 2026-10-16 | About 160 community PRs landed, each through the full gate. Crashes and hostile files: damaged PDF dictionaries and arrays no longer crash import (#2133, #2240, #2244, #2271), area type with huge row or column counts opens (#2109), hostile mesh edges are bounded (#2051). New: Dimension tool (#1788), legacy version 7 `.ai` save (#1794), Object › Intertwine (#2095), Apple Pencil and touch input on the web (#1740), Sample Color from Screen (#2257), Drop Shadow Darkness (#2252), Smart Blur edge modes (#2154), Scribble variations (#2180), Free Distort corners in its dialog (#2134), Rotate View presets (#2106), tritanopia proofing (#2234), Layers panel filters (#2087), Hide Template (#2117), File › Automate Batch through the Actions panel (#1938), dataset and graph CSV (#1929, #1941), Reset Tracking and Kerning (#2274), Alt+Enter copies in Transform fields (#2236), Shift+Tab panels (#2254), Control bar isolation, Recolor and image Replace (#2258, #2079, #2081). Revolve renders smooth with Cap on by default (#1193); Image Trace keeps tiny parts, thin outlines and shared corners, and Grayscale gradients are grey (#2012, #2025, #2263, #2264, #2265, #1879). Import: many `.ai`, EPS and PDF fidelity fixes (#2014–#2016, #2029, #2030, #2044, #2046, #2050–#2052, #2058, #2129, #2199, #2202, #2218), images up to 1 GB decoded (#2060), `.ai`/`.ait`/`.svgz` files paste from a file manager (#2148, #2201). Fixes across fields (arithmetic #2069, #2209, #2022; caret #1403), New Document (#2158, #2176), menus (#2232), shortcuts (#2235, #2146), Transform Each axes (#2227), Paste in Place (#1926), Color Picker tab order (#1937, #1939) and more. Languages: Bulgarian, Greek, Swedish and Finnish complete under the tests, pt-br completed. Details per PR in the PRs; headline numbers unchanged (estimated). |
 | 2026-10-14 | Brazilian Portuguese (`pt-br`) covers the whole interface and status/error messages under the completeness tests (#1914); Localization 71% → 74% (measured), hours 55–90 → 50–85. |
 | 2026-10-14 | Direct Selection: deleting an interior anchor of an open path leaves separate surviving runs. Delete/Backspace and history regressions cover the gap; explicit Remove Anchors remains connected. Headline numbers unchanged. |

@@ -5,7 +5,9 @@
 //! (glyph outlines, the evaluated live object, the symbol's art) and [`reshape`] runs each effect
 //! over all of them as one piece, with the whole art's bounds as the effect's reference box, so a
 //! warp bends a line of type as a whole. An image is clipped by its reshaped frame. Raster effects
-//! (shadows, glows, blur, feather) stay on the result for the renderer and exporters.
+//! (shadows, glows, blur, feather) stay on the result for the renderer and exporters. Type without
+//! inline graphics whose own fills or strokes have geometry effects is outlined too: each of those
+//! effects reshapes the whole outline that its fill or stroke paints.
 
 use std::sync::Arc;
 
@@ -28,6 +30,14 @@ pub fn needs_outline(n: &Node) -> bool {
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
     )
+}
+
+/// Is `n` type without inline graphics that has a fill or stroke of its own that paints and has a
+/// visible geometry effect? Such an effect reshapes the whole outline that its fill or stroke
+/// paints ([`outline_text`], which leaves inline graphics out).
+pub fn has_item_geometry(n: &Node) -> bool {
+    let NodeKind::Text(t) = &n.kind else { return false };
+    t.runs.iter().all(|r| r.inline.is_none()) && n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects()))
 }
 
 /// The glyph outlines of type `t` in text space with its underline and strikethrough bars: one
@@ -155,11 +165,13 @@ pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
 
 /// `n` (see [`needs_outline`]) with its object-level geometry effects and its perspective applied:
 /// its [`outline_art`] reshaped as one piece, or for an image the image clipped by its reshaped
-/// frame. The result is a group with `n`'s id, name, visibility, transparency, opacity mask and
-/// remaining (raster) effects; `None` when `n` has neither a visible geometry effect nor a
-/// perspective, or has no art (a symbol instance without `symbol_art`).
+/// frame. Type's own fills and strokes keep their effects on its whole outline. The result is a
+/// group with `n`'s id, name, visibility, transparency, opacity mask and remaining (raster)
+/// effects; `None` when `n` has no visible geometry effect, no perspective and is not type with
+/// a geometry effect on a fill or stroke of its own ([`has_item_geometry`]), or has no art (a
+/// symbol instance without `symbol_art`).
 pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    if (geometry_effects(n).is_empty() && n.projection().is_none()) || !needs_outline(n) {
+    if (geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !needs_outline(n) {
         return None;
     }
     as_art(n, symbol_art)

@@ -1,22 +1,27 @@
-# Windows on ARM: package the ARM64 release the way release.yml does (cross-compiled on an x64
-# runner, unsigned here), then install that MSI on a Windows 11 ARM64 runner, check the installed
-# binaries are ARM64, run the CLI natively, and uninstall. (A native ARM64 `cargo test` job is left
-# out for now: PdfCraft saw an intermittent access violation in egui UI tests there.)
+# Windows ARM64 build and smoke test.
+#
+# Release packages on arm64-windows are produced on x64 runners via cross-compilation
+# (target: aarch64-pc-windows-msvc) using MSVC's ARM64 cross tools, then installed and run
+# on GitHub Actions' native windows-11-arm runner.
 name: Windows ARM64
 
 on:
   push:
     branches: [main]
-  pull_request:
     paths:
-      - Cargo.toml
-      - Cargo.lock
-      - "**/Cargo.toml"
-      - "**/build.rs"
-      - .github/workflows/windows-arm64.yml
-      - packaging/windows/**
-  schedule:
-    - cron: "41 4 * * 1" # weekly, so drift in the runner images shows up
+      - ".github/workflows/windows-arm64.yml"
+      - "packaging/windows/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-arm64.yml"
+      - "packaging/windows/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
   workflow_dispatch:
 
 concurrency:
@@ -25,10 +30,6 @@ concurrency:
 
 permissions:
   contents: read
-
-env:
-  CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: 0
 
 jobs:
   package:

@@ -6,7 +6,7 @@
 //! - **Geometry effects** (Distort & Transform, Path, Convert to Shape, Round Corners, Scribble,
 //!   Warp) rewrite a path: [`apply_geometry`] evaluates them in stack order.
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur, and the
-//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Color Halftone, Crystallize, Mezzotint, Pointillize,
+//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Color Halftone, Crystallize, Mezzotint, Pointillize, Halftone Pattern,
 //!   Unsharp Mask and Glowing Edges) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
@@ -69,7 +69,7 @@ pub use live::{expand_live, expand_live_deep, expanded_live_group, text_outliner
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use raster::{RasterFx, outset, raster_effects};
-pub use reshape::{expand_outlined, needs_outline, outline_art, outline_text, reshape};
+pub use reshape::{expand_outlined, has_item_geometry, needs_outline, outline_art, outline_text, reshape};
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
     EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, extrude_options, has_solid, inflate_options, is_three_d, solid_art, validate_solid,
@@ -149,6 +149,7 @@ fn lengths_of(id: &str) -> Lengths {
         "texture.mosaicTiles" => always(&["tileSize"]),
         "texture.patchwork" => always(&["squareSize"]),
         "texture.stainedGlass" => always(&["cellSize"]),
+        "sketch.halftonePattern" => always(&["size"]),
         _ => Lengths::default(),
     }
 }
@@ -165,6 +166,7 @@ const ARTISTIC: &[&str] = &["Effect", "Artistic"];
 const BRUSH_STROKES: &[&str] = &["Effect", "Brush Strokes"];
 const DISTORT: &[&str] = &["Effect", "Distort"];
 const SHARPEN: &[&str] = &["Effect", "Sharpen"];
+const SKETCH: &[&str] = &["Effect", "Sketch"];
 const PIXELATE: &[&str] = &["Effect", "Pixelate"];
 const TEXTURE: &[&str] = &["Effect", "Texture"];
 const VIDEO: &[&str] = &["Effect", "Video"];
@@ -288,6 +290,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             PATH,
             "{offset: pt (10; negative insets), joins: \"miter\"|\"round\"|\"bevel\", miterLimit: (4)}",
             json!({"offset": 10.0, "joins": "miter", "miterLimit": 4.0}),
+        ),
+        g(
+            "path.outlineObject",
+            "Outline Object",
+            PATH,
+            "{} type is drawn, exported and expanded as its glyph outlines and stays editable, and the effects after it reshape those outlines; paths and images do not change",
+            json!({}),
         ),
         g(
             "path.outlineStroke",
@@ -431,6 +440,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             SHARPEN,
             "{amount: % 1..500 (50), radius: pt 0.1..250 (1; σ of the blur edges are found against), threshold: levels 0..255 (0; smaller differences are left alone)}",
             json!({"amount": 50.0, "radius": 1.0, "threshold": 0.0}),
+        ),
+        r(
+            "sketch.halftonePattern",
+            "Halftone Pattern…",
+            SKETCH,
+            "{size: pt 1..12 (1; how far apart the screen's dots, rings or lines are), contrast: 0..50 (5; 50 draws pure black and white), patternType: \"circle\"|\"dot\"|\"line\" (\"dot\"; rings round the object's centre, dots on a square grid, horizontal lines)} redraws the object in black ink on white paper through a halftone screen whose ink covers as much as the colour is dark, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"size": 1.0, "contrast": 5.0, "patternType": "dot"}),
         ),
         r(
             "stylize.glowingEdges",
@@ -865,6 +881,9 @@ pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &Geo
             }
             vectorcraft_pathops::offset_path(path, off, join(p, "joins"), num(p, "miterLimit", 4.0).clamp(1.0, 500.0))
         }
+        // Outline Object returns the geometry unchanged. Type reaches every geometry effect as its
+        // glyph outlines (`reshape::reshape`), so type that carries it is drawn as those outlines.
+        "path.outlineObject" => path.clone(),
         "path.outlineStroke" => {
             let fallback;
             let base = match ctx.stroke {

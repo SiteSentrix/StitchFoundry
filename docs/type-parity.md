@@ -51,6 +51,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | CJK: Proportional Metrics (`palt` in horizontal type, `vpal` in vertical type) | done | #966 |
 | CJK: ruby, manual tate-chu-yoko | missing | #633 |
 | Inline symbols in text | beyond Illustrator | not scored |
+| Align Stroke (inside, outside) on live type's character stroke | beyond Illustrator | not scored; `stroke.set {align}` and `text.setRangeStyle {strokeOptions: {align}}`; saved natively, drawn around the glyphs on the canvas and in PDF, EPS and SVG (live text, stroke on the glyph outlines); visual bounds grow with it (#2294) |
 
 Character Styles menu New/Redefine and footer New capture the first selected character of a nonempty Type selection, including exact style-run and UTF-8 boundaries; New adds a definition without applying it. New/Redefine commands accept optional `end` for range capture. Start-only command affinity, existing UI caret/object behavior and paragraph capture at `start` remain unchanged. Pointer regressions assert captured definitions, linked-text updates and local overrides, complete-document Undo/Redo and saved state, with whole-object, collapsed-caret and range-Apply controls. Capture closes prior typing while preserving the Type selection. Live text and Select All regressions exercise menu New/Redefine and footer New, asserting that further typing retains the captured definition and that typing, capture and further typing have separate Undo/Redo steps. Focused engine and egui input tests pass for boundary capture, all three live-typing capture routes and the existing compatibility controls. Full workspace CI passes.
 
@@ -58,6 +59,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | Align Stroke on live type: the characters' stroke goes inside or outside the glyphs without creating outlines, for every run or a range; kept in the native file and in canvas, PDF, EPS and SVG output (#2294); beyond Illustrator, scores and hours unchanged |
 | 2026-10-14 | minor | Cmd+Shift+C (Align center) works on Windows and Linux too, where egui reported it as a copy (#1940); scores and hours unchanged |
 | 2026-10-14 | minor | Cmd+Shift+C (Align center) works on Windows and Linux too, where egui reported it as a copy; a double-click on area type's bottom middle handle turns on Auto Size (#1940); scores and hours unchanged |
 | 2026-10-14 | minor | MCP `add_text` exposes the existing `vertical` option for point, area and path type; horizontal remains the default; scores and hours unchanged. |

@@ -83,6 +83,38 @@ fn dataset_next_and_prev_wrap_around() {
 }
 
 #[test]
+fn applying_a_dataset_reports_the_area_type_it_overflows() {
+    let mut s = session();
+    let area = |s: &mut Session, y: u32, content: &str| {
+        let r = s.execute("text.create", &json!({"x": 10, "y": y, "text": content, "size": 12, "area": {"width": 120, "height": 40}})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let long = "word ".repeat(60);
+    let a = area(&mut s, 10, "x");
+    let p = text(&mut s, "x");
+    // Area type that already overflows, bound to no variable, isn't named.
+    area(&mut s, 200, &long);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0, p.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [a.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Short", "values": {"Name": "Ann", "Title": "Ann"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Long", "values": {"Name": long, "Title": long}})).unwrap();
+
+    // The area type is named once though two variables rewrote it; the point type is never named.
+    let v = s.execute("dataset.select", &json!({"name": "Long"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), &v["overflow"]), (Some(3), &json!([a.0])), "{v}");
+    let v = s.execute("dataset.select", &json!({"name": "Short"})).unwrap();
+    assert!(v.get("overflow").is_none(), "{v}");
+    let v = s.execute("dataset.next", &json!({})).unwrap();
+    assert_eq!((&v["name"], &v["overflow"]), (&json!("Long"), &json!([a.0])), "{v}");
+    let v = s.execute("dataset.prev", &json!({})).unwrap();
+    assert!(v.get("overflow").is_none(), "{v}");
+    let v = s.execute("dataset.prev", &json!({})).unwrap();
+    assert_eq!((&v["name"], &v["overflow"]), (&json!("Long"), &json!([a.0])), "{v}");
+}
+
+#[test]
 fn mismatched_and_missing_bindings_are_skipped_and_counted() {
     let mut s = session();
     let t = text(&mut s, "x");
@@ -894,6 +926,26 @@ fn datasets_csv_keeps_line_breaks_in_quoted_cells() {
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].values.get("Name"), Some(&vectorcraft_doc::DataValue::Text(value.into())));
     assert!(s.execute("dataset.import", &json!({"csv": "name,Name\nX,\"open"})).is_err(), "unclosed quote");
+}
+
+/// A quoted text cell keeps its leading and trailing spaces, so a padded value comes back from
+/// the exported CSV as it went out; an unquoted cell, and spaces after a closing quote, are trimmed.
+#[test]
+fn datasets_csv_keeps_spaces_in_quoted_cells() {
+    let mut s = session();
+    let t = text(&mut s, "One");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "  padded "}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "name,Name\nB,  typed  \nC,\" quoted \"  \n"})).unwrap();
+    let value = |name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
+    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
+    assert_eq!(value("A"), text_value("  padded "));
+    assert_eq!(value("B"), text_value("typed"));
+    assert_eq!(value("C"), text_value(" quoted "));
 }
 
 /// Import / export datasets as CSV: header `name` then variables; round-trip keeps values.

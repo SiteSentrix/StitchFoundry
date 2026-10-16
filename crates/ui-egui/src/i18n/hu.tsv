@@ -144,7 +144,7 @@
 	[Press Quality]	[Nyomdai minőség]
 	[Smallest File Size]	[Legkisebb fájlméret]
 	[Unnamed]	[Névtelen]
-	[VectorCraft Default]	[VectorCraft alapértelmezés]
+	[StitchFoundry Default]	[StitchFoundry alapértelmezés]
 	A file dialog is open: choose there first	Egy fájlválasztó ablak nyitva van: előbb ott válassz
 	A File…	Fájlba…
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Kisebb értéknél az útvonal szorosan követi a vonást, nagyobbnál kevesebb pont és simább görbék keletkeznek.
@@ -155,7 +155,7 @@
 	A5	A5
 	A6	A6
 	About	Névjegy
-	About VectorCraft	A VectorCraft névjegye
+	About StitchFoundry	A StitchFoundry névjegye
 	above	fölötte
 	Above Text	Szöveg fölött
 	Absolute	Abszolút
@@ -282,7 +282,7 @@
 	Appearance of Black	A fekete megjelenése
 	Appearance panel	Megjelenés panel
 	Appearance Panel	Megjelenés panel
-	Applies the next time VectorCraft starts.	A VectorCraft következő indításakor lép életbe.
+	Applies the next time StitchFoundry starts.	A StitchFoundry következő indításakor lép életbe.
 	Applies when the linked file is relinked or updated.	A csatolt fájl újracsatolásakor vagy frissítésekor érvényes.
 	Apply	Alkalmaz
 	Apply Brush	Ecset alkalmazása
@@ -763,6 +763,7 @@
 	Convert to RGB	Átalakítás RGB-re
 	Convert to Shape	Átalakítás alakzattá
 	Convert to sRGB	Átalakítás sRGB-re
+	Convert to Straight Lines	Átalakítás egyenes vonalakká
 	Convert:	Átalakítás:
 	Cool	Hideg
 	Copied the CSS of {rules} object(s)	CSS másolva, objektumok: {rules}
@@ -787,6 +788,7 @@
 	Copyright Symbol	Szerzői jogi jel
 	Copyrighted	Szerzői jogvédett
 	Corner	Sarok
+	Corner Point Angle Threshold:	Sarokpontok szögküszöbe:
 	Corner Radius	Sarokkerekítés sugara
 	Corner Radius:	Sarokkerekítés sugara:
 	Corner:	Sarok:
@@ -882,6 +884,7 @@
 	Decimal:	Tizedesjegyek:
 	Decorative	Díszítő
 	Decrease Font Size	Betűméret csökkentése
+	Decrease Font Size by Five Steps	Betűméret csökkentése öt lépéssel
 	Default	Alapértelmezett
 	Default Actions	Alapértelmezett műveletek
 	Default Figure	Alapértelmezett számjegyek
@@ -961,7 +964,7 @@
 	Diamond (open)	Rombusz (nyitott)
 	Difference	Különbség
 	Differences from [Default]:	Eltérések az [Alapértelmezett] beállítástól:
-	Differences from VectorCraft Default:	Eltérések a VectorCraft alapértelmezésétől:
+	Differences from StitchFoundry Default:	Eltérések a StitchFoundry alapértelmezésétől:
 	Differences from {preset}:	Eltérések ettől: {preset}:
 	Diffuse Glow	Szórt ragyogás
 	Diffuse Glow…	Szórt ragyogás…
@@ -1251,6 +1254,32 @@
 	Export All…	Összes exportálása…
 	Export and Clipboard Transparency Flattener Settings	Átlátszóság lapítása exportáláskor és vágólapra másoláskor
 	Export Artboard	Rajztábla exportálása
+	A File per Object	Objektumonként egy fájl
+	Example: {name}	Példa: {name}
+	Export Preset:	Exportálási előbeállítás:
+	Folders:	Mappák:
+	Insert	Beszúrás
+	Nothing is selected. Select the art to export, then open this tab again.	Nincs kijelölés. Jelölje ki az exportálandó grafikát, majd nyissa meg újra ezt a lapot.
+	One File of the Selection	Egy fájl a kijelölésből
+	Start at:	Kezdőérték:
+	{n} objects selected	{n} objektum kijelölve
+	Delete Export Preset	Exportálási előbeállítás törlése
+	Export Presets	Exportálási előbeállítások
+	Save Export Preset	Exportálási előbeállítás mentése
+	Export Layer	Réteg exportálása
+	Export Selection	Kijelölés exportálása
+	All in One Folder	Mind egy mappába
+	By Size or Row	Méret vagy sor szerint
+	By Format	Formátum szerint
+	By Artboard or Item	Rajztábla vagy elem szerint
+	By Item, Then Format	Elem, majd formátum szerint
+	Document Name	Dokumentum neve
+	Artboard or Item Name	Rajztábla vagy elem neve
+	Number (####)	Szám (####)
+	Date (YYYYMMDD)	Dátum (ÉÉÉÉHHNN)
+	Date (YYYY-MM-DD)	Dátum (ÉÉÉÉ-HH-NN)
+	Time (hhmmss)	Idő (óóppmm)
+	PDF Print	Nyomdai PDF
 	Export As	Exportálás másként
 	Export As PNG…	Exportálás PNG-ként…
 	Export As SVG…	Exportálás SVG-ként…
@@ -1328,6 +1357,7 @@
 	Fill Color	Kitöltőszín
 	Fill new strokes	Új vonások kitöltése
 	Keep selected	Kijelölés megtartása
+	Merge only with selection	Összeolvasztás csak a kijelöléssel
 	Fill New Type Objects With Placeholder Text	Új szövegobjektumok kitöltése helykitöltő szöveggel
 	Fill Rule	Kitöltési szabály
 	Fill with Placeholder Text	Kitöltés helykitöltő szöveggel
@@ -1615,7 +1645,7 @@
 	Hide Thumbnail	Bélyegkép elrejtése
 	Hide Thumbnails	Bélyegképek elrejtése
 	Hide Transparency Grid	Átlátszósági rács elrejtése
-	Hide VectorCraft	VectorCraft elrejtése
+	Hide StitchFoundry	StitchFoundry elrejtése
 	High	Magas
 	High (300 ppi)	Magas (300 ppi)
 	High Contrast	Erős kontraszt
@@ -1662,6 +1692,14 @@
 	Hyphenate	Elválasztás
 	Hyphenation	Elválasztás
 	Hyphenation…	Elválasztás…
+	Words Longer Than:	Ennél hosszabb szavak:
+	After First:	Az első után:
+	Before Last:	Az utolsó előtt:
+	Hyphen Limit:	Kötőjelek korlátja:
+	Hyphenation Zone:	Elválasztási zóna:
+	letters	betű
+	hyphens	kötőjel
+	Hyphenate Capitalized Words	Nagybetűs szavak elválasztása
 	ICC Profile	ICC-profil
 	ICF Bottom/Left	ICF alja/bal oldala
 	ICF Top/Right	ICF teteje/jobb oldala
@@ -1714,6 +1752,7 @@
 	Include Swatches for Tints	Tónusok színmintáinak felvétele
 	Include tagged source profiles	Címkézett forrásprofilok beágyazása
 	Increase Font Size	Betűméret növelése
+	Increase Font Size by Five Steps	Betűméret növelése öt lépéssel
 	Inflate…	Felfújás…
 	Info	Infó
 	Ink	Festék
@@ -1781,7 +1820,7 @@
 	Keep this row's colors (exclude)	A sor színeinek megtartása (kizárás)
 	Keep visible surfaces only when expanding	Kibontáskor csak a látható felületek megtartása
 	Keep:	Megtartás:
-	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	Szerkeszthető marad a dokumentum: a VectorCraft veszteség nélkül nyitja meg újra a PDF-et. Azokhoz a fájlokhoz, amelyeket még szerkesztesz.
+	Keeps the document editable: StitchFoundry reopens the PDF with nothing lost. For files you'll edit again.	Szerkeszthető marad a dokumentum: a StitchFoundry veszteség nélkül nyitja meg újra a PDF-et. Azokhoz a fájlokhoz, amelyeket még szerkesztesz.
 	Kerning (0 = Auto)	Alávágás (0 = automatikus)
 	Key Color:	Kulcsszín:
 	Keyboard Increment	Billentyűzetes lépésköz
@@ -2401,7 +2440,7 @@
 	Open Swatch Library	Színminta-könyvtár megnyitása
 	Open the URL in the web browser	URL megnyitása a böngészőben
 	Opened with {} note(s): {}	Megnyitva, megjegyzések: {}. {}
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Megnyitáskor kimaradt, amit a VectorCraft még nem tud beolvasni ({what}), ezért a fájl felülírásával ez végleg elvész. A megtartásához mentsd más néven.
+	Opening it left out what StitchFoundry can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Megnyitáskor kimaradt, amit a StitchFoundry még nem tud beolvasni ({what}), ezért a fájl felülírásával ez végleg elvész. A megtartásához mentsd más néven.
 	Open…	Megnyitás…
 	Optical Margin Alignment	Optikai margóigazítás
 	Optimize for fast web view	Optimalizálás gyors webes megtekintéshez
@@ -2429,6 +2468,7 @@
 	Outer Corner Tile	Külső sarokcsempe
 	Outer Glow…	Külső ragyogás…
 	Outline	Vázlat
+	Outline Object	Objektum útvonallá alakítása
 	Outline Others	Többi vázlatnézetben
 	Outline Stroke	Körvonal útvonallá alakítása
 	Outline Text	Szöveg útvonallá alakítása
@@ -2711,7 +2751,7 @@
 	Quarter Space	Negyedkvirt-szóköz
 	Quick Actions	Gyorsműveletek
 	Quickly start a new file	Új fájl gyors létrehozása
-	Quit VectorCraft	Kilépés a VectorCraftból
+	Quit StitchFoundry	Kilépés a StitchFoundryból
 	Radar Graph Tool	Sugárdiagram
 	Radial	Körkörös
 	Radial Blur	Körkörös elmosás
@@ -2903,6 +2943,7 @@
 	Reset Envelope Shape	Burkoló alakjának visszaállítása
 	Reset Essentials	Essentials visszaállítása
 	Reset Essentials Classic	Essentials Classic visszaállítása
+	Reset Horizontal Scale	Vízszintes méretezés visszaállítása
 	Reset Keyboard Shortcuts	Billentyűparancsok visszaállítása
 	Reset Layout	Layout visszaállítása
 	Reset OpenType Features	OpenType-funkciók visszaállítása
@@ -2912,6 +2953,7 @@
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
 	Reset Profiles	Profilok visszaállítása
 	Reset Rotate View	Nézetforgatás visszaállítása
+	Rotate View to Selection	Nézet elforgatása a kijelöléshez
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
 	Reset to default	Alapérték visszaállítása
 	Reset to Default	Alapérték visszaállítása
@@ -3060,6 +3102,7 @@
 	Save selected colors as swatches	Kijelölt színek mentése színmintaként
 	Save Selection	Kijelölés mentése
 	Save Selection…	Kijelölés mentése…
+	Update Selection	Kijelölés frissítése
 	Save Swatch Library	Színminta-könyvtár mentése
 	Save Swatch Library…	Színminta-könyvtár mentése…
 	Save the current layout under this name	Az aktuális elrendezés mentése ezen a néven
@@ -3337,6 +3380,7 @@
 	Show Modified	Módosultak megjelenítése
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
+	Show Original Path	Eredeti útvonal megjelenítése
 	Color Panel Options	Szín panel beállításai
 	Show Package	Csomag megjelenítése
 	Show Panel	Panel megjelenítése
@@ -3908,15 +3952,15 @@
 	Vector Halftone	Vektoros rácspontos raszter
 	Vector Halftone…	Vektoros rácspontos raszter…
 	Vector illustration — fast, open, scriptable.	Vektoros illusztráció – gyors, nyílt, szkriptelhető.
-	VectorCraft copies the fonts to {folder}.	A VectorCraft ide másolja a betűtípusokat: {folder}.
-	VectorCraft Default	VectorCraft alapértelmezés
-	VectorCraft Defaults	VectorCraft-alapértékek
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	A VectorCraft legutóbb nem szabályosan lépett ki. Ezekben a dokumentumokban mentetlen módosítások voltak:
-	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-dokumentumok: egyetlen zárolt objektum, amely a fájl változásakor frissül.
-	VectorCraft Generic CMYK (SWOP-like)	VectorCraft általános CMYK (SWOP-szerű)
-	VectorCraft Help…	VectorCraft súgó…
-	VectorCraft on GitHub	A VectorCraft a GitHubon
-	VectorCraft Swatches (.vcswatches)	VectorCraft-színminták (.vcswatches)
+	StitchFoundry copies the fonts to {folder}.	A StitchFoundry ide másolja a betűtípusokat: {folder}.
+	StitchFoundry Default	StitchFoundry alapértelmezés
+	StitchFoundry Defaults	StitchFoundry-alapértékek
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	A StitchFoundry legutóbb nem szabályosan lépett ki. Ezekben a dokumentumokban mentetlen módosítások voltak:
+	StitchFoundry documents: one locked object, updated when the file changes.	StitchFoundry-dokumentumok: egyetlen zárolt objektum, amely a fájl változásakor frissül.
+	StitchFoundry Generic CMYK (SWOP-like)	StitchFoundry általános CMYK (SWOP-szerű)
+	StitchFoundry Help…	StitchFoundry súgó…
+	StitchFoundry on GitHub	A StitchFoundry a GitHubon
+	StitchFoundry Swatches (.vcswatches)	StitchFoundry-színminták (.vcswatches)
 	Vectors	Vektorok
 	Version	Verzió
 	Version {version} — open-source vector illustration in pure Rust.	Verzió: {version} – nyílt forráskódú vektoros illusztráció, tisztán Rustban.
@@ -3982,7 +4026,7 @@
 	WebP	WebP
 	Weight	Vastagság
 	Weight:	Vastagság:
-	Welcome to VectorCraft	Üdvözöl a VectorCraft
+	Welcome to StitchFoundry	Üdvözöl a StitchFoundry
 	When pasting text	Szöveg beillesztésekor
 	White	Fehér
 	White Intensity	Fehér erőssége
@@ -4163,7 +4207,7 @@ imageTrace	Outline	Körvonal
 @msg	action is required	az action kötelező
 @msg	add a format to export	adj meg egy exportálási formátumot
 @msg	already editing a pattern	már folyik egy mintázat szerkesztése
-@msg	an image VectorCraft can't read was left out	kimaradt egy kép, amelyet a VectorCraft nem tud olvasni
+@msg	an image StitchFoundry can't read was left out	kimaradt egy kép, amelyet a StitchFoundry nem tud olvasni
 @msg	an image whose data is cut short was left out	kimaradt egy csonka adatú kép
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	a túl alacsony keretben lévő területszöveg, amelybe a megjelenítő betűtípus egy sora sem fér el, magasabb keretet kapott ({_1}): különben nem látszana
@@ -4203,12 +4247,14 @@ imageTrace	Outline	Körvonal
 @msg	can't encode the document: {0}	a dokumentum nem kódolható: {0}
 @msg	can't parse shortcut `{c}`	a billentyűparancs nem értelmezhető: `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	a billentyűparancs nem értelmezhető: `{s}` (ehhez: `{k}`)
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	ez a verzió nem menthető: {0}; a VectorCraft ezeket a verziókat írja: {MIN_VERSION}–{VERSION}
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	ez a verzió nem menthető: {0}; a StitchFoundry ezeket a verziókat írja: {MIN_VERSION}–{VERSION}
 @msg	can't write .{ext} images	ilyen kép nem írható: .{ext}
 @msg	cannot distort a zero-size bounding box	nulla méretű befoglaló keret nem torzítható
 @msg	cannot read PDF: {0}	a PDF nem olvasható: {0}
 @msg	cannot split an open path at its end point	nyitott útvonal a végpontjánál nem vágható ketté
 @msg	check an asset to export	jelölj be egy exportálandó elemet
+@msg	check a layer to export	jelöljön be egy exportálandó réteget
+@msg	select the art to export first	először jelölje ki az exportálandó grafikát
 @msg	choice must be "merge" or "add", not `{choice}`	a choice értéke "merge" vagy "add" lehet, ez nem az: `{choice}`
 @msg	choose a direction to divide in	válaszd ki a felosztás irányát
 @msg	choose a folder to export to	válaszd ki az exportálás célmappáját
@@ -4271,7 +4317,7 @@ imageTrace	Outline	Körvonal
 @msg	Exported {what}	Exportálva: {what}
 @msg	Exported {what} with {_1} note(s): {first}	Exportálva: {what}; megjegyzések: {_1}, az első: {first}
 @msg	Exporting {_1}	Exportálás: {_1}
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	a fájl verziója újabb, mint amit ez a VectorCraft támogat: {0} (támogatott: {VERSION})
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	a fájl verziója újabb, mint amit ez a StitchFoundry támogat: {0} (támogatott: {VERSION})
 @msg	Flatten Transparency: select objects to flatten	Átlátszóság lapítása: jelöld ki a lapítandó objektumokat
 @msg	Flatten Transparency: {e}	Átlátszóság lapítása: {e}
 @msg	freeform line {i} must be an array of point indices	a szabad formájú vonal pontindexek tömbje kell legyen: {i}
@@ -4305,7 +4351,7 @@ imageTrace	Outline	Körvonal
 @msg	invalid parameters for `{cmd}`: {msg}	érvénytelen paraméterek (`{cmd}`): {msg}
 @msg	invalid PDF setting: {0}	érvénytelen PDF-beállítás: {0}
 @msg	invalid restored panel group	érvénytelen visszaállított panelcsoport
-@msg	is not an image VectorCraft reads	nem olyan kép, amelyet a VectorCraft olvas
+@msg	is not an image StitchFoundry reads	nem olyan kép, amelyet a StitchFoundry olvas
 @msg	it ends inside a layer	egy rétegen belül ér véget
 @msg	it has art outside its layers	a rétegein kívül is van grafikája
 @msg	it has more than one artboard	egynél több rajztáblája van
@@ -4315,9 +4361,9 @@ imageTrace	Outline	Körvonal
 @msg	it has too many text objects	túl sok szövegobjektumot tartalmaz
 @msg	it has too many values in a row	túl sok érték áll benne egymás után
 @msg	it has too much text	túl sok szöveget tartalmaz
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	olyat tartalmaz, amelyet a VectorCraft még nem olvas be belőle: {_1}
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	olyan elemet használ, amelyet a VectorCraft PostScript-olvasója nem ismer: `{at}`
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	olyan elemet használ, amelyet a VectorCraft PostScript-olvasója nem ismer: `{at}` (itt: {procs})
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	olyat tartalmaz, amelyet a StitchFoundry még nem olvas be belőle: {_1}
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	olyan elemet használ, amelyet a StitchFoundry PostScript-olvasója nem ismer: `{at}`
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	olyan elemet használ, amelyet a StitchFoundry PostScript-olvasója nem ismer: `{at}` (itt: {procs})
 @msg	its editing data doesn't say where its art is	a szerkesztési adataiból nem derül ki, hol van a grafikája
 @msg	its editing data doesn't say where its artboard is	a szerkesztési adataiból nem derül ki, hol van a rajztáblája
 @msg	its editing data has no layers	a szerkesztési adataiban nincsenek rétegek
@@ -4337,7 +4383,7 @@ imageTrace	Outline	Körvonal
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Élő festés egyesítése: jelölj ki egy élőfestés-csoportot és a hozzáadandó útvonalakat
 @msg	Live Paint: select paths or compound paths	Élő festés: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	Live Paint: these paths are too degenerate to paint	Élő festés: ezek az útvonalak túlságosan elfajultak a festéshez
-@msg	Loading VectorCraft…	A VectorCraft betöltése…
+@msg	Loading StitchFoundry…	A StitchFoundry betöltése…
 @msg	Make Guides: select paths	Segédvonalak létrehozása: jelölj ki útvonalakat
 @msg	missing `folder`	hiányzik: `folder`
 @msg	missing `id` (see plugin.list)	hiányzik: `id` (lásd: plugin.list)
@@ -4412,6 +4458,7 @@ imageTrace	Outline	Körvonal
 @msg	no saved presets	nincs mentett előbeállítás
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	nincs ilyen nevű mentett nyomtatási előbeállítás: `{name}` (védett: {DEFAULT_PRESET}; új előbeállítást indíthatsz belőle)
 @msg	no saved profiles	nincs mentett profil
+@msg	no saved selection recalled	nincs visszahívott mentett kijelölés
 @msg	no saved selections	nincs mentett kijelölés
 @msg	No saved selections (Select → Save Selection…)	Nincs mentett kijelölés (Kijelölés → Kijelölés mentése…)
 @msg	no saved themes	nincs mentett téma
@@ -4450,8 +4497,8 @@ imageTrace	Outline	Körvonal
 @msg	not a PSD file	nem PSD-fájl
 @msg	not a stored central record	nem tárolt központi rekord
 @msg	not a valid plug-in module: {0}	nem érvényes bővítménymodul: {0}
-@msg	not a VectorCraft file: {0}	nem VectorCraft-fájl: {0}
-@msg	not a VectorCraft shortcut set (missing `overrides`)	nem VectorCraft-billentyűparancskészlet (hiányzik: `overrides`)
+@msg	not a StitchFoundry file: {0}	nem StitchFoundry-fájl: {0}
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	nem StitchFoundry-billentyűparancskészlet (hiányzik: `overrides`)
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
@@ -4611,9 +4658,9 @@ imageTrace	Outline	Körvonal
 @msg	the file was read up to an error ({why}): what follows it was left out	a fájl beolvasása egy hibáig jutott ({why}): az utána következő rész kimaradt
 @msg	the file's preview header points outside the file	a fájl előnézeti fejléce a fájlon kívülre mutat
 @msg	the files come to more than 1 GB: add fewer at a time	a fájlok együtt nagyobbak 1 GB-nál: egyszerre kevesebbet adj hozzá
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Az először kipróbált grafikus processzor nem tudta megjeleníteni az ablakot, ezért a VectorCraft újraindult ezen: {summary}
-@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	A VectorCraft legutóbbi indítása még az ablak megjelenése előtt véget ért ezen: {name}, ezért most ezen indult el: {summary}. Ha újra ki szeretnéd próbálni ezt a grafikus processzort, módosítsd a Beállítások › Teljesítmény › Grafikus processzor értékét, vagy indítsd a WGPU_BACKEND változó beállításával
-@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	A VectorCraft legutóbbi indítása a grafikus processzorok listázása közben ért véget, ezért most csak OpenGL-lel indult el ezen: {summary}. Ha újra ki szeretnéd próbálni a többi grafikus felületet, módosítsd a Beállítások › Teljesítmény › Grafikus processzor értékét, vagy indítsd a WGPU_BACKEND változó beállításával
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Az először kipróbált grafikus processzor nem tudta megjeleníteni az ablakot, ezért a StitchFoundry újraindult ezen: {summary}
+@msg	The last start of StitchFoundry ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	A StitchFoundry legutóbbi indítása még az ablak megjelenése előtt véget ért ezen: {name}, ezért most ezen indult el: {summary}. Ha újra ki szeretnéd próbálni ezt a grafikus processzort, módosítsd a Beállítások › Teljesítmény › Grafikus processzor értékét, vagy indítsd a WGPU_BACKEND változó beállításával
+@msg	The last start of StitchFoundry ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	A StitchFoundry legutóbbi indítása a grafikus processzorok listázása közben ért véget, ezért most csak OpenGL-lel indult el ezen: {summary}. Ha újra ki szeretnéd próbálni a többi grafikus felületet, módosítsd a Beállítások › Teljesítmény › Grafikus processzor értékét, vagy indítsd a WGPU_BACKEND változó beállításával
 @msg	The graphics were lost and couldn't be restarted.	A grafikus megjelenítés megszakadt, és nem sikerült újraindítani.
 @msg	The graphics were lost and have been restarted	A grafikus megjelenítés megszakadt, és újraindult
 @msg	the guide is on a hidden or locked layer	a segédvonal rejtett vagy zárolt rétegen van
@@ -4697,10 +4744,10 @@ imageTrace	Outline	Körvonal
 @msg	unsupported: {0}	nem támogatott: {0}
 @msg	Updated {_1} image(s)	Frissített képek: {_1}
 @msg	Updated {_1} linked file(s) changed on disk	Frissített, a lemezen módosult csatolt fájlok: {_1}
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	a VectorCraft nem keres más alkalmazások és a rendszer mappáiban: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	a VectorCraft nem keres a Users alatti Shared és Public mappában: {path}
-@msg	VectorCraft failed to start: {e}	A VectorCraft nem tudott elindulni: {e}
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	a VectorCraft Fonts mappája itt nincs beállítva: az asztali alkalmazás és a vectorcraft-cli állítja be
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	a StitchFoundry nem keres más alkalmazások és a rendszer mappáiban: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	a StitchFoundry nem keres a Users alatti Shared és Public mappában: {path}
+@msg	StitchFoundry failed to start: {e}	A StitchFoundry nem tudott elindulni: {e}
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	a StitchFoundry Fonts mappája itt nincs beállítva: az asztali alkalmazás és a vectorcraft-cli állítja be
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	ilyen verziójú fájl nem tömöríthető: {0}; tömörített fájlt csak ez a verzió és az újabbak nyitnak meg: {COMPRESSED_SINCE}
 @msg	width and height are at least 1 pixel	a szélesség és a magasság legalább 1 pixel
 @msg	workspace name can't be empty	a munkaterület neve nem lehet üres
@@ -4743,7 +4790,7 @@ imageTrace	Outline	Körvonal
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	az eszköz nincs többeszközös eszköztár-csoportban: {tool}
-@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	a tömörített fájl kicsomagolva nagyobb lenne, mint amennyit a VectorCraft beolvas ({_1} MB dokumentum, képenként {_2} MB)
+@msg	the compressed file unpacks to more than StitchFoundry reads ({_1} MB of document, {_2} MB per image)	a tömörített fájl kicsomagolva nagyobb lenne, mint amennyit a StitchFoundry beolvas ({_1} MB dokumentum, képenként {_2} MB)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	a dokumentum túl nagy a tömörített mentéshez ({0}): mentsd a Tömörítés használata beállítás kikapcsolásával
 @msg	the file stopped being read (please report this bug)	a fájl beolvasása megszakadt (kérjük, jelentsd ezt a hibát)
 	Concentric Dividers:	Koncentrikus osztók:
@@ -4890,3 +4937,23 @@ imageTrace	Outline	Körvonal
 @msg	choose a source folder	válasszon forrásmappát
 @msg	open a document with data sets	nyisson meg egy adatkészleteket tartalmazó dokumentumot
 @msg	the action has no steps	a műveletnek nincsenek lépései
+
+# User Interface › Accent Color
+	Accent Color	Kiemelőszín
+	Amber	Borostyán
+	Coral	Korall
+	Violet	Ibolya
+	Sketch	Vázlat
+	Halftone Pattern…	Féltónus minta…
+	Halftone Pattern	Féltónus minta
+	Pattern Type	Mintatípus
+	Dot	Pont
+# User Interface › Color Scheme
+	Color Scheme	Színséma
+	Modern	Modern
+
+# Symbol Options › Export Type
+	Export Type:	Exportálás típusa:
+	Movie Clip	Mozgóklip
+@msg	name is empty	a név üres
+@msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum

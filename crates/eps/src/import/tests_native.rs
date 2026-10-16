@@ -628,6 +628,24 @@ fn a_shown_text_object_on_the_page_that_the_page_doesnt_draw_is_left_out() {
     assert!(r.warnings.iter().any(|w| w.contains("doesn't draw")), "{:?}", r.warnings);
 }
 
+/// A text object on a layer that shows and doesn't print, which the page doesn't draw, isn't taken
+/// out: it comes in from the text document, on its layer.
+#[test]
+fn a_shown_text_object_on_a_layer_that_doesnt_print_stays_on_its_layer() {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    // The layer's options with its fourth flag, printing, off.
+    let tips = layer("Tips", true, &text_object(0)).replace("1 1 1 1 0 0 1 0 79", "1 1 1 0 0 0 1 0 79");
+    let art = native_with_text(&(layer("Art", true, &square(10, 10)) + &tips), &doc);
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Art", "Tips"], "{w:?}");
+    let tips = &d.layers[1];
+    assert!(tips.visible && matches!(tips.kind, NodeKind::Layer { printable: false, .. }));
+    let texts: Vec<String> = text_of(tips).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["Hi there"], "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
+}
+
 #[test]
 fn pieces_of_two_lines_the_page_draws_alternately_go_each_to_its_own_text() {
     // "Hello" is drawn as "He" and "llo", with "abcd" ("ab", "cd") drawn between them.

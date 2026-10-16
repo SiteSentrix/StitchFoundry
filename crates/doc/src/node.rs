@@ -1228,6 +1228,13 @@ impl Node {
                 let o = self.appearance.outset() + symbols.map_or(0.0, |s| s.brush_pad(symbol));
                 self.projected(Some(b)).map(|b| b.inflate(o, o))
             }
+            NodeKind::Text(t) => {
+                // The characters' strokes paint around the glyphs, scaled with the type.
+                let k = Scaling::factor(t.xf).unwrap_or(1.0);
+                let chars = t.runs.iter().map(|r| r.style.stroke_outset()).fold(0.0, f64::max) * k;
+                let o = self.appearance.outset().max(chars);
+                self.geometric(symbols).map(|b| b.inflate(o, o))
+            }
             _ => {
                 let o = self.appearance.outset();
                 self.geometric(symbols).map(|b| b.inflate(o, o))
@@ -2349,6 +2356,25 @@ mod tests {
         let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
         assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+    }
+
+    /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
+    /// weight centred, the whole weight outside, nothing inside; scaled with the type.
+    #[test]
+    fn type_visual_bounds_grow_with_the_character_stroke() {
+        use crate::appearance::StrokeAlign;
+        use crate::text::{CharStyle, TextObject};
+        let style = CharStyle { stroke: vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), stroke_width: 4.0, ..Default::default() };
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(0.0, 0.0), "Ab", style);
+        t.xf = Affine::scale(2.0) * t.xf;
+        let node = |t: &TextObject| Node::new(NodeId(1), NodeKind::Text(Box::new(t.clone())));
+        let g = node(&t).geometric_bounds().unwrap();
+        for (align, grow) in [(StrokeAlign::Center, 4.0), (StrokeAlign::Outside, 8.0), (StrokeAlign::Inside, 0.0)] {
+            t.runs[0].style.stroke_align = align;
+            assert_eq!(node(&t).visual_bounds(), Some(g.inflate(grow, grow)), "{align:?}");
+        }
+        t.runs[0].style.stroke = vectorcraft_color::Paint::None;
+        assert_eq!(node(&t).visual_bounds(), Some(g), "no stroke, no growth");
     }
 
     /// A group holding a path, a compound, an image and a nested group, as a file writes it.

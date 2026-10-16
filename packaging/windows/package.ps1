@@ -5,7 +5,7 @@
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
     stitchfoundry-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
-    stitchfoundry-<version>-windows-<arch>-portable.zip   stitchfoundry.exe + stitchfoundry-cli.exe
+    stitchfoundry-<version>-windows-<arch>-portable.zip   stitchfoundry.exe + stitchfoundry-cli.exe + portable.txt
 
   The binaries link the C runtime statically (+crt-static), so neither the MSI nor the portable
   zip needs the Visual C++ redistributable. Signing is delegated to sign.ps1 (skipped with a
@@ -165,6 +165,9 @@ Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
 Copy-Item -Recurse (Join-Path $Docs '*') $Portable
+# portable.txt beside stitchfoundry.exe switches on portable mode: settings, libraries, recovery
+# files and logs go to StitchFoundryData\ next to the exe instead of %APPDATA% (see profile.rs).
+Copy-Item (Join-Path $PSScriptRoot 'portable.txt') $Portable
 $Zip = Join-Path $Dist "stitchfoundry-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip
