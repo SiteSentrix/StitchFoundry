@@ -15,6 +15,7 @@ pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
 mod command;
+pub mod compare;
 pub mod confirm;
 pub mod corners;
 mod design_prompt;
@@ -365,6 +366,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     life_size::show(app, ctx);
     my_machine::show(app, ctx);
     font_library::show(app, ctx);
+    compare::show(app, ctx);
     crate::guide::show(app, ctx);
     settle(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and

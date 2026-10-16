@@ -239,6 +239,7 @@ fn embroidery_menu() -> Vec<Item> {
         sub("Export Machine File", machine_file_items()),
         cp("Lettering Kiosk", "embroidery.kiosk", json!({ "on": true })),
         c("Get Embroidery Fonts…", "ui.fontLibrary"),
+        c("Compare Designs…", "ui.compareDesigns"),
         Sep,
         cp("Embroidery", "window.panel", json!({ "panel": "embroidery" })),
         cp("Stitch Sequence", "window.panel", json!({ "panel": "stitchSequence" })),
@@ -647,6 +648,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Export Quilting Lines…",
         "",
         "{format?: plt|dxf|svg (plt), path?} the quilting lines (quilt.export: the selected, else all) as a single-stroke file to path, else a picked file (the web downloads it) → {path}",
+    ),
+    (
+        "ui.compareDesigns",
+        "Compare Designs…",
+        "",
+        "{a?, b?: \"design\" (the design open now) or a machine file's path} opens Compare Designs: two designs side by side, a picture of each and their figures with how much the second differs (embroidery.compare) → {open, result}",
     ),
     (
         "ui.fontLibrary",
@@ -1647,6 +1654,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.calibrateLifeSize" => crate::dialogs::life_size::run(app, p),
         "ui.myMachine" => crate::dialogs::my_machine::open(app),
         "ui.fontLibrary" => crate::dialogs::font_library::open(app),
+        "ui.compareDesigns" => crate::dialogs::compare::open(app, p),
         "ui.makeDesign" => crate::guide::open(app),
         "ui.saveForMyMachine" => crate::dialogs::my_machine::save(app, p),
         "help.commandPalette" => {

@@ -26,6 +26,7 @@ pub mod embroidery_blend;
 pub mod embroidery_buttonholes;
 pub mod embroidery_charts;
 pub mod embroidery_chenille;
+pub mod embroidery_compare;
 pub mod embroidery_clipart;
 pub mod embroidery_colorways;
 pub mod embroidery_crossstitch;
@@ -315,6 +316,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_tartan::specs());
         v.extend(embroidery_crossstitch::specs());
         v.extend(embroidery_chenille::specs());
+        v.extend(embroidery_compare::specs());
         v.extend(quilting::specs());
         v.extend(embroidery_testsew::specs());
         v.extend(embroidery_sheet_setup::specs());
