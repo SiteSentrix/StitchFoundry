@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Batch Convert",
             [],
             None,
-            "{format: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap|dsb, folder?: the designs in it (as embroidery.library.scan finds them: query?, recursive?), files?: [path…] (these designs instead), dir?: the folder to write to (each design's own), replace?: bool (false: a number is added when the name is taken)} batch convert: each design read and written again in `format`, named as it was; designs already in that format are skipped and the files read are left as they are → {format, converted: [{from, to, stitches, colors}], skipped: [path], failed: [{path, error}], truncated}",
+            "{format: dst|exp|jef|pes|pec|vp3|xxx|u01|pcs|tap|dsb, folder?: the designs in it (as embroidery.library.scan finds them), query?, recursive? (as embroidery.library.scan), files?: [path…] (these designs instead), dir?: the folder to write to (each design's own), replace?: bool (false: a number is added when the name is taken)} batch convert: each design read and written again in `format`, named as it was; designs already in that format are skipped and the files read are left as they are → {format, converted: [{from, to, stitches, colors}], skipped: [path], failed: [{path, error}], truncated}",
             always,
             convert
         ),
