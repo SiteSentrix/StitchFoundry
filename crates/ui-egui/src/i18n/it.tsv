@@ -5742,3 +5742,5 @@ machine	Stop	Arresto
 @msg	open a document with data sets	apri un documento con set di dati
 @msg	the action has no steps	l'azione non ha passaggi
 	Direction	Direzione
+	Along the selected line	Lungo la linea selezionata
+	To curve the words, draw a line first, select it, then Add Words.	Per curvare le parole, disegna prima una linea, selezionala e poi scegli Aggiungi parole.

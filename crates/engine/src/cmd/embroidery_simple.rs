@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Words",
             [],
             None,
-            "{text, height?: mm the capital letters are tall (20; 5–150), color?: \"#rrggbb\" (dark blue)} words that sew: text in a clean built-in font, the given height, in the middle of the design, sewn as satin → {id, widthMm, heightMm}",
+            "{text, height?: mm the capital letters are tall (20; 5–150), color?: \"#rrggbb\" (dark blue), path?: id (a line the words follow, centred along it: a path, open or closed)} words that sew: text in a clean built-in font, the given height, in the middle of the design or along the line, sewn as satin → {id, widthMm, heightMm}",
             has_doc,
             add_words
         ),
@@ -30,6 +30,30 @@ pub fn specs() -> Vec<CommandSpec> {
             add_shape
         ),
     ]
+}
+
+/// New type in an embroidery design (one with a hoop) sews: satin from its letters' outlines, as
+/// Add Words makes it, with the properties made current for satin. The Type tools and Type on a
+/// Path make their type through here (`text.create`, `text.createInPath`); type in a document
+/// that isn't an embroidery design is left as it is.
+pub(crate) fn stitch_new_type(s: &mut Session, id: u64) -> Result<()> {
+    if s.doc()?.doc.embroidery.as_deref().is_some_and(|e| e.hoop.is_some()) {
+        s.execute("embroidery.set", &json!({ "type": "satin", "ids": [id] }))?;
+    }
+    Ok(())
+}
+
+/// `f`'s edits as one undo step (unless they are already part of an open one); undone if it fails.
+pub(crate) fn one_step<T>(s: &mut Session, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
+    let group = s.active().is_some_and(|d| d.undo_group.is_none());
+    if group {
+        s.begin_undo_group();
+    }
+    let res = f(s);
+    if group {
+        s.end_undo_group(res.is_err());
+    }
+    res
 }
 
 /// The first artboard's middle and size (points).
@@ -55,6 +79,10 @@ fn centre(s: &mut Session, id: u64, c: kurbo::Point) -> Result<()> {
 }
 
 fn add_words(s: &mut Session, p: &Value) -> Result<Value> {
+    one_step(s, |s| make_words(s, p))
+}
+
+fn make_words(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.addWords";
     let text = str_param(p, "text").map(str::trim).filter(|t| !t.is_empty()).ok_or_else(|| bad(CMD, "missing `text`: the words to sew"))?.to_string();
     if text.chars().count() > 200 {
@@ -66,9 +94,28 @@ fn add_words(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let color = str_param(p, "color").unwrap_or("#1a3e8c");
     sf_core::Rgb::from_hex(color).ok_or_else(|| bad(CMD, "`color` is \"#rrggbb\""))?;
-    let r = page(s)?;
     // capital letters are about seven tenths of the type size
     let size = height * PT_PER_MM / 0.7;
+    // along a line: type on that path, centred on it
+    if let Some(v) = p.get("path").filter(|v| !v.is_null()) {
+        let path = v.as_u64().ok_or_else(|| bad(CMD, "`path` is the id of the line the words follow"))?;
+        let line = s.doc()?.doc.node(vectorcraft_doc::NodeId(path)).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }));
+        if !line {
+            return Err(bad(CMD, "the words can follow a line or a shape's outline: select one path"));
+        }
+        let made = s.execute(
+            "text.createInPath",
+            &json!({ "path": path, "mode": "onPath", "text": text, "size": size, "color": color, "justify": "center" }),
+        )?;
+        let id = made["id"].as_u64().ok_or_else(|| bad(CMD, "the words weren't made"))?;
+        s.execute("select.set", &json!({ "ids": [id] }))?;
+        s.execute("embroidery.set", &json!({ "type": "satin" }))?;
+        s.execute("embroidery.setThread", &json!({ "color": color, "name": "Words", "ids": [id] }))?;
+        let round = |v: f64| (v * 10.0).round() / 10.0;
+        let (w, h) = sewn_size(s, id).unwrap_or_default();
+        return Ok(json!({ "id": id, "widthMm": round(w), "heightMm": round(h) }));
+    }
+    let r = page(s)?;
     let made = s.execute("text.create", &json!({ "x": r.center().x, "y": r.center().y, "text": text, "size": size, "color": color }))?;
     let id = made["id"].as_u64().ok_or_else(|| bad(CMD, "the words weren't made"))?;
     centre(s, id, r.center())?;

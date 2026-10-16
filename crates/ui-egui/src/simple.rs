@@ -27,6 +27,8 @@ pub fn active(app: &VectorcraftApp) -> bool {
 pub struct SimpleState {
     /// Add Words is open, with what has been typed and how tall (mm).
     pub words: Option<(String, f64)>,
+    /// The line selected when Add Words opened (a path), and whether the words follow it.
+    pub words_along: Option<(u64, bool)>,
     /// The shape picker is open, for appliqué or not.
     pub shapes: Option<bool>,
     /// Start Over is asking to be sure.
@@ -65,7 +67,7 @@ pub fn left_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("tool.select", json!({ "tool": "selection" })).ok();
             }
             if big(ui, tl!("Add Words…"), false).on_hover_text(tl!("A name or a few words, ready to sew")).clicked() {
-                app.simple.words = Some((String::new(), 20.0));
+                open_words(app);
             }
             if big(ui, tl!("Add a Shape…"), false).on_hover_text(tl!("A heart, a star, a flower and more, ready to sew")).clicked() {
                 app.simple.shapes = Some(false);
@@ -392,42 +394,6 @@ pub fn windows(app: &mut VectorcraftApp, ctx: &egui::Context) {
             app.simple.start_over = false;
         }
     }
-    if let Some((mut text, mut height)) = app.simple.words.clone() {
-        let mut open = true;
-        let mut action: Option<bool> = None;
-        egui::Window::new(tl!("Add Words")).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
-            ui.set_width(380.0);
-            ui.label(RichText::new(tl!("What should it say?")).size(15.0));
-            let r = ui.add(egui::TextEdit::singleline(&mut text).font(egui::FontId::proportional(18.0)).desired_width(360.0));
-            r.request_focus();
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(tl!("How tall")).size(15.0));
-                ui.add(egui::Slider::new(&mut height, 8.0..=80.0).suffix(" mm").fixed_decimals(0));
-            });
-            ui.label(RichText::new(format!("≈ {:.1} in", height / 25.4)).size(12.0));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if crate::widgets::primary_button(ui, tl!("Add")).clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
-                    action = Some(true);
-                }
-                if ui.button(tl!("Cancel")).clicked() {
-                    action = Some(false);
-                }
-            });
-        });
-        match action {
-            Some(true) if !text.trim().is_empty() => {
-                if let Err(e) = app.run("embroidery.addWords", json!({ "text": text, "height": height })) {
-                    app.status(e);
-                }
-                app.simple.words = None;
-            }
-            Some(false) => app.simple.words = None,
-            _ if !open => app.simple.words = None,
-            _ => app.simple.words = Some((text, height)),
-        }
-    }
     if let Some(applique) = app.simple.shapes {
         let mut open = true;
         let mut chosen: Option<&str> = None;
@@ -501,4 +467,68 @@ pub fn keeps(id: &str, _p: &Value) -> bool {
         "app.home",
     ];
     KEEP.contains(&id)
+}
+
+/// Opens Add Words (`ui.addWords`; simple mode's Add Words button): with one line selected (a
+/// path), the words can follow it.
+pub fn open_words(app: &mut VectorcraftApp) -> Value {
+    let line = app.session.active().and_then(|st| match st.selection.objects.as_slice() {
+        [id] => st.doc.node(*id).filter(|n| matches!(n.kind, NodeKind::Path { .. })).map(|_| id.0),
+        _ => None,
+    });
+    app.simple.words = Some((String::new(), 20.0));
+    app.simple.words_along = line.map(|id| (id, true));
+    json!({ "open": true, "along": line })
+}
+
+/// Add Words, while open (in every way of working): what to say, how tall, and with a line
+/// selected, whether the words follow it.
+pub fn words_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some((mut text, mut height)) = app.simple.words.clone() else { return };
+    let mut along = app.simple.words_along;
+    let mut open = true;
+    let mut action: Option<bool> = None;
+    egui::Window::new(tl!("Add Words")).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+        ui.set_width(380.0);
+        ui.label(RichText::new(tl!("What should it say?")).size(15.0));
+        let r = ui.add(egui::TextEdit::singleline(&mut text).font(egui::FontId::proportional(18.0)).desired_width(360.0));
+        r.request_focus();
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(tl!("How tall")).size(15.0));
+            ui.add(egui::Slider::new(&mut height, 8.0..=80.0).suffix(" mm").fixed_decimals(0));
+        });
+        ui.label(RichText::new(format!("≈ {:.1} in", height / 25.4)).size(12.0));
+        if let Some((_, follow)) = &mut along {
+            ui.add_space(4.0);
+            ui.checkbox(follow, RichText::new(tl!("Along the selected line")).size(15.0));
+        } else {
+            ui.label(RichText::new(tl!("To curve the words, draw a line first, select it, then Add Words.")).size(12.0));
+        }
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if crate::widgets::primary_button(ui, tl!("Add")).clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                action = Some(true);
+            }
+            if ui.button(tl!("Cancel")).clicked() {
+                action = Some(false);
+            }
+        });
+    });
+    app.simple.words_along = along;
+    match action {
+        Some(true) if !text.trim().is_empty() => {
+            let mut p = json!({ "text": text, "height": height });
+            if let Some((line, true)) = along {
+                p["path"] = json!(line);
+            }
+            if let Err(e) = app.run("embroidery.addWords", p) {
+                app.status(e);
+            }
+            app.simple.words = None;
+        }
+        Some(false) => app.simple.words = None,
+        _ if !open => app.simple.words = None,
+        _ => app.simple.words = Some((text, height)),
+    }
 }

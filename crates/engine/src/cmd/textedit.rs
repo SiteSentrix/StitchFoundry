@@ -523,7 +523,12 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "runs": n}))
 }
 
+/// `text.createInPath`: in an embroidery design the new type sews too, in the same undo step.
 fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
+    super::embroidery_simple::one_step(s, |s| make_in_path(s, p))
+}
+
+fn make_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.createInPath";
     let pid = id_param(p, "path").ok_or_else(|| bad(C, "missing `path` (a path object id)"))?;
     let on_path = match str_param(p, "mode").unwrap_or("area") {
@@ -582,6 +587,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([id]);
         Ok(id)
     })?;
+    super::embroidery_simple::stitch_new_type(s, id.0)?;
     Ok(super::typecmd::with_overflow(s, &[id], json!({"id": id.0})))
 }
 

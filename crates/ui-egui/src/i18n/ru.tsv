@@ -5738,3 +5738,5 @@ machine	Stop	Остановка
 @msg	open a document with data sets	откройте документ с наборами данных
 @msg	the action has no steps	в действии нет шагов
 	Direction	Направление
+	Along the selected line	Вдоль выбранной линии
+	To curve the words, draw a line first, select it, then Add Words.	Чтобы изогнуть слова, сначала нарисуйте линию, выделите её и выберите «Добавить слова».

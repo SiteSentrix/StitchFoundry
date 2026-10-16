@@ -1201,6 +1201,15 @@ designs over their maker's own wireless link are not reached directly; send to a
 
 ## Lettering
 
+**Embroidery › Add Words…** (in every way of working) asks what to say and how tall, and adds the
+words in the middle of the design, sewn as satin. With a line selected (any path: draw one with
+the Pen, Curvature or Arc tool, or use a shape's outline), **Along the selected line** makes the
+words follow it, centred along it (`embroidery.addWords {text, height?, color?, path?}`).
+
+In an embroidery design (one with a hoop), type made with the Type tools, including Type on a
+Path, sews at once as satin, in the same undo step; type in an ordinary document stays type until
+it is given a stitch type.
+
 Type objects are stitched straight from their glyph outlines, so there are no embroidery fonts
 to install, and editing the text, font or size restitches it. Small lettering becomes turning
 satin columns, with counters and stroke joins cut so each piece turns cleanly. Lettering too thick

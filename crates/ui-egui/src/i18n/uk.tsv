@@ -5722,3 +5722,5 @@ machine	Stop	Зупинка
 @msg	open a document with data sets	відкрийте документ із наборами даних
 @msg	the action has no steps	у дії немає кроків
 	Direction	Напрямок
+	Along the selected line	Уздовж вибраної лінії
+	To curve the words, draw a line first, select it, then Add Words.	Щоб вигнути слова, спочатку намалюйте лінію, виділіть її, а потім виберіть «Додати слова».

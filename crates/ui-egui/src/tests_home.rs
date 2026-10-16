@@ -332,27 +332,29 @@ fn make_a_design_guide_walks_from_words_to_saving() {
 
 /// E5 + E6: simple mode's column has Undo, Redo, Start Over and Text size; Start Over asks first;
 /// Keep Safe saves the design in My Designs and Your Design says where.
+/// The texts a frame of `f` draws (a window takes two frames: measured, then drawn).
+fn strings(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
+    // a window is measured on its first frame and drawn on the next
+    ctx.run_ui(raw.clone(), |ui| f(app, ui)).textures_delta.clear();
+    let mut out = ctx.run_ui(raw, |ui| f(app, ui));
+    out.textures_delta.clear();
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    v
+}
+
 #[test]
 fn simple_mode_makes_mistakes_safe_and_text_larger() {
-    fn strings(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
-        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-            match s {
-                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-                _ => {}
-            }
-        }
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
-        // a window is measured on its first frame and drawn on the next
-        ctx.run_ui(raw.clone(), |ui| f(app, ui)).textures_delta.clear();
-        let mut out = ctx.run_ui(raw, |ui| f(app, ui));
-        out.textures_delta.clear();
-        let mut v = vec![];
-        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
-        v
-    }
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("window.experience", json!({"level": "beginner"})).unwrap();
     assert!(crate::simple::active(&app));
@@ -394,4 +396,22 @@ fn a_tablet_starts_in_simple_mode_unless_another_way_was_chosen() {
     app.run("window.experience", serde_json::json!({"level": "digitizer"})).unwrap();
     assert!(!app.start_on_tablet());
     assert!(!crate::simple::active(&app));
+}
+
+/// Add Words is in the Embroidery menu in every way of working; with a line selected it offers
+/// to follow it, and the words it adds sew along the line.
+#[test]
+fn add_words_from_the_menu_can_follow_a_line() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("embroidery.newDesign", json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+    let r = app.run("ui.addWords", json!({})).unwrap();
+    assert_eq!((r["open"].as_bool(), r["along"].as_u64()), (Some(true), None));
+    let shown = strings(&mut app, |app, ui| crate::simple::words_window(app, ui.ctx()));
+    assert!(shown.iter().any(|t| t.starts_with("To curve the words")), "{shown:?}");
+    let arc = app.run("shape.arc", json!({"x1": 60, "y1": 220, "x2": 310, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [arc]})).unwrap();
+    let r = app.run("ui.addWords", json!({})).unwrap();
+    assert_eq!(r["along"].as_u64(), Some(arc));
+    let shown = strings(&mut app, |app, ui| crate::simple::words_window(app, ui.ctx()));
+    assert!(shown.iter().any(|t| t == "Along the selected line"), "{shown:?}");
 }

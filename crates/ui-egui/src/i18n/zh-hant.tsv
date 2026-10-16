@@ -5033,3 +5033,5 @@ machine	Stop	停止
 	Overrides	覆寫
 	Uses every data set of the open document.	使用開啟文件的每個資料集。
 	Direction	方向
+	Along the selected line	沿所選線條
+	To curve the words, draw a line first, select it, then Add Words.	要讓文字彎曲，請先畫一條線並選取它，然後選擇「新增文字」。

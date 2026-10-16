@@ -6093,3 +6093,5 @@ mark-style	Japanese	Japonesas
 @msg	open a document with data sets	abra un documento con conjuntos de datos
 @msg	the action has no steps	la acción no tiene pasos
 	Direction	Dirección
+	Along the selected line	A lo largo de la línea seleccionada
+	To curve the words, draw a line first, select it, then Add Words.	Para curvar las palabras, dibuja primero una línea, selecciónala y luego elige Añadir palabras.
