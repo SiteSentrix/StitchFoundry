@@ -407,7 +407,7 @@ fn add_words_from_the_menu_can_follow_a_line() {
     let r = app.run("ui.addWords", json!({})).unwrap();
     assert_eq!((r["open"].as_bool(), r["along"].as_u64()), (Some(true), None));
     let shown = strings(&mut app, |app, ui| crate::simple::words_window(app, ui.ctx()));
-    assert!(shown.iter().any(|t| t.starts_with("To curve the words")), "{shown:?}");
+    assert!(shown.iter().any(|t| t.starts_with("To follow a line")) && shown.iter().any(|t| t == "Arc Up"), "{shown:?}");
     let arc = app.run("shape.arc", json!({"x1": 60, "y1": 220, "x2": 310, "y2": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [arc]})).unwrap();
     let r = app.run("ui.addWords", json!({})).unwrap();

@@ -6141,7 +6141,6 @@ mark-style	Japanese	Japonské
 @msg	the action has no steps	akce nemá žádné kroky
 	Direction	Směr
 	Along the selected line	Podél vybrané čáry
-	To curve the words, draw a line first, select it, then Add Words.	Chcete-li slova zakřivit, nejprve nakreslete čáru, vyberte ji a pak zvolte Přidat slova.
 	Add to Design	Přidat do návrhu
 	Colors and Order	Barvy a pořadí
 	Paint	Barva a malba
@@ -6150,3 +6149,6 @@ mark-style	Japanese	Japonské
 	Split Lines	Dělicí čáry
 	Stitch Direction	Směr stehů
 	Use Line as Direction	Použít čáru jako směr
+	Arc Up	Oblouk nahoru
+	Arc Down	Oblouk dolů
+	To follow a line of your own, draw it first, select it, then Add Words.	Chcete-li slova vést po vlastní čáře, nejprve ji nakreslete, vyberte a pak zvolte Přidat slova.

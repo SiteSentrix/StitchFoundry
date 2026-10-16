@@ -5243,7 +5243,6 @@ machine	Stop	停止
 	Uses every data set of the open document.	使用打开文档的每个数据集。
 	Direction	方向
 	Along the selected line	沿所选线条
-	To curve the words, draw a line first, select it, then Add Words.	要让文字弯曲，请先画一条线并选中它，然后选择“添加文字”。
 	Add to Design	添加到设计
 	Colors and Order	颜色和顺序
 	Paint	绘画
@@ -5252,3 +5251,6 @@ machine	Stop	停止
 	Split Lines	分割线
 	Stitch Direction	针迹方向
 	Use Line as Direction	将线条用作方向
+	Arc Up	向上拱形
+	Arc Down	向下拱形
+	To follow a line of your own, draw it first, select it, then Add Words.	要沿自己画的线排列文字，请先画线并选中它，然后选择“添加文字”。

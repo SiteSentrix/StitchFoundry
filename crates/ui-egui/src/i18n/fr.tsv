@@ -6153,7 +6153,6 @@ theme	Appearance	Apparence
 @msg	the action has no steps	l'action n'a aucune étape
 	Direction	Direction
 	Along the selected line	Le long de la ligne sélectionnée
-	To curve the words, draw a line first, select it, then Add Words.	Pour courber les mots, tracez d’abord une ligne, sélectionnez-la, puis choisissez Ajouter des mots.
 	Add to Design	Ajouter au motif
 	Colors and Order	Couleurs et ordre
 	Paint	Peinture
@@ -6162,3 +6161,6 @@ theme	Appearance	Apparence
 	Split Lines	Lignes de découpe
 	Stitch Direction	Direction des points
 	Use Line as Direction	Utiliser la ligne comme direction
+	Arc Up	Arc vers le haut
+	Arc Down	Arc vers le bas
+	To follow a line of your own, draw it first, select it, then Add Words.	Pour suivre une ligne à vous, tracez-la d’abord, sélectionnez-la, puis choisissez Ajouter des mots.

@@ -541,6 +541,29 @@ fn branch_covers(design: &Design) -> Vec<Option<Vec<Polygon>>> {
     out
 }
 
+/// The longest way (mm) the thread is carried under an object instead of a trim, and how much
+/// longer than the straight way it may be.
+const HIDDEN_TRAVEL_MAX: f64 = 40.0;
+const HIDDEN_TRAVEL_DETOUR: f64 = 2.0;
+
+/// A way from `from` to `first` (where `obj` starts) under `obj`'s own area, which it then sews
+/// over: none for objects that cover nothing (runs, stitches) or when the way would leave the
+/// area or wander far. `from` may lie up to [`TRAVEL_SLACK`] outside the area, so objects that
+/// touch or overlap are reached; ones apart are trimmed between as before.
+fn hidden_travel(obj: &EmbObject, from: Point, first: Point) -> Option<Vec<Point>> {
+    if !matches!(obj.kind, ObjectKind::Fill(_) | ObjectKind::Satin(_) | ObjectKind::Lettering(_)) {
+        return None;
+    }
+    let cover: Vec<Polygon> = object_polygons(obj).into_iter().filter(|p| p.outer.len() >= 3).collect();
+    if cover.is_empty() {
+        return None;
+    }
+    let way = crate::travel::route(from, first, &poly::union(&cover), TRAVEL_SLACK)?;
+    let length: f64 = std::iter::once(from).chain(way.iter().copied()).collect::<Vec<_>>().windows(2).map(|w| w[0].distance(w[1])).sum();
+    let direct = from.distance(first);
+    (length.is_finite() && length <= HIDDEN_TRAVEL_MAX && length <= direct * HIDDEN_TRAVEL_DETOUR + 2.0).then_some(way)
+}
+
 /// Where a branched object without a stop bead should end so the thread can go on
 /// under the objects after it: its point, under those, nearest to the next object.
 /// `None` when the next object is not of the same branch and thread (the thread is
@@ -573,6 +596,38 @@ fn branch_exit(design: &Design, index: usize, covers: &[Option<Vec<Polygon>>]) -
         }
     };
     under.iter().flat_map(|p| p.rings()).flatten().copied().min_by(|a, b| dist(*a).total_cmp(&dist(*b)))
+}
+
+/// Where an object should end so the next one, of the same thread, starts close by (then no
+/// trim is needed, or the thread runs hidden under it: [`hidden_travel`]): its outline's point
+/// nearest that object. `None` for branched objects (see [`branch_exit`]), objects with their own
+/// stop bead or a trim after, the last object of a thread, or with [`DesignSettings::hide_travel`]
+/// off.
+fn near_next_exit(design: &Design, index: usize) -> Option<Point> {
+    let objs = &design.objects;
+    let obj = objs.get(index)?;
+    if !design.settings.hide_travel || obj.branch.is_some() || obj.exit.is_some() || obj.trim_after {
+        return None;
+    }
+    let next = objs.get(index + 1).filter(|n| n.visible && n.color == obj.color && n.branch.is_none() && !n.own_block)?;
+    let mine = object_polygons(obj);
+    let target = object_polygons(next);
+    if mine.is_empty() {
+        return None;
+    }
+    let bbox = next.bbox();
+    let dist = |p: Point| {
+        if target.is_empty() {
+            let dx = (bbox.min.x - p.x).max(p.x - bbox.max.x).max(0.0);
+            let dy = (bbox.min.y - p.y).max(p.y - bbox.max.y).max(0.0);
+            dx.hypot(dy)
+        } else if target.iter().any(|t| t.contains(p)) {
+            0.0
+        } else {
+            target.iter().map(|t| t.distance_to_boundary(p)).fold(f64::INFINITY, f64::min)
+        }
+    };
+    mine.iter().flat_map(|p| p.rings()).flatten().copied().min_by(|a, b| dist(*a).total_cmp(&dist(*b)))
 }
 
 /// `st` without its last needle point (when it has more than two).
@@ -628,7 +683,7 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
         if !obj.visible {
             continue;
         }
-        let st = match branch_exit(design, index, &covers) {
+        let st = match branch_exit(design, index, &covers).or_else(|| near_next_exit(design, index)) {
             Some(exit) => cache.get(&EmbObject { exit: Some(exit), ..obj.clone() }, settings, pos),
             None => cache.get(obj, settings, pos),
         };
@@ -660,6 +715,12 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
             && let Some(way) = crate::travel::route(p, first, cover, TRAVEL_SLACK)
         {
             // branched: carry the thread across under what is still to be sewn
+            em.travel(&way);
+        } else if let Some(way) = pos
+            .filter(|p| settings.hide_travel && em.live && !force_trim && obj.branch.is_none() && p.distance(first) > settings.trim_threshold)
+            .and_then(|p| hidden_travel(obj, p, first))
+        {
+            // the same thread: carried under the object about to be sewn, which covers it
             em.travel(&way);
         } else if force_trim || pos.is_some_and(|p| p.distance(first) > settings.trim_threshold) {
             em.cut();

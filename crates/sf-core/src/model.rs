@@ -157,6 +157,9 @@ impl Design {
 pub struct DesignSettings {
     /// Connectors longer than this (mm) are trimmed instead of jumped.
     pub trim_threshold: f64,
+    /// Between two objects of one thread, carry the thread under the object about to be sewn
+    /// (running stitches it covers) where it can reach it that way, instead of trimming.
+    pub hide_travel: bool,
     /// Sew small locking stitches at the start of each object.
     pub tie_in: bool,
     /// Sew small locking stitches before each trim / colour change.
@@ -348,6 +351,7 @@ impl Default for DesignSettings {
     fn default() -> Self {
         DesignSettings {
             trim_threshold: 2.0,
+            hide_travel: true,
             tie_in: true,
             tie_off: true,
             tie_length: 0.8,

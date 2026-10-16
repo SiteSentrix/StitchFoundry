@@ -5739,7 +5739,6 @@ machine	Stop	Остановка
 @msg	the action has no steps	в действии нет шагов
 	Direction	Направление
 	Along the selected line	Вдоль выбранной линии
-	To curve the words, draw a line first, select it, then Add Words.	Чтобы изогнуть слова, сначала нарисуйте линию, выделите её и выберите «Добавить слова».
 	Add to Design	Добавить в дизайн
 	Colors and Order	Цвета и порядок
 	Paint	Окраска
@@ -5748,3 +5747,6 @@ machine	Stop	Остановка
 	Split Lines	Линии разделения
 	Stitch Direction	Направление стежков
 	Use Line as Direction	Использовать линию как направление
+	Arc Up	Дуга вверх
+	Arc Down	Дуга вниз
+	To follow a line of your own, draw it first, select it, then Add Words.	Чтобы слова шли по своей линии, сначала нарисуйте её, выделите и выберите «Добавить слова».

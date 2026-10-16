@@ -5743,7 +5743,6 @@ machine	Stop	Arresto
 @msg	the action has no steps	l'azione non ha passaggi
 	Direction	Direzione
 	Along the selected line	Lungo la linea selezionata
-	To curve the words, draw a line first, select it, then Add Words.	Per curvare le parole, disegna prima una linea, selezionala e poi scegli Aggiungi parole.
 	Add to Design	Aggiungi al disegno
 	Colors and Order	Colori e ordine
 	Paint	Pittura
@@ -5752,3 +5751,6 @@ machine	Stop	Arresto
 	Split Lines	Linee di divisione
 	Stitch Direction	Direzione del punto
 	Use Line as Direction	Usa la linea come direzione
+	Arc Up	Arco in su
+	Arc Down	Arco in giù
+	To follow a line of your own, draw it first, select it, then Add Words.	Per seguire una linea tua, disegnala prima, selezionala e poi scegli Aggiungi parole.
