@@ -1334,7 +1334,9 @@ The Embroidery panel's **Design** section shows the stitch count, size, colours,
 time and thread used, and whether the design fits the hoop. Its settings:
 
 - **Hoop**: the sewing field, drawn on the canvas centred on the design (machine files are
-  centred too); dashed red when the design doesn't fit.
+  centred too); dashed red when the design doesn't fit. Choosing a hoop makes the page its size,
+  about the page's middle, so the design stays put (`embroidery.settings {hoop, page?: false}`
+  keeps the page; templates keep their own page with a margin round the hoop).
 - **Fabric**: presets (recipes) that set density, fill stitch length, pull and push compensation
   and underlay (the satin underlay type: automatic, centre run, edge run, zigzag or an edge run
   with a zigzag over it, the support knits and pile need; and whether fills get an edge run, which
