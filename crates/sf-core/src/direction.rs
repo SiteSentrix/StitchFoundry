@@ -319,6 +319,9 @@ pub fn auto_strip(ring: &[Point]) -> Option<Strip> {
 
 /// Places guides automatically along a column-like outline. The guides are plain
 /// editable data: callers store them on the object so users can adjust them.
+/// How far (degrees) a column turns between two automatic guides at most.
+const BEND_DEG: f64 = 20.0;
+
 pub fn auto_guides(ring: &[Point]) -> Option<Vec<Guide>> {
     const N: usize = 96;
     const SAMPLES: usize = 24;
@@ -403,13 +406,27 @@ pub fn auto_guides(ring: &[Point]) -> Option<Vec<Guide>> {
     let spacing = (width * 1.5).max(3.0);
     let mut guides = Vec::new();
     let (mut travelled, mut next, mut prev) = (0.0, spacing * 0.5, None::<Point>);
+    // and one wherever the column has turned by BEND_DEG since the last guide (at least half a
+    // width on), so a tight bend gets the lines it needs to turn smoothly, as a digitizer would
+    // place them by hand round a curve
+    let angle = |a: Point, b: Point| (b.y - a.y).atan2(b.x - a.x);
+    let turned = |x: f64, y: f64| {
+        // rungs have no front: a half turn is no turn
+        let d = (x - y).rem_euclid(std::f64::consts::PI);
+        d.min(std::f64::consts::PI - d)
+    };
+    let mut last: Option<(f64, f64)> = None;
     for &(a, b) in &rungs {
         let mid = a.midpoint(b);
         travelled += prev.map_or(0.0, |p| p.distance(mid));
         prev = Some(mid);
-        if travelled >= next {
+        let bend = last.is_some_and(|(at, dir)| travelled - at >= width * 0.5 && turned(angle(a, b), dir) >= BEND_DEG.to_radians());
+        if travelled >= next || bend {
             guides.push(Guide::new(a, b));
-            next += spacing;
+            last = Some((travelled, angle(a, b)));
+            next = travelled + spacing;
+        } else if last.is_none() {
+            last = Some((travelled, angle(a, b)));
         }
     }
     if guides.len() < 2 {

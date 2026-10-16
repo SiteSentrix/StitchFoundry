@@ -306,7 +306,7 @@ impl Default for EmbroideryUi {
             density_map: false,
             density: None,
             beads: true,
-            guides: false,
+            guides: true,
             fabric: Color32::from_rgb(246, 243, 236),
             player: Player::default(),
             mesh: overlay::MeshCache::default(),

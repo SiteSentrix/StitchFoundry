@@ -448,7 +448,33 @@ fn rgb_of(c: &Color) -> Rgb {
 
 // ---------- commands ----------
 
+/// `embroidery.set`: shapes made satin get their editable inclination lines at once, as
+/// Auto Direction places them (a satin brush places its direction lines as it is drawn), so the
+/// panel and the Inclination tool show them to adjust; one undo step.
 fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
+    super::embroidery_simple::one_step(s, |s| {
+        let r = set_stitch_type(s, p)?;
+        if str_param(p, "type").map(canonical) == Some("satin") {
+            let d = &s.doc()?.doc;
+            let fresh: Vec<u64> = r["ids"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(Value::as_u64)
+                .filter(|id| {
+                    d.node(NodeId(*id)).is_some_and(|n| !is_line_art(n) && n.embroidery.as_deref().is_some_and(|e| e.guides.is_empty() && e.auto_direction))
+                })
+                .collect();
+            if !fresh.is_empty() {
+                auto_direction(s, &json!({ "ids": fresh }))?;
+            }
+        }
+        Ok(r)
+    })
+}
+
+fn set_stitch_type(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.set";
     let name = str_param(p, "type").ok_or_else(|| bad(CMD, "missing `type`"))?;
     let st = stitch_type(name).ok_or_else(|| bad(CMD, format!("unknown stitch type `{name}`")))?;
