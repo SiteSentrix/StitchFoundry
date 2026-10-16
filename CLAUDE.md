@@ -25,6 +25,7 @@ Formerly **DrawCraft** (renamed 2026-10-01): old `.drawcraft` files and `"format
   - Behaviour comes only from public documentation (helpx, published specs, public forum posts), cited by URL, and from files users send us that they own (used locally, never committed). Never copy Adobe icons, artwork, presets or wording beyond feature names.
   - If a task seems to need any of this, stop and say so instead. `cargo xtask cleanroom` (run by `cargo xtask ci`) fails on Adobe copyright notices and on fixtures made with Adobe applications.
   - Never copy GPL/AGPL code (Inkscape, lib2geom…).
+  - Never copy code from Roidery (github.com/lork-fork/Roidery), another VectorCraft embroidery fork, even though its licence would allow it (owner's decision, 2026-10-16). Its public README may be read for ideas, as any product's.
 - **Assets: no Adobe iconography or images — ever (absolute rule, from the project owner).**
   - Never add, copy, trace, redraw-from, embed or ship any icon, image, artwork, cursor, preset, swatch/brush/symbol/pattern/style library, ICC profile or screenshot from Adobe products or from any other source whose licence doesn't allow it.
   - Every image, icon, font or other asset must be one of:
