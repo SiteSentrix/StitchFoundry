@@ -26,8 +26,25 @@
 > [!NOTE]
 > **Pre-release.** Every machine format round-trips in software, and files StitchFoundry writes are
 > read correctly by an independent open-source embroidery library, but nothing has been sewn on a
-> real machine yet: test-sew before production runs. There are no release builds yet; build it
-> from source (below).
+> real machine yet: test-sew before production runs.
+
+## Download
+
+<p align="center">
+  <a href="https://github.com/Stitchwright/StitchFoundry/releases/tag/latest-build"><b>⬇ Download the latest build</b></a>
+  (Windows, macOS, Linux) ·
+  <a href="https://stitchwright.github.io/StitchFoundry/"><b>Try it in your browser</b></a>
+</p>
+
+| System | File to download |
+|---|---|
+| Windows (64-bit) | `stitchfoundry-…-windows-x64.msi` (installer) or `…-portable.zip` |
+| macOS (Apple silicon and Intel) | `stitchfoundry-…-macos-universal.dmg` |
+| Linux (x86_64) | `.AppImage` (runs anywhere), `.deb` (Debian, Ubuntu) or `.rpm` (Fedora) |
+
+These builds are not signed yet. On Windows, if SmartScreen warns, choose **More info › Run
+anyway**; on macOS, right-click the app and choose **Open** the first time. The browser version is
+a demo: it can't download embroidery fonts.
 
 <p align="center">
   <img src="docs/images/stitchfoundry-branching.png" alt="StitchFoundry: thirty satin petals and a fill vine sewn as one thread, with the Stitch Sequence panel" width="100%">
