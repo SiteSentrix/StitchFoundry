@@ -6226,3 +6226,21 @@ theme	Appearance	Apparence
 	Movie Clip	Clip
 @msg	name is empty	le nom est vide
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	Questions sur la broderie…
+	Ask About Embroidery	Questions sur la broderie
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Posez n'importe quelle question sur la broderie machine ou StitchFoundry : quel entoilage choisir, pourquoi le fil casse, comment rendre les lettres plus nettes, où trouver une fonction.
+	Thinking…	Réflexion…
+	Type your question, then press Enter	Tapez votre question, puis appuyez sur Entrée
+	Ask	Demander
+	New Conversation	Nouvelle conversation
+	Include my design	Inclure mon motif
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Les réponses viennent de Claude avec votre propre clé API Anthropic, facturée sur votre compte Anthropic. Elles peuvent être fausses : faites un essai avant une pièce importante.
+	Change key	Changer de clé
+@msg	Type a question first.	Tapez d'abord une question.
+@msg	The question is too long: keep it under 2,000 characters.	La question est trop longue : restez sous 2 000 caractères.
+@msg	The AI declined to answer this: ask another way.	L'IA a refusé de répondre : posez la question autrement.
+@msg	The reply had no answer: try again, or ask something narrower.	La réponse était vide : réessayez, ou posez une question plus précise.
+@msg	Ask About Embroidery needs the desktop app for now	Questions sur la broderie nécessite pour l'instant l'application de bureau
+@msg	already asking: wait for the answer	question déjà en cours : attendez la réponse

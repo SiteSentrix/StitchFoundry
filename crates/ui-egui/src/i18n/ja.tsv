@@ -5857,3 +5857,21 @@ machine	Stop	停止
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	刺しゅうについて質問…
+	Ask About Embroidery	刺しゅうについて質問
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	ミシン刺しゅうや StitchFoundry について何でも質問できます：どの接着芯を使うか、糸が切れる理由、文字をきれいに縫う方法、機能の場所など。
+	Thinking…	考え中…
+	Type your question, then press Enter	質問を入力して Enter キーを押してください
+	Ask	質問する
+	New Conversation	新しい会話
+	Include my design	デザインを含める
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	回答はお客様自身の Anthropic API キーを使って Claude が作成し、Anthropic アカウントに請求されます。回答は誤っている場合があります。大切な作品の前には試し縫いをしてください。
+	Change key	キーを変更
+@msg	Type a question first.	まず質問を入力してください。
+@msg	The question is too long: keep it under 2,000 characters.	質問が長すぎます：2,000 文字以内にしてください。
+@msg	The AI declined to answer this: ask another way.	AI がこの質問への回答を断りました：別の聞き方をしてください。
+@msg	The reply had no answer: try again, or ask something narrower.	回答が空でした：もう一度試すか、より具体的に質問してください。
+@msg	Ask About Embroidery needs the desktop app for now	「刺しゅうについて質問」は現在デスクトップアプリでのみ使用できます
+@msg	already asking: wait for the answer	質問中です：回答をお待ちください

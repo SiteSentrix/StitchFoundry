@@ -87,6 +87,12 @@ fn ready(app: &mut VectorcraftApp) -> Result<(), String> {
     if app.session.active().is_none() {
         return Err("no document".into());
     }
+    load_key(app);
+    Ok(())
+}
+
+/// Read the API key from the secret store once (Design from Prompt and Ask share it).
+pub(crate) fn load_key(app: &mut VectorcraftApp) {
     let st = &mut app.embroidery.prompt;
     if !st.loaded {
         st.loaded = true;
@@ -94,7 +100,6 @@ fn ready(app: &mut VectorcraftApp) -> Result<(), String> {
             st.key = k;
         }
     }
-    Ok(())
 }
 
 /// Open the dialog to redraw the selected image, its fields from `p` (`{prompt?: notes on what to
@@ -217,7 +222,7 @@ pub fn start(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// Keep `key` as the API key (`None`: forget it). A store that can't only costs the convenience.
-fn keep_key(store: Option<&dyn crate::SecretStore>, key: Option<&str>) {
+pub(crate) fn keep_key(store: Option<&dyn crate::SecretStore>, key: Option<&str>) {
     if let Some(Err(e)) = store.map(|s| s.save(KEY_NAME, key)) {
         log::warn!("Design from Prompt: the API key: {e}");
     }

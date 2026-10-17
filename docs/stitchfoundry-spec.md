@@ -538,7 +538,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-04 | Buttonholes | Done | SP-14 | – |
 | NEW-05 | Grids, guides, snapping to objects | Done | VectorCraft | – |
 | NEW-06 | Continue digitizing | Done | ST-11 | 1 |
-| NEW-07 | In-app assistant for embroidery questions | Partial | Agents can already drive the app over MCP; add an "Ask" panel that calls Claude, paid by AI credits or the user's own key | A |
+| NEW-07 | In-app assistant for embroidery questions | Partial | Embroidery › Ask About Embroidery… (desktop, 2026-10-17): questions answered by Claude with the user's own key, the conversation and a summary of the open design (stitches, trims, threads, hoop, Check Design findings, the selection) sent along (`sf_core::ai::ask`, `ui.askAboutEmbroidery`). Left: AI credits instead of a key, the web app, and Claude editing the design itself by running commands | A |
 | NEW-08 | Contour fill robustness on tiny objects | Done | Falls back cleanly | – |
 | NEW-09 | Twin-sided pull compensation | Done | RE-05 | 1 |
 | NEW-10 | Batch output, barcode formats | Partial | Batch output and profiles done (OUT-02); Code 128 and Code 39 on worksheets (RP-02) still to be checked with a scanner | 1 |
@@ -880,7 +880,9 @@ Decided by the owner on 2026-10-11: StitchFoundry is free and open source, and s
      lands on the image. With your own key a line asks users to redraw only artwork they may use;
      the cloud version adds the terms of service.
   3. **Assistant** (NEW-07): Claude answers embroidery questions and edits the design by running
-     engine commands (every feature is already a command).
+     engine commands (every feature is already a command). Answering is built with your own key
+     (Embroidery › Ask About Embroidery…, desktop), with a summary of the open design; editing
+     the design from it comes next.
   4. **Product mockups** (NEW-18): the design shown on a shirt, cap or bag, for selling to
      customers.
   Uploads need terms of service: users confirm they may use the art, and prompts for others'

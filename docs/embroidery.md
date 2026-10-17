@@ -23,6 +23,7 @@ the control channel, the CLI and the MCP server.
 - [Auto-Digitize](#auto-digitize)
 - [Design from Prompt](#design-from-prompt)
 - [Redraw Image with Claude](#redraw-image-with-claude)
+- [Ask About Embroidery](#ask-about-embroidery)
 - [Design settings: hoop, fabric, threads](#design-settings-hoop-fabric-threads)
 - [Stitch Sequence and the stitch player](#stitch-sequence-and-the-stitch-player)
 - [Machine files](#machine-files)
@@ -1343,6 +1344,27 @@ the image before you sew.
 The image is sent as a PNG (a JPEG when that would be too large), no larger than 1568 pixels on its
 longest side, which is as much as the model looks at.
 
+## Ask About Embroidery
+
+Choose **Embroidery › Ask About Embroidery…** (also in the Help menu, and in simple mode's Help
+menu) and type a question about machine embroidery or about StitchFoundry: which stabilizer suits
+a T-shirt, why the thread keeps breaking, how to make small letters sew cleaner, where a feature
+is. Press Enter (Shift+Enter starts a new line) or **Ask**; Claude's answer appears in the window,
+in plain words, naming StitchFoundry's menu items where one does what you need. Ask a follow-up
+and the conversation so far goes along (its latest eight questions); **New Conversation** starts
+over. Nothing of it is saved.
+
+With **Include my design** on (the default), a short summary of the design open now goes with each
+question, so "why does this design have so many trims?" can be answered: its size, stitches,
+trims, jumps, colour changes and sewing time, its threads in order, the hoop (and whether the
+design fits), fabric, machine and file format, what Check Design finds, and the selected objects
+with their stitch types and sizes. The design itself, its artwork and its file are never sent.
+
+It uses the same Anthropic API key as Design from Prompt, billed to your Anthropic account; the key
+row shows while there is none (or after **Change key**). Answers can be wrong: try a test sew
+before an important piece. Like Design from Prompt it needs the desktop app for now, and agents
+can open it with a question (`ui.askAboutEmbroidery {question}`).
+
 ## Design settings: hoop, fabric, threads
 
 The Embroidery panel's **Design** section shows the stitch count, size, colours, trims, sewing
@@ -1872,12 +1894,12 @@ From the control channel (`stitchfoundry --control 7979`, one JSON object per li
 
 | Crate | Layer | Role |
 |---|---|---|
-| `sf-core` | standalone | geometry, the embroidery model, the stitch engine (runs, satin, fills, underlay, appliqué, connectors, ties, trims), inclination lines and turning, brushes, threads, hoops, fabrics; Design from Prompt's request and the reading of its reply (`ai`) |
+| `sf-core` | standalone | geometry, the embroidery model, the stitch engine (runs, satin, fills, underlay, appliqué, connectors, ties, trims), inclination lines and turning, brushes, threads, hoops, fabrics; Design from Prompt's and Ask About Embroidery's requests and the reading of their replies (`ai`, `ai::ask`) |
 | `sf-formats` | 1 | machine file readers and writers |
 | `vectorcraft-embroidery` | 2 | the document side: converts paths and type to embroidery objects (millimetres), plans the whole document in paint order, caches unchanged objects |
 | `vectorcraft-engine` | 5 | the `embroidery.*` commands and machine-file open/place |
 | `vectorcraft-tools` | 4 | the Embroidery Brush and Inclination tools |
-| `vectorcraft-ui-egui` | 6 | canvas overlay (TrueView mesh, hoop, beads, player), panels, widget, menus, the Design from Prompt dialog |
+| `vectorcraft-ui-egui` | 6 | canvas overlay (TrueView mesh, hoop, beads, player), panels, widget, menus, the Design from Prompt dialog, the Ask About Embroidery window |
 | `vectorcraft` (the desktop app) | 7 | sends Design from Prompt's request (ureq, rustls) and keeps the API key |
 
 Documents store embroidery as an optional attribute on each node (`Node.embroidery`) and on

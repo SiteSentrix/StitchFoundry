@@ -5776,3 +5776,21 @@ machine	Stop	Stopp
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	Fragen zur Stickerei…
+	Ask About Embroidery	Fragen zur Stickerei
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Fragen Sie alles über Maschinenstickerei oder StitchFoundry: welches Stickvlies passt, warum der Faden reißt, wie Buchstaben sauberer gestickt werden, wo eine Funktion zu finden ist.
+	Thinking…	Denkt nach…
+	Type your question, then press Enter	Geben Sie Ihre Frage ein und drücken Sie die Eingabetaste
+	Ask	Fragen
+	New Conversation	Neues Gespräch
+	Include my design	Mein Stickmuster mitsenden
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Die Antworten kommen von Claude mit Ihrem eigenen Anthropic-API-Schlüssel, abgerechnet über Ihr Anthropic-Konto. Sie können falsch sein: Sticken Sie vor einem wichtigen Stück eine Probe.
+	Change key	Schlüssel ändern
+@msg	Type a question first.	Geben Sie zuerst eine Frage ein.
+@msg	The question is too long: keep it under 2,000 characters.	Die Frage ist zu lang: Bleiben Sie unter 2000 Zeichen.
+@msg	The AI declined to answer this: ask another way.	Die KI hat es abgelehnt, darauf zu antworten: Fragen Sie anders.
+@msg	The reply had no answer: try again, or ask something narrower.	Die Antwort war leer: Versuchen Sie es erneut oder stellen Sie eine engere Frage.
+@msg	Ask About Embroidery needs the desktop app for now	„Fragen zur Stickerei“ erfordert vorerst die Desktop-App
+@msg	already asking: wait for the answer	es wird bereits gefragt: Warten Sie auf die Antwort

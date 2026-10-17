@@ -5813,3 +5813,21 @@ machine	Stop	Остановка
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	Вопрос о вышивке…
+	Ask About Embroidery	Вопрос о вышивке
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Спросите что угодно о машинной вышивке или StitchFoundry: какой стабилизатор выбрать, почему рвётся нить, как вышить буквы аккуратнее, где найти функцию.
+	Thinking…	Думаю…
+	Type your question, then press Enter	Введите вопрос и нажмите Enter
+	Ask	Спросить
+	New Conversation	Новый разговор
+	Include my design	Приложить мой дизайн
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Ответы даёт Claude с вашим собственным ключом API Anthropic, оплата с вашего аккаунта Anthropic. Ответы могут быть ошибочными: перед важным изделием сделайте пробную вышивку.
+	Change key	Сменить ключ
+@msg	Type a question first.	Сначала введите вопрос.
+@msg	The question is too long: keep it under 2,000 characters.	Вопрос слишком длинный: не более 2000 символов.
+@msg	The AI declined to answer this: ask another way.	ИИ отказался отвечать: спросите иначе.
+@msg	The reply had no answer: try again, or ask something narrower.	Ответ пуст: попробуйте снова или задайте более узкий вопрос.
+@msg	Ask About Embroidery needs the desktop app for now	«Вопрос о вышивке» пока работает только в настольном приложении
+@msg	already asking: wait for the answer	вопрос уже отправлен: дождитесь ответа

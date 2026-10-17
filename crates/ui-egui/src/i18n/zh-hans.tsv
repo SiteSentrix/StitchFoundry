@@ -5315,3 +5315,21 @@ machine	Stop	停止
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	询问刺绣问题…
+	Ask About Embroidery	询问刺绣问题
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	可以询问任何关于机器刺绣或 StitchFoundry 的问题：用哪种衬布、为什么断线、怎样让字母绣得更整齐、某个功能在哪里。
+	Thinking…	思考中…
+	Type your question, then press Enter	输入问题，然后按 Enter
+	Ask	提问
+	New Conversation	新对话
+	Include my design	附上我的设计
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	回答由 Claude 使用您自己的 Anthropic API 密钥生成，费用计入您的 Anthropic 账户。回答可能有误：重要作品前请先试绣。
+	Change key	更换密钥
+@msg	Type a question first.	请先输入问题。
+@msg	The question is too long: keep it under 2,000 characters.	问题太长：请不要超过 2,000 个字符。
+@msg	The AI declined to answer this: ask another way.	AI 拒绝回答此问题：请换一种问法。
+@msg	The reply had no answer: try again, or ask something narrower.	回复中没有回答：请重试，或问得更具体些。
+@msg	Ask About Embroidery needs the desktop app for now	“询问刺绣问题”目前需要桌面应用
+@msg	already asking: wait for the answer	正在提问：请等待回答

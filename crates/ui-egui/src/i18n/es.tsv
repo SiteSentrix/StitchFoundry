@@ -6167,3 +6167,21 @@ mark-style	Japanese	Japonesas
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	Preguntar sobre bordado…
+	Ask About Embroidery	Preguntar sobre bordado
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Pregunte lo que quiera sobre bordado a máquina o StitchFoundry: qué entretela usar, por qué se rompe el hilo, cómo bordar letras más limpias, dónde está una función.
+	Thinking…	Pensando…
+	Type your question, then press Enter	Escriba su pregunta y pulse Intro
+	Ask	Preguntar
+	New Conversation	Nueva conversación
+	Include my design	Incluir mi diseño
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Las respuestas vienen de Claude con su propia clave de API de Anthropic, facturada a su cuenta de Anthropic. Pueden ser incorrectas: haga una prueba antes de una pieza importante.
+	Change key	Cambiar clave
+@msg	Type a question first.	Escriba primero una pregunta.
+@msg	The question is too long: keep it under 2,000 characters.	La pregunta es demasiado larga: no supere los 2000 caracteres.
+@msg	The AI declined to answer this: ask another way.	La IA se negó a responder: pregunte de otra manera.
+@msg	The reply had no answer: try again, or ask something narrower.	La respuesta llegó vacía: inténtelo de nuevo o haga una pregunta más concreta.
+@msg	Ask About Embroidery needs the desktop app for now	Preguntar sobre bordado necesita por ahora la aplicación de escritorio
+@msg	already asking: wait for the answer	ya se está preguntando: espere la respuesta

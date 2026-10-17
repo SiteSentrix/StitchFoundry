@@ -6214,3 +6214,21 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	Zeptat se na vyšívání…
+	Ask About Embroidery	Zeptat se na vyšívání
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Zeptejte se na cokoli o strojovém vyšívání nebo o StitchFoundry: jaký stabilizátor použít, proč se trhá nit, jak vyšít čistší písmena, kde najít funkci.
+	Thinking…	Přemýšlí…
+	Type your question, then press Enter	Napište otázku a stiskněte Enter
+	Ask	Zeptat se
+	New Conversation	Nová konverzace
+	Include my design	Přiložit můj vzor
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Odpovědi přicházejí od Clauda s vaším vlastním klíčem API Anthropic, účtovaným na váš účet Anthropic. Mohou být chybné: před důležitým kusem vyšijte zkoušku.
+	Change key	Změnit klíč
+@msg	Type a question first.	Nejprve napište otázku.
+@msg	The question is too long: keep it under 2,000 characters.	Otázka je příliš dlouhá: nepřekračujte 2 000 znaků.
+@msg	The AI declined to answer this: ask another way.	AI odmítla odpovědět: zeptejte se jinak.
+@msg	The reply had no answer: try again, or ask something narrower.	Odpověď byla prázdná: zkuste to znovu nebo se zeptejte konkrétněji.
+@msg	Ask About Embroidery needs the desktop app for now	Zeptat se na vyšívání zatím vyžaduje desktopovou aplikaci
+@msg	already asking: wait for the answer	otázka už se odesílá: počkejte na odpověď

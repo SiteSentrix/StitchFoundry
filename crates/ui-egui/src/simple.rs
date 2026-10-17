@@ -464,6 +464,7 @@ pub fn keeps(id: &str, _p: &Value) -> bool {
         "view.actualSize",
         "ui.calibrateLifeSize",
         "help.show",
+        "ui.askAboutEmbroidery",
         "help.about",
         "window.experience",
         "app.home",

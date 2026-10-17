@@ -12,6 +12,8 @@
 
 use serde_json::{Value, json};
 
+pub mod ask;
+
 /// The Messages API endpoint.
 pub const API_URL: &str = "https://api.anthropic.com/v1/messages";
 /// The API version the request is written against.
@@ -84,6 +86,10 @@ pub enum ArtError {
     BadKey,
     #[error("Describe the design first.")]
     NoPrompt,
+    #[error("Type a question first.")]
+    NoQuestion,
+    #[error("The question is too long: keep it under 2,000 characters.")]
+    LongQuestion,
     #[error("The description is too long: keep it under 2,000 characters.")]
     LongPrompt,
     #[error("The image is too large to send: crop it, or place a smaller copy.")]
@@ -115,6 +121,12 @@ pub enum ArtError {
     /// The reply holds no usable artwork.
     #[error("The reply had no artwork: try again.")]
     NoArt,
+    /// The model declined to answer.
+    #[error("The AI declined to answer this: ask another way.")]
+    RefusedAnswer,
+    /// The reply holds no answer, or ran out of room before one.
+    #[error("The reply had no answer: try again, or ask something narrower.")]
+    NoAnswer,
     /// The request never got an answer (from the app's client).
     #[error("Couldn't reach the AI service: {0}")]
     Network(String),
@@ -123,7 +135,7 @@ pub enum ArtError {
 impl ArtError {
     /// Whether the same request may succeed if sent again shortly.
     pub fn retryable(&self) -> bool {
-        matches!(self, Self::Busy | Self::Service(_) | Self::Network(_) | Self::NoArt)
+        matches!(self, Self::Busy | Self::Service(_) | Self::Network(_) | Self::NoArt | Self::NoAnswer)
     }
 }
 
@@ -272,25 +284,21 @@ fn api_message(body: &str) -> String {
     if text.is_empty() { "no details".to_string() } else { text }
 }
 
-/// The artwork in a reply with HTTP status `status` and body `body`.
-pub fn parse_reply(status: u16, body: &str) -> Result<Art, ArtError> {
+/// The error an HTTP status other than success stands for.
+fn check_status(status: u16, body: &str) -> Result<(), ArtError> {
     match status {
-        200..=299 => {}
-        401 | 403 => return Err(ArtError::Key(api_message(body))),
-        402 => return Err(ArtError::Billing(api_message(body))),
-        429 | 503 | 529 => return Err(ArtError::Busy),
-        500..=599 => return Err(ArtError::Service(status)),
-        _ => return Err(ArtError::Request(status, api_message(body))),
+        200..=299 => Ok(()),
+        401 | 403 => Err(ArtError::Key(api_message(body))),
+        402 => Err(ArtError::Billing(api_message(body))),
+        429 | 503 | 529 => Err(ArtError::Busy),
+        500..=599 => Err(ArtError::Service(status)),
+        _ => Err(ArtError::Request(status, api_message(body))),
     }
-    let v: Value = serde_json::from_str(body).map_err(|_| ArtError::NoArt)?;
-    // The stop reason comes first: a declined or cut-off reply has no finished artwork.
-    match v.get("stop_reason").and_then(Value::as_str) {
-        Some("refusal") => return Err(ArtError::Refused),
-        Some("max_tokens") => return Err(ArtError::Truncated),
-        _ => {}
-    }
-    let text: String = v
-        .get("content")
+}
+
+/// A reply's text blocks joined (thinking left out).
+fn reply_text(v: &Value) -> String {
+    v.get("content")
         .and_then(Value::as_array)
         .map(|blocks| {
             blocks
@@ -299,7 +307,20 @@ pub fn parse_reply(status: u16, body: &str) -> Result<Art, ArtError> {
                 .filter_map(|b| b.get("text").and_then(Value::as_str))
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+/// The artwork in a reply with HTTP status `status` and body `body`.
+pub fn parse_reply(status: u16, body: &str) -> Result<Art, ArtError> {
+    check_status(status, body)?;
+    let v: Value = serde_json::from_str(body).map_err(|_| ArtError::NoArt)?;
+    // The stop reason comes first: a declined or cut-off reply has no finished artwork.
+    match v.get("stop_reason").and_then(Value::as_str) {
+        Some("refusal") => return Err(ArtError::Refused),
+        Some("max_tokens") => return Err(ArtError::Truncated),
+        _ => {}
+    }
+    let text = reply_text(&v);
     if let Some(reason) = text.trim().strip_prefix("DECLINED:") {
         let reason: String = reason.trim().chars().take(300).collect();
         return Err(ArtError::NotOriginal(if reason.is_empty() { "describe an original design".into() } else { reason }));

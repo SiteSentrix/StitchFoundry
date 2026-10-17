@@ -5817,3 +5817,21 @@ machine	Stop	Arresto
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
+
+# Embroidery (StitchFoundry): Ask About Embroidery
+	Ask About Embroidery…	Domande sul ricamo…
+	Ask About Embroidery	Domande sul ricamo
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Chiedi qualsiasi cosa sul ricamo a macchina o su StitchFoundry: quale stabilizzatore usare, perché il filo si rompe, come ricamare lettere più pulite, dove si trova una funzione.
+	Thinking…	Sto pensando…
+	Type your question, then press Enter	Scrivi la domanda, poi premi Invio
+	Ask	Chiedi
+	New Conversation	Nuova conversazione
+	Include my design	Includi il mio disegno
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Le risposte arrivano da Claude con la tua chiave API Anthropic, addebitata sul tuo account Anthropic. Possono essere sbagliate: fai una prova prima di un capo importante.
+	Change key	Cambia chiave
+@msg	Type a question first.	Scrivi prima una domanda.
+@msg	The question is too long: keep it under 2,000 characters.	La domanda è troppo lunga: resta sotto i 2.000 caratteri.
+@msg	The AI declined to answer this: ask another way.	L'IA ha rifiutato di rispondere: chiedi in un altro modo.
+@msg	The reply had no answer: try again, or ask something narrower.	La risposta era vuota: riprova, o fai una domanda più precisa.
+@msg	Ask About Embroidery needs the desktop app for now	Domande sul ricamo richiede per ora l'app desktop
+@msg	already asking: wait for the answer	domanda già in corso: attendi la risposta

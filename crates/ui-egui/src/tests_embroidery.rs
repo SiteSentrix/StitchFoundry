@@ -396,7 +396,7 @@ mod design_from_prompt {
     const ART: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><circle cx="500" cy="500" r="400" fill="#e07020"/><circle cx="380" cy="420" r="70" fill="#ffffff"/><circle cx="620" cy="420" r="70" fill="#ffffff"/></svg>"##;
 
     #[derive(Clone, Default)]
-    struct Keys(Arc<Mutex<HashMap<String, String>>>);
+    pub(super) struct Keys(Arc<Mutex<HashMap<String, String>>>);
 
     impl SecretStore for Keys {
         fn load(&self, name: &str) -> Option<String> {
@@ -412,10 +412,10 @@ mod design_from_prompt {
         }
     }
 
-    type Sent = Arc<Mutex<Vec<HttpRequest>>>;
+    pub(super) type Sent = Arc<Mutex<Vec<HttpRequest>>>;
 
     /// An app whose AI service answers `(status, body)` after `delay`, recording what it was sent.
-    fn app(status: u16, body: String, delay: Duration) -> (VectorcraftApp, Sent, Keys) {
+    pub(super) fn app(status: u16, body: String, delay: Duration) -> (VectorcraftApp, Sent, Keys) {
         let sent: Sent = Arc::default();
         let keys = Keys::default();
         let log = sent.clone();
@@ -654,4 +654,120 @@ fn the_colour_count_is_previewed_with_its_threads_before_digitizing() {
     assert_eq!(p.info["threadChanges"].as_u64(), Some(many.1 - 1));
     // the white round it is the background, shown but not sewn
     assert!(p.info["colors"].as_array().unwrap().iter().any(|c| c["background"] == true));
+}
+
+mod ask_about_embroidery {
+    use std::time::Duration;
+
+    use serde_json::{Value, json};
+    use vectorcraft_engine::Session;
+
+    use super::design_from_prompt::app;
+    use crate::embroidery::{ask, prompt};
+    use crate::{SecretStore, Services, VectorcraftApp};
+
+    fn answer(text: &str) -> String {
+        json!({"type": "message", "model": "claude-opus-5-5", "content": [{"type": "text", "text": text}], "stop_reason": "end_turn"}).to_string()
+    }
+
+    /// Poll as frames do until the answer is in.
+    fn wait(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        for _ in 0..1000 {
+            ask::poll(app, &ctx);
+            if !app.embroidery.ask.asking() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("no answer");
+    }
+
+    /// Every piece of text the window paints.
+    fn window_text(app: &mut VectorcraftApp) -> Vec<String> {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let raw =
+            || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
+        for _ in 0..3 {
+            ctx.run_ui(raw(), |ui| ask::window(app, &ui.ctx().clone())).textures_delta.clear();
+        }
+        let out = ctx.run_ui(raw(), |ui| ask::window(app, &ui.ctx().clone()));
+        fn walk(s: &egui::Shape, into: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => into.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, into)),
+                _ => {}
+            }
+        }
+        let mut texts = Vec::new();
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        texts
+    }
+
+    #[test]
+    fn a_question_is_answered_with_the_conversation_and_the_design() {
+        let (mut app, sent, keys) = app(200, answer("Use a cut-away stabilizer on knits."), Duration::ZERO);
+        keys.save(prompt::KEY_NAME, Some("sk-ant-test")).unwrap();
+        assert!(crate::menus::enabled(&app, "ui.askAboutEmbroidery"));
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+        app.run("embroidery.set", json!({"type": "tatami"})).unwrap();
+        let r = app.run("ui.askAboutEmbroidery", json!({"question": "Which stabilizer for a T-shirt?"})).unwrap();
+        assert_eq!(r, json!({"open": true, "asking": true}));
+        wait(&mut app);
+        let st = &app.embroidery.ask;
+        assert!(st.open && st.input.is_empty() && st.error.is_none(), "{:?}", st.error);
+        assert_eq!(st.turns.len(), 1);
+        assert_eq!(st.turns[0].answer, "Use a cut-away stabilizer on knits.");
+        let texts = window_text(&mut app);
+        for want in ["Ask About Embroidery", "Which stabilizer for a T-shirt?", "Use a cut-away stabilizer on knits.", "Ask", "Include my design"] {
+            assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+        }
+        assert!(!texts.iter().any(|t| t == "Anthropic API key:"), "a kept key isn't asked for: {texts:?}");
+        // the design went along: its stitches and the selected fill
+        let body: Value = serde_json::from_str(&sent.lock().unwrap()[0].body).unwrap();
+        let system = body["system"].as_str().unwrap();
+        assert!(system.contains("The design open now") && system.contains("stitches;") && system.contains(": Tatami"), "{system}");
+        // a second question carries the first with it; without the design this time
+        app.embroidery.ask.include_design = false;
+        app.embroidery.ask.input = "And on a towel?".into();
+        ask::send(&mut app).unwrap();
+        wait(&mut app);
+        let body: Value = serde_json::from_str(&sent.lock().unwrap()[1].body).unwrap();
+        assert_eq!(body["messages"].as_array().unwrap().len(), 3);
+        assert_eq!(body["messages"][1]["content"], "Use a cut-away stabilizer on knits.");
+        assert!(!body["system"].as_str().unwrap().contains("The design open now"));
+        // New Conversation starts over
+        ask::clear(&mut app);
+        assert!(app.embroidery.ask.turns.is_empty());
+    }
+
+    #[test]
+    fn without_a_key_or_a_question_nothing_is_sent() {
+        let err = json!({"type": "error", "error": {"message": "invalid x-api-key"}}).to_string();
+        let (mut app, sent, keys) = app(401, err, Duration::ZERO);
+        app.run("ui.askAboutEmbroidery", json!({})).unwrap();
+        assert!(window_text(&mut app).iter().any(|t| t == "Anthropic API key:"), "no key yet: its row shows");
+        app.embroidery.ask.input = "Why does my thread break?".into();
+        assert_eq!(ask::send(&mut app).unwrap_err(), "Enter your Anthropic API key first.");
+        app.embroidery.prompt.key = "sk-ant-bad".into();
+        app.embroidery.ask.input = "   ".into();
+        assert_eq!(ask::send(&mut app).unwrap_err(), "Type a question first.");
+        assert!(sent.lock().unwrap().is_empty());
+        app.embroidery.ask.input = "Why does my thread break?".into();
+        ask::send(&mut app).unwrap();
+        assert!(ask::send(&mut app).is_err(), "one question at a time");
+        wait(&mut app);
+        let st = &app.embroidery.ask;
+        assert_eq!(st.error.as_deref(), Some("Anthropic refused the API key: invalid x-api-key"));
+        assert_eq!(st.input, "Why does my thread break?", "the question stays to ask again");
+        assert!(st.turns.is_empty());
+        assert_eq!(keys.load(prompt::KEY_NAME), None, "a refused key isn't remembered");
+        assert!(window_text(&mut app).iter().any(|t| t == "Anthropic refused the API key: invalid x-api-key"));
+        // the web has no service yet
+        let mut web = VectorcraftApp::new(Session::new(), Services::default());
+        assert!(!crate::menus::enabled(&web, "ui.askAboutEmbroidery"));
+        assert!(web.run("ui.askAboutEmbroidery", json!({})).is_err());
+    }
 }
