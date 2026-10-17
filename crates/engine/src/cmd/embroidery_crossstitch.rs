@@ -143,8 +143,11 @@ pub(super) struct Pattern {
     dirty: Vec<bool>,
     /// Backstitch: each colour's lines from grid corner to grid corner (`[col, row, col, row]`,
     /// the smaller corner first), sewn after the crosses, over them.
-    pub(super) backs: Vec<(Option<NodeId>, Rgb, Option<Thread>, Vec<[u32; 4]>)>,
+    pub(super) backs: Vec<Back>,
 }
+
+/// One colour's backstitch: its object (once written), colour, thread and lines.
+pub(super) type Back = (Option<NodeId>, Rgb, Option<Thread>, Vec<[u32; 4]>);
 
 pub(super) fn style_name(s: CrossStyle) -> &'static str {
     match s {
@@ -639,8 +642,7 @@ fn chains(lines: &[[u32; 4]]) -> Vec<Vec<(u32, u32)>> {
     while let Some(first) = left.pop() {
         let mut chain = vec![(first[0], first[1]), (first[2], first[3])];
         // grow the chain at its end while a line starts or ends there
-        loop {
-            let Some(&end) = chain.last() else { break };
+        while let Some(&end) = chain.last() {
             let Some(i) = left.iter().position(|l| (l[0], l[1]) == end || (l[2], l[3]) == end) else { break };
             let l = left.swap_remove(i);
             chain.push(if (l[0], l[1]) == end { (l[2], l[3]) } else { (l[0], l[1]) });

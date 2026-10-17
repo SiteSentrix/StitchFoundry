@@ -199,7 +199,7 @@ fn clip(l: &[u32; 4], lo: (f64, f64), hi: (f64, f64)) -> Option<((f64, f64), (f6
             t1 = t1.min(t);
         }
     }
-    (t1 - t0 > 1e-9).then(|| ((x0 + t0 * dx, y0 + t0 * dy), (x0 + t1 * dx, y0 + t1 * dy)))
+    (t1 - t0 > 1e-9).then_some(((x0 + t0 * dx, y0 + t0 * dy), (x0 + t1 * dx, y0 + t1 * dy)))
 }
 
 fn chart(s: &mut Session, p: &Value) -> Result<Value> {
