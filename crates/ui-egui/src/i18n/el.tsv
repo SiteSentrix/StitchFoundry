@@ -4942,3 +4942,1278 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+	Mode	Λειτουργία
+	Blur Mode	Λειτουργία θόλωσης
+	Edge Only	Μόνο ακμή
+	Overlay Edge	Επικάλυψη ακμής
+	Path Length	Μήκος διαδρομής
+@msg	not a VectorCraft file: {0}	δεν είναι αρχείο VectorCraft: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	Έγγραφα VectorCraft: ένα κλειδωμένο αντικείμενο που ενημερώνεται όταν αλλάζει το αρχείο.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Κατά το άνοιγμα παραλείφθηκαν στοιχεία που το StitchFoundry δεν μπορεί ακόμη να διαβάσει ({what}): αν αντικαταστήσετε το αρχείο, θα χαθούν οριστικά. Αποθηκεύστε με άλλο όνομα για να τα διατηρήσετε.
+	Report a Bug…	Αναφορά σφάλματος…
+	Add Inclination Line	Προσθήκη γραμμής κλίσης
+	After the selection	Μετά την επιλογή
+	Appliqué	Απλικέ
+	Apply Fabric	Εφαρμογή υφάσματος
+	Artwork	Σχέδιο
+	Auto Direction	Αυτόματη κατεύθυνση
+	Auto Stitch Direction	Αυτόματη κατεύθυνση βελονιών
+	Auto spacing	Αυτόματο διάστημα
+	Auto split	Αυτόματος διαχωρισμός
+	Auto-Digitize Image	Αυτόματη ψηφιοποίηση εικόνας
+	Automatic underlay	Αυτόματο υπόστρωμα
+	Back to the start	Πίσω στην αρχή
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	Βελονιά bean
+	Before the selection	Πριν από την επιλογή
+	Blanket	Φεστόνι
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Πινελιά
+	Calligraphy	Καλλιγραφία
+	Cell size	Μέγεθος κελιού
+	Centre run	Κεντρική ευθεία βελονιά
+	Clear Inclination Lines	Απαλοιφή γραμμών κλίσης
+	Clear Lines	Απαλοιφή γραμμών
+	Connectors	Συνδέσεις
+	Constant	Σταθερό
+	Contour Fill	Γέμισμα περιγράμματος
+	Convert Artwork to Embroidery	Μετατροπή σχεδίου σε κέντημα
+	Cover stitch	Βελονιά κάλυψης
+	Cover width	Πλάτος κάλυψης
+	Cross Fill	Σταυρωτό γέμισμα
+	Delete Inclination Line	Διαγραφή γραμμής κλίσης
+	Densities (mm)	Πυκνότητες (mm)
+	Density	Πυκνότητα
+	Design	Σχέδιο κεντήματος
+	Design Information	Πληροφορίες σχεδίου
+	Digitizing Widget	Γραφικό στοιχείο ψηφιοποίησης
+	Dimmed	Αχνό
+	Direction: automatic	Κατεύθυνση: αυτόματη
+	Direction: fixed angle	Κατεύθυνση: σταθερή γωνία
+	Direction: one inclination line	Κατεύθυνση: μία γραμμή κλίσης
+	Direction: turning along	Κατεύθυνση: στροφή κατά μήκος
+	Drag across the shape to add a line; drag a bead to move it	Σύρετε κατά μήκος του σχήματος για να προσθέσετε γραμμή· σύρετε μια χάντρα για να τη μετακινήσετε
+	Each anchor point is a needle penetration.	Κάθε σημείο αγκύρωσης είναι μια διάτρηση βελόνας.
+	Edge run	Ευθεία βελονιά ακμής
+	Edge run underlay	Υπόστρωμα ευθείας ακμής
+	Edit Lines	Επεξεργασία γραμμών
+	Embroidery	Κέντημα
+	Embroidery Brush Tool	Εργαλείο πινέλου κεντήματος
+	Embroidery Settings	Ρυθμίσεις κεντήματος
+	Export Machine File	Εξαγωγή αρχείου μηχανής
+	Export Machine File…	Εξαγωγή αρχείου μηχανής…
+	Fabric	Ύφασμα
+	Fabric color	Χρώμα υφάσματος
+	Fill style	Στυλ γεμίσματος
+	Fits the hoop	Χωράει στο τελάρο
+	Give objects a stitch type in the Embroidery panel.	Ορίστε τύπο βελονιάς στα αντικείμενα από τον πίνακα Κέντημα.
+	Gradient to	Διαβάθμιση προς
+	Hide Digitizing Widget	Απόκρυψη γραφικού στοιχείου ψηφιοποίησης
+	Hoop	Τελάρο
+	Inclination Tool	Εργαλείο κλίσης
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Μεγαλύτερο από το τελάρο
+	Lengths (mm)	Μήκη (mm)
+	Let sewing start and stop at the closest points again	Να ξεκινά και να τελειώνει ξανά το ράψιμο στα πλησιέστερα σημεία
+	Machine Embroidery File	Αρχείο μηχανής κεντήματος
+	Manual Stitches	Χειροκίνητες βελονιές
+	Meander Fill	Ελικοειδές γέμισμα
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Μοτίβο
+	Move Inclination Line	Μετακίνηση γραμμής κλίσης
+	Needle points	Σημεία βελόνας
+	New strokes	Νέες πινελιές
+	No Stitches	Χωρίς βελονιές
+	No hoop	Χωρίς τελάρο
+	No stitches yet.	Δεν υπάρχουν ακόμη βελονιές.
+	Not set	Δεν έχει οριστεί
+	Nothing stitched yet	Δεν έχει κεντηθεί τίποτα ακόμη
+	Object color	Χρώμα αντικειμένου
+	Open a document to see its stitch sequence.	Ανοίξτε ένα έγγραφο για να δείτε τη σειρά βελονιών του.
+	Open or create a document to digitize embroidery.	Ανοίξτε ή δημιουργήστε ένα έγγραφο για να ψηφιοποιήσετε κέντημα.
+	Path spacing	Διάστημα διαδρομών
+	Pause	Παύση
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Επιλέξτε πινέλο, πλάτος, πυκνότητα και σχήμα από έναν επιλογέα και σχεδιάστε στον καμβά
+	Place editable inclination lines (or pick the angle) automatically	Αυτόματη τοποθέτηση επεξεργάσιμων γραμμών κλίσης (ή επιλογή γωνίας)
+	Placement line and stop	Γραμμή τοποθέτησης και στάση
+	Play the stitches	Αναπαραγωγή βελονιών
+	Pull compensation	Αντιστάθμιση έλξης
+	Radial Fill	Ακτινωτό γέμισμα
+	Randomness	Τυχαιότητα
+	Remove background	Αφαίρεση φόντου
+	Reset Start and Stop	Επαναφορά αρχής και τέλους
+	Row offset	Μετατόπιση σειράς
+	Run	Ευθεία βελονιά
+	Run style	Στυλ ευθείας βελονιάς
+	Satin	Σατέν
+	Satin Fill	Γέμισμα σατέν
+	Select a path, shape or compound path to give it a stitch type.	Επιλέξτε διαδρομή, σχήμα ή σύνθετη διαδρομή για να της ορίσετε τύπο βελονιάς.
+	Set Inclination Lines	Ορισμός γραμμών κλίσης
+	Set Start and Stop	Ορισμός αρχής και τέλους
+	Set Thread	Ορισμός κλωστής
+	Sew earlier	Ράψιμο νωρίτερα
+	Sew first	Ράψιμο πρώτο
+	Sew last	Ράψιμο τελευταίο
+	Sew later	Ράψιμο αργότερα
+	Sewing time	Χρόνος ραψίματος
+	Sewn last	Ράβεται τελευταίο
+	Short stitches on curves	Κοντές βελονιές στις καμπύλες
+	Show every stitch	Εμφάνιση κάθε βελονιάς
+	Show stitches	Εμφάνιση βελονιών
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Μονή
+	Sort by Thread Color	Ταξινόμηση κατά χρώμα κλωστής
+	Spiral Fill	Σπειροειδές γέμισμα
+	Stitch Parameters	Παράμετροι βελονιών
+	Stitch Plan	Σχέδιο βελονιών
+	Stitch Sequence	Σειρά βελονιών
+	Stitch Type	Τύπος βελονιάς
+	Stitch length	Μήκος βελονιάς
+	Stitch type	Τύπος βελονιάς
+	Stitches	Βελονιές
+	Stop to trim fabric	Στάση για κόψιμο υφάσματος
+	Tack-down	Στερέωση
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Κωνικό
+	Tatami Fill	Γέμισμα τατάμι
+	Tatami underlay	Υπόστρωμα τατάμι
+	Thread	Κλωστή
+	Thread colors	Χρώματα κλωστής
+	Trim after	Κόψιμο μετά
+	Trims	Κοψίματα
+	Triple	Τριπλή
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Μετατρέψτε την εικόνα σε βελονιές: τα στενά τμήματα γίνονται σατέν, τα υπόλοιπα γέμισμα τατάμι.
+	Wave	Κύμα
+	Widget values	Τιμές γραφικού στοιχείου
+	Width profile	Προφίλ πλάτους
+	Widths (mm)	Πλάτη (mm)
+	Zigzag	Ζιγκ-ζαγκ
+	inclination lines	γραμμές κλίσης
+	Brush	Πινέλο
+	Bean	Bean
+	Steil	Steil
+	Heart	Καρδιά
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Η αυτόματη ψηφιοποίηση δεν βρήκε σχήματα για κέντημα: μειώστε τον Θόρυβο ή αυξήστε τα Χρώματα
+@msg	Auto-Digitize: the image traced to nothing	Αυτόματη ψηφιοποίηση: η ανίχνευση της εικόνας δεν έδωσε τίποτα
+@msg	can't open `{title}`: the file has no stitches	δεν είναι δυνατό το άνοιγμα του `{title}`: το αρχείο δεν έχει βελονιές
+@msg	can't open `{title}`: {e}	δεν είναι δυνατό το άνοιγμα του `{title}`: {e}
+@msg	{_1} export failed: {e}	Η εξαγωγή {_1} απέτυχε: {e}
+	Stitch Lines	Γραμμές βελονιών
+	Tatami	Τατάμι
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Από τη Stitchwright, με βάση το VectorCraft της ομάδας ArtCraft. MIT OR Apache-2.0. Γραμματοσειρές: Source Sans 3, Inter, JetBrains Mono (OFL). Εικονίδια: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Έκδοση {version} — ψηφιοποίηση μηχανικού κεντήματος ανοιχτού κώδικα, γραμμένη αποκλειστικά σε Rust.
+	Machine embroidery digitizing — fast, open, scriptable.	Ψηφιοποίηση μηχανικού κεντήματος — γρήγορη, ανοιχτή, προγραμματιζόμενη.
+	Split Here	Διαχωρισμός εδώ
+	Split the object in two at the picked stitch	Διαχωρισμός του αντικειμένου στα δύο στην επιλεγμένη βελονιά
+	Split Object	Διαχωρισμός αντικειμένου
+	Check settings	Έλεγχος ρυθμίσεων
+	Dense from (layers)	Πυκνό από (στρώσεις)
+	Give every stitched object the chart's closest thread	Ορισμός σε κάθε κεντημένο αντικείμενο της πλησιέστερης κλωστής του χρωματολογίου
+	Hidden (not sewn)	Κρυφό (δεν ράβεται)
+	Inclination lines	Γραμμές κλίσης
+	Long stitches from	Μακριές βελονιές από
+	Match Threads to Chart	Αντιστοίχιση κλωστών στο χρωματολόγιο
+	Omit last stitch	Παράλειψη τελευταίας βελονιάς
+	Small lettering under	Μικρά γράμματα κάτω από
+	Start and stop	Αρχή και τέλος
+	Thread chart	Χρωματολόγιο κλωστών
+	Tie style	Στυλ δεσίματος
+	Tiny objects under	Πολύ μικρά αντικείμενα κάτω από
+	Travel by	Μετάβαση με
+	Double	Διπλή
+machine	Trim	Κόψιμο
+@plural	{n} stitch|{n} stitches	{n} βελονιά|{n} βελονιές
+@plural	{n} trim|{n} trims	{n} κόψιμο|{n} κοψίματα
+machine	Stop	Στάση
+	Column A/B Tool	Εργαλείο στήλης A/B
+	Column A/B	Στήλη A/B
+	Tatami stitches	Βελονιές τατάμι
+	Make Current	Ορισμός ως τρέχουσες
+	New objects of this stitch type take these properties	Τα νέα αντικείμενα αυτού του τύπου βελονιάς παίρνουν αυτές τις ιδιότητες
+	Properties for New Objects	Ιδιότητες για νέα αντικείμενα
+	Objects you give a stitch type take these properties.	Τα αντικείμενα στα οποία ορίζετε τύπο βελονιάς παίρνουν αυτές τις ιδιότητες.
+	Fabric settings	Ρυθμίσεις υφάσματος
+	Satin density	Πυκνότητα σατέν
+	Fill density	Πυκνότητα γεμίσματος
+	Fill stitch length	Μήκος βελονιάς γεμίσματος
+	Underlay spacing	Διάστημα υποστρώματος
+	Fill underlay	Υπόστρωμα γεμίσματος
+	Topping	Επικάλυψη (topping)
+	Save as New Fabric	Αποθήκευση ως νέο ύφασμα
+	Seconds per trim	Δευτερόλεπτα ανά κόψιμο
+	Seconds per color change	Δευτερόλεπτα ανά αλλαγή χρώματος
+	Save to Machine	Αποθήκευση στη μηχανή
+	Keep these settings in the machine's profile, for new designs	Διατήρηση αυτών των ρυθμίσεων στο προφίλ της μηχανής, για νέα σχέδια
+	Reset Machine	Επαναφορά μηχανής
+	Put the machine's profile back to how it ships, and use it	Επαναφορά του προφίλ της μηχανής στις εργοστασιακές ρυθμίσεις και χρήση του
+	Delete Machine	Διαγραφή μηχανής
+	Save as New Machine	Αποθήκευση ως νέα μηχανή
+	A machine profile of your own with these settings	Δικό σας προφίλ μηχανής με αυτές τις ρυθμίσεις
+	My Machine	Η μηχανή μου
+	A copy of this fabric to change	Αντίγραφο αυτού του υφάσματος για τροποποίηση
+	Delete Fabric	Διαγραφή υφάσματος
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Δεν υπάρχουν ακόμη στυλ. Επιλέξτε ένα κεντημένο αντικείμενο και δημιουργήστε ένα στυλ για να επαναχρησιμοποιήσετε τις ιδιότητες βελονιάς του.
+	New Embroidery Style	Νέο στυλ κεντήματος
+	Delete Embroidery Style	Διαγραφή στυλ κεντήματος
+	Duplicate Embroidery Style	Αντίγραφο στυλ κεντήματος
+	Redefine Embroidery Style	Επαναπροσδιορισμός στυλ κεντήματος
+	Break Link to Embroidery Style	Αποσύνδεση από το στυλ κεντήματος
+	Rename Embroidery Style…	Μετονομασία στυλ κεντήματος…
+	Embroidery Styles	Στυλ κεντήματος
+	Make Properties Current	Ορισμός ιδιοτήτων ως τρεχουσών
+	Current Properties	Τρέχουσες ιδιότητες
+	New Object Properties	Ιδιότητες νέων αντικειμένων
+	Reset Current Properties	Επαναφορά τρεχουσών ιδιοτήτων
+	Apply Embroidery Style	Εφαρμογή στυλ κεντήματος
+	Rename Embroidery Style	Μετονομασία στυλ κεντήματος
+	Save Fabric	Αποθήκευση υφάσματος
+	Machine Profiles	Προφίλ μηχανών
+	Save Machine Profile	Αποθήκευση προφίλ μηχανής
+	Delete Machine Profile	Διαγραφή προφίλ μηχανής
+	Auto Sequence	Αυτόματη σειρά
+	Branch	Διακλάδωση
+	Break Apart	Διάσπαση
+	Sew the objects separately again	Ξεχωριστό ράψιμο των αντικειμένων ξανά
+	These objects are sewn as one path (a branch).	Αυτά τα αντικείμενα ράβονται ως μία διαδρομή (διακλάδωση).
+	Clear Machine Function	Απαλοιφή λειτουργίας μηχανής
+	Insert Machine Function	Εισαγωγή λειτουργίας μηχανής
+	Object Stitches	Βελονιές αντικειμένου
+@msg	`after` is −1 to {_1}	το `after` είναι από −1 έως {_1}
+@msg	`{what}` is [x, y]	το `{what}` είναι [x, y]
+@msg	`{what}` is [x, y] (numbers)	το `{what}` είναι [x, y] (αριθμοί)
+@msg	each op needs `op`: move, delete or insert	κάθε λειτουργία χρειάζεται `op`: move, delete ή insert
+@msg	indices are record numbers (0, 1, 2…)	οι δείκτες είναι αριθμοί εγγραφών (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	λείπει το `after` (το −1 εισάγει πρώτο)
+@msg	missing `indices`	λείπει το `indices`
+@msg	no record {i}: the object has {len}	δεν υπάρχει εγγραφή {i}: το αντικείμενο έχει {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	άγνωστη εντολή `{c}`: stitch, jump, trim ή stop
+@msg	unknown op `{other}`: move, delete or insert	άγνωστη λειτουργία `{other}`: move, delete ή insert
+	Stitch Edit Tool	Εργαλείο επεξεργασίας βελονιών
+	Stitch List	Λίστα βελονιών
+	Stop after	Στάση μετά
+	Stitches edited by hand: the shape no longer changes them.	Βελονιές επεξεργασμένες με το χέρι: το σχήμα δεν τις αλλάζει πλέον.
+	Edit Stitches	Επεξεργασία βελονιών
+	Pick, move, add and delete single stitches	Επιλογή, μετακίνηση, προσθήκη και διαγραφή μεμονωμένων βελονιών
+	Regenerate Stitches	Αναδημιουργία βελονιών
+	Drop the hand edits and stitch the shape again	Απόρριψη των χειροκίνητων αλλαγών και νέο κέντημα του σχήματος
+	Freeze Stitches	Πάγωμα βελονιών
+	Function	Λειτουργία
+	X (mm)	X (mm)
+	Y (mm)	Y (mm)
+	Stitch	Βελονιά
+	Jump	Άλμα
+	Color change	Αλλαγή χρώματος
+	End	Τέλος
+	#	#
+	Open a document to see its stitches.	Ανοίξτε ένα έγγραφο για να δείτε τις βελονιές του.
+	Machine	Μηχανή
+	Machine settings	Ρυθμίσεις μηχανής
+	Longest stitch	Μεγαλύτερη βελονιά
+	Longest jump	Μεγαλύτερο άλμα
+	Shortest stitch	Μικρότερη βελονιά
+	Trim jumps longer than	Κόψιμο αλμάτων μεγαλύτερων από
+	Tie length	Μήκος δεσίματος
+	Stitches per minute	Βελονιές ανά λεπτό
+	commercial machines	επαγγελματικές μηχανές
+	home machines	οικιακές μηχανές
+	Remove underlying stitching	Αφαίρεση υποκείμενων βελονιών
+	Overlap	Επικάλυψη
+	Turn	Στροφή
+	Capped	Κλειστά άκρα
+	Backstitch	Πισωβελονιά
+	Check Again	Νέος έλεγχος
+	Check Design	Έλεγχος σχεδίου
+	Click to select and show it	Κάντε κλικ για επιλογή και εμφάνιση
+	Design setting	Ρύθμιση σχεδίου
+	Different on each side	Διαφορετικό σε κάθε πλευρά
+	Double zigzag	Διπλό ζιγκ-ζαγκ
+	Fill Holes	Γέμισμα οπών
+	Flip to the other side	Αναστροφή στην άλλη πλευρά
+	Lettering only {n} mm tall is hard to sew clearly	Τα γράμματα ύψους μόνο {n} mm δύσκολα ράβονται καθαρά
+	Look for dense spots, long stitches, tiny objects and small lettering	Αναζήτηση πυκνών σημείων, μακριών βελονιών, πολύ μικρών αντικειμένων και μικρών γραμμάτων
+	Makes no stitches	Δεν δημιουργεί βελονιές
+	No problems found.	Δεν βρέθηκαν προβλήματα.
+	Passes	Περάσματα
+	Preserve long stitches	Διατήρηση μακριών βελονιών
+	Pull comp., side 1	Αντιστ. έλξης, πλευρά 1
+	Pull comp., side 2	Αντιστ. έλξης, πλευρά 2
+	Remove Holes	Αφαίρεση οπών
+	Reverse Stitch Direction	Αντιστροφή κατεύθυνσης βελονιών
+	Swap Satin Sides	Εναλλαγή πλευρών σατέν
+	Convert to Satin Column	Μετατροπή σε στήλη σατέν
+	Stem Stitch	Βελονιά κοτσάνι
+	Stem stitch	Βελονιά κοτσάνι
+	Stitches up to {n} mm long can snag	Βελονιές μήκους έως {n} mm μπορεί να πιαστούν
+	The design is larger than the hoop	Το σχέδιο είναι μεγαλύτερο από το τελάρο
+	Thread Color	Χρώμα κλωστής
+	Tie in	Δέσιμο αρχής
+	Tie off	Δέσιμο τέλους
+	Tiny object: may not sew cleanly	Πολύ μικρό αντικείμενο: ίσως δεν ραφτεί καθαρά
+	Very dense: about {n} layers of thread here	Πολύ πυκνό: περίπου {n} στρώσεις κλωστής εδώ
+	Design from Prompt…	Σχέδιο από περιγραφή…
+	Design from Prompt	Σχέδιο από περιγραφή
+	Generate	Δημιουργία
+	Describe the design:	Περιγράψτε το σχέδιο:
+	Size (longest side):	Μέγεθος (μεγαλύτερη πλευρά):
+	Anthropic API key:	Κλειδί API της Anthropic:
+	Remember the key on this computer	Απομνημόνευση του κλειδιού σε αυτόν τον υπολογιστή
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Ο Claude σχεδιάζει το σχέδιο με το δικό σας κλειδί API της Anthropic, με χρέωση στον λογαριασμό σας στην Anthropic· έπειτα το StitchFoundry το ψηφιοποιεί. Ελέγξτε τις βελονιές πριν ράψετε.
+	Get a key	Λήψη κλειδιού
+	Drawing the design…	Σχεδίαση του σχεδίου…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Περιγράψτε ένα σχέδιο και ο Claude το σχεδιάζει· έπειτα το StitchFoundry το ψηφιοποιεί
+	Place Artwork as Embroidery	Τοποθέτηση σχεδίου ως κέντημα
+	Place Artwork	Τοποθέτηση σχεδίου
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Το σχέδιο τοποθετήθηκε: {n} κεντημένο αντικείμενο|Το σχέδιο τοποθετήθηκε: {n} κεντημένα αντικείμενα
+@msg	Enter your Anthropic API key first.	Εισαγάγετε πρώτα το κλειδί API της Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Το κλειδί API δεν είναι έγκυρο: επικολλήστε το ξανά από το Anthropic Console.
+@msg	Describe the design first.	Περιγράψτε πρώτα το σχέδιο.
+@msg	The description is too long: keep it under 2,000 characters.	Η περιγραφή είναι πολύ μεγάλη: κρατήστε την κάτω από 2.000 χαρακτήρες.
+@msg	Anthropic refused the API key: {e}	Η Anthropic απέρριψε το κλειδί API: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Ο λογαριασμός σας στην Anthropic δεν μπορεί να πληρώσει γι' αυτό: {e}
+@msg	The AI service is busy: try again in a minute.	Η υπηρεσία AI είναι απασχολημένη: δοκιμάστε ξανά σε ένα λεπτό.
+@msg	The AI service failed (error {code}): try again later.	Η υπηρεσία AI απέτυχε (σφάλμα {code}): δοκιμάστε ξανά αργότερα.
+@msg	The request failed (error {code}): {e}	Το αίτημα απέτυχε (σφάλμα {code}): {e}
+@msg	The AI declined to draw this: try another description.	Η AI αρνήθηκε να το σχεδιάσει: δοκιμάστε άλλη περιγραφή.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Το σχέδιο έγινε υπερβολικά λεπτομερές για να ολοκληρωθεί: ζητήστε κάτι απλούστερο.
+@msg	The reply had no artwork: try again.	Η απάντηση δεν περιείχε σχέδιο: δοκιμάστε ξανά.
+@msg	Couldn't reach the AI service: {e}	Δεν ήταν δυνατή η σύνδεση με την υπηρεσία AI: {e}
+@msg	Design from Prompt needs the desktop app for now	Η λειτουργία Σχέδιο από περιγραφή χρειάζεται προς το παρόν την εφαρμογή υπολογιστή
+@msg	already drawing: wait for it, or Cancel	η σχεδίαση είναι ήδη σε εξέλιξη: περιμένετε ή πατήστε Ακύρωση
+@msg	the artwork has no shapes to stitch	το σχέδιο δεν έχει σχήματα για κέντημα
+@msg	the artwork has nothing to place	το σχέδιο δεν έχει τίποτα για τοποθέτηση
+@msg	the artwork can't be read: {e}	δεν είναι δυνατή η ανάγνωση του σχεδίου: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	Η AI δεν αντιγράφει λογότυπα ή χαρακτήρες άλλων: {e}
+	Redraw Image with Claude…	Επανασχεδίαση εικόνας με τον Claude…
+	Redraw Image with Claude	Επανασχεδίαση εικόνας με τον Claude
+	What to change (optional):	Τι να αλλάξει (προαιρετικό):
+	Only redraw artwork you own or have permission to use.	Επανασχεδιάζετε μόνο σχέδια που σας ανήκουν ή έχετε άδεια να χρησιμοποιήσετε.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Ο Claude επανασχεδιάζει την εικόνα με επίπεδα χρώματα, με το δικό σας κλειδί API της Anthropic, με χρέωση στον λογαριασμό σας στην Anthropic· έπειτα το StitchFoundry την ψηφιοποιεί. Ελέγξτε τις βελονιές πριν ράψετε.
+	Redraw with Claude…	Επανασχεδίαση με τον Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Ο Claude επανασχεδιάζει την εικόνα με καθαρά επίπεδα χρώματα· έπειτα το StitchFoundry την ψηφιοποιεί
+@msg	select an image to redraw	επιλέξτε μια εικόνα για επανασχεδίαση
+@msg	the image couldn't be read	δεν ήταν δυνατή η ανάγνωση της εικόνας
+@msg	The image is too large to send: crop it, or place a smaller copy.	Η εικόνα είναι πολύ μεγάλη για αποστολή: περικόψτε την ή τοποθετήστε ένα μικρότερο αντίγραφο.
+	Set Split Lines	Ορισμός γραμμών διαχωρισμού
+	Carve Split Lines	Χάραξη γραμμών διαχωρισμού
+	Clear Split Lines	Απαλοιφή γραμμών διαχωρισμού
+	Split lines:	Γραμμές διαχωρισμού:
+	Texture size	Μέγεθος υφής
+	Texture angle	Γωνία υφής
+	Diamonds	Ρόμβοι
+	Waves	Κύματα
+	Herringbone	Ψαροκόκαλο
+	Bricks	Τούβλα
+	Circles	Κύκλοι
+	Scales	Λέπια
+	Hand stitch	Βελονιά χεριού
+	Gap	Κενό
+	Jagged edges	Οδοντωτές άκρες
+	Side 1	Πλευρά 1
+	Side 2	Πλευρά 2
+	Jag depth	Βάθος οδόντωσης
+	Trapunto (travel along the outline)	Τραπούντο (μετάβαση κατά μήκος του περιγράμματος)
+	Place Motif	Τοποθέτηση μοτίβου
+	Loop	Θηλιά
+	Motif Fill	Γέμισμα μοτίβου
+	Motif size	Μέγεθος μοτίβου
+	Graded	Διαβαθμισμένο
+	Width at end	Πλάτος στο τέλος
+	Row spacing	Διάστημα σειρών
+	E-stitch	Βελονιά E
+	Rings (0: all)	Δακτύλιοι (0: όλοι)
+	Add Laydown	Προσθήκη βάσης (laydown)
+	Spacing profile	Προφίλ διαστήματος
+	Accordion	Ακορντεόν
+	Fade out	Σβήσιμο
+	Fade in	Εμφάνιση σταδιακά
+	Blend into	Ανάμειξη σε
+	Make Blend	Δημιουργία ανάμειξης
+	Blend Colors	Ανάμειξη χρωμάτων
+	Add Outline	Προσθήκη περιγράμματος
+	Satin Outline	Περίγραμμα σατέν
+	Bean Outline	Περίγραμμα bean
+	Rectangle Border	Ορθογώνιο πλαίσιο
+	Oval Border	Οβάλ πλαίσιο
+	Rounded Border	Στρογγυλεμένο πλαίσιο
+	Motif Border	Πλαίσιο μοτίβου
+	Make Motif	Δημιουργία μοτίβου
+	Apply Motif	Εφαρμογή μοτίβου
+	Embroidery Motifs	Μοτίβα κεντήματος
+	Delete Motif	Διαγραφή μοτίβου
+	Remove the motif from the design; what sews it keeps it.	Αφαίρεση του μοτίβου από το σχέδιο· όσα το χρησιμοποιούν το διατηρούν.
+	Sculpture run	Γλυπτή ευθεία βελονιά
+	Triple stitch length	Μήκος τριπλής βελονιάς
+	Single stitch length	Μήκος μονής βελονιάς
+	Triple stitches	Τριπλές βελονιές
+	Single stitches	Μονές βελονιές
+	Cross style	Στυλ σταυρού
+	Full cross	Πλήρης σταυρός
+	Half cross	Μισός σταυρός
+	Upright cross	Όρθιος σταυρός
+	Double cross	Διπλός σταυρός
+	Redwork	Redwork
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	Ράβεται ως μία γραμμή που τελειώνει εκεί που ξεκινά· η διαδρομή ανάμεσα στις γραμμές ξαναπερνά πάνω τους.
+	Add Buttonholes	Προσθήκη κουμπότρυπων
+	Straight Buttonhole	Ίσια κουμπότρυπα
+	Rounded Buttonhole	Στρογγυλεμένη κουμπότρυπα
+	Keyhole Buttonhole	Κουμπότρυπα κλειδαρότρυπας
+	Place Ring	Τοποθέτηση δακτυλίου
+	Satin Ring	Δακτύλιος σατέν
+	Filled Ring	Γεμάτος δακτύλιος
+	Bean Ring	Δακτύλιος bean
+	Hexagons	Εξάγωνα
+	Chevrons	Σιρίτια (chevron)
+	Basket weave	Καλαθοπλεκτική
+	Stars	Αστέρια
+	Hearts	Καρδιές
+	Leaves	Φύλλα
+	Paired with	Σε ζεύγος με
+	Sew as	Ράψιμο ως
+	Motifs	Μοτίβα
+	Motif length (× width)	Μήκος μοτίβου (× πλάτος)
+	String stitch	Βελονιά κορδονιού
+	Chord length	Μήκος χορδής
+	Automatic Knife	Αυτόματο μαχαίρι
+	3D effect	Εφέ 3D
+	Globe out	Κυρτό προς τα έξω
+	Globe in	Κυρτό προς τα μέσα
+	Fill Along Lines	Γέμισμα κατά μήκος γραμμών
+	Clear Flow Lines	Απαλοιφή γραμμών ροής
+	Rows follow lines:	Οι σειρές ακολουθούν γραμμές:
+	Set Flow Lines	Ορισμός γραμμών ροής
+	Carving Stamps	Σφραγίδες χάραξης
+	Carve Stamp	Χάραξη σφραγίδας
+	Flower	Λουλούδι
+	Sun	Ήλιος
+	Moon	Φεγγάρι
+	Snowflake	Νιφάδα χιονιού
+	Paw Print	Πατούσα
+	Swirl	Στρόβιλος
+	Shell	Κοχύλι
+	Butterfly	Πεταλούδα
+	Clover	Τριφύλλι
+	Show Repeats	Εμφάνιση επαναλήψεων
+	Repeats across	Επαναλήψεις οριζόντια
+	Repeats down	Επαναλήψεις κάθετα
+	Gap between repeats	Κενό μεταξύ επαναλήψεων
+	Stripes	Ρίγες
+	Slants	Λοξές
+	Pinstripes	Λεπτές ρίγες
+	Lattice	Πλέγμα
+	Arches	Αψίδες
+	Spirals	Σπείρες
+	Pyramids	Πυραμίδες
+	Ripples	Κυματισμοί
+	Greek key	Μαίανδρος
+	Crosses	Σταυροί
+	Quatrefoils	Τετράφυλλα
+	Flowers	Λουλούδια
+	Trefoils	Τρίφυλλα
+	Moons	Φεγγάρια
+	Arrows	Βέλη
+	Nested diamonds	Εγκιβωτισμένοι ρόμβοι
+	Argyle	Argyle
+	Wicker	Ψάθα
+	Feathers	Φτερά
+	Paisley	Πέισλι
+	Swirls	Στρόβιλοι
+	Snowflakes	Νιφάδες χιονιού
+	Bubbles	Φυσαλίδες
+	Sunbursts	Ηλιαχτίδες
+	Motif Tool	Εργαλείο μοτίβου
+	Contour Split Lines	Γραμμές διαχωρισμού περιγράμματος
+	Keep Motif	Διατήρηση μοτίβου
+	Keep the motif in My Motifs, for any design	Διατήρηση του μοτίβου στα Μοτίβα μου, για κάθε σχέδιο
+	My Motifs	Τα μοτίβα μου
+	Forget Motif	Κατάργηση μοτίβου
+	Buttonholes	Κουμπότρυπες
+	Straight	Ίσια
+	Keyhole	Κλειδαρότρυπα
+	Count	Πλήθος
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Σειρές κατά μήκος του σχήματος: προς τα πάνω είναι πυκνότερο. Σύρετε ένα σημείο· διπλό κλικ για προσθήκη· δεξί κλικ σε σημείο για αφαίρεση.
+	Embroidery Lettering	Κεντητά γράμματα
+	Load Embroidery Font	Φόρτωση γραμματοσειράς κεντήματος
+	Embroidery Fonts	Γραμματοσειρές κεντήματος
+	Load Embroidery Font…	Φόρτωση γραμματοσειράς κεντήματος…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Φάκελος γραμματοσειράς σε μορφή Ink/Stitch: font.json και οι γλύφοι του
+	Load an embroidery font to set text with it.	Φορτώστε μια γραμματοσειρά κεντήματος για να γράψετε κείμενο με αυτήν.
+	Sews well at	Ράβεται καλά στα
+	Place Lettering	Τοποθέτηση γραμμάτων
+	Edit Lettering	Επεξεργασία γραμμάτων
+	Update Lettering	Ενημέρωση γραμμάτων
+	Load this lettering's font to change it:	Φορτώστε τη γραμματοσειρά αυτών των γραμμάτων για να τα αλλάξετε:
+	Arch	Τόξο
+	Valley	Κοιλάδα
+	Forget Font	Κατάργηση γραμματοσειράς
+	Unload the font and stop loading its folder	Αποφόρτωση της γραμματοσειράς και διακοπή φόρτωσης του φακέλου της
+	Forget Embroidery Font	Κατάργηση γραμματοσειράς κεντήματος
+	Team Names	Ονόματα ομάδας
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Επιλέξτε γράμματα με γραμματοσειρά κεντήματος: γράφεται ένα αρχείο μηχανής για κάθε όνομα, με τα γράμματα να το αναγράφουν.
+	One name a line	Ένα όνομα ανά γραμμή
+	Import Names…	Εισαγωγή ονομάτων…
+	The first column of a CSV table, or a text file of one name a line	Η πρώτη στήλη πίνακα CSV ή αρχείο κειμένου με ένα όνομα ανά γραμμή
+	Names	Ονόματα
+	Export One File per Name…	Εξαγωγή ενός αρχείου ανά όνομα…
+	Team name files written	Γράφτηκαν τα αρχεία ονομάτων ομάδας
+	Export Team Names	Εξαγωγή ονομάτων ομάδας
+	Read Team Names	Ανάγνωση ονομάτων ομάδας
+	Monogram	Μονόγραμμα
+	Load an embroidery font (Embroidery Lettering) to make monograms.	Φορτώστε μια γραμματοσειρά κεντήματος (Κεντητά γράμματα) για να δημιουργήσετε μονογράμματα.
+	Initials	Αρχικά
+	In a line	Σε μία γραμμή
+	Scallops	Φεστόνια
+	Border	Πλαίσιο
+	Place Monogram	Τοποθέτηση μονογράμματος
+	New Embroidery Font	Νέα γραμματοσειρά κεντήματος
+	Save Embroidery Font…	Αποθήκευση γραμματοσειράς κεντήματος…
+	Add Glyphs	Προσθήκη γλύφων
+	Font Properties	Ιδιότητες γραμματοσειράς
+	Kern Glyph Pair	Διαγραμμάτωση ζεύγους γλύφων
+	Font Info	Πληροφορίες γραμματοσειράς
+	Save Embroidery Font	Αποθήκευση γραμματοσειράς κεντήματος
+	Edit Embroidery Font	Επεξεργασία γραμματοσειράς κεντήματος
+	Merge Embroidery Font	Συγχώνευση γραμματοσειράς κεντήματος
+	New Embroidery Font from Type	Νέα γραμματοσειρά κεντήματος από κείμενο
+	Font Creator	Δημιουργός γραμματοσειρών
+	Capitals' height	Ύψος κεφαλαίων
+	Line spacing	Διάστιχο
+	Space width	Πλάτος διαστήματος
+	As typed	Όπως πληκτρολογήθηκε
+	Capitals	Κεφαλαία
+	Small letters	Πεζά
+	Letter case	Πεζά/κεφαλαία
+	Sews well from	Ράβεται καλά από
+	Sews well up to	Ράβεται καλά έως
+	Still to digitize	Απομένουν για ψηφιοποίηση
+	Show this glyph	Εμφάνιση αυτού του γλύφου
+	Not digitized yet: show its artboard	Δεν έχει ψηφιοποιηθεί ακόμη: εμφάνιση του πίνακα σχεδίασής του
+	Glyphs to add	Γλύφοι προς προσθήκη
+	Kerning (mm closer)	Διαγραμμάτωση (mm πιο κοντά)
+	Pair	Ζεύγος
+	Kern	Διαγραμμάτωση
+	Merge glyphs from	Συγχώνευση γλύφων από
+	Test text	Δοκιμαστικό κείμενο
+	Try in a New Document	Δοκιμή σε νέο έγγραφο
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Δημιουργία γραμματοσειράς κεντήματος: ένα έγγραφο με έναν πίνακα σχεδίασης για κάθε γλύφο προς ψηφιοποίηση.
+	Type family	Οικογένεια γραμματοσειράς
+	New Font from Type	Νέα γραμματοσειρά από κείμενο
+	Edit Font	Επεξεργασία γραμματοσειράς
+	Assign to Glyph	Ανάθεση σε γλύφο
+	Selection to glyph	Επιλογή σε γλύφο
+	The selected art becomes the glyph, moved onto its artboard	Το επιλεγμένο σχέδιο γίνεται ο γλύφος και μετακινείται στον πίνακα σχεδίασής του
+	Sew order	Σειρά ραψίματος
+	Left to right	Από αριστερά προς τα δεξιά
+	Right to left	Από δεξιά προς τα αριστερά
+	Centre out	Από το κέντρο προς τα έξω
+	Closest	Πλησιέστερο
+	Along the baseline	Κατά μήκος της γραμμής βάσης
+	Where needed	Όπου χρειάζεται
+	After each letter	Μετά από κάθε γράμμα
+	After each word	Μετά από κάθε λέξη
+	After each line	Μετά από κάθε γραμμή
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Εκτός των μεγεθών για τα οποία φτιάχτηκε η γραμματοσειρά: οι βελονιές μπορεί να βγουν πολύ πυκνές ή πολύ μακριές
+	Adjust Letter	Προσαρμογή γράμματος
+	One letter: moved, scaled or turned, kept when the lettering is set again	Ένα γράμμα: μετακινημένο, κλιμακωμένο ή περιστραμμένο, διατηρείται όταν τα γράμματα ξαναγράφονται
+	Move along	Μετακίνηση κατά μήκος
+	Move down	Μετακίνηση κάτω
+	Reset Letter	Επαναφορά γράμματος
+	3D Puff	3D Puff
+	3D puff	3D puff
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	Σατέν ραμμένο πάνω σε αφρώδες υλικό: πυκνό, χωρίς υπόστρωμα, με κλειστά άκρα. Ράψτε το με δικό του χρώμα, ώστε να τοποθετήσετε το αφρώδες υλικό στη στάση
+	Sew Puff Last	Ράψιμο του puff τελευταίο
+	Click to Stitch	Κλικ για κέντημα
+	Click-to-Stitch Tool	Εργαλείο κλικ για κέντημα
+	Fill without holes	Γέμισμα χωρίς οπές
+	Centre line	Κεντρική γραμμή
+	Stitch as	Κέντημα ως
+	Click a region of an image to stitch it	Κάντε κλικ σε μια περιοχή εικόνας για να την κεντήσετε
+	Send to Machine	Αποστολή στη μηχανή
+	Machine Folders	Φάκελοι μηχανής
+	Add Machine Folder…	Προσθήκη φακέλου μηχανής…
+	A USB stick, the machine's folder or a network share the machine reads	Ένα USB stick, ο φάκελος της μηχανής ή ένας κοινόχρηστος φάκελος δικτύου που διαβάζει η μηχανή
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Προσθέστε τον φάκελο που διαβάζει η μηχανή σας: ένα USB stick, τον φάκελό της ή έναν κοινόχρηστο φάκελο δικτύου.
+	Machine folder	Φάκελος μηχανής
+	Send	Αποστολή
+	Sent:	Στάλθηκε:
+	Forget Folder	Κατάργηση φακέλου
+	Triple run	Τριπλή ευθεία βελονιά
+	Partial cover	Μερική κάλυψη
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	η κωδικοποίηση του αρχείου μηχανής απέτυχε
+	Worksheet	Φύλλο εργασίας
+	Outline Around	Περίγραμμα γύρω
+	Octagon	Οκτάγωνο
+	Shield	Ασπίδα
+	Ornament	Στολίδι
+	Multi-Hooping	Πολλαπλό τελάρωμα
+	Basting first	Πρώτα τρύπωμα
+	Basting round	Τρύπωμα γύρω
+	The design	Το σχέδιο
+	The hoop	Το τελάρο
+	Basting margin	Περιθώριο τρυπώματος
+	Design notes	Σημειώσεις σχεδίου
+	Printed on worksheets	Εκτυπώνεται στα φύλλα εργασίας
+	Cost a piece	Κόστος ανά τεμάχιο
+	Estimate cost	Εκτίμηση κόστους
+	Cost settings	Ρυθμίσεις κόστους
+	Per 1000 stitches	Ανά 1000 βελονιές
+	Machine time an hour	Χρόνος μηχανής ανά ώρα
+	Thread per 1000 m	Κλωστή ανά 1000 m
+	Set-up an order	Προετοιμασία ανά παραγγελία
+	Machine heads	Κεφαλές μηχανής
+	Currency	Νόμισμα
+	Cost Estimate	Εκτίμηση κόστους
+	Colorways	Χρωματικοί συνδυασμοί
+	New Colorway	Νέος χρωματικός συνδυασμός
+	Use Colorway	Χρήση χρωματικού συνδυασμού
+	Colorway Thread	Κλωστή χρωματικού συνδυασμού
+	Rename Colorway	Μετονομασία χρωματικού συνδυασμού
+	Delete Colorway	Διαγραφή χρωματικού συνδυασμού
+	Colorway	Χρωματικός συνδυασμός
+	The design's own	Του ίδιου του σχεδίου
+	Own colour block	Δικό του χρωματικό μπλοκ
+	Where it falls	Όπου τύχει
+	Centre	Κέντρο
+	Top left	Πάνω αριστερά
+	Top right	Πάνω δεξιά
+	Bottom left	Κάτω αριστερά
+	Bottom right	Κάτω δεξιά
+	Start at	Έναρξη στο
+	End at	Τέλος στο
+	Stabiliser	Σταθεροποιητικό
+	Tear-away	Σκιζόμενο
+	Cut-away	Κοπτόμενο
+	No-show mesh	Διαφανές πλέγμα (no-show)
+	Wash-away	Υδατοδιαλυτό
+	Scatter Copies	Διασπορά αντιγράφων
+	Appliqué letters	Γράμματα απλικέ
+	Each letter a patch of fabric: placement line, tack-down and cover	Κάθε γράμμα ένα κομμάτι υφάσματος: γραμμή τοποθέτησης, στερέωση και κάλυψη
+	Letters sewn	Ραμμένα γράμματα
+	As the font has them	Όπως τα έχει η γραμματοσειρά
+	Small text	Μικρό κείμενο
+	Under 6 mm	Κάτω από 6 mm
+	Place Along Selected Line	Τοποθέτηση κατά μήκος της επιλεγμένης γραμμής
+	The text along the selected line or shape, from its start	Το κείμενο κατά μήκος της επιλεγμένης γραμμής ή σχήματος, από την αρχή της
+	Monogram Templates	Πρότυπα μονογράμματος
+	Save Monogram Template	Αποθήκευση προτύπου μονογράμματος
+	Delete Monogram Template	Διαγραφή προτύπου μονογράμματος
+	Template name	Όνομα προτύπου
+	Delete Template	Διαγραφή προτύπου
+	Lay Out Team Names	Διάταξη ονομάτων ομάδας
+	Team Names Worksheet	Φύλλο εργασίας ονομάτων ομάδας
+	Lay Out Together	Διάταξη μαζί
+	Every name in one design, in rows and columns, for a large hoop or patches	Όλα τα ονόματα σε ένα σχέδιο, σε σειρές και στήλες, για μεγάλο τελάρο ή σήματα
+	Names Worksheet	Φύλλο εργασίας ονομάτων
+	Each name with its size, stitches and sewing time, and the totals	Κάθε όνομα με το μέγεθος, τις βελονιές και τον χρόνο ραψίματός του, και τα σύνολα
+	Design Library	Βιβλιοθήκη σχεδίων
+	Design Catalogue	Κατάλογος σχεδίων
+	No folder chosen	Δεν επιλέχθηκε φάκελος
+	Choose Folder…	Επιλογή φακέλου…
+	Newest	Νεότερα
+	Most stitches	Περισσότερες βελονιές
+	Largest	Μεγαλύτερα
+	Designs	Σχέδια
+	Couldn't be read	Δεν ήταν δυνατή η ανάγνωση
+	stitches	βελονιές
+	colours	χρώματα
+	Print Catalogue	Εκτύπωση καταλόγου
+	A sheet of the designs found, to print or save as PDF	Ένα φύλλο με τα σχέδια που βρέθηκαν, για εκτύπωση ή αποθήκευση ως PDF
+@msg	larger than {_1} MB	μεγαλύτερο από {_1} MB
+@msg	not a machine file: .{ext}	δεν είναι αρχείο μηχανής: .{ext}
+	Batch Output	Μαζική έξοδος
+	Output Profiles	Προφίλ εξόδου
+	Save Output Profile	Αποθήκευση προφίλ εξόδου
+	Delete Output Profile	Διαγραφή προφίλ εξόδου
+	Batch Convert	Μαζική μετατροπή
+	files written	αρχεία γράφτηκαν
+	Machine formats (none ticked: the machine's)	Μορφές μηχανής (καμία επιλεγμένη: της μηχανής)
+	Production	Παραγωγή
+	Approval	Έγκριση
+	Placement template	Πρότυπο τοποθέτησης
+	The design file too	Και το αρχείο σχεδίου
+	Write to Folder…	Εγγραφή σε φάκελο…
+	Machine files, worksheet PDF and design, named alike	Αρχεία μηχανής, PDF φύλλου εργασίας και σχέδιο, με το ίδιο όνομα
+	Write Again	Νέα εγγραφή
+	Profile name	Όνομα προφίλ
+	Save Profile	Αποθήκευση προφίλ
+	Profile	Προφίλ
+	Convert to	Μετατροπή σε
+	Convert All	Μετατροπή όλων
+	Each design found written again in this format beside it	Κάθε σχέδιο που βρέθηκε γράφεται ξανά σε αυτή τη μορφή δίπλα του
+	Converted:	Μετατράπηκαν:
+	couldn't be read:	δεν ήταν δυνατή η ανάγνωση:
+	Product Visualizer	Οπτικοποίηση σε προϊόν
+@msg	product outline: {e}	περίγραμμα προϊόντος: {e}
+	Exports	Εξαγωγές
+	Nothing exported yet in this session.	Δεν έχει γίνει ακόμη εξαγωγή σε αυτή την περίοδο λειτουργίας.
+	Again	Ξανά
+	Export it again, as it was asked, from this document	Νέα εξαγωγή, όπως ζητήθηκε, από αυτό το έγγραφο
+	Export History	Ιστορικό εξαγωγών
+	Clear Export History	Απαλοιφή ιστορικού εξαγωγών
+	Export Again	Νέα εξαγωγή
+	Export Stitch Image	Εξαγωγή εικόνας βελονιών
+	Export Stitch Image…	Εξαγωγή εικόνας βελονιών…
+	Stitch List CSV (.csv)…	Λίστα βελονιών CSV (.csv)…
+	Stitch List JSON (.json)…	Λίστα βελονιών JSON (.json)…
+	G-code (.gcode)…	G-code (.gcode)…
+	Stitch Image PNG (.png)…	Εικόνα βελονιών PNG (.png)…
+@msg	PNG encoding failed: {e}	Η κωδικοποίηση PNG απέτυχε: {e}
+@msg	the design has no stitches	το σχέδιο δεν έχει βελονιές
+@msg	the image would be {w} × {h} pixels: lower ppmm	η εικόνα θα ήταν {w} × {h} εικονοστοιχεία: μειώστε το ppmm
+	Smallest That Fits	Το μικρότερο που χωράει
+	The smallest hoop that holds the design, turned if that fits better	Το μικρότερο τελάρο που χωράει το σχέδιο, περιστραμμένο αν χωράει καλύτερα
+	Rotate Hoop	Περιστροφή τελάρου
+	Custom Hoops	Προσαρμοσμένα τελάρα
+	Hoop name	Όνομα τελάρου
+	Save Hoop	Αποθήκευση τελάρου
+	Delete Hoop	Διαγραφή τελάρου
+	Hoops	Τελάρα
+	Choose Smallest Hoop	Επιλογή μικρότερου τελάρου
+	Save Custom Hoop	Αποθήκευση προσαρμοσμένου τελάρου
+	Delete Custom Hoop	Διαγραφή προσαρμοσμένου τελάρου
+	Turn the hue	Περιστροφή απόχρωσης
+	One colour	Ένα χρώμα
+	Inverted	Ανεστραμμένα
+	Recolour	Επαναχρωματισμός
+	Recolour Threads	Επαναχρωματισμός κλωστών
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Κάθε κλωστή αλλάζει σύμφωνα με τον συνδυασμό και αντιστοιχίζεται στο χρωματολόγιο του σχεδίου· η αναίρεση τις επαναφέρει
+	Garment Background	Φόντο ενδύματος
+	Garment Photo…	Φωτογραφία ενδύματος…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Μια φωτογραφία του ενδύματος πίσω από το σχέδιο, σε φυσικό μέγεθος, σε κλειδωμένο επίπεδο προτύπου που δεν κεντιέται ποτέ
+	Import Chart…	Εισαγωγή χρωματολογίου…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	Δικό σας χρωματολόγιο κλωστών από αρχείο CSV (κωδικός, όνομα και χρώμα ανά κλωστή) ή παλέτα GIMP (.gpl)
+	Export Chart…	Εξαγωγή χρωματολογίου…
+	Thread Charts	Χρωματολόγια κλωστών
+	Import Thread Chart	Εισαγωγή χρωματολογίου κλωστών
+	Export Thread Chart	Εξαγωγή χρωματολογίου κλωστών
+	Save Thread Chart	Αποθήκευση χρωματολογίου κλωστών
+	Delete Thread Chart	Διαγραφή χρωματολογίου κλωστών
+	Design Templates	Πρότυπα σχεδίων
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	Διατήρηση της σελίδας, του σχεδίου, του τελάρου, του υφάσματος και των ρυθμίσεων αυτού του σχεδίου ως αφετηρία για νέα σχέδια
+	New from Design Template	Νέο από πρότυπο σχεδίου
+	Save as Design Template	Αποθήκευση ως πρότυπο σχεδίου
+	Delete Design Template	Διαγραφή προτύπου σχεδίου
+	Print Stitch View	Εκτύπωση προβολής βελονιών
+	Job Orders	Παραγγελίες εργασιών
+	Customer	Πελάτης
+	Due (YYYY-MM-DD)	Προθεσμία (ΕΕΕΕ-ΜΜ-ΗΗ)
+	New Job for This Design	Νέα εργασία για αυτό το σχέδιο
+	In production	Σε παραγωγή
+	Cancelled	Ακυρώθηκε
+	New Job Order	Νέα παραγγελία εργασίας
+	Update Job Order	Ενημέρωση παραγγελίας εργασίας
+	Delete Job Order	Διαγραφή παραγγελίας εργασίας
+	Job Worksheet	Φύλλο εργασίας παραγγελίας
+	Job Output	Έξοδος παραγγελίας
+	Clipart	Clipart
+	Click a motif to place it, digitized, in the middle of the page.	Κάντε κλικ σε ένα μοτίβο για να το τοποθετήσετε, ψηφιοποιημένο, στη μέση της σελίδας.
+	Embroidery Clipart	Clipart κεντήματος
+	Insert Clipart	Εισαγωγή clipart
+	Send When Ready	Αποστολή όταν είναι έτοιμο
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Προσθήκη του σχεδίου στην ουρά για αυτόν τον φάκελο: γράφεται τώρα αν ο φάκελος υπάρχει, αλλιώς μόλις εμφανιστεί
+	Waiting for the folder	Αναμονή για τον φάκελο
+	Send queue	Ουρά αποστολής
+	waiting	σε αναμονή
+	sent	στάλθηκε
+	failed	απέτυχε
+	Clear Sent	Απαλοιφή απεσταλμένων
+	Send Queue	Ουρά αποστολής
+	Add to Send Queue	Προσθήκη στην ουρά αποστολής
+	Send Waiting Designs	Αποστολή σχεδίων σε αναμονή
+	Remove from Send Queue	Αφαίρεση από την ουρά αποστολής
+@msg	the queued file is damaged	το αρχείο στην ουρά είναι κατεστραμμένο
+	Centred	Στο κέντρο
+	In the hoop	Στο τελάρο
+	Worksheet Setup	Ρύθμιση φύλλου εργασίας
+	Merge Colours	Συγχώνευση χρωμάτων
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Οι κλωστές με ίδιο ή παρόμοιο χρώμα γίνονται μία και τα χρωματικά τους μπλοκ ενώνονται· η αναίρεση τις επαναφέρει
+	Lettering Kiosk	Κιόσκι γραμμάτων
+	Kiosk Lettering	Γράμματα κιοσκιού
+	Type a name and make the design	Πληκτρολογήστε ένα όνομα και δημιουργήστε το σχέδιο
+	No embroidery font is loaded: ask the shop to load one.	Δεν έχει φορτωθεί γραμματοσειρά κεντήματος: ζητήστε από το κατάστημα να φορτώσει μία.
+	As large as fits	Όσο μεγαλύτερο χωράει
+	Make Design	Δημιουργία σχεδίου
+	T-shirt	Μπλουζάκι
+	Polo shirt	Πόλο μπλούζα
+	Hoodie	Φούτερ με κουκούλα
+	Tote bag	Τσάντα πάνινη
+	Towel	Πετσέτα
+	Product	Προϊόν
+	Show on Product	Εμφάνιση στο προϊόν
+	Back to the Design	Πίσω στο σχέδιο
+	Save Machine File…	Αποθήκευση αρχείου μηχανής…
+	Next Name	Επόμενο όνομα
+	PIN	PIN
+	Leave Kiosk	Έξοδος από το κιόσκι
+	Leaving the kiosk will take this PIN	Για έξοδο από το κιόσκι απαιτείται αυτό το PIN
+	Snapback	Snapback
+	Trucker cap	Καπέλο trucker
+	Dad cap	Καπέλο dad cap
+	Image Colours	Χρώματα εικόνας
+	Prepare Image	Προετοιμασία εικόνας
+	Photo Stitch	Κέντημα φωτογραφίας
+	Convert Stitches to Objects	Μετατροπή βελονιών σε αντικείμενα
+	Colour Preview	Προεπισκόπηση χρωμάτων
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Ένα εξομαλυμένο αντίγραφο της εικόνας σε αυτά τα χρώματα, καθαρισμένο από κουκκίδες, για ψηφιοποίηση ή κλικ για κέντημα
+	Colours	Χρώματα
+	background, not sewn	φόντο, δεν ράβεται
+	thread changes	αλλαγές κλωστής
+	threads sewn	κλωστές που ράβονται
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Ράψιμο της φωτογραφίας με γραμμές ζιγκ-ζαγκ, μία ελικοειδή ευθεία βελονιά ή τα χρώματά της
+	Sequins	Πούλιες
+	Beads	Χάντρες
+	Rhinestones	Στρας
+	Cord	Κορδόνι
+	Boring	Διάτρηση (boring)
+	Along the line	Κατά μήκος της γραμμής
+	Fill the shape	Γέμισμα του σχήματος
+	Round the edge	Γύρω από την άκρη
+	At each point	Σε κάθε σημείο
+	Bead length	Μήκος χάντρας
+	Cord width	Πλάτος κορδονιού
+	Edge width	Πλάτος άκρης
+	Honeycomb	Κηρήθρα
+	Packing	Διάταξη
+	Three	Τρεις
+	Fixing	Στερέωση
+	Flip every other	Αναστροφή εναλλάξ
+	Colour	Χρώμα
+	Thread colour	Χρώμα κλωστής
+	Stop before	Στάση πριν
+	Rhinestones aren't sewn: export their template to cut and set them	Τα στρας δεν ράβονται: εξαγάγετε το πρότυπό τους για κοπή και τοποθέτηση
+	Decoration Sizes	Μεγέθη διακοσμητικών
+	Count Decorations	Καταμέτρηση διακοσμητικών
+	Cut File	Αρχείο κοπής
+	Sew the pieces together	Ράψιμο των κομματιών μεταξύ τους
+	Fabric colour	Χρώμα υφάσματος
+	Plain	Απλό
+	Check	Καρό
+	Denim	Τζιν
+	Felt	Τσόχα
+	Fabric pattern	Σχέδιο υφάσματος
+	Pattern colour	Χρώμα σχεδίου υφάσματος
+	Combine Appliqué	Συνδυασμός απλικέ
+	Prepare Appliqué	Προετοιμασία απλικέ
+	Coil	Σπιράλ
+	Square loop	Τετράγωνη θηλιά
+	Foil	Φύλλο μεταλλικό (foil)
+	Shown with the design, not sewn	Εμφανίζεται με το σχέδιο, δεν ράβεται
+	StitchFoundry Help	Βοήθεια StitchFoundry
+	Tips	Συμβουλές
+	Search help	Αναζήτηση στη βοήθεια
+	Nothing found	Δεν βρέθηκε τίποτα
+	Help Topics	Θέματα βοήθειας
+	Help Topic	Θέμα βοήθειας
+	Help for Tool	Βοήθεια για το εργαλείο
+	New Design for Hoop	Νέο σχέδιο για τελάρο
+	Sample Designs	Δείγματα σχεδίων
+	Open Sample Design	Άνοιγμα δείγματος σχεδίου
+	Start a design for your hoop	Ξεκινήστε ένα σχέδιο για το τελάρο σας
+	Your first design	Το πρώτο σας σχέδιο
+	Draw shapes, place a picture or type text.	Σχεδιάστε σχήματα, τοποθετήστε μια εικόνα ή πληκτρολογήστε κείμενο.
+	Choose how each part is stitched: satin, fill, run and more.	Επιλέξτε πώς κεντιέται κάθε τμήμα: σατέν, γέμισμα, ευθεία βελονιά και άλλα.
+	Watch it sew with the stitch player and check it.	Δείτε το να ράβεται με την αναπαραγωγή βελονιών και ελέγξτε το.
+	Export the file for your machine.	Εξαγάγετε το αρχείο για τη μηχανή σας.
+	Learn how	Μάθετε πώς
+	Try a sample	Δοκιμάστε ένα δείγμα
+	Heart patch	Σήμα με καρδιά
+	Sun and moon	Ήλιος και φεγγάρι
+	Appliqué star	Αστέρι απλικέ
+	Tip:	Συμβουλή:
+	More tips	Περισσότερες συμβουλές
+	A new design the size of this hoop's sewing field	Νέο σχέδιο στο μέγεθος του πεδίου ραψίματος αυτού του τελάρου
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Σχεδιάστε μια γραμμή κλίσης πάνω σε ένα σχήμα για να ορίσετε τη γωνία βελονιάς· με δύο ή περισσότερες γραμμές οι βελονιές στρίβουν.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Κάντε κλικ σε μια περιοχή μιας τοποθετημένης εικόνας για να την κεντήσετε· αυξήστε την Ανοχή για να συμπεριλάβετε περισσότερες αποχρώσεις.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Σύρετε τα επιλεγμένα σημεία βελόνας για να τα μετακινήσετε, Alt-κλικ σε βελονιά για προσθήκη, το Delete τα διαγράφει.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Κάντε κλικ εναλλάξ στη μία πλευρά της στήλης και μετά στην άλλη· το Enter ή το Escape την ολοκληρώνει.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	Ο επιλογέας στην κάτω αριστερή γωνία ορίζει το πινέλο, το πλάτος, την πυκνότητα, το μήκος και το σχήμα.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Πληκτρολογήστε το κείμενο και επιλέξτε μια γραμματοσειρά κεντήματος στον πίνακα Κεντητά γράμματα ώστε να ράβεται καθαρά.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Επιλέξτε σχέδιο και ορίστε Κέντημα › Μετατροπή σχεδίου σε κέντημα για να το ψηφιοποιήσετε σε ένα βήμα.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Το σατέν ταιριάζει σε σχήματα πλάτους έως περίπου 7 mm· οι φαρδύτερες περιοχές ράβονται καλύτερα με γέμισμα τατάμι.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Επιλέξτε τελάρο στον πίνακα Κέντημα για να δείτε το πεδίο ραψίματος γύρω από το σχέδιο.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Ο Έλεγχος σχεδίου στο μενού Κέντημα βρίσκει πυκνές στρώσεις, μακριές βελονιές και κείμενο πολύ μικρό για ράψιμο.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Δείτε το σχέδιο να ράβεται με την αναπαραγωγή βελονιών στη Σειρά βελονιών πριν το στείλετε.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Εξαγάγετε με Κέντημα › Εξαγωγή αρχείου μηχανής και επιλέξτε τη μορφή της μηχανής σας.
+	Save as Default	Αποθήκευση ως προεπιλογή
+	Clear Default	Απαλοιφή προεπιλογής
+	Every new design starts with these properties	Κάθε νέο σχέδιο ξεκινά με αυτές τις ιδιότητες
+	New designs take the built-in properties again	Τα νέα σχέδια παίρνουν ξανά τις ενσωματωμένες ιδιότητες
+	All Tools, Ungrouped	Όλα τα εργαλεία, χωρίς ομαδοποίηση
+	Toolbar: All Tools, Ungrouped	Γραμμή εργαλείων: Όλα τα εργαλεία, χωρίς ομαδοποίηση
+	Push compensation	Αντιστάθμιση ώθησης
+	{n} very short stitches can break the thread	{n} πολύ κοντές βελονιές μπορεί να σπάσουν την κλωστή
+	Satin only {n} mm wide sinks into the fabric	Σατέν πλάτους μόνο {n} mm βυθίζεται στο ύφασμα
+	Fill stitches {n} mm long can ripple after washing	Βελονιές γεμίσματος μήκους {n} mm μπορεί να ζαρώσουν μετά το πλύσιμο
+	Sewn on clothing	Ράβεται σε ρούχα
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	Οι μακριές βελονιές πιάνονται από 7 mm στα ρούχα, 12,1 mm σε άλλα είδη
+	Short stitches under	Κοντές βελονιές κάτω από
+	Narrow satin under	Στενό σατέν κάτω από
+	Short fill stitches under	Κοντές βελονιές γεμίσματος κάτω από
+	Edge run and zigzag	Ευθεία ακμής και ζιγκ-ζαγκ
+	Satin underlay	Υπόστρωμα σατέν
+	Edge run under fills	Ευθεία ακμής κάτω από γεμίσματα
+	New to digitizing? Read the basics	Νέοι στην ψηφιοποίηση; Διαβάστε τα βασικά
+	Density Map	Χάρτης πυκνότητας
+	Density map	Χάρτης πυκνότητας
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Χρωματισμός του σχεδίου ανάλογα με το πάχος της κλωστής: μπλε μία στρώση, κόκκινο όσο πυκνό επισημαίνει ο Έλεγχος σχεδίου
+	Calibrate Life Size…	Βαθμονόμηση φυσικού μεγέθους…
+	Calibrate Life Size	Βαθμονόμηση φυσικού μεγέθους
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Κρατήστε έναν χάρακα ή μια τραπεζική κάρτα πάνω στην οθόνη και αλλάξτε το μέγεθος μέχρι να ταιριάξουν οι ενδείξεις. Τότε το Πραγματικό μέγεθος δείχνει τα σχέδια σε φυσικό μέγεθος.
+	Bank card	Τραπεζική κάρτα
+	Screen points per inch	Σημεία οθόνης ανά ίντσα
+	Use This Size	Χρήση αυτού του μεγέθους
+	Screen Points per Inch at Life Size	Σημεία οθόνης ανά ίντσα σε φυσικό μέγεθος
+@msg	`pointsPerInch` is a number from 40 to 400	το `pointsPerInch` είναι αριθμός από 40 έως 400
+	Experience	Εμπειρία
+	New to Embroidery	Νέοι στο κέντημα
+	Digitizer	Ψηφιοποιητής
+	Embroidery Business	Επιχείρηση κεντήματος
+	Everything	Όλα
+	Showing the basics.	Εμφανίζονται τα βασικά.
+	Show everything	Εμφάνιση όλων
+	New to embroidery	Νέοι στο κέντημα
+	I digitize designs	Ψηφιοποιώ σχέδια
+	I run an embroidery business	Διατηρώ επιχείρηση κεντήματος
+	The basic tools and everyday sections, nothing more	Τα βασικά εργαλεία και οι καθημερινές ενότητες, τίποτα περισσότερο
+	Every digitizing tool, rulers and the control bar	Κάθε εργαλείο ψηφιοποίησης, οι χάρακες και η γραμμή ελέγχου
+	Everything, with job orders and batch output	Όλα, με παραγγελίες εργασιών και μαζική έξοδο
+	How do you work?	Πώς εργάζεστε;
+@msg	`level` is beginner, digitizer, business or all	το `level` είναι beginner, digitizer, business ή all
+	Echo Quilting	Καπιτονέ ηχούς
+	Background Quilting	Καπιτονέ φόντου
+	Remove Blend	Αφαίρεση ανάμειξης
+	Blend layers	Στρώσεις ανάμειξης
+	My Machine…	Η μηχανή μου…
+	Save for My Machine	Αποθήκευση για τη μηχανή μου
+	Which embroidery machine do you have?	Ποια μηχανή κεντήματος έχετε;
+	Measure in	Μέτρηση σε
+	Save designs to	Αποθήκευση σχεδίων σε
+	No folder chosen yet	Δεν έχει επιλεγεί ακόμη φάκελος
+	Plug in the USB stick you take to your machine, then choose it here.	Συνδέστε το USB stick που πηγαίνετε στη μηχανή σας και επιλέξτε το εδώ.
+	Husqvarna Viking (other models)	Husqvarna Viking (άλλα μοντέλα)
+	Brother or Baby Lock	Brother ή Baby Lock
+	Janome or Elna	Janome ή Elna
+	Another machine (DST)	Άλλη μηχανή (DST)
+	My machine:	Η μηχανή μου:
+	Tell us your machine to see its hoops and save in its format.	Πείτε μας τη μηχανή σας για να δείτε τα τελάρα της και να αποθηκεύετε στη μορφή της.
+	Choose My Machine	Επιλογή της μηχανής μου
+	Saved for your machine:	Αποθηκεύτηκε για τη μηχανή σας:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Ένα σχήμα υφάσματος: η μηχανή σταματά για να τοποθετήσετε το ύφασμα και μετά το ράβει
+	A heart, a star, a flower and more, ready to sew	Μια καρδιά, ένα αστέρι, ένα λουλούδι και άλλα, έτοιμα για ράψιμο
+	A name or a few words, ready to sew	Ένα όνομα ή λίγες λέξεις, έτοιμα για ράψιμο
+	A photo or drawing to turn into stitches	Μια φωτογραφία ή ζωγραφιά για μετατροπή σε βελονιές
+	A picture	Μια εικόνα
+	Add Appliqué	Προσθήκη απλικέ
+	Add Appliqué…	Προσθήκη απλικέ…
+	Add Words	Προσθήκη λέξεων
+	Add Words…	Προσθήκη λέξεων…
+	Add a Picture…	Προσθήκη εικόνας…
+	Add a Shape	Προσθήκη σχήματος
+	Add a Shape…	Προσθήκη σχήματος…
+	Bigger	Μεγαλύτερο
+	Choose a shape	Επιλέξτε σχήμα
+	Click a part of the design to change how it sews.	Κάντε κλικ σε ένα τμήμα του σχεδίου για να αλλάξετε τον τρόπο που ράβεται.
+	Click a part of the design to choose it, drag it to move it	Κάντε κλικ σε ένα τμήμα του σχεδίου για να το επιλέξετε, σύρετέ το για να το μετακινήσετε
+	Crown	Στέμμα
+	Filled	Γεμάτο
+	How tall	Ύψος
+	Just the outline	Μόνο το περίγραμμα
+	Not sewn	Δεν ράβεται
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Δεν υπάρχει ακόμη τίποτα για ράψιμο. Προσθέστε λέξεις, σχήμα ή εικόνα με τα κουμπιά στα αριστερά.
+	Paw	Πατούσα
+	See the design sew on screen, stitch by stitch	Δείτε το σχέδιο να ράβεται στην οθόνη, βελονιά προς βελονιά
+	Sew it as	Ράψιμο ως
+	Smaller	Μικρότερο
+	Smooth edge (satin)	Λεία άκρη (σατέν)
+	Start a design from the Home screen.	Ξεκινήστε ένα σχέδιο από την αρχική οθόνη.
+	Take back the last change	Αναίρεση της τελευταίας αλλαγής
+	The chosen part	Το επιλεγμένο τμήμα
+	The chosen parts	Τα επιλεγμένα τμήματα
+	The design is bigger than the hoop: make it smaller before you sew.	Το σχέδιο είναι μεγαλύτερο από το τελάρο: μικρύνετέ το πριν το ράψετε.
+	Thread colours	Χρώματα κλωστής
+	Turn Into Stitches	Μετατροπή σε βελονιές
+	Turn it into stitches in your thread colours.	Μετατρέψτε το σε βελονιές με τα χρώματα των κλωστών σας.
+	Watch It Sew	Δείτε το να ράβεται
+	What should it say?	Τι να γράφει;
+	Write the design for your machine to its USB stick or folder	Εγγραφή του σχεδίου για τη μηχανή σας στο USB stick ή στον φάκελό της
+	Your design	Το σχέδιό σας
+	Show Everything	Εμφάνιση όλων
+@msg	the design has no page	το σχέδιο δεν έχει σελίδα
+@msg	open or start a design first	ανοίξτε ή ξεκινήστε πρώτα ένα σχέδιο
+	Set My Machine	Ορισμός της μηχανής μου
+	Make a Design	Δημιουργία σχεδίου
+	Make a Design…	Δημιουργία σχεδίου…
+	Make a Design, Step by Step	Δημιουργία σχεδίου, βήμα προς βήμα
+	Step by step: words, a shape, appliqué, a picture or a sample	Βήμα προς βήμα: λέξεις, σχήμα, απλικέ, εικόνα ή δείγμα
+	What would you like to make?	Τι θα θέλατε να φτιάξετε;
+	A name or some words	Ένα όνομα ή λίγες λέξεις
+	For towels, bags, pillows and gifts	Για πετσέτες, τσάντες, μαξιλάρια και δώρα
+	A shape	Ένα σχήμα
+	A heart, a star, a flower and more	Μια καρδιά, ένα αστέρι, ένα λουλούδι και άλλα
+	An appliqué	Ένα απλικέ
+	A shape cut from fabric and sewn down	Ένα σχήμα κομμένο από ύφασμα και ραμμένο πάνω
+	A photo or a drawing turned into stitches	Μια φωτογραφία ή ζωγραφιά μετατρεμμένη σε βελονιές
+	A sample to try	Ένα δείγμα για δοκιμή
+	A finished design to sew and learn from	Ένα έτοιμο σχέδιο για να το ράψετε και να μάθετε
+	Which hoop will you use?	Ποιο τελάρο θα χρησιμοποιήσετε;
+	Tell us your machine to see its hoops.	Πείτε μας τη μηχανή σας για να δείτε τα τελάρα της.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Επιλέξτε το τελάρο όπου θα βάλετε το ύφασμα. Το σχέδιο φτιάχνεται ώστε να χωράει σε αυτό.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Τα κεφαλαία γράμματα έχουν αυτό το ύψος. 20 έως 30 mm ταιριάζουν σε πετσέτα· 10 έως 15 mm σε μπλούζα.
+	Make It	Δημιουργία
+	Which shape of fabric?	Ποιο σχήμα υφάσματος;
+	Which shape?	Ποιο σχήμα;
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Η μηχανή ράβει το σημείο όπου μπαίνει το ύφασμα και σταματά· τοποθετείτε το ύφασμα, εκείνη το στερεώνει και σταματά ξανά για να το κόψετε· μετά ράβει την άκρη.
+	Choose a picture	Επιλέξτε εικόνα
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Οι απλές εικόνες με λίγα επίπεδα χρώματα και καθαρές άκρες δίνουν το καλύτερο αποτέλεσμα: κινούμενα σχέδια, λογότυπα, clipart.
+	Choose a Picture…	Επιλογή εικόνας…
+	Which sample?	Ποιο δείγμα;
+	Your thread colours	Τα χρώματα των κλωστών σας
+	These are sewn in this order. Click a colour to match a thread you have.	Ράβονται με αυτή τη σειρά. Κάντε κλικ σε ένα χρώμα για να το αντιστοιχίσετε σε κλωστή που έχετε.
+	Watch it sew	Δείτε το να ράβεται
+	See the needle go stitch by stitch, in the order your machine will sew it.	Δείτε τη βελόνα να κινείται βελονιά προς βελονιά, με τη σειρά που θα το ράψει η μηχανή σας.
+	Save it	Αποθηκεύστε το
+	Save for My Machine writes the file your machine sews, to its USB stick.	Η Αποθήκευση για τη μηχανή μου γράφει το αρχείο που ράβει η μηχανή σας στο USB stick της.
+	Save Design keeps a copy you can open and change later.	Η Αποθήκευση σχεδίου κρατά ένα αντίγραφο που μπορείτε να ανοίξετε και να αλλάξετε αργότερα.
+	Save Design…	Αποθήκευση σχεδίου…
+	Put back what Undo took back	Επαναφορά όσων αναίρεσε η Αναίρεση
+	Start Over…	Από την αρχή…
+	Clear the design and begin again	Απαλοιφή του σχεδίου και νέα αρχή
+	Text size	Μέγεθος κειμένου
+	Saved for you automatically in My Designs:	Αποθηκεύτηκε αυτόματα για εσάς στα Σχέδιά μου:
+	Start Over	Από την αρχή
+	Clear everything in this design and begin again?	Να διαγραφούν όλα σε αυτό το σχέδιο και να ξεκινήσετε από την αρχή;
+	You can still get it back with Undo.	Μπορείτε ακόμη να το επαναφέρετε με την Αναίρεση.
+	Keep It	Διατήρηση
+	Keep Design Safe	Ασφαλής διατήρηση σχεδίου
+	In-the-Hoop Projects	Έργα στο τελάρο
+	Make In-the-Hoop Project	Δημιουργία έργου στο τελάρο
+	Steps	Βήματα
+	The machine also stops where you lay or trim fabric.	Η μηχανή σταματά επίσης όπου τοποθετείτε ή κόβετε ύφασμα.
+	Print the Steps…	Εκτύπωση των βημάτων…
+	Change the Size?	Αλλαγή μεγέθους;
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	Αυτό το σχέδιο σταματά για ύφασμα που κόβετε στο μέγεθος. Αν μεγαλώσει ή μικρύνει, τα κομμάτια μπορεί να μην ταιριάζουν πια.
+	Keep the Size	Διατήρηση μεγέθους
+	Change It Anyway	Αλλαγή ούτως ή άλλως
+	An in-the-hoop project	Ένα έργο στο τελάρο
+	A little pillow front, a mug rug, a coaster or an ornament	Μια μικρή πρόσοψη μαξιλαριού, ένα σουβέρ κούπας (mug rug), ένα σουβέρ ή ένα στολίδι
+	Which project?	Ποιο έργο;
+	Sewn in a 5×7 hoop, borders and back sewn on after	Ράβεται σε τελάρο 5×7, με τα πλαίσια και την πλάτη να ράβονται μετά
+	Finished in the hoop: batting, backing and a satin edge	Ολοκληρώνεται στο τελάρο: βάτα, φόδρα και άκρη σατέν
+	Words (you can leave this empty)	Λέξεις (μπορείτε να το αφήσετε κενό)
+	Little pillow front, 8″ square	Μικρή πρόσοψη μαξιλαριού, τετράγωνη 8″
+	Little pillow front, 9½ × 5½″	Μικρή πρόσοψη μαξιλαριού, 9½ × 5½″
+	Mug rug, 6½ × 4½″	Σουβέρ κούπας (mug rug), 6½ × 4½″
+	Coaster, 3¾″ square	Σουβέρ, τετράγωνο 3¾″
+	Round ornament, 3½″	Στρογγυλό στολίδι, 3½″
+	Quilting for a tile	Καπιτονέ για πλακίδιο
+	Background quilting the size of a quilting tile, block by block	Καπιτονέ φόντου στο μέγεθος ενός πλακιδίου καπιτονέ, μπλοκ προς μπλοκ
+	What size is the tile?	Τι μέγεθος έχει το πλακίδιο;
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	Διαβάστε το μέγεθος στο παράθυρο του πλακιδίου. Το μπλοκ γίνεται καπιτονέ από άκρη σε άκρη, στο μέγεθος του πλακιδίου.
+	Lines apart	Απόσταση γραμμών
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	Κρατήστε το ίδιο μοτίβο και διάστημα για κάθε μπλοκ ενός πάπλωματος, ώστε τα μπλοκ να συνεχίζονται το ένα στο άλλο.
+	Make Every Size…	Δημιουργία όλων των μεγεθών…
+	One file for each usual tile size, in a folder or on the USB stick	Ένα αρχείο για κάθε συνηθισμένο μέγεθος πλακιδίου, σε φάκελο ή στο USB stick
+	Quilt blocks saved:	Αποθηκευμένα μπλοκ καπιτονέ:
+	Stipple	Στίγματα (stipple)
+	Squares spiral	Τετράγωνη σπείρα
+	Quilt Block Patterns	Μοτίβα μπλοκ καπιτονέ
+	Quilt Block	Μπλοκ καπιτονέ
+	Quilt Block Set	Σετ μπλοκ καπιτονέ
+	Loops	Θηλιές
+	Pebbles	Βότσαλα
+	A block	Ένα μπλοκ
+	A border strip	Μια λωρίδα πλαισίου
+	A corner	Μια γωνία
+	In the middle (you can leave this empty)	Στη μέση (μπορείτε να το αφήσετε κενό)
+	Words	Λέξεις
+	No shape	Χωρίς σχήμα
+	Sew the shape as appliqué	Ράψιμο του σχήματος ως απλικέ
+	Add a ribbon band across it	Προσθήκη λωρίδας κορδέλας κατά μήκος
+	Add a ribbon loop to hang it	Προσθήκη θηλιάς κορδέλας για κρέμασμα
+	Clear vinyl on top (wipe-clean)	Διαφανές βινύλιο από πάνω (σκουπίζεται)
+	Mark where a button goes	Σημάδι για τη θέση κουμπιού
+	Print the Cutting Templates…	Εκτύπωση των προτύπων κοπής…
+	In-the-Hoop Cutting Templates	Πρότυπα κοπής για έργα στο τελάρο
+	Downloaded for your machine:	Λήφθηκε για τη μηχανή σας:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	Η Αποθήκευση για τη μηχανή μου κατεβάζει το σχέδιο: αντιγράψτε το στο USB stick που πηγαίνετε στη μηχανή σας.
+	Downloaded:	Λήφθηκε:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	Η Αποθήκευση για τη μηχανή μου κατεβάζει το αρχείο που ράβει η μηχανή σας: αντιγράψτε το στο USB stick της.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Ανάμειξη από ντεγκραντέ
+	Sew the gradient's colours blended the way it runs	Ράψιμο των χρωμάτων του ντεγκραντέ αναμεμειγμένων κατά την κατεύθυνσή του
+	Cutwork	Κοφτό κέντημα
+	Tartan Fill	Γέμισμα καρό (tartan)
+	Test Sew-Out	Δοκιμαστικό ράψιμο
+	Test Sew-Outs	Δοκιμαστικά ραψίματα
+	Cross Stitch	Σταυροβελονιά
+	Cross Stitch Tool	Εργαλείο σταυροβελονιάς
+	Cross Stitch from Image…	Σταυροβελονιά από εικόνα…
+	Cross-Stitch Pattern Info	Πληροφορίες σχεδίου σταυροβελονιάς
+	Cross-Stitch Pattern Settings	Ρυθμίσεις σχεδίου σταυροβελονιάς
+	New Cross-Stitch Pattern…	Νέο σχέδιο σταυροβελονιάς…
+	Paint Cross Stitches	Ζωγραφική σταυροβελονιών
+	Brush (squares)	Πινέλο (τετράγωνα)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	Κάντε κλικ ή σύρετε σε ένα πλέγμα σταυροβελονιάς για να γεμίσετε τα τετράγωνά του· κρατήστε πατημένο το Alt για σβήσιμο
+	Erase	Σβήσιμο
+	Pattern colours	Χρώματα σχεδίου
+	Add My Hoop	Προσθήκη του τελάρου μου
+	Brother or Baby Lock multi-needle	Brother ή Baby Lock πολυβελονική
+	Commercial multi-needle (DST)	Επαγγελματική πολυβελονική (DST)
+	Give the hoop a name	Δώστε όνομα στο τελάρο
+	Hoop not listed? Add its sewing field here.	Το τελάρο δεν υπάρχει στη λίστα; Προσθέστε εδώ το πεδίο ραψίματός του.
+	My hoop	Το τελάρο μου
+	My own hoops	Τα δικά μου τελάρα
+	Square corners	Τετράγωνες γωνίες
+	Type the hoop's width and height as numbers	Πληκτρολογήστε το πλάτος και το ύψος του τελάρου ως αριθμούς
+	in	in
+	Chenille	Σενίλ
+	Chenille Stitch	Βελονιά σενίλ
+	Chenille Stops	Στάσεις σενίλ
+	Compound Chenille…	Σύνθετο σενίλ…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	Γέμισμα moss με περιγράμματα αλυσίδας ραμμένα πριν και μετά, σε ομάδα στη θέση του σχήματος
+	Chain	Αλυσίδα
+	Chenille stops	Στάσεις σενίλ
+	Lockstitch	Βελονιά κλειδώματος
+	Moss	Moss
+	Moss pattern	Μοτίβο moss
+	Needle height	Ύψος βελόνας
+	Start	Έναρξη
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	το moss ράβει γεμίσματα και ευθείες: ορίστε πρώτα στο σατέν βελονιά γεμίσματος ή ευθεία
+	Get Embroidery Fonts…	Λήψη γραμματοσειρών κεντήματος…
+	About the library	Σχετικά με τη βιβλιοθήκη
+	Download Again	Νέα λήψη
+	Download fonts from an embroidery font library, ready for lettering	Λήψη γραμματοσειρών από βιβλιοθήκη γραμματοσειρών κεντήματος, έτοιμων για γράμματα
+	Downloading	Γίνεται λήψη
+	Each font comes with its own licence, in its folder.	Κάθε γραμματοσειρά συνοδεύεται από τη δική της άδεια, στον φάκελό της.
+	Fonts are kept in	Οι γραμματοσειρές φυλάσσονται στο
+	Get Embroidery Fonts	Λήψη γραμματοσειρών κεντήματος
+	Listing the fonts…	Καταγραφή των γραμματοσειρών…
+	Try Again	Δοκιμή ξανά
+	fonts	γραμματοσειρές
+	is ready for lettering	είναι έτοιμη για γράμματα
+@msg	a file of the font has an unsafe name: {path}	ένα αρχείο της γραμματοσειράς έχει μη ασφαλές όνομα: {path}
+@msg	can't reach the font library: {e}	δεν είναι δυνατή η σύνδεση με τη βιβλιοθήκη γραμματοσειρών: {e}
+@msg	downloading embroidery fonts works in the desktop app	η λήψη γραμματοσειρών κεντήματος λειτουργεί στην εφαρμογή υπολογιστή
+@msg	the font library answered {status} for {path}	η βιβλιοθήκη γραμματοσειρών απάντησε {status} για {path}
+@msg	the font library answered {status}: try again later	η βιβλιοθήκη γραμματοσειρών απάντησε {status}: δοκιμάστε ξανά αργότερα
+@msg	{_1} isn't published yet	το {_1} δεν έχει δημοσιευτεί ακόμη
+	Border or Corner…	Πλαίσιο ή γωνία…
+	Check Continuous Line	Έλεγχος συνεχούς γραμμής
+	Continuous Fill	Συνεχές γέμισμα
+	Continuous Fill…	Συνεχές γέμισμα…
+	Crib (36 × 52″)	Κούνια (36 × 52″)
+	DXF Lines (.dxf)…	Γραμμές DXF (.dxf)…
+	Echo	Ηχώ
+	Edge-to-Edge Rows	Σειρές από άκρη σε άκρη
+	Edge-to-Edge Rows…	Σειρές από άκρη σε άκρη…
+	Export Quilting Lines	Εξαγωγή γραμμών καπιτονέ
+	Export Quilting Lines…	Εξαγωγή γραμμών καπιτονέ…
+	HP-GL Plot (.plt)…	Σχεδίαση HP-GL (.plt)…
+	Join into One Line	Ένωση σε μία γραμμή
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Καπιτονέ longarm
+	Meander	Ελικοειδής γραμμή
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Γραμμές SVG (.svg)…
+	Start and End on the Edges	Αρχή και τέλος στις άκρες
+	Stitch in the Ditch	Ράψιμο στη ραφή (stitch in the ditch)
+	Throw (50 × 65″)	Ριχτάρι (50 × 65″)
+	Twin (70 × 90″)	Μονό (70 × 90″)
+	A border of the selected line	Πλαίσιο από την επιλεγμένη γραμμή
+	Border depth	Βάθος πλαισίου
+	Border length	Μήκος πλαισίου
+	Corner leg (0: no corner)	Σκέλος γωνίας (0: χωρίς γωνία)
+	Edge-to-edge rows of the selected line	Σειρές από άκρη σε άκρη από την επιλεγμένη γραμμή
+	Make Border	Δημιουργία πλαισίου
+	Make Rows	Δημιουργία σειρών
+	Nest the rows	Εμφώλευση των σειρών
+	One continuous line, ready for a longarm	Μία συνεχής γραμμή, έτοιμη για μηχανή longarm
+	Quilt height	Ύψος παπλώματος
+	Quilt width	Πλάτος παπλώματος
+	Row spacing (0: the line's height)	Διάστημα σειρών (0: το ύψος της γραμμής)
+	joins needed: Join into One Line makes them	χρειάζονται ενώσεις: η Ένωση σε μία γραμμή τις δημιουργεί
+	longest	μεγαλύτερο
+@msg	nothing to add	δεν υπάρχει τίποτα για προσθήκη
+	Download All	Λήψη όλων
+	Every font not downloaded yet, one after another	Κάθε γραμματοσειρά που δεν έχει ληφθεί ακόμη, τη μία μετά την άλλη
+	Fonts downloaded:	Γραμματοσειρές που λήφθηκαν:
+	failed:	απέτυχαν:
+	fonts downloaded, ready for lettering	γραμματοσειρές λήφθηκαν, έτοιμες για γράμματα
+	Compare Designs	Σύγκριση σχεδίων
+	Compare Designs…	Σύγκριση σχεδίων…
+	Average stitch (mm)	Μέση βελονιά (mm)
+	Bobbin thread (m)	Κλωστή μασουριού (m)
+	Choose a machine file or the design open now	Επιλέξτε ένα αρχείο μηχανής ή το σχέδιο που είναι ανοιχτό τώρα
+	Choose both designs to compare them	Επιλέξτε και τα δύο σχέδια για να τα συγκρίνετε
+	Colour changes	Αλλαγές χρώματος
+	Differences of 10% or more are highlighted. The real test is sewing both.	Οι διαφορές 10% ή μεγαλύτερες επισημαίνονται. Η πραγματική δοκιμή είναι να ράψετε και τα δύο.
+	First design	Πρώτο σχέδιο
+	Height (mm)	Ύψος (mm)
+	Jumps	Άλματα
+	Longest stitch (mm)	Μεγαλύτερη βελονιά (mm)
+	Open File…	Άνοιγμα αρχείου…
+	Second	Δεύτερο
+	Second design	Δεύτερο σχέδιο
+	Stitches over 7 mm	Βελονιές πάνω από 7 mm
+	Stitches under 1 mm	Βελονιές κάτω από 1 mm
+	Stops	Στάσεις
+	This Design	Αυτό το σχέδιο
+	This design	Αυτό το σχέδιο
+	Top thread (m)	Επάνω κλωστή (m)
+	Width (mm)	Πλάτος (mm)
+	same	ίδιο
+	Angular	Γωνιακή
+	Away from the Line	Μακριά από τη γραμμή
+	Between Line and Object	Μεταξύ γραμμής και αντικειμένου
+	Drag out from a segment, or click two points, then click to place.	Σύρετε από ένα τμήμα ή κάντε κλικ σε δύο σημεία και μετά κάντε κλικ για τοποθέτηση.
+	Drag out from a corner, or click two straight lines, then click to place.	Σύρετε από μια γωνία ή κάντε κλικ σε δύο ευθείες γραμμές και μετά κάντε κλικ για τοποθέτηση.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Σύρετε από κύκλο ή τόξο για την ακτίνα του, προς τα μέσα για τη διάμετρο.
+	Display	Εμφάνιση
+@msg	Unknown dimension style	Άγνωστο στυλ διάστασης
+@msg	Unknown unit	Άγνωστη μονάδα
+	Direction	Κατεύθυνση
+	Along the selected line	Κατά μήκος της επιλεγμένης γραμμής
+	Add to Design	Προσθήκη στο σχέδιο
+	Colors and Order	Χρώματα και σειρά
+	Paint	Ζωγραφική
+	Print and Export	Εκτύπωση και εξαγωγή
+	Special Machines	Ειδικές μηχανές
+	Split Lines	Γραμμές διαχωρισμού
+	Stitch Direction	Κατεύθυνση βελονιών
+	Use Line as Direction	Χρήση γραμμής ως κατεύθυνσης
+	Arc Up	Τόξο προς τα πάνω
+	Arc Down	Τόξο προς τα κάτω
+	To follow a line of your own, draw it first, select it, then Add Words.	Για να ακολουθεί μια δική σας γραμμή, σχεδιάστε την πρώτα, επιλέξτε την και μετά Προσθήκη λέξεων.
+	Ask About Embroidery…	Ερώτηση για το κέντημα…
+	Ask About Embroidery	Ερώτηση για το κέντημα
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Ρωτήστε οτιδήποτε για το μηχανικό κέντημα ή το StitchFoundry: ποιο σταθεροποιητικό να χρησιμοποιήσετε, γιατί σπάει η κλωστή, πώς να ράβονται πιο καθαρά τα γράμματα, πού βρίσκεται μια λειτουργία. Ο Claude μπορεί επίσης να αλλάξει το σχέδιό σας όταν του το ζητήσετε, αφού το επιτρέψετε.
+	Thinking…	Σκέφτεται…
+	Type your question, then press Enter	Πληκτρολογήστε την ερώτησή σας και πατήστε Enter
+	Ask	Ερώτηση
+	New Conversation	Νέα συνομιλία
+	Include my design	Συμπερίληψη του σχεδίου μου
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Οι απαντήσεις προέρχονται από τον Claude με το δικό σας κλειδί API της Anthropic, με χρέωση στον λογαριασμό σας στην Anthropic. Μπορεί να είναι λανθασμένες: κάντε ένα δοκιμαστικό ράψιμο πριν από ένα σημαντικό κομμάτι.
+	Change key	Αλλαγή κλειδιού
+@msg	Type a question first.	Πληκτρολογήστε πρώτα μια ερώτηση.
+@msg	The question is too long: keep it under 2,000 characters.	Η ερώτηση είναι πολύ μεγάλη: κρατήστε την κάτω από 2.000 χαρακτήρες.
+@msg	The AI declined to answer this: ask another way.	Η AI αρνήθηκε να απαντήσει: ρωτήστε με άλλο τρόπο.
+@msg	The reply had no answer: try again, or ask something narrower.	Η απάντηση ήταν κενή: δοκιμάστε ξανά ή ρωτήστε κάτι πιο συγκεκριμένο.
+@msg	Ask About Embroidery needs the desktop app for now	Η Ερώτηση για το κέντημα χρειάζεται προς το παρόν την εφαρμογή υπολογιστή
+@msg	already asking: wait for the answer	η ερώτηση είναι ήδη σε εξέλιξη: περιμένετε την απάντηση
+	Claude wants to change your design:	Ο Claude θέλει να αλλάξει το σχέδιό σας:
+	Allow	Να επιτρέπεται
+	Don't Allow	Να μην επιτρέπεται
+	Edit › Undo takes each change back.	Η εντολή Επεξεργασία › Αναίρεση αναιρεί κάθε αλλαγή ξεχωριστά.
+	Changed:	Άλλαξαν:
+	Couldn't change:	Δεν ήταν δυνατή η αλλαγή:
+	Not changed:	Δεν άλλαξαν:
+@msg	This conversation is long: start a New Conversation.	Αυτή η συνομιλία είναι μεγάλη: ξεκινήστε μια Νέα συνομιλία.
+@msg	Claude took too many steps: ask again, more simply.	Ο Claude έκανε υπερβολικά πολλά βήματα: ρωτήστε ξανά, πιο απλά.

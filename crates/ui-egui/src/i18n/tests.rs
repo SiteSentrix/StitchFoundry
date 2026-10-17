@@ -481,10 +481,11 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 9] = ["cs", "de", "es", "fr", "it", "ja", "pt-br", "ru", "uk"];
-/// StitchFoundry: the languages VectorCraft completed that wait for the embroidery strings here.
-/// Their catalogs are VectorCraft's complete ones, so they hold strings this app doesn't show.
-const COMPLETE_UPSTREAM: [&str; 9] = ["bg", "el", "fi", "hu", "ko", "pl", "pt-br", "sv", "vi"];
+const KEEPS_MENU_NAMES: [&str; 16] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
+/// StitchFoundry: the languages VectorCraft completed that wait for the embroidery strings here
+/// (Brazilian Portuguese has its menu labels only). Its catalog is VectorCraft's complete one, so
+/// it holds strings this app doesn't show.
+const COMPLETE_UPSTREAM: [&str; 1] = ["pt-br"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -708,8 +709,7 @@ fn vi() -> Lang {
 #[test]
 fn vietnamese_reads_as_vietnamese() {
     assert_eq!(vi().name(), "Tiếng Việt");
-    // StitchFoundry: partial until the embroidery strings are translated.
-    assert!(!vi().complete_menus());
+    assert!(vi().complete_menus());
     assert_eq!(Lang::from_pref("vi"), vi());
     assert_eq!(Lang::from_pref("VI"), vi());
     for (en, want) in [
@@ -740,8 +740,7 @@ fn fi() -> Lang {
 #[test]
 fn finnish_reads_as_finnish() {
     assert_eq!(fi().name(), "Suomi");
-    // StitchFoundry: partial until the embroidery strings are translated.
-    assert!(!fi().complete_menus());
+    assert!(fi().complete_menus());
     assert_eq!(Lang::from_pref("fi"), fi());
     assert_eq!(Lang::from_pref("FI"), fi());
     for tag in ["fi", "fi-FI", "fi_FI.UTF-8", "FI-fi"] {

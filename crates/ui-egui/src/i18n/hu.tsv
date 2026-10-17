@@ -4957,3 +4957,1265 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+@msg	not a VectorCraft file: {0}	nem VectorCraft-fájl: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-dokumentumok: egyetlen zárolt objektum, amely a fájl változásakor frissül.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Megnyitáskor kimaradt, amit a StitchFoundry még nem tud beolvasni ({what}): a fájl felülírásával ez végleg elvész. A megtartásához mentsd más néven.
+	Report a Bug…	Hiba bejelentése…
+	Add Inclination Line	Dőlésvonal hozzáadása
+	After the selection	A kijelölés után
+	Appliqué	Applikáció
+	Apply Fabric	Anyag alkalmazása
+	Artwork	Grafika
+	Auto Direction	Automatikus irány
+	Auto Stitch Direction	Automatikus öltésirány
+	Auto spacing	Automatikus térköz
+	Auto split	Automatikus felosztás
+	Auto-Digitize Image	Kép automatikus digitalizálása
+	Automatic underlay	Automatikus alávarrás
+	Back to the start	Vissza az elejére
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	Babfutás
+	Before the selection	A kijelölés előtt
+	Blanket	Langettöltés
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Ecsetvonás
+	Calligraphy	Kalligráfia
+	Cell size	Cellaméret
+	Centre run	Középső futóöltés
+	Clear Inclination Lines	Dőlésvonalak törlése
+	Clear Lines	Vonalak törlése
+	Connectors	Összekötők
+	Constant	Állandó
+	Contour Fill	Kontúrkitöltés
+	Convert Artwork to Embroidery	Grafika átalakítása hímzéssé
+	Cover stitch	Fedőöltés
+	Cover width	Fedési szélesség
+	Cross Fill	Keresztirányú kitöltés
+	Delete Inclination Line	Dőlésvonal törlése
+	Densities (mm)	Sűrűségek (mm)
+	Density	Sűrűség
+	Design	Minta
+	Design Information	Mintaadatok
+	Digitizing Widget	Digitalizáló vezérlő
+	Dimmed	Halványított
+	Direction: automatic	Irány: automatikus
+	Direction: fixed angle	Irány: rögzített szög
+	Direction: one inclination line	Irány: egy dőlésvonal
+	Direction: turning along	Irány: követi a fordulást
+	Drag across the shape to add a line; drag a bead to move it	Húzd át az alakzaton egy vonal hozzáadásához; húzz egy gyöngyöt az áthelyezéséhez
+	Each anchor point is a needle penetration.	Minden horgonypont egy tűszúrás.
+	Edge run	Szegélyfutás
+	Edge run underlay	Szegélyfutó alávarrás
+	Edit Lines	Vonalak szerkesztése
+	Embroidery	Hímzés
+	Embroidery Brush Tool	Hímzőecset
+	Embroidery Settings	Hímzési beállítások
+	Export Machine File	Gépi fájl exportálása
+	Export Machine File…	Gépi fájl exportálása…
+	Fabric	Anyag
+	Fabric color	Anyag színe
+	Fill style	Kitöltési stílus
+	Fits the hoop	Belefér a keretbe
+	Give objects a stitch type in the Embroidery panel.	A Hímzés panelen adj öltéstípust az objektumoknak.
+	Gradient to	Színátmenet ehhez:
+	Hide Digitizing Widget	Digitalizáló vezérlő elrejtése
+	Hoop	Keret
+	Inclination Tool	Dőlés
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Nagyobb a keretnél
+	Lengths (mm)	Hosszak (mm)
+	Let sewing start and stop at the closest points again	Az öltés újra a legközelebbi pontokon kezdődjön és végződjön
+	Machine Embroidery File	Gépi hímzőfájl
+	Manual Stitches	Kézi öltések
+	Meander Fill	Kanyargó kitöltés
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Motívum
+	Move Inclination Line	Dőlésvonal áthelyezése
+	Needle points	Tűszúrási pontok
+	New strokes	Új vonások
+	No Stitches	Nincs öltés
+	No hoop	Nincs keret
+	No stitches yet.	Még nincsenek öltések.
+	Not set	Nincs beállítva
+	Nothing stitched yet	Még semmi sincs kivarrva
+	Object color	Objektum színe
+	Open a document to see its stitch sequence.	Nyiss meg egy dokumentumot az öltéssorrend megtekintéséhez.
+	Open or create a document to digitize embroidery.	Nyiss meg vagy hozz létre egy dokumentumot a hímzés digitalizálásához.
+	Path spacing	Útvonalak térköze
+	Pause	Szünet
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Válassz ecsetet, szélességet, sűrűséget és formát a tárcsán, majd rajzolj a vásznon
+	Place editable inclination lines (or pick the angle) automatically	Szerkeszthető dőlésvonalak (vagy a szög) automatikus elhelyezése
+	Placement line and stop	Elhelyezővonal és megállás
+	Play the stitches	Öltések lejátszása
+	Pull compensation	Húzáskompenzáció
+	Radial Fill	Sugaras kitöltés
+	Randomness	Véletlenszerűség
+	Remove background	Háttér eltávolítása
+	Reset Start and Stop	Kezdő- és végpont visszaállítása
+	Row offset	Sorok eltolása
+	Run	Futóöltés
+	Run style	Futóöltés stílusa
+	Satin	Szatén
+	Satin Fill	Szaténkitöltés
+	Select a path, shape or compound path to give it a stitch type.	Jelölj ki egy útvonalat, alakzatot vagy összetett útvonalat, hogy öltéstípust adj neki.
+	Set Inclination Lines	Dőlésvonalak beállítása
+	Set Start and Stop	Kezdő- és végpont beállítása
+	Set Thread	Cérna beállítása
+	Sew earlier	Korábbi varrás
+	Sew first	Varrás elsőként
+	Sew last	Varrás utolsóként
+	Sew later	Későbbi varrás
+	Sewing time	Varrási idő
+	Sewn last	Utolsóként varrva
+	Short stitches on curves	Rövid öltések íveken
+	Show every stitch	Minden öltés megjelenítése
+	Show stitches	Öltések megjelenítése
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Egyszeres
+	Sort by Thread Color	Rendezés cérnaszín szerint
+	Spiral Fill	Spirálkitöltés
+	Stitch Parameters	Öltésparaméterek
+	Stitch Plan	Öltésterv
+	Stitch Sequence	Öltéssorrend
+	Stitch Type	Öltéstípus
+	Stitch length	Öltéshossz
+	Stitch type	Öltéstípus
+	Stitches	Öltések
+	Stop to trim fabric	Megállás az anyag levágásához
+	Tack-down	Lefogó öltés
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Elvékonyodó
+	Tatami Fill	Tatami kitöltés
+	Tatami underlay	Tatami alávarrás
+	Thread	Cérna
+	Thread colors	Cérnaszínek
+	Trim after	Szálvágás utána
+	Trims	Szálvágások
+	Triple	Hármas
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	A kép öltésekké alakítása: a keskeny részek szaténok lesznek, a többi tatami kitöltés.
+	Wave	Hullám
+	Widget values	Vezérlő értékei
+	Width profile	Szélességprofil
+	Widths (mm)	Szélességek (mm)
+	Zigzag	Cikcakk
+	inclination lines	dőlésvonalak
+	Brush	Ecset
+	Length	Hossz
+	Bean	Bab
+	Steil	Steil
+	Heart	Szív
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Az automatikus digitalizálás nem talált kivarrható alakzatot: csökkentsd a zajt, vagy növeld a színek számát
+@msg	Auto-Digitize: the image traced to nothing	Automatikus digitalizálás: a vektorizálás üres eredményt adott
+@msg	can't open `{title}`: the file has no stitches	nem nyitható meg: `{title}`; a fájlban nincsenek öltések
+@msg	can't open `{title}`: {e}	nem nyitható meg: `{title}`; {e}
+@msg	{_1} export failed: {e}	Sikertelen exportálás ({_1}): {e}
+	Stitch Lines	Öltésvonalak
+	Tatami	Tatami
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Készítette: Stitchwright, a VectorCraft alapján, amelyet az ArtCraft csapata készít. MIT OR Apache-2.0. Betűtípusok: Source Sans 3, Inter, JetBrains Mono (OFL). Ikonok: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Verzió: {version} – nyílt forráskódú gépi hímzés-digitalizálás tiszta Rust nyelven.
+	Machine embroidery digitizing — fast, open, scriptable.	Gépi hímzés digitalizálása – gyorsan, nyíltan, szkriptelhetően.
+	Split Here	Felosztás itt
+	Split the object in two at the picked stitch	Az objektum kettéosztása a kiválasztott öltésnél
+	Split Object	Objektum felosztása
+	Check settings	Beállítások ellenőrzése
+	Dense from (layers)	Sűrű ettől (rétegek)
+	Give every stitched object the chart's closest thread	Minden kivarrt objektum a cérnakártya legközelebbi cérnáját kapja
+	Hidden (not sewn)	Rejtett (nincs varrva)
+	Inclination lines	Dőlésvonalak
+	Long stitches from	Hosszú öltések ettől
+	Match Threads to Chart	Cérnák illesztése a cérnakártyához
+	Omit last stitch	Utolsó öltés elhagyása
+	Small lettering under	Apró felirat ez alatt
+	Start and stop	Kezdés és befejezés
+	Thread chart	Cérnakártya
+	Tie style	Rögzítés stílusa
+	Tiny objects under	Apró objektumok ez alatt
+	Travel by	Átmenet módja
+	Double	Dupla
+machine	Trim	Szálvágás
+@plural	{n} stitch|{n} stitches	{n} öltés
+@plural	{n} trim|{n} trims	{n} szálvágás
+machine	Stop	Megállás
+	Column A/B Tool	A/B oszlop
+	Column A/B	A/B oszlop
+	Tatami stitches	Tatami öltések
+	Make Current	Legyen ez az aktuális
+	New objects of this stitch type take these properties	Az ilyen öltéstípusú új objektumok ezeket a tulajdonságokat kapják
+	Properties for New Objects	Új objektumok tulajdonságai
+	Objects you give a stitch type take these properties.	Az objektumok, amelyeknek öltéstípust adsz, ezeket a tulajdonságokat kapják.
+	Fabric settings	Anyagbeállítások
+	Satin density	Szaténsűrűség
+	Fill density	Kitöltés sűrűsége
+	Fill stitch length	Kitöltés öltéshossza
+	Underlay spacing	Alávarrás térköze
+	Fill underlay	Kitöltés alávarrása
+	Topping	Fedőfólia
+	Save as New Fabric	Mentés új anyagként
+	Seconds per trim	Másodperc szálvágásonként
+	Seconds per color change	Másodperc színváltásonként
+	Save to Machine	Mentés a géphez
+	Keep these settings in the machine's profile, for new designs	A beállítások megőrzése a gép profiljában, új mintákhoz
+	Reset Machine	Gép visszaállítása
+	Put the machine's profile back to how it ships, and use it	A gép profiljának visszaállítása a gyári állapotra, és annak használata
+	Delete Machine	Gép törlése
+	Save as New Machine	Mentés új gépként
+	A machine profile of your own with these settings	Saját gépprofil ezekkel a beállításokkal
+	My Machine	Saját gépem
+	A copy of this fabric to change	Az anyag módosítható másolata
+	Delete Fabric	Anyag törlése
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Még nincsenek stílusok. Jelölj ki egy kivarrt objektumot, és hozz létre belőle egyet, hogy újra felhasználhasd az öltéstulajdonságait.
+	New Embroidery Style	Új hímzési stílus
+	Delete Embroidery Style	Hímzési stílus törlése
+	Duplicate Embroidery Style	Hímzési stílus kettőzése
+	Redefine Embroidery Style	Hímzési stílus újradefiniálása
+	Break Link to Embroidery Style	Hímzési stílus kapcsolatának bontása
+	Rename Embroidery Style…	Hímzési stílus átnevezése…
+	Embroidery Styles	Hímzési stílusok
+	Make Properties Current	Tulajdonságok legyenek az aktuálisak
+	Current Properties	Aktuális tulajdonságok
+	New Object Properties	Új objektumok tulajdonságai
+	Reset Current Properties	Aktuális tulajdonságok visszaállítása
+	Apply Embroidery Style	Hímzési stílus alkalmazása
+	Rename Embroidery Style	Hímzési stílus átnevezése
+	Save Fabric	Anyag mentése
+	Machine Profiles	Gépprofilok
+	Save Machine Profile	Gépprofil mentése
+	Delete Machine Profile	Gépprofil törlése
+	Auto Sequence	Automatikus sorrend
+	Branch	Elágazás
+	Break Apart	Szétbontás
+	Sew the objects separately again	Az objektumok ismét külön varrása
+	These objects are sewn as one path (a branch).	Ezeket az objektumokat egyetlen útként varrja a gép (elágazás).
+	Clear Machine Function	Gépi funkció törlése
+	Insert Machine Function	Gépi funkció beszúrása
+	Object Stitches	Objektum öltései
+@msg	`after` is −1 to {_1}	az `after` értéke −1 és {_1} közötti
+@msg	`{what}` is [x, y]	a `{what}` formája [x, y]
+@msg	`{what}` is [x, y] (numbers)	a `{what}` formája [x, y] (számok)
+@msg	each op needs `op`: move, delete or insert	minden műveletnek kell egy `op`: move, delete vagy insert
+@msg	indices are record numbers (0, 1, 2…)	az indexek rekordsorszámok (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	hiányzik: `after` (a −1 az elejére szúr be)
+@msg	missing `indices`	hiányzik: `indices`
+@msg	no record {i}: the object has {len}	nincs ilyen rekord: {i}; az objektum rekordjainak száma: {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	ismeretlen cmd: `{c}`; lehetséges: stitch, jump, trim vagy stop
+@msg	unknown op `{other}`: move, delete or insert	ismeretlen op: `{other}`; lehetséges: move, delete vagy insert
+	Stitch Edit Tool	Öltésszerkesztő
+	Stitch List	Öltéslista
+	Stop after	Megállás utána
+	Stitches edited by hand: the shape no longer changes them.	Kézzel szerkesztett öltések: az alakzat már nem módosítja őket.
+	Edit Stitches	Öltések szerkesztése
+	Pick, move, add and delete single stitches	Egyes öltések kiválasztása, áthelyezése, hozzáadása és törlése
+	Regenerate Stitches	Öltések újragenerálása
+	Drop the hand edits and stitch the shape again	A kézi módosítások elvetése és az alakzat újbóli kiöltése
+	Freeze Stitches	Öltések rögzítése
+	Function	Funkció
+	X (mm)	X (mm)
+	Y (mm)	Y (mm)
+	Stitch	Öltés
+	Jump	Ugrás
+	Color change	Színváltás
+	End	Vége
+	#	#
+	Open a document to see its stitches.	Nyiss meg egy dokumentumot az öltései megtekintéséhez.
+	Machine	Gép
+	Machine settings	Gépbeállítások
+	Longest stitch	Leghosszabb öltés
+	Longest jump	Leghosszabb ugrás
+	Shortest stitch	Legrövidebb öltés
+	Trim jumps longer than	Szálvágás az ennél hosszabb ugrásoknál
+	Tie length	Rögzítés hossza
+	Stitches per minute	Öltés percenként
+	commercial machines	ipari gépek
+	home machines	háztartási gépek
+	Remove underlying stitching	Alatta lévő öltések eltávolítása
+	Overlap	Átfedés
+	Turn	Fordulás
+	Capped	Lezárt
+	Backstitch	Visszaöltés
+	Check Again	Újraellenőrzés
+	Check Design	Minta ellenőrzése
+	Click to select and show it	Kattints a kijelöléséhez és megjelenítéséhez
+	Design setting	Mintabeállítás
+	Different on each side	Mindkét oldalon eltérő
+	Double zigzag	Dupla cikcakk
+	Fill Holes	Lyukak kitöltése
+	Flip to the other side	Átfordítás a másik oldalra
+	Lettering only {n} mm tall is hard to sew clearly	A csak {n} mm magas felirat nehezen varrható tisztán
+	Look for dense spots, long stitches, tiny objects and small lettering	Sűrű helyek, hosszú öltések, apró objektumok és kis feliratok keresése
+	Makes no stitches	Nem hoz létre öltést
+	No problems found.	Nem található probléma.
+	Passes	Menetek
+	Preserve long stitches	Hosszú öltések megtartása
+	Pull comp., side 1	Húzáskomp., 1. oldal
+	Pull comp., side 2	Húzáskomp., 2. oldal
+	Remove Holes	Lyukak eltávolítása
+	Reverse Stitch Direction	Öltésirány megfordítása
+	Swap Satin Sides	Szaténoldalak felcserélése
+	Convert to Satin Column	Átalakítás szaténoszloppá
+	Stem Stitch	Száröltés
+	Stem stitch	Száröltés
+	Stitches up to {n} mm long can snag	A legfeljebb {n} mm hosszú öltések beakadhatnak
+	The design is larger than the hoop	A minta nagyobb a keretnél
+	Thread Color	Cérnaszín
+	Tie in	Kezdő rögzítés
+	Tie off	Záró rögzítés
+	Tiny object: may not sew cleanly	Apró objektum: lehet, hogy nem varrható tisztán
+	Very dense: about {n} layers of thread here	Nagyon sűrű: itt kb. {n} réteg cérna van
+	Design from Prompt…	Minta leírásból…
+	Design from Prompt	Minta leírásból
+	Generate	Létrehozás
+	Describe the design:	Írd le a mintát:
+	Size (longest side):	Méret (hosszabbik oldal):
+	Anthropic API key:	Anthropic API-kulcs:
+	Remember the key on this computer	A kulcs megjegyzése ezen a számítógépen
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude a saját Anthropic API-kulcsoddal rajzolja meg a grafikát, a díjat az Anthropic-fiókod terheli; ezután a StitchFoundry digitalizálja. Varrás előtt ellenőrizd az öltéseket.
+	Get a key	Kulcs igénylése
+	Drawing the design…	A minta rajzolása…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Írj le egy mintát, Claude megrajzolja hozzá a grafikát, majd a StitchFoundry digitalizálja
+	Place Artwork as Embroidery	Grafika elhelyezése hímzésként
+	Place Artwork	Grafika elhelyezése
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Minta elhelyezve; kivarrt objektumok: {n}
+@msg	Enter your Anthropic API key first.	Előbb add meg az Anthropic API-kulcsodat.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Az API-kulcs érvénytelen: másold be újra az Anthropic Console-ból.
+@msg	Describe the design first.	Előbb írd le a mintát.
+@msg	The description is too long: keep it under 2,000 characters.	A leírás túl hosszú: legyen 2000 karakternél rövidebb.
+@msg	Anthropic refused the API key: {e}	Az Anthropic elutasította az API-kulcsot: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Az Anthropic-fiókod nem tudja kifizetni ezt: {e}
+@msg	The AI service is busy: try again in a minute.	Az MI-szolgáltatás foglalt: próbáld újra egy perc múlva.
+@msg	The AI service failed (error {code}): try again later.	Az MI-szolgáltatás hibát jelzett ({code}): próbáld újra később.
+@msg	The request failed (error {code}): {e}	A kérés sikertelen ({code}): {e}
+@msg	The AI declined to draw this: try another description.	Az MI nem vállalta ennek a megrajzolását: próbálkozz másik leírással.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	A rajz túl részletesre sikerült ahhoz, hogy elkészüljön: kérj valami egyszerűbbet.
+@msg	The reply had no artwork: try again.	A válasz nem tartalmazott grafikát: próbáld újra.
+@msg	Couldn't reach the AI service: {e}	Nem érhető el az MI-szolgáltatás: {e}
+@msg	Design from Prompt needs the desktop app for now	A Minta leírásból funkcióhoz egyelőre az asztali alkalmazás kell
+@msg	already drawing: wait for it, or Cancel	a rajzolás már folyamatban van: várd meg, vagy válaszd a Mégse gombot
+@msg	the artwork has no shapes to stitch	a grafikában nincs kivarrható alakzat
+@msg	the artwork has nothing to place	a grafikában nincs elhelyezhető elem
+@msg	the artwork can't be read: {e}	a grafika nem olvasható: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	Az MI nem másolja le más logóját vagy karakterét: {e}
+	Redraw Image with Claude…	Kép újrarajzolása Claude-dal…
+	Redraw Image with Claude	Kép újrarajzolása Claude-dal
+	What to change (optional):	Mit változtasson (nem kötelező):
+	Only redraw artwork you own or have permission to use.	Csak olyan grafikát rajzoltass újra, amely a tiéd, vagy amelynek használatára engedélyed van.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude a saját Anthropic API-kulcsoddal egyszínű foltokból álló grafikává rajzolja újra a képet, a díjat az Anthropic-fiókod terheli; ezután a StitchFoundry digitalizálja. Varrás előtt ellenőrizd az öltéseket.
+	Redraw with Claude…	Újrarajzolás Claude-dal…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude tiszta, egyszínű foltokból álló grafikává rajzolja újra a képet, majd a StitchFoundry digitalizálja
+@msg	select an image to redraw	jelölj ki egy újrarajzolandó képet
+@msg	the image couldn't be read	a kép nem olvasható
+@msg	The image is too large to send: crop it, or place a smaller copy.	A kép túl nagy a küldéshez: vágd körül, vagy helyezz el egy kisebb másolatot.
+	Set Split Lines	Felosztóvonalak beállítása
+	Carve Split Lines	Felosztóvonalak bevésése
+	Clear Split Lines	Felosztóvonalak törlése
+	Split lines:	Felosztóvonalak:
+	Texture size	Textúra mérete
+	Texture angle	Textúra szöge
+	Diamonds	Rombuszok
+	Waves	Hullámok
+	Herringbone	Halszálka
+	Bricks	Téglák
+	Circles	Körök
+	Scales	Pikkelyek
+	Hand stitch	Kézi öltés
+	Gap	Hézag
+	Jagged edges	Csipkés szélek
+	Side 1	1. oldal
+	Side 2	2. oldal
+	Jag depth	Csipkézés mélysége
+	Trapunto (travel along the outline)	Trapunto (haladás a körvonal mentén)
+	Place Motif	Motívum elhelyezése
+	Loop	Hurok
+	Motif Fill	Motívumkitöltés
+	Motif size	Motívum mérete
+	Graded	Fokozatos
+	Width at end	Szélesség a végén
+	Row spacing	Sortávolság
+	E-stitch	E-öltés
+	Rings (0: all)	Gyűrűk (0: mind)
+	Add Laydown	Alapozó réteg hozzáadása
+	Spacing profile	Térközprofil
+	Accordion	Harmonika
+	Fade out	Kifakulás
+	Fade in	Beúszás
+	Blend into	Átmenet ebbe:
+	Make Blend	Átmenet létrehozása
+	Blend Colors	Színek átmenete
+	Add Outline	Körvonal hozzáadása
+	Satin Outline	Szatén körvonal
+	Bean Outline	Bab körvonal
+	Rectangle Border	Téglalap keret
+	Oval Border	Ovális keret
+	Rounded Border	Lekerekített keret
+	Motif Border	Motívumos keret
+	Make Motif	Motívum létrehozása
+	Apply Motif	Motívum alkalmazása
+	Embroidery Motifs	Hímzőmotívumok
+	Delete Motif	Motívum törlése
+	Remove the motif from the design; what sews it keeps it.	A motívum eltávolítása a mintából; ami ezzel varr, megtartja.
+	Sculpture run	Szoborszerű futóöltés
+	Triple stitch length	Hármas öltés hossza
+	Single stitch length	Egyszeres öltés hossza
+	Triple stitches	Hármas öltések
+	Single stitches	Egyszeres öltések
+	Cross style	Kereszt stílusa
+	Full cross	Teljes kereszt
+	Half cross	Félkereszt
+	Upright cross	Álló kereszt
+	Double cross	Dupla kereszt
+	Redwork	Redwork
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	Egyetlen, a kiindulópontjában végződő vonalként varrva; a vonalak közötti utat a gép a vonalakon visszahaladva teszi meg.
+	Add Buttonholes	Gomblyukak hozzáadása
+	Straight Buttonhole	Egyenes gomblyuk
+	Rounded Buttonhole	Lekerekített gomblyuk
+	Keyhole Buttonhole	Szemes gomblyuk
+	Place Ring	Gyűrű elhelyezése
+	Satin Ring	Szaténgyűrű
+	Filled Ring	Kitöltött gyűrű
+	Bean Ring	Babgyűrű
+	Hexagons	Hatszögek
+	Chevrons	Cikcakkminta
+	Basket weave	Kosárfonás
+	Stars	Csillagok
+	Hearts	Szívek
+	Leaves	Levelek
+	Paired with	Párja
+	Sew as	Varrás mint
+	Motifs	Motívumok
+	Motif length (× width)	Motívum hossza (× szélesség)
+	String stitch	Zsinóröltés
+	Chord length	Húr hossza
+	Automatic Knife	Automatikus kés
+	3D effect	3D-hatás
+	Globe out	Kidomborodó
+	Globe in	Behorpadó
+	Fill Along Lines	Kitöltés vonalak mentén
+	Clear Flow Lines	Folyásvonalak törlése
+	Rows follow lines:	A sorok vonalakat követnek:
+	Set Flow Lines	Folyásvonalak beállítása
+	Carving Stamps	Bevéső bélyegzők
+	Carve Stamp	Bélyegző bevésése
+	Flower	Virág
+	Sun	Nap
+	Moon	Hold
+	Snowflake	Hópehely
+	Paw Print	Mancsnyom
+	Swirl	Örvény
+	Shell	Kagyló
+	Butterfly	Pillangó
+	Clover	Lóhere
+	Show Repeats	Ismétlések megjelenítése
+	Repeats across	Ismétlések vízszintesen
+	Repeats down	Ismétlések függőlegesen
+	Gap between repeats	Ismétlések közötti hézag
+	Stripes	Csíkok
+	Slants	Ferde vonalak
+	Pinstripes	Tűcsíkok
+	Lattice	Rácsozat
+	Arches	Ívek
+	Spirals	Spirálok
+	Pyramids	Piramisok
+	Ripples	Fodrok
+	Greek key	Görög meander
+	Crosses	Keresztek
+	Quatrefoils	Négykaréjok
+	Flowers	Virágok
+	Trefoils	Háromkaréjok
+	Moons	Holdak
+	Arrows	Nyilak
+	Nested diamonds	Egymásba ágyazott rombuszok
+	Argyle	Argyle
+	Wicker	Vesszőfonat
+	Feathers	Tollak
+	Paisley	Paisley
+	Swirls	Örvények
+	Snowflakes	Hópelyhek
+	Bubbles	Buborékok
+	Sunbursts	Napsugarak
+	Motif Tool	Motívum
+	Contour Split Lines	Kontúr felosztóvonalak
+	Keep Motif	Motívum megőrzése
+	Keep the motif in My Motifs, for any design	A motívum megőrzése a Saját motívumok között, bármely mintához
+	My Motifs	Saját motívumok
+	Forget Motif	Motívum elfelejtése
+	Buttonholes	Gomblyukak
+	Straight	Egyenes
+	Keyhole	Szemes
+	Count	Darabszám
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Sorok az alakzaton át: felfelé sűrűbb. Húzz el egy pontot; dupla kattintással adhatsz hozzá egyet; jobb kattintással vehetsz ki egyet.
+	Embroidery Lettering	Hímzett felirat
+	Load Embroidery Font	Hímzőbetűtípus betöltése
+	Embroidery Fonts	Hímzőbetűtípusok
+	Load Embroidery Font…	Hímzőbetűtípus betöltése…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Betűtípusmappa az Ink/Stitch formátumában: font.json és a glifái
+	Load an embroidery font to set text with it.	Tölts be egy hímzőbetűtípust, hogy szöveget szedj vele.
+	Sews well at	Jól varrható ekkora méretben:
+	Place Lettering	Felirat elhelyezése
+	Edit Lettering	Felirat szerkesztése
+	Update Lettering	Felirat frissítése
+	Load this lettering's font to change it:	A módosításhoz töltsd be ennek a feliratnak a betűtípusát:
+	Arch	Boltív
+	Valley	Völgy
+	Forget Font	Betűtípus elfelejtése
+	Unload the font and stop loading its folder	A betűtípus eltávolítása és a mappája betöltésének leállítása
+	Forget Embroidery Font	Hímzőbetűtípus elfelejtése
+	Team Names	Csapatnevek
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Jelölj ki egy hímzőbetűtípussal szedett feliratot: a program minden névhez gépi fájlt ír, amelyben a felirat az adott név.
+	One name a line	Soronként egy név
+	Import Names…	Nevek importálása…
+	The first column of a CSV table, or a text file of one name a line	Egy CSV-táblázat első oszlopa, vagy egy soronként egy nevet tartalmazó szövegfájl
+	Names	Nevek
+	Export One File per Name…	Exportálás névenként egy fájlba…
+	Team name files written	A csapatnév-fájlok elkészültek
+	Export Team Names	Csapatnevek exportálása
+	Read Team Names	Csapatnevek beolvasása
+	Monogram	Monogram
+	Load an embroidery font (Embroidery Lettering) to make monograms.	Monogramok készítéséhez tölts be egy hímzőbetűtípust (Hímzett felirat).
+	Initials	Kezdőbetűk
+	In a line	Egy sorban
+	Scallops	Hullámos szegély
+	Border	Keret
+	Place Monogram	Monogram elhelyezése
+	New Embroidery Font	Új hímzőbetűtípus
+	Save Embroidery Font…	Hímzőbetűtípus mentése…
+	Add Glyphs	Glifák hozzáadása
+	Font Properties	Betűtípus tulajdonságai
+	Kern Glyph Pair	Glifapár alávágása
+	Font Info	Betűtípus adatai
+	Save Embroidery Font	Hímzőbetűtípus mentése
+	Edit Embroidery Font	Hímzőbetűtípus szerkesztése
+	Merge Embroidery Font	Hímzőbetűtípus egyesítése
+	New Embroidery Font from Type	Új hímzőbetűtípus szövegből
+	Font Creator	Betűtípus-készítő
+	Capitals' height	Nagybetűk magassága
+	Line spacing	Sortávolság
+	Space width	Szóköz szélessége
+	As typed	Ahogy beírtad
+	Capitals	Nagybetűk
+	Small letters	Kisbetűk
+	Letter case	Kis- és nagybetűk
+	Sews well from	Jól varrható ettől:
+	Sews well up to	Jól varrható eddig:
+	Still to digitize	Még digitalizálandó
+	Show this glyph	Glifa megjelenítése
+	Not digitized yet: show its artboard	Még nincs digitalizálva: a rajztáblájának megjelenítése
+	Glyphs to add	Hozzáadandó glifák
+	Kerning (mm closer)	Alávágás (mm-rel közelebb)
+	Pair	Pár
+	Kern	Alávágás
+	Merge glyphs from	Glifák egyesítése innen:
+	Test text	Próbaszöveg
+	Try in a New Document	Kipróbálás új dokumentumban
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Hímzőbetűtípus készítése: egy dokumentum, amelyben minden digitalizálandó glifának saját rajztáblája van.
+	Type family	Betűcsalád
+	New Font from Type	Új betűtípus szövegből
+	Edit Font	Betűtípus szerkesztése
+	Assign to Glyph	Hozzárendelés glifához
+	Selection to glyph	Kijelölés glifába
+	The selected art becomes the glyph, moved onto its artboard	A kijelölt grafika lesz a glifa, áthelyezve a rajztáblájára
+	Sew order	Varrási sorrend
+	Left to right	Balról jobbra
+	Right to left	Jobbról balra
+	Centre out	Középről kifelé
+	Closest	Legközelebbi
+	Along the baseline	Az alapvonal mentén
+	Where needed	Ahol szükséges
+	After each letter	Minden betű után
+	After each word	Minden szó után
+	After each line	Minden sor után
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Kívül esik azon a méreten, amelyre a betűtípus készült: az öltései túl sűrűk vagy túl hosszúak lehetnek
+	Adjust Letter	Betű igazítása
+	One letter: moved, scaled or turned, kept when the lettering is set again	Egyetlen betű: áthelyezve, méretezve vagy elforgatva; a felirat újraszedésekor is megmarad
+	Move along	Eltolás előre
+	Move down	Eltolás lefelé
+	Reset Letter	Betű visszaállítása
+	3D Puff	3D habhímzés
+	3D puff	3D habhímzés
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	Habszivacs fölé varrt szatén: sűrű, alávarrás nélkül, a végei lezárva. Saját színnel varrd, hogy a megállásnál felhelyezhesd a habot
+	Sew Puff Last	Habhímzés varrása utoljára
+	Click to Stitch	Kattintásos kiöltés
+	Click-to-Stitch Tool	Kattintásos kiöltés
+	Fill without holes	Kitöltés lyukak nélkül
+	Centre line	Középvonal
+	Stitch as	Kiöltés mint
+	Click a region of an image to stitch it	Kattints egy kép egy területére a kiöltéséhez
+	Send to Machine	Küldés a gépre
+	Machine Folders	Gépmappák
+	Add Machine Folder…	Gépmappa hozzáadása…
+	A USB stick, the machine's folder or a network share the machine reads	USB-meghajtó, a gép mappája vagy egy hálózati megosztás, amelyet a gép olvas
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Add hozzá a mappát, amelyet a géped olvas: USB-meghajtó, a gép mappája vagy egy hálózati megosztás.
+	Machine folder	Gépmappa
+	Send	Küldés
+	Sent:	Elküldve:
+	Forget Folder	Mappa elfelejtése
+	Triple run	Hármas futóöltés
+	Partial cover	Részleges fedés
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	a gépi fájl kódolása nem sikerült
+	Worksheet	Munkalap
+	Outline Around	Körvonal körülötte
+	Octagon	Nyolcszög
+	Shield	Pajzs
+	Ornament	Díszítmény
+	Multi-Hooping	Többszöri befogás
+	Basting first	Előbb fércelés
+	Basting round	Fércelés körben
+	The design	A minta
+	The hoop	A keret
+	Basting margin	Fércelési ráhagyás
+	Design notes	Megjegyzések a mintához
+	Printed on worksheets	Munkalapokra nyomtatva
+	Cost a piece	Darabár
+	Estimate cost	Költségbecslés
+	Cost settings	Költségbeállítások
+	Per 1000 stitches	1000 öltésenként
+	Machine time an hour	Gépidő óránként
+	Thread per 1000 m	Cérna 1000 m-enként
+	Set-up an order	Beállítás rendelésenként
+	Machine heads	Hímzőfejek
+	Currency	Pénznem
+	Cost Estimate	Költségbecslés
+	Colorways	Színváltozatok
+	New Colorway	Új színváltozat
+	Use Colorway	Színváltozat használata
+	Colorway Thread	Színváltozat cérnája
+	Rename Colorway	Színváltozat átnevezése
+	Delete Colorway	Színváltozat törlése
+	Colorway	Színváltozat
+	The design's own	A minta sajátja
+	Own colour block	Saját színblokk
+	Where it falls	Ahová esik
+	Centre	Közép
+	Top left	Bal felső
+	Top right	Jobb felső
+	Bottom left	Bal alsó
+	Bottom right	Jobb alsó
+	Start at	Kezdés itt:
+	End at	Befejezés itt:
+	Stabiliser	Merevítő
+	Tear-away	Téphető
+	Cut-away	Vágható
+	No-show mesh	Áttetsző háló
+	Wash-away	Vízben oldódó
+	Scatter Copies	Másolatok szétszórása
+	Appliqué letters	Applikált betűk
+	Each letter a patch of fabric: placement line, tack-down and cover	Minden betű egy anyagfolt: elhelyezővonal, lefogó öltés és fedés
+	Letters sewn	Varrt betűk
+	As the font has them	Ahogy a betűtípusban vannak
+	Small text	Kis szöveg
+	Under 6 mm	6 mm alatt
+	Place Along Selected Line	Elhelyezés a kijelölt vonal mentén
+	The text along the selected line or shape, from its start	A szöveg a kijelölt vonal vagy alakzat mentén, annak elejétől
+	Monogram Templates	Monogramsablonok
+	Save Monogram Template	Monogramsablon mentése
+	Delete Monogram Template	Monogramsablon törlése
+	Template name	Sablon neve
+	Delete Template	Sablon törlése
+	Lay Out Team Names	Csapatnevek elrendezése
+	Team Names Worksheet	Csapatnevek munkalapja
+	Lay Out Together	Elrendezés együtt
+	Every name in one design, in rows and columns, for a large hoop or patches	Minden név egy mintában, sorokban és oszlopokban, nagy kerethez vagy foltokhoz
+	Names Worksheet	Nevek munkalapja
+	Each name with its size, stitches and sewing time, and the totals	Minden név a méretével, öltésszámával és varrási idejével, valamint az összesítéssel
+	Design Library	Mintatár
+	Design Catalogue	Mintakatalógus
+	No folder chosen	Nincs kiválasztott mappa
+	Choose Folder…	Mappa kiválasztása…
+	Newest	Legújabb
+	Most stitches	Legtöbb öltés
+	Largest	Legnagyobb
+	Designs	Minták
+	Couldn't be read	Nem olvasható
+	stitches	öltés
+	colours	szín
+	Print Catalogue	Katalógus nyomtatása
+	A sheet of the designs found, to print or save as PDF	A talált minták áttekintő lapja nyomtatáshoz vagy PDF-be mentéshez
+@msg	larger than {_1} MB	nagyobb, mint {_1} MB
+@msg	not a machine file: .{ext}	nem gépi fájl: .{ext}
+	Batch Output	Kötegelt kimenet
+	Output Profiles	Kimeneti profilok
+	Save Output Profile	Kimeneti profil mentése
+	Delete Output Profile	Kimeneti profil törlése
+	Batch Convert	Kötegelt átalakítás
+	files written	megírt fájl
+	Machine formats (none ticked: the machine's)	Gépi formátumok (ha egyik sincs bejelölve: a gépé)
+	Production	Gyártás
+	Approval	Jóváhagyás
+	Placement template	Elhelyezési sablon
+	The design file too	A mintafájl is
+	Write to Folder…	Írás mappába…
+	Machine files, worksheet PDF and design, named alike	Gépi fájlok, munkalap-PDF és minta, azonos néven
+	Write Again	Újraírás
+	Profile name	Profil neve
+	Save Profile	Profil mentése
+	Profile	Profil
+	Convert to	Átalakítás erre:
+	Convert All	Összes átalakítása
+	Each design found written again in this format beside it	Minden talált minta újraírása ebben a formátumban, mellé
+	Converted:	Átalakítva:
+	couldn't be read:	nem olvasható:
+	Product Visualizer	Termékmegjelenítő
+@msg	product outline: {e}	termék körvonala: {e}
+	Exports	Exportálások
+	Nothing exported yet in this session.	Ebben a munkamenetben még nem volt exportálás.
+	Again	Újra
+	Export it again, as it was asked, from this document	Újbóli exportálás ugyanúgy, ebből a dokumentumból
+	Export History	Exportálási előzmények
+	Clear Export History	Exportálási előzmények törlése
+	Export Again	Exportálás újra
+	Export Stitch Image	Öltéskép exportálása
+	Export Stitch Image…	Öltéskép exportálása…
+	Stitch List CSV (.csv)…	Öltéslista CSV (.csv)…
+	Stitch List JSON (.json)…	Öltéslista JSON (.json)…
+	G-code (.gcode)…	G-kód (.gcode)…
+	Stitch Image PNG (.png)…	Öltéskép PNG (.png)…
+@msg	PNG encoding failed: {e}	A PNG-kódolás nem sikerült: {e}
+@msg	the design has no stitches	a mintában nincsenek öltések
+@msg	the image would be {w} × {h} pixels: lower ppmm	a kép {w} × {h} képpontos lenne: csökkentsd a ppmm értékét
+	Smallest That Fits	Legkisebb, amelybe belefér
+	The smallest hoop that holds the design, turned if that fits better	A legkisebb keret, amelybe a minta belefér, elforgatva, ha úgy jobban illik
+	Rotate Hoop	Keret elforgatása
+	Custom Hoops	Egyéni keretek
+	Hoop name	Keret neve
+	Save Hoop	Keret mentése
+	Delete Hoop	Keret törlése
+	Hoops	Keretek
+	Choose Smallest Hoop	Legkisebb keret kiválasztása
+	Save Custom Hoop	Egyéni keret mentése
+	Delete Custom Hoop	Egyéni keret törlése
+	Turn the hue	Színárnyalat elforgatása
+	One colour	Egy szín
+	Inverted	Invertált
+	Recolour	Átszínezés
+	Recolour Threads	Cérnák átszínezése
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Minden cérnát módosít a séma, és a minta cérnakártyájához illeszt; a visszavonás visszaállítja őket
+	Garment Background	Ruhadarab háttér
+	Garment Photo…	Ruhadarab fotója…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	A ruhadarab fotója a minta mögött, életnagyságban, egy zárolt sablonrétegen, amelyet a gép soha nem varr ki
+	Import Chart…	Színtábla importálása…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	Saját cérnakártya CSV-fájlból (cérnánként kód, név és szín) vagy GIMP-palettából (.gpl)
+	Export Chart…	Színtábla exportálása…
+	Thread Charts	Cérnakártyák
+	Import Thread Chart	Cérnakártya importálása
+	Export Thread Chart	Cérnakártya exportálása
+	Save Thread Chart	Cérnakártya mentése
+	Delete Thread Chart	Cérnakártya törlése
+	Design Templates	Mintasablonok
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	A minta oldalának, grafikájának, keretének, anyagának és beállításainak megőrzése új minták kiindulópontjaként
+	New from Design Template	Új mintasablonból
+	Save as Design Template	Mentés mintasablonként
+	Delete Design Template	Mintasablon törlése
+	Print Stitch View	Öltésnézet nyomtatása
+	Job Orders	Munkarendelések
+	Customer	Ügyfél
+	Due (YYYY-MM-DD)	Határidő (ÉÉÉÉ-HH-NN)
+	New Job for This Design	Új munka ehhez a mintához
+	In production	Gyártásban
+	Cancelled	Törölve
+	New Job Order	Új munkarendelés
+	Update Job Order	Munkarendelés frissítése
+	Delete Job Order	Munkarendelés törlése
+	Job Worksheet	Munkalap a rendeléshez
+	Job Output	Rendelés kimenete
+	Clipart	Clipart
+	Click a motif to place it, digitized, in the middle of the page.	Kattints egy motívumra, hogy digitalizálva az oldal közepére kerüljön.
+	Embroidery Clipart	Hímző-clipart
+	Insert Clipart	Clipart beszúrása
+	Send When Ready	Küldés, ha elérhető
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	A minta sorba állítása ehhez a mappához: azonnal kiírja, ha a mappa elérhető, különben amint elérhetővé válik
+	Waiting for the folder	Várakozás a mappára
+	Send queue	Küldési sor
+	waiting	várakozik
+	sent	elküldve
+	failed	sikertelen
+	Clear Sent	Elküldöttek törlése
+	Send Queue	Küldési sor
+	Add to Send Queue	Hozzáadás a küldési sorhoz
+	Send Waiting Designs	Várakozó minták küldése
+	Remove from Send Queue	Eltávolítás a küldési sorból
+@msg	the queued file is damaged	a sorban álló fájl sérült
+	Centred	Középre igazítva
+	In the hoop	A keretben
+	Worksheet Setup	Munkalap beállítása
+	Merge Colours	Színek egyesítése
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Az azonos vagy hasonló színű cérnák eggyé válnak, és a színblokkjaik összekapcsolódnak; a visszavonás visszaállítja őket
+	Lettering Kiosk	Feliratkioszk
+	Kiosk Lettering	Kioszkfelirat
+	Type a name and make the design	Írj be egy nevet, és készítsd el a mintát
+	No embroidery font is loaded: ask the shop to load one.	Nincs betöltve hímzőbetűtípus: kérd meg a műhelyt, hogy töltsön be egyet.
+	As large as fits	A lehető legnagyobb
+	Make Design	Minta készítése
+	T-shirt	Póló
+	Polo shirt	Galléros póló
+	Hoodie	Kapucnis pulóver
+	Tote bag	Vászontáska
+	Towel	Törölköző
+	Product	Termék
+	Show on Product	Megjelenítés a terméken
+	Back to the Design	Vissza a mintához
+	Save Machine File…	Gépi fájl mentése…
+	Next Name	Következő név
+	PIN	PIN-kód
+	Leave Kiosk	Kilépés a kioszkból
+	Leaving the kiosk will take this PIN	A kioszkból való kilépéshez ez a PIN-kód kell
+	Snapback	Snapback sapka
+	Trucker cap	Trucker sapka
+	Dad cap	Baseballsapka
+	Image Colours	Képszínek
+	Prepare Image	Kép előkészítése
+	Photo Stitch	Fotóhímzés
+	Convert Stitches to Objects	Öltések átalakítása objektumokká
+	Colour Preview	Színelőnézet
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	A kép simított másolata ezekben a színekben, a pöttyöktől megtisztítva, digitalizáláshoz vagy kattintásos kiöltéshez
+	Colours	Színek
+	background, not sewn	háttér, nincs varrva
+	thread changes	cérnaváltás
+	threads sewn	varrt cérna
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	A fotó kivarrása önmaga fölé cikcakkvonalakként, egyetlen kanyargó futóöltésként vagy a színeivel
+	Sequins	Flitterek
+	Beads	Gyöngyök
+	Rhinestones	Strasszkövek
+	Cord	Zsinór
+	Boring	Lyukasztás
+	Along the line	A vonal mentén
+	Fill the shape	Az alakzat kitöltése
+	Round the edge	A szél körül
+	At each point	Minden pontnál
+	Bead length	Gyöngy hossza
+	Cord width	Zsinór szélessége
+	Edge width	Szegély szélessége
+	Honeycomb	Méhsejt
+	Packing	Elrendezés
+	Three	Három
+	Fixing	Rögzítés
+	Flip every other	Minden második megfordítása
+	Colour	Szín
+	Thread colour	Cérnaszín
+	Stop before	Megállás előtte
+	Rhinestones aren't sewn: export their template to cut and set them	A strasszköveket nem varrja a gép: exportáld a sablonjukat a kivágáshoz és felrakáshoz
+	Decoration Sizes	Díszítőelemek méretei
+	Count Decorations	Díszítőelemek megszámolása
+	Cut File	Vágófájl
+	Sew the pieces together	A darabok összevarrása
+	Fabric colour	Anyag színe
+	Plain	Sima
+	Check	Kockás
+	Denim	Farmer
+	Felt	Filc
+	Fabric pattern	Anyag mintázata
+	Pattern colour	Mintázat színe
+	Combine Appliqué	Applikáció egyesítése
+	Prepare Appliqué	Applikáció előkészítése
+	Coil	Spirál
+	Square loop	Négyzetes hurok
+	Foil	Fólia
+	Shown with the design, not sewn	A mintával együtt látható, nincs varrva
+	StitchFoundry Help	StitchFoundry súgó
+	Tips	Tippek
+	Search help	Keresés a súgóban
+	Nothing found	Nincs találat
+	Help Topics	Súgótémakörök
+	Help Topic	Súgótémakör
+	Help for Tool	Súgó az eszközhöz
+	New Design for Hoop	Új minta kerethez
+	Sample Designs	Mintapéldák
+	Open Sample Design	Mintapélda megnyitása
+	Start a design for your hoop	Minta indítása a keretedhez
+	Your first design	Az első mintád
+	Draw shapes, place a picture or type text.	Rajzolj alakzatokat, helyezz el egy képet, vagy írj be szöveget.
+	Choose how each part is stitched: satin, fill, run and more.	Válaszd ki, hogyan legyenek kiöltve az egyes részek: szatén, kitöltés, futóöltés és más.
+	Watch it sew with the stitch player and check it.	Nézd meg az öltéslejátszóval, hogyan varrja ki a gép, és ellenőrizd.
+	Export the file for your machine.	Exportáld a fájlt a gépedhez.
+	Learn how	Tudj meg többet
+	Try a sample	Próbálj ki egy példát
+	Heart patch	Szíves folt
+	Sun and moon	Nap és hold
+	Appliqué star	Applikált csillag
+	Tip:	Tipp:
+	More tips	További tippek
+	A new design the size of this hoop's sewing field	Új minta ennek a keretnek a varrási mezője méretében
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Húzz egy dőlésvonalat egy alakzaton át az öltésszög beállításához; két vagy több vonallal az öltések fordulnak.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Kattints egy elhelyezett kép egy területére a kiöltéséhez; növeld a tűréshatárt, hogy több árnyalatát is felölelje.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Húzd el a kiválasztott tűszúrási pontokat az áthelyezésükhöz; Alt+kattintással adhatsz hozzá öltést, a Delete eltávolítja őket.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Kattints felváltva az oszlop egyik, majd másik oldalára; az Enter vagy az Esc befejezi.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	A bal alsó sarokban lévő tárcsán állítható az ecset, a szélesség, a sűrűség, a hossz és a forma.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Írd be a szöveget, majd válassz hímzőbetűtípust a Felirat panelen, hogy tisztán varrható legyen.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Jelölj ki egy grafikát, és válaszd a Hímzés › Grafika átalakítása hímzéssé parancsot, hogy egy lépésben digitalizáld.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	A szatén kb. 7 mm széles alakzatokig való; a szélesebb területek tatami kitöltésként jobban varrhatók.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Válassz keretet a Hímzés panelen, hogy lásd a varrási mezőt a minta körül.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	A Hímzés menü Minta ellenőrzése parancsa megtalálja a sűrű rétegeket, a hosszú öltéseket és a varráshoz túl kicsi szöveget.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Küldés előtt nézd meg az öltéslejátszóval az Öltéssorrend panelen, hogyan varrja ki a gép a mintát.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Exportálj a Hímzés › Gépi fájl exportálása paranccsal, és válaszd ki a géped formátumát.
+	Save as Default	Mentés alapértelmezésként
+	Clear Default	Alapértelmezés törlése
+	Every new design starts with these properties	Minden új minta ezekkel a tulajdonságokkal indul
+	New designs take the built-in properties again	Az új minták ismét a beépített tulajdonságokat kapják
+	All Tools, Ungrouped	Összes eszköz, csoportosítás nélkül
+	Toolbar: All Tools, Ungrouped	Eszköztár: Összes eszköz, csoportosítás nélkül
+	Push compensation	Nyomáskompenzáció
+	{n} very short stitches can break the thread	{n} nagyon rövid öltés elszakíthatja a cérnát
+	Satin only {n} mm wide sinks into the fabric	A csak {n} mm széles szatén belesüpped az anyagba
+	Fill stitches {n} mm long can ripple after washing	A {n} mm hosszú kitöltőöltések mosás után hullámosodhatnak
+	Sewn on clothing	Ruházatra varrva
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	A hosszú öltések ruházaton 7 mm-től, más tárgyakon 12,1 mm-től akadnak be
+	Short stitches under	Rövid öltések ez alatt
+	Narrow satin under	Keskeny szatén ez alatt
+	Short fill stitches under	Rövid kitöltőöltések ez alatt
+	Edge run and zigzag	Szegélyfutás és cikcakk
+	Satin underlay	Szatén alávarrása
+	Edge run under fills	Szegélyfutás a kitöltések alatt
+	New to digitizing? Read the basics	Új vagy a digitalizálásban? Olvasd el az alapokat
+	Density Map	Sűrűségtérkép
+	Density map	Sűrűségtérkép
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	A minta színezése aszerint, milyen vastagon fekszik a cérna: kék egy réteg, piros olyan sűrű, amilyet a Minta ellenőrzése már jelez
+	Calibrate Life Size…	Életnagyság kalibrálása…
+	Calibrate Life Size	Életnagyság kalibrálása
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Tarts egy vonalzót vagy egy bankkártyát a képernyőhöz, és változtasd a méretet, amíg a jelek egyeznek. Ezután a Tényleges méret életnagyságban mutatja a mintákat.
+	Bank card	Bankkártya
+	Screen points per inch	Képernyőpont hüvelykenként
+	Use This Size	Ez a méret legyen
+	Screen Points per Inch at Life Size	Képernyőpont hüvelykenként életnagyságban
+@msg	`pointsPerInch` is a number from 40 to 400	a `pointsPerInch` 40 és 400 közötti szám
+	Experience	Tapasztalat
+	New to Embroidery	Kezdő hímző
+	Digitizer	Digitalizáló
+	Embroidery Business	Hímzővállalkozás
+	Everything	Minden
+	Showing the basics.	Csak az alapok láthatók.
+	Show everything	Minden megjelenítése
+	New to embroidery	Kezdő vagyok a hímzésben
+	I digitize designs	Mintákat digitalizálok
+	I run an embroidery business	Hímzővállalkozást vezetek
+	The basic tools and everyday sections, nothing more	Az alapeszközök és a mindennapi részek, semmi több
+	Every digitizing tool, rulers and the control bar	Minden digitalizáló eszköz, a vonalzók és a vezérlősáv
+	Everything, with job orders and batch output	Minden, a munkarendelésekkel és a kötegelt kimenettel együtt
+	How do you work?	Hogyan dolgozol?
+@msg	`level` is beginner, digitizer, business or all	a `level` értéke beginner, digitizer, business vagy all
+	Echo Quilting	Kontúrkövető steppelés
+	Background Quilting	Háttérsteppelés
+	Remove Blend	Átmenet eltávolítása
+	Blend layers	Átmenet rétegei
+	My Machine…	Saját gépem…
+	Save for My Machine	Mentés a gépemre
+	Which embroidery machine do you have?	Milyen hímzőgéped van?
+	Measure in	Mértékegység
+	Save designs to	Minták mentése ide:
+	No folder chosen yet	Még nincs kiválasztott mappa
+	Plug in the USB stick you take to your machine, then choose it here.	Dugd be azt az USB-meghajtót, amelyet a gépedhez viszel, majd itt válaszd ki.
+	Husqvarna Viking (other models)	Husqvarna Viking (egyéb modellek)
+	Brother or Baby Lock	Brother vagy Baby Lock
+	Janome or Elna	Janome vagy Elna
+	Another machine (DST)	Más gép (DST)
+	My machine:	A gépem:
+	Tell us your machine to see its hoops and save in its format.	Add meg a gépedet, hogy lásd a kereteit, és a formátumában ments.
+	Choose My Machine	Saját gép kiválasztása
+	Saved for your machine:	Mentve a gépedhez:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Anyagforma: a gép megáll, hogy felhelyezd az anyagot, majd levarrja
+	A heart, a star, a flower and more, ready to sew	Szív, csillag, virág és sok más, varrásra készen
+	A name or a few words, ready to sew	Egy név vagy néhány szó, varrásra készen
+	A photo or drawing to turn into stitches	Öltésekké alakítandó fotó vagy rajz
+	A picture	Kép
+	Add Appliqué	Applikáció hozzáadása
+	Add Appliqué…	Applikáció hozzáadása…
+	Add Words	Szöveg hozzáadása
+	Add Words…	Szöveg hozzáadása…
+	Add a Picture…	Kép hozzáadása…
+	Add a Shape	Alakzat hozzáadása
+	Add a Shape…	Alakzat hozzáadása…
+	Bigger	Nagyobb
+	Choose a shape	Válassz alakzatot
+	Click a part of the design to change how it sews.	Kattints a minta egy részére, hogy módosítsd, hogyan legyen varrva.
+	Click a part of the design to choose it, drag it to move it	Kattints a minta egy részére a kiválasztásához, húzd az áthelyezéséhez
+	Crown	Korona
+	Filled	Kitöltött
+	How tall	Magasság
+	Just the outline	Csak a körvonal
+	Not sewn	Nincs varrva
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Még nincs mit varrni. Adj hozzá szöveget, alakzatot vagy képet a bal oldali gombokkal.
+	Paw	Mancs
+	See the design sew on screen, stitch by stitch	A minta varrásának megtekintése a képernyőn, öltésről öltésre
+	Sew it as	Varrás módja
+	Smaller	Kisebb
+	Smooth edge (satin)	Sima szél (szatén)
+	Start a design from the Home screen.	Kezdj egy mintát a Kezdőképernyőn.
+	Take back the last change	Az utolsó módosítás visszavonása
+	The chosen part	A kiválasztott rész
+	The chosen parts	A kiválasztott részek
+	The design is bigger than the hoop: make it smaller before you sew.	A minta nagyobb a keretnél: varrás előtt kicsinyítsd.
+	Thread colours	Cérnaszínek
+	Turn Into Stitches	Öltésekké alakítás
+	Turn it into stitches in your thread colours.	Alakítsd öltésekké a cérnaszíneiddel.
+	Watch It Sew	Varrás megtekintése
+	What should it say?	Mi legyen a felirat?
+	Write the design for your machine to its USB stick or folder	A minta kiírása a géped számára az USB-meghajtójára vagy mappájába
+	Your design	A mintád
+	Show Everything	Minden megjelenítése
+@msg	the design has no page	a mintának nincs oldala
+@msg	open or start a design first	előbb nyiss meg vagy kezdj egy mintát
+	Set My Machine	Saját gép beállítása
+	Make a Design	Minta készítése
+	Make a Design…	Minta készítése…
+	Make a Design, Step by Step	Minta készítése lépésről lépésre
+	Step by step: words, a shape, appliqué, a picture or a sample	Lépésről lépésre: szöveg, alakzat, applikáció, kép vagy példa
+	What would you like to make?	Mit szeretnél készíteni?
+	A name or some words	Egy név vagy néhány szó
+	For towels, bags, pillows and gifts	Törölközőkre, táskákra, párnákra és ajándékokra
+	A shape	Egy alakzat
+	A heart, a star, a flower and more	Szív, csillag, virág és sok más
+	An appliqué	Egy applikáció
+	A shape cut from fabric and sewn down	Anyagból kivágott és levarrt alakzat
+	A photo or a drawing turned into stitches	Öltésekké alakított fotó vagy rajz
+	A sample to try	Egy kipróbálható példa
+	A finished design to sew and learn from	Kész minta varráshoz és tanuláshoz
+	Which hoop will you use?	Melyik keretet használod?
+	Tell us your machine to see its hoops.	Add meg a gépedet, hogy lásd a kereteit.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Válaszd ki a keretet, amelybe az anyagot befogod. A minta úgy készül, hogy beleférjen.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Ilyen magasak a nagybetűk. Törölközőhöz 20–30 mm, inghez 10–15 mm illik.
+	Make It	Elkészítés
+	Which shape of fabric?	Milyen formájú legyen az anyag?
+	Which shape?	Milyen alakzat?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	A gép kivarrja, hová kerül az anyag, és megáll; felhelyezed az anyagot, a gép lefogja, és újra megáll, hogy levágd; aztán kivarrja a szélét.
+	Choose a picture	Válassz képet
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	A néhány egyszínű foltból és tiszta szélekből álló egyszerű képek működnek a legjobban: rajzfilmfigura, logó, clipart.
+	Choose a Picture…	Kép kiválasztása…
+	Which sample?	Melyik példa?
+	Your thread colours	A cérnaszíneid
+	These are sewn in this order. Click a colour to match a thread you have.	Ebben a sorrendben varrja ki őket a gép. Kattints egy színre, hogy egy meglévő cérnádhoz igazítsd.
+	Watch it sew	Varrás megtekintése
+	See the needle go stitch by stitch, in the order your machine will sew it.	Nézd, ahogy a tű öltésről öltésre halad, abban a sorrendben, ahogy a géped varrni fogja.
+	Save it	Mentés
+	Save for My Machine writes the file your machine sews, to its USB stick.	A Mentés a gépemre azt a fájlt írja az USB-meghajtóra, amelyet a géped kivarr.
+	Save Design keeps a copy you can open and change later.	A Minta mentése egy olyan másolatot őriz meg, amelyet később megnyithatsz és módosíthatsz.
+	Save Design…	Minta mentése…
+	Put back what Undo took back	A visszavont módosítás visszaállítása
+	Start Over…	Újrakezdés…
+	Clear the design and begin again	A minta törlése és újrakezdés
+	Text size	Szövegméret
+	Saved for you automatically in My Designs:	Automatikusan mentve a Saját minták mappába:
+	Start Over	Újrakezdés
+	Clear everything in this design and begin again?	Törlöd a minta teljes tartalmát, és újrakezded?
+	You can still get it back with Undo.	A Visszavonással még visszakaphatod.
+	Keep It	Megtartás
+	Keep Design Safe	Minta biztonságba helyezése
+	In-the-Hoop Projects	Keretben készülő projektek
+	Make In-the-Hoop Project	Keretben készülő projekt létrehozása
+	Steps	Lépések
+	The machine also stops where you lay or trim fabric.	A gép ott is megáll, ahol anyagot kell felhelyezni vagy levágni.
+	Print the Steps…	Lépések nyomtatása…
+	Change the Size?	Módosítod a méretet?
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	Ez a minta megáll a méretre vágott anyagdarabokhoz. Nagyítva vagy kicsinyítve előfordulhat, hogy a darabok már nem illenek.
+	Keep the Size	Méret megtartása
+	Change It Anyway	Módosítás mégis
+	An in-the-hoop project	Keretben készülő projekt
+	A little pillow front, a mug rug, a coaster or an ornament	Kis párnahuzat-előlap, bögrealátét, poháralátét vagy díszítmény
+	Which project?	Melyik projekt?
+	Sewn in a 5×7 hoop, borders and back sewn on after	5×7-es keretben varrva, a szegélyeket és a hátlapot utána kell rávarrni
+	Finished in the hoop: batting, backing and a satin edge	A keretben elkészül: vatelin, hátlap és szatén szegély
+	Words (you can leave this empty)	Szöveg (üresen hagyható)
+	Little pillow front, 8″ square	Kis párnahuzat-előlap, 8″-es négyzet
+	Little pillow front, 9½ × 5½″	Kis párnahuzat-előlap, 9½ × 5½″
+	Mug rug, 6½ × 4½″	Bögrealátét, 6½ × 4½″
+	Coaster, 3¾″ square	Poháralátét, 3¾″-es négyzet
+	Round ornament, 3½″	Kerek díszítmény, 3½″
+	Quilting for a tile	Steppelés egy csempéhez
+	Background quilting the size of a quilting tile, block by block	Háttérsteppelés egy steppelőcsempe méretében, blokkról blokkra
+	What size is the tile?	Mekkora a csempe?
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	A méretet a csempe ablakában olvasd le. A blokkot széltől szélig steppeli ki a gép, a csempe méretében.
+	Lines apart	Vonalak távolsága
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	Egy paplan minden blokkjához ugyanazt a mintázatot és térközt használd, hogy a blokkok egymásba folyjanak.
+	Make Every Size…	Minden méret elkészítése…
+	One file for each usual tile size, in a folder or on the USB stick	Egy-egy fájl minden szokásos csempemérethez, egy mappába vagy az USB-meghajtóra
+	Quilt blocks saved:	Mentett steppelt blokkok:
+	Stipple	Apró kanyargás
+	Squares spiral	Négyzetes spirál
+	Quilt Block Patterns	Steppelt blokkmintázatok
+	Quilt Block	Steppelt blokk
+	Quilt Block Set	Steppelt blokkok készlete
+	Loops	Hurkok
+	Pebbles	Kavicsok
+	A block	Egy blokk
+	A border strip	Egy szegélycsík
+	A corner	Egy sarok
+	In the middle (you can leave this empty)	Középen (üresen hagyható)
+	Words	Szöveg
+	No shape	Nincs alakzat
+	Sew the shape as appliqué	Az alakzat varrása applikációként
+	Add a ribbon band across it	Szalagsáv hozzáadása keresztben
+	Add a ribbon loop to hang it	Szalagakasztó hozzáadása a felakasztáshoz
+	Clear vinyl on top (wipe-clean)	Átlátszó vinil a tetején (letörölhető)
+	Mark where a button goes	Gomb helyének jelölése
+	Print the Cutting Templates…	Szabásminták nyomtatása…
+	In-the-Hoop Cutting Templates	Szabásminták keretben készülő projektekhez
+	Downloaded for your machine:	Letöltve a gépedhez:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	A Mentés a gépemre letölti a mintát: másold arra az USB-meghajtóra, amelyet a gépedhez viszel.
+	Downloaded:	Letöltve:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	A Mentés a gépemre letölti a fájlt, amelyet a géped kivarr: másold az USB-meghajtójára.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Átmenet színátmenetből
+	Sew the gradient's colours blended the way it runs	A színátmenet színeinek varrása átmenetesen, a színátmenet irányában
+	Cutwork	Kivágásos hímzés
+	Tartan Fill	Tartan kitöltés
+	Test Sew-Out	Próbavarrás
+	Test Sew-Outs	Próbavarrások
+	Cross Stitch	Keresztszemes
+	Cross Stitch Tool	Keresztszemes
+	Cross Stitch from Image…	Keresztszemes képből…
+	Cross-Stitch Pattern Info	Keresztszemes minta adatai
+	Cross-Stitch Pattern Settings	Keresztszemes minta beállításai
+	New Cross-Stitch Pattern…	Új keresztszemes minta…
+	Paint Cross Stitches	Keresztszemek festése
+	Brush (squares)	Ecset (négyzetek)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	Kattints vagy húzz egy keresztszemes rácson a négyzetek kitöltéséhez; az Alt nyomva tartásával törölhetsz
+	Erase	Radírozás
+	Pattern colours	Mintaszínek
+	Add My Hoop	Saját keret hozzáadása
+	Brother or Baby Lock multi-needle	Brother vagy Baby Lock többtűs gép
+	Commercial multi-needle (DST)	Ipari többtűs gép (DST)
+	Give the hoop a name	Adj nevet a keretnek
+	Hoop not listed? Add its sewing field here.	Nincs a listában a kereted? Itt add hozzá a varrási mezőjét.
+	My hoop	Saját keret
+	My own hoops	Saját kereteim
+	Square corners	Szögletes sarkok
+	Type the hoop's width and height as numbers	Írd be számokkal a keret szélességét és magasságát
+	in	hüvelyk
+	Chenille	Zsenília
+	Chenille Stitch	Zseníliaöltés
+	Chenille Stops	Zsenília-megállások
+	Compound Chenille…	Összetett zsenília…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	Mohakitöltés láncöltéses szegéllyel előtte és utána, csoportban az alakzat helyén
+	Chain	Láncöltés
+	Chenille stops	Zsenília-megállások
+	Lockstitch	Zártöltés
+	Moss	Moha
+	Moss pattern	Mohaminta
+	Needle height	Tűmagasság
+	Start	Kezdés
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	a moha kitöltést és futóöltést varr: előbb adj a szaténnak kitöltés- vagy futóöltést
+	Get Embroidery Fonts…	Hímzőbetűtípusok beszerzése…
+	About the library	A könyvtárról
+	Download Again	Újbóli letöltés
+	Download fonts from an embroidery font library, ready for lettering	Betűtípusok letöltése egy hímzőbetűtípus-könyvtárból, feliratokhoz készen
+	Downloading	Letöltés
+	Each font comes with its own licence, in its folder.	Minden betűtípushoz saját licenc tartozik, a mappájában.
+	Fonts are kept in	A betűtípusok helye:
+	Get Embroidery Fonts	Hímzőbetűtípusok beszerzése
+	Listing the fonts…	A betűtípusok listázása…
+	Try Again	Újrapróbálás
+	fonts	betűtípus
+	is ready for lettering	feliratokhoz készen áll
+@msg	a file of the font has an unsafe name: {path}	a betűtípus egyik fájljának neve nem biztonságos: {path}
+@msg	can't reach the font library: {e}	nem érhető el a betűtípus-könyvtár: {e}
+@msg	downloading embroidery fonts works in the desktop app	a hímzőbetűtípusok letöltése az asztali alkalmazásban működik
+@msg	the font library answered {status} for {path}	a betűtípus-könyvtár válasza {status} erre: {path}
+@msg	the font library answered {status}: try again later	a betűtípus-könyvtár válasza {status}: próbáld újra később
+@msg	{_1} isn't published yet	még nincs közzétéve: {_1}
+	Border or Corner…	Szegély vagy sarok…
+	Check Continuous Line	Folytonos vonal ellenőrzése
+	Continuous Fill	Folytonos kitöltés
+	Continuous Fill…	Folytonos kitöltés…
+	Crib (36 × 52″)	Kiságy (36 × 52″)
+	DXF Lines (.dxf)…	DXF-vonalak (.dxf)…
+	Echo	Kontúrkövetés
+	Edge-to-Edge Rows	Széltől szélig sorok
+	Edge-to-Edge Rows…	Széltől szélig sorok…
+	Export Quilting Lines	Steppelővonalak exportálása
+	Export Quilting Lines…	Steppelővonalak exportálása…
+	HP-GL Plot (.plt)…	HP-GL plot (.plt)…
+	Join into One Line	Egyesítés egy vonallá
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Hosszúkaros steppelés
+	Meander	Kanyargás
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	SVG-vonalak (.svg)…
+	Start and End on the Edges	Kezdés és befejezés a széleken
+	Stitch in the Ditch	Steppelés a varratárokban
+	Throw (50 × 65″)	Takaró (50 × 65″)
+	Twin (70 × 90″)	Egyszemélyes (70 × 90″)
+	A border of the selected line	A kijelölt vonalból készült szegély
+	Border depth	Szegély mélysége
+	Border length	Szegély hossza
+	Corner leg (0: no corner)	Sarokszár (0: nincs sarok)
+	Edge-to-edge rows of the selected line	A kijelölt vonalból készült széltől szélig sorok
+	Make Border	Szegély készítése
+	Make Rows	Sorok készítése
+	Nest the rows	Sorok egymásba illesztése
+	One continuous line, ready for a longarm	Egyetlen folytonos vonal, hosszúkaros géphez készen
+	Quilt height	Paplan magassága
+	Quilt width	Paplan szélessége
+	Row spacing (0: the line's height)	Sortávolság (0: a vonal magassága)
+	joins needed: Join into One Line makes them	összekötés szükséges: az Egyesítés egy vonallá elvégzi
+	longest	leghosszabb
+@msg	nothing to add	nincs mit hozzáadni
+	Download All	Összes letöltése
+	Every font not downloaded yet, one after another	Minden még le nem töltött betűtípus, egymás után
+	Fonts downloaded:	Letöltött betűtípusok:
+	failed:	sikertelen:
+	fonts downloaded, ready for lettering	betűtípus letöltve, feliratokhoz készen
+	Compare Designs	Minták összehasonlítása
+	Compare Designs…	Minták összehasonlítása…
+	Average stitch (mm)	Átlagos öltés (mm)
+	Bobbin thread (m)	Alsó szál (m)
+	Choose a machine file or the design open now	Válassz egy gépi fájlt vagy a most megnyitott mintát
+	Choose both designs to compare them	Az összehasonlításhoz válaszd ki mindkét mintát
+	Colour changes	Színváltások
+	Differences of 10% or more are highlighted. The real test is sewing both.	A legalább 10%-os eltérések ki vannak emelve. Az igazi próba mindkettő kivarrása.
+	First design	Első minta
+	Height (mm)	Magasság (mm)
+	Jumps	Ugrások
+	Longest stitch (mm)	Leghosszabb öltés (mm)
+	Open File…	Fájl megnyitása…
+	Second	Második
+	Second design	Második minta
+	Stitches over 7 mm	7 mm-nél hosszabb öltések
+	Stitches under 1 mm	1 mm-nél rövidebb öltések
+	Stops	Megállások
+	This Design	Ez a minta
+	This design	Ez a minta
+	Top thread (m)	Felső szál (m)
+	Width (mm)	Szélesség (mm)
+	same	azonos
+	Direction	Irány
+	Along the selected line	A kijelölt vonal mentén
+	Add to Design	Hozzáadás a mintához
+	Colors and Order	Színek és sorrend
+	Paint	Festés
+	Print and Export	Nyomtatás és exportálás
+	Special Machines	Speciális gépek
+	Split Lines	Felosztóvonalak
+	Stitch Direction	Öltésirány
+	Use Line as Direction	Vonal használata irányként
+	Arc Up	Ív felfelé
+	Arc Down	Ív lefelé
+	To follow a line of your own, draw it first, select it, then Add Words.	Ha saját vonalat szeretnél követni, előbb rajzold meg, jelöld ki, majd válaszd a Szöveg hozzáadása lehetőséget.
+	Ask About Embroidery…	Kérdezz a hímzésről…
+	Ask About Embroidery	Kérdezz a hímzésről
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Kérdezz bármit a gépi hímzésről vagy a StitchFoundryról: milyen merevítőt használj, miért szakad a cérna, hogyan varrhatók tisztábban a betűk, hol található egy funkció. Claude a mintádat is módosíthatja, ha kéred, miután engedélyezed.
+	Thinking…	Gondolkodás…
+	Type your question, then press Enter	Írd be a kérdésed, majd nyomd meg az Entert
+	Ask	Kérdezés
+	New Conversation	Új beszélgetés
+	Include my design	A mintám csatolása
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	A válaszokat Claude adja a saját Anthropic API-kulcsoddal, a díjat az Anthropic-fiókod terheli. Tévedhetnek: fontos darab előtt varrj próbát.
+	Change key	Kulcs módosítása
+@msg	Type a question first.	Előbb írj be egy kérdést.
+@msg	The question is too long: keep it under 2,000 characters.	A kérdés túl hosszú: legyen 2000 karakternél rövidebb.
+@msg	The AI declined to answer this: ask another way.	Az MI nem vállalta a válaszadást: kérdezz másképp.
+@msg	The reply had no answer: try again, or ask something narrower.	A válasz üres volt: próbáld újra, vagy kérdezz szűkebben.
+@msg	Ask About Embroidery needs the desktop app for now	A Kérdezz a hímzésről funkcióhoz egyelőre az asztali alkalmazás kell
+@msg	already asking: wait for the answer	a kérdezés már folyamatban van: várd meg a választ
+	Claude wants to change your design:	Claude módosítani szeretné a mintádat:
+	Allow	Engedélyezés
+	Don't Allow	Tiltás
+	Edit › Undo takes each change back.	A Szerkesztés › Visszavonás egyenként visszavonja a módosításokat.
+	Changed:	Módosítva:
+	Couldn't change:	Nem sikerült módosítani:
+	Not changed:	Nem módosult:
+@msg	This conversation is long: start a New Conversation.	Ez a beszélgetés hosszú: kezdj egy új beszélgetést.
+@msg	Claude took too many steps: ask again, more simply.	Claude túl sok lépést tett: kérdezz újra, egyszerűbben.

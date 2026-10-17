@@ -4954,3 +4954,1278 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+	Mode	Tila
+	Blur Mode	Sumennustila
+	Edge Only	Vain reuna
+	Overlay Edge	Reuna päällä
+	Path Length	Polun pituus
+@msg	not a VectorCraft file: {0}	ei VectorCraft-tiedosto: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-asiakirjat: yksi lukittu objekti, joka päivittyy tiedoston muuttuessa.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Avattaessa jätettiin pois se, mitä StitchFoundry ei vielä osaa lukea ({what}): korvaaminen hävittää sen pysyvästi. Säilytä se tallentamalla toisella nimellä.
+	Report a Bug…	Ilmoita virheestä…
+	Add Inclination Line	Lisää kaltevuusviiva
+	After the selection	Valinnan jälkeen
+	Appliqué	Applikointi
+	Apply Fabric	Käytä kangasta
+	Artwork	Kuvitus
+	Auto Direction	Automaattinen suunta
+	Auto Stitch Direction	Automaattinen pistosuunta
+	Auto spacing	Automaattinen välistys
+	Auto split	Automaattinen jako
+	Auto-Digitize Image	Digitoi kuva automaattisesti
+	Automatic underlay	Automaattinen alustikkaus
+	Back to the start	Takaisin alkuun
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	Papupisto
+	Before the selection	Ennen valintaa
+	Blanket	Langettipisto
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Sivellinveto
+	Calligraphy	Kalligrafia
+	Cell size	Solun koko
+	Centre run	Keskiviivan juoksupisto
+	Clear Inclination Lines	Tyhjennä kaltevuusviivat
+	Clear Lines	Tyhjennä viivat
+	Connectors	Yhdysviivat
+	Constant	Vakio
+	Contour Fill	Ääriviivatäyttö
+	Convert Artwork to Embroidery	Muunna kuvitus kirjonnaksi
+	Cover stitch	Peittopisto
+	Cover width	Peittoleveys
+	Cross Fill	Ristikkotäyttö
+	Delete Inclination Line	Poista kaltevuusviiva
+	Densities (mm)	Tiheydet (mm)
+	Density	Tiheys
+	Design	Malli
+	Design Information	Mallin tiedot
+	Digitizing Widget	Digitointiohjain
+	Dimmed	Himmennetty
+	Direction: automatic	Suunta: automaattinen
+	Direction: fixed angle	Suunta: kiinteä kulma
+	Direction: one inclination line	Suunta: yksi kaltevuusviiva
+	Direction: turning along	Suunta: kääntyy mukana
+	Drag across the shape to add a line; drag a bead to move it	Lisää viiva vetämällä muodon poikki; siirrä helmeä vetämällä
+	Each anchor point is a needle penetration.	Jokainen ankkuripiste on neulanpisto.
+	Edge run	Reunan juoksupisto
+	Edge run underlay	Reunan juoksupistoalustikkaus
+	Edit Lines	Muokkaa viivoja
+	Embroidery	Kirjonta
+	Embroidery Brush Tool	Kirjontasivellintyökalu
+	Embroidery Settings	Kirjonta-asetukset
+	Export Machine File	Vie konetiedosto
+	Export Machine File…	Vie konetiedosto…
+	Fabric	Kangas
+	Fabric color	Kankaan väri
+	Fill style	Täyttötyyli
+	Fits the hoop	Mahtuu kehykseen
+	Give objects a stitch type in the Embroidery panel.	Anna objekteille pistotyyppi Kirjonta-paneelissa.
+	Gradient to	Liukuväri kohteeseen
+	Hide Digitizing Widget	Piilota digitointiohjain
+	Hoop	Kehys
+	Inclination Tool	Kaltevuustyökalu
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Suurempi kuin kehys
+	Lengths (mm)	Pituudet (mm)
+	Let sewing start and stop at the closest points again	Anna ompelun alkaa ja päättyä taas lähimmissä kohdissa
+	Machine Embroidery File	Konekirjontatiedosto
+	Manual Stitches	Käsin tehdyt pistot
+	Meander Fill	Mutkittelutäyttö
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Aihe
+	Move Inclination Line	Siirrä kaltevuusviivaa
+	Needle points	Neulanpistot
+	New strokes	Uudet viivat
+	No Stitches	Ei pistoja
+	No hoop	Ei kehystä
+	No stitches yet.	Ei vielä pistoja.
+	Not set	Ei asetettu
+	Nothing stitched yet	Mitään ei ole vielä ommeltu
+	Object color	Objektin väri
+	Open a document to see its stitch sequence.	Avaa asiakirja nähdäksesi sen pistojärjestyksen.
+	Open or create a document to digitize embroidery.	Avaa tai luo asiakirja digitoidaksesi kirjontaa.
+	Path spacing	Polkujen välistys
+	Pause	Tauko
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Valitse sivellin, leveys, tiheys ja muoto valitsimesta ja piirrä sitten piirtoalueelle
+	Place editable inclination lines (or pick the angle) automatically	Sijoita muokattavat kaltevuusviivat (tai valitse kulma) automaattisesti
+	Placement line and stop	Sijoitusviiva ja pysäytys
+	Play the stitches	Toista pistot
+	Pull compensation	Vetokompensaatio
+	Radial Fill	Säteittäinen täyttö
+	Randomness	Satunnaisuus
+	Remove background	Poista tausta
+	Reset Start and Stop	Palauta alku ja loppu
+	Row offset	Rivin siirtymä
+	Run	Juoksupisto
+	Run style	Juoksupiston tyyli
+	Satin	Satiini
+	Satin Fill	Satiinitäyttö
+	Select a path, shape or compound path to give it a stitch type.	Valitse polku, muoto tai yhdistelmäpolku antaaksesi sille pistotyypin.
+	Set Inclination Lines	Aseta kaltevuusviivat
+	Set Start and Stop	Aseta alku ja loppu
+	Set Thread	Aseta lanka
+	Sew earlier	Ompele aiemmin
+	Sew first	Ompele ensimmäisenä
+	Sew last	Ompele viimeisenä
+	Sew later	Ompele myöhemmin
+	Sewing time	Ompeluaika
+	Sewn last	Ommellaan viimeisenä
+	Short stitches on curves	Lyhyet pistot kaarteissa
+	Show every stitch	Näytä jokainen pisto
+	Show stitches	Näytä pistot
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Yksinkertainen
+	Sort by Thread Color	Lajittele langan värin mukaan
+	Spiral Fill	Spiraalitäyttö
+	Stitch Parameters	Pistoparametrit
+	Stitch Plan	Pistosuunnitelma
+	Stitch Sequence	Pistojärjestys
+	Stitch Type	Pistotyyppi
+	Stitch length	Piston pituus
+	Stitch type	Pistotyyppi
+	Stitches	Pistot
+	Stop to trim fabric	Pysäytä kankaan leikkaamista varten
+	Tack-down	Kiinnitystikkaus
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Kapeneva
+	Tatami Fill	Tatamitäyttö
+	Tatami underlay	Tatamialustikkaus
+	Thread	Lanka
+	Thread colors	Lankojen värit
+	Trim after	Leikkaus jälkeen
+	Trims	Leikkaukset
+	Triple	Kolminkertainen
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Muunna kuva pistoiksi: kapeat osat muuttuvat satiiniksi, muut tatamitäytöksi.
+	Wave	Aalto
+	Widget values	Ohjaimen arvot
+	Width profile	Leveysprofiili
+	Widths (mm)	Leveydet (mm)
+	Zigzag	Siksak
+	inclination lines	kaltevuusviivat
+	Brush	Sivellin
+	Bean	Papu
+	Steil	Steil
+	Heart	Sydän
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Automaattinen digitointi ei löytänyt ommeltavia muotoja: pienennä kohinaa tai lisää värejä
+@msg	Auto-Digitize: the image traced to nothing	Automaattinen digitointi: kuvan jäljitys ei tuottanut mitään
+@msg	can't open `{title}`: the file has no stitches	tiedostoa `{title}` ei voi avata: tiedostossa ei ole pistoja
+@msg	can't open `{title}`: {e}	tiedostoa `{title}` ei voi avata: {e}
+@msg	{_1} export failed: {e}	{_1}-vienti epäonnistui: {e}
+	Stitch Lines	Pistoviivat
+	Tatami	Tatami
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Tekijä Stitchwright, perustuu ArtCraft-tiimin VectorCraftiin. MIT OR Apache-2.0. Fontit: Source Sans 3, Inter, JetBrains Mono (OFL). Kuvakkeet: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Versio {version} — avoimen lähdekoodin konekirjonnan digitointi puhtaalla Rustilla.
+	Machine embroidery digitizing — fast, open, scriptable.	Konekirjonnan digitointi — nopea, avoin, skriptattava.
+	Split Here	Jaa tästä
+	Split the object in two at the picked stitch	Jaa objekti kahtia valitun piston kohdalta
+	Split Object	Jaa objekti
+	Check settings	Tarkista asetukset
+	Dense from (layers)	Tiheä alkaen (kerrosta)
+	Give every stitched object the chart's closest thread	Anna jokaiselle ommellulle objektille kartan lähin lanka
+	Hidden (not sewn)	Piilotettu (ei ommella)
+	Inclination lines	Kaltevuusviivat
+	Long stitches from	Pitkät pistot alkaen
+	Match Threads to Chart	Sovita langat karttaan
+	Omit last stitch	Jätä viimeinen pisto pois
+	Small lettering under	Pieni teksti alle
+	Start and stop	Alku ja loppu
+	Thread chart	Lankakartta
+	Tie style	Päättelytyyli
+	Tiny objects under	Pienet objektit alle
+	Travel by	Siirtymä
+	Double	Kaksinkertainen
+machine	Trim	Leikkaus
+@plural	{n} stitch|{n} stitches	{n} pisto|{n} pistoa
+@plural	{n} trim|{n} trims	{n} leikkaus|{n} leikkausta
+machine	Stop	Pysäytys
+	Column A/B Tool	Palsta A/B -työkalu
+	Column A/B	Palsta A/B
+	Tatami stitches	Tatamipistot
+	Make Current	Tee nykyiseksi
+	New objects of this stitch type take these properties	Tämän pistotyypin uudet objektit saavat nämä ominaisuudet
+	Properties for New Objects	Uusien objektien ominaisuudet
+	Objects you give a stitch type take these properties.	Objektit, joille annat pistotyypin, saavat nämä ominaisuudet.
+	Fabric settings	Kankaan asetukset
+	Satin density	Satiinin tiheys
+	Fill density	Täytön tiheys
+	Fill stitch length	Täyttöpiston pituus
+	Underlay spacing	Alustikkauksen välistys
+	Fill underlay	Täytön alustikkaus
+	Topping	Pintakalvo
+	Save as New Fabric	Tallenna uutena kankaana
+	Seconds per trim	Sekuntia leikkausta kohti
+	Seconds per color change	Sekuntia värinvaihtoa kohti
+	Save to Machine	Tallenna koneeseen
+	Keep these settings in the machine's profile, for new designs	Säilytä nämä asetukset koneen profiilissa uusia malleja varten
+	Reset Machine	Palauta kone
+	Put the machine's profile back to how it ships, and use it	Palauta koneen profiili tehdasasetuksiin ja käytä sitä
+	Delete Machine	Poista kone
+	Save as New Machine	Tallenna uutena koneena
+	A machine profile of your own with these settings	Oma koneprofiili näillä asetuksilla
+	My Machine	Oma kone
+	A copy of this fabric to change	Muutettava kopio tästä kankaasta
+	Delete Fabric	Poista kangas
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Ei vielä tyylejä. Valitse ommeltu objekti ja luo tyyli käyttääksesi sen pisto-ominaisuuksia uudelleen.
+	New Embroidery Style	Uusi kirjontatyyli
+	Delete Embroidery Style	Poista kirjontatyyli
+	Duplicate Embroidery Style	Monista kirjontatyyli
+	Redefine Embroidery Style	Määritä kirjontatyyli uudelleen
+	Break Link to Embroidery Style	Katkaise linkki kirjontatyyliin
+	Rename Embroidery Style…	Nimeä kirjontatyyli uudelleen…
+	Embroidery Styles	Kirjontatyylit
+	Make Properties Current	Tee ominaisuuksista nykyiset
+	Current Properties	Nykyiset ominaisuudet
+	New Object Properties	Uuden objektin ominaisuudet
+	Reset Current Properties	Palauta nykyiset ominaisuudet
+	Apply Embroidery Style	Käytä kirjontatyyliä
+	Rename Embroidery Style	Nimeä kirjontatyyli uudelleen
+	Save Fabric	Tallenna kangas
+	Machine Profiles	Koneprofiilit
+	Save Machine Profile	Tallenna koneprofiili
+	Delete Machine Profile	Poista koneprofiili
+	Auto Sequence	Automaattinen järjestys
+	Branch	Haara
+	Break Apart	Erota
+	Sew the objects separately again	Ompele objektit taas erikseen
+	These objects are sewn as one path (a branch).	Nämä objektit ommellaan yhtenä polkuna (haarana).
+	Clear Machine Function	Tyhjennä konetoiminto
+	Insert Machine Function	Lisää konetoiminto
+	Object Stitches	Objektin pistot
+@msg	`after` is −1 to {_1}	`after` on −1–{_1}
+@msg	`{what}` is [x, y]	`{what}` on [x, y]
+@msg	`{what}` is [x, y] (numbers)	`{what}` on [x, y] (lukuja)
+@msg	each op needs `op`: move, delete or insert	jokainen op tarvitsee kentän `op`: move, delete tai insert
+@msg	indices are record numbers (0, 1, 2…)	indeksit ovat tietuenumeroita (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	`after` puuttuu (−1 lisää ensimmäiseksi)
+@msg	missing `indices`	`indices` puuttuu
+@msg	no record {i}: the object has {len}	tietuetta {i} ei ole: objektissa on {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	tuntematon cmd `{c}`: stitch, jump, trim tai stop
+@msg	unknown op `{other}`: move, delete or insert	tuntematon op `{other}`: move, delete tai insert
+	Stitch Edit Tool	Pistojen muokkaustyökalu
+	Stitch List	Pistoluettelo
+	Stop after	Pysäytys jälkeen
+	Stitches edited by hand: the shape no longer changes them.	Pistoja on muokattu käsin: muoto ei enää muuta niitä.
+	Edit Stitches	Muokkaa pistoja
+	Pick, move, add and delete single stitches	Valitse, siirrä, lisää ja poista yksittäisiä pistoja
+	Regenerate Stitches	Luo pistot uudelleen
+	Drop the hand edits and stitch the shape again	Hylkää käsin tehdyt muokkaukset ja ompele muoto uudelleen
+	Freeze Stitches	Jäädytä pistot
+	Function	Toiminto
+	X (mm)	X (mm)
+	Y (mm)	Y (mm)
+	Stitch	Pisto
+	Jump	Hyppy
+	Color change	Värinvaihto
+	End	Loppu
+	#	#
+	Open a document to see its stitches.	Avaa asiakirja nähdäksesi sen pistot.
+	Machine	Kone
+	Machine settings	Koneen asetukset
+	Longest stitch	Pisin pisto
+	Longest jump	Pisin hyppy
+	Shortest stitch	Lyhin pisto
+	Trim jumps longer than	Leikkaa hypyt, jotka ovat pidempiä kuin
+	Tie length	Päättelyn pituus
+	Stitches per minute	Pistoa minuutissa
+	commercial machines	teollisuuskoneet
+	home machines	kotikoneet
+	Remove underlying stitching	Poista alla oleva ompelu
+	Overlap	Limitys
+	Turn	Käännös
+	Capped	Suljettu pää
+	Backstitch	Jälkipisto
+	Check Again	Tarkista uudelleen
+	Check Design	Tarkista malli
+	Click to select and show it	Valitse ja näytä napsauttamalla
+	Design setting	Mallin asetus
+	Different on each side	Erilainen kummallakin puolella
+	Double zigzag	Kaksoissiksak
+	Fill Holes	Täytä reiät
+	Flip to the other side	Käännä toiselle puolelle
+	Lettering only {n} mm tall is hard to sew clearly	Vain {n} mm korkeaa tekstiä on vaikea ommella selkeästi
+	Look for dense spots, long stitches, tiny objects and small lettering	Etsi tiheitä kohtia, pitkiä pistoja, pieniä objekteja ja pientä tekstiä
+	Makes no stitches	Ei tuota pistoja
+	No problems found.	Ongelmia ei löytynyt.
+	Passes	Kierrokset
+	Preserve long stitches	Säilytä pitkät pistot
+	Pull comp., side 1	Vetokomp., puoli 1
+	Pull comp., side 2	Vetokomp., puoli 2
+	Remove Holes	Poista reiät
+	Reverse Stitch Direction	Käännä pistosuunta
+	Swap Satin Sides	Vaihda satiinin puolet
+	Convert to Satin Column	Muunna satiinipalstaksi
+	Stem Stitch	Varsipisto
+	Stem stitch	Varsipisto
+	Stitches up to {n} mm long can snag	Jopa {n} mm pitkät pistot voivat tarttua kiinni
+	The design is larger than the hoop	Malli on suurempi kuin kehys
+	Thread Color	Langan väri
+	Tie in	Alkupäättely
+	Tie off	Loppupäättely
+	Tiny object: may not sew cleanly	Pieni objekti: ei ehkä ompeleudu siististi
+	Very dense: about {n} layers of thread here	Hyvin tiheä: noin {n} lankakerrosta tässä
+	Design from Prompt…	Malli kuvauksesta…
+	Design from Prompt	Malli kuvauksesta
+	Generate	Luo
+	Describe the design:	Kuvaile malli:
+	Size (longest side):	Koko (pisin sivu):
+	Anthropic API key:	Anthropic API -avain:
+	Remember the key on this computer	Muista avain tällä tietokoneella
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude piirtää kuvituksen omalla Anthropic API -avaimellasi, ja se laskutetaan Anthropic-tililtäsi; sen jälkeen StitchFoundry digitoi sen. Tarkista pistot ennen ompelua.
+	Get a key	Hanki avain
+	Drawing the design…	Piirretään mallia…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Kuvaile malli, niin Claude piirtää sille kuvituksen ja StitchFoundry digitoi sen
+	Place Artwork as Embroidery	Sijoita kuvitus kirjontana
+	Place Artwork	Sijoita kuvitus
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Malli sijoitettu: {n} ommeltu objekti|Malli sijoitettu: {n} ommeltua objektia
+@msg	Enter your Anthropic API key first.	Anna ensin Anthropic API -avaimesi.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	API-avain ei kelpaa: liitä se uudelleen Anthropic Consolesta.
+@msg	Describe the design first.	Kuvaile malli ensin.
+@msg	The description is too long: keep it under 2,000 characters.	Kuvaus on liian pitkä: pidä se alle 2 000 merkissä.
+@msg	Anthropic refused the API key: {e}	Anthropic hylkäsi API-avaimen: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Anthropic-tilisi ei voi maksaa tätä: {e}
+@msg	The AI service is busy: try again in a minute.	Tekoälypalvelu on varattu: yritä uudelleen minuutin kuluttua.
+@msg	The AI service failed (error {code}): try again later.	Tekoälypalvelu epäonnistui (virhe {code}): yritä myöhemmin uudelleen.
+@msg	The request failed (error {code}): {e}	Pyyntö epäonnistui (virhe {code}): {e}
+@msg	The AI declined to draw this: try another description.	Tekoäly kieltäytyi piirtämästä tätä: kokeile toista kuvausta.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Piirroksesta tuli liian yksityiskohtainen valmistuakseen: pyydä jotain yksinkertaisempaa.
+@msg	The reply had no artwork: try again.	Vastauksessa ei ollut kuvitusta: yritä uudelleen.
+@msg	Couldn't reach the AI service: {e}	Tekoälypalveluun ei saatu yhteyttä: {e}
+@msg	Design from Prompt needs the desktop app for now	Malli kuvauksesta vaatii toistaiseksi työpöytäsovelluksen
+@msg	already drawing: wait for it, or Cancel	piirretään jo: odota tai valitse Peruuta
+@msg	the artwork has no shapes to stitch	kuvituksessa ei ole ommeltavia muotoja
+@msg	the artwork has nothing to place	kuvituksessa ei ole mitään sijoitettavaa
+@msg	the artwork can't be read: {e}	kuvitusta ei voi lukea: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	Tekoäly ei kopioi jonkun muun logoa tai hahmoa: {e}
+	Redraw Image with Claude…	Piirrä kuva uudelleen Claudella…
+	Redraw Image with Claude	Piirrä kuva uudelleen Claudella
+	What to change (optional):	Mitä muutetaan (valinnainen):
+	Only redraw artwork you own or have permission to use.	Piirrä uudelleen vain kuvitusta, jonka omistat tai jonka käyttöön sinulla on lupa.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude piirtää kuvan uudelleen tasavärisenä kuvituksena omalla Anthropic API -avaimellasi, ja se laskutetaan Anthropic-tililtäsi; sen jälkeen StitchFoundry digitoi sen. Tarkista pistot ennen ompelua.
+	Redraw with Claude…	Piirrä uudelleen Claudella…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude piirtää kuvan uudelleen selkeänä tasavärisenä kuvituksena, ja StitchFoundry digitoi sen
+@msg	select an image to redraw	valitse uudelleen piirrettävä kuva
+@msg	the image couldn't be read	kuvaa ei voitu lukea
+@msg	The image is too large to send: crop it, or place a smaller copy.	Kuva on liian suuri lähetettäväksi: rajaa se tai sijoita pienempi kopio.
+	Set Split Lines	Aseta jakoviivat
+	Carve Split Lines	Kaiverra jakoviivat
+	Clear Split Lines	Tyhjennä jakoviivat
+	Split lines:	Jakoviivat:
+	Texture size	Tekstuurin koko
+	Texture angle	Tekstuurin kulma
+	Diamonds	Vinoneliöt
+	Waves	Aallot
+	Herringbone	Kalanruoto
+	Bricks	Tiilet
+	Circles	Ympyrät
+	Scales	Suomut
+	Hand stitch	Käsinommeltu pisto
+	Gap	Väli
+	Jagged edges	Rosoiset reunat
+	Side 1	Puoli 1
+	Side 2	Puoli 2
+	Jag depth	Rosojen syvyys
+	Trapunto (travel along the outline)	Trapunto (siirtymä ääriviivaa pitkin)
+	Place Motif	Sijoita aihe
+	Loop	Silmukka
+	Motif Fill	Aihetäyttö
+	Motif size	Aiheen koko
+	Graded	Porrastettu
+	Width at end	Leveys lopussa
+	Row spacing	Rivien välistys
+	E-stitch	E-pisto
+	Rings (0: all)	Renkaat (0: kaikki)
+	Add Laydown	Lisää pohjapisto
+	Spacing profile	Välistysprofiili
+	Accordion	Haitari
+	Fade out	Häivytys pois
+	Fade in	Häivytys esiin
+	Blend into	Sulauta kohteeseen
+	Make Blend	Luo sulautus
+	Blend Colors	Sulauta värit
+	Add Outline	Lisää ääriviiva
+	Satin Outline	Satiiniääriviiva
+	Bean Outline	Papupistoääriviiva
+	Rectangle Border	Suorakulmainen reunus
+	Oval Border	Soikea reunus
+	Rounded Border	Pyöristetty reunus
+	Motif Border	Aihereunus
+	Make Motif	Luo aihe
+	Apply Motif	Käytä aihetta
+	Embroidery Motifs	Kirjonta-aiheet
+	Delete Motif	Poista aihe
+	Remove the motif from the design; what sews it keeps it.	Poista aihe mallista; sen ompelevat säilyttävät sen.
+	Sculpture run	Kuvanveistojuoksupisto
+	Triple stitch length	Kolminkertaisen piston pituus
+	Single stitch length	Yksinkertaisen piston pituus
+	Triple stitches	Kolminkertaiset pistot
+	Single stitches	Yksinkertaiset pistot
+	Cross style	Ristin tyyli
+	Full cross	Kokoristi
+	Half cross	Puoliristi
+	Upright cross	Pystyristi
+	Double cross	Kaksoisristi
+	Redwork	Redwork
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	Ommellaan yhtenä viivana, joka päättyy alkukohtaansa; viivojen välinen matka ommellaan uudelleen niitä pitkin.
+	Add Buttonholes	Lisää napinlävet
+	Straight Buttonhole	Suora napinläpi
+	Rounded Buttonhole	Pyöristetty napinläpi
+	Keyhole Buttonhole	Avaimenreikänapinläpi
+	Place Ring	Sijoita rengas
+	Satin Ring	Satiinirengas
+	Filled Ring	Täytetty rengas
+	Bean Ring	Papupistorengas
+	Hexagons	Kuusikulmiot
+	Chevrons	Siksakraidat
+	Basket weave	Korikudos
+	Stars	Tähdet
+	Hearts	Sydämet
+	Leaves	Lehdet
+	Paired with	Parina kohteen kanssa
+	Sew as	Ompele muodossa
+	Motifs	Aiheet
+	Motif length (× width)	Aiheen pituus (× leveys)
+	String stitch	Nauhapisto
+	Chord length	Jänteen pituus
+	Automatic Knife	Automaattinen veitsi
+	3D effect	3D-tehoste
+	Globe out	Pullistus ulos
+	Globe in	Pullistus sisään
+	Fill Along Lines	Täytä viivoja pitkin
+	Clear Flow Lines	Tyhjennä virtausviivat
+	Rows follow lines:	Rivit seuraavat viivoja:
+	Set Flow Lines	Aseta virtausviivat
+	Carving Stamps	Kaiverrusleimat
+	Carve Stamp	Kaiverra leima
+	Flower	Kukka
+	Sun	Aurinko
+	Moon	Kuu
+	Snowflake	Lumihiutale
+	Paw Print	Tassunjälki
+	Swirl	Kiehkura
+	Shell	Simpukka
+	Butterfly	Perhonen
+	Clover	Apila
+	Show Repeats	Näytä toistot
+	Repeats across	Toistot vaakasuunnassa
+	Repeats down	Toistot pystysuunnassa
+	Gap between repeats	Toistojen väli
+	Stripes	Raidat
+	Slants	Vinot
+	Pinstripes	Kapeat raidat
+	Lattice	Säleikkö
+	Arches	Kaaret
+	Spirals	Spiraalit
+	Pyramids	Pyramidit
+	Ripples	Väreet
+	Greek key	Meanderi
+	Crosses	Ristit
+	Quatrefoils	Neliapilat
+	Flowers	Kukat
+	Trefoils	Kolmiapilat
+	Moons	Kuut
+	Arrows	Nuolet
+	Nested diamonds	Sisäkkäiset vinoneliöt
+	Argyle	Argyle
+	Wicker	Punos
+	Feathers	Höyhenet
+	Paisley	Paisley
+	Swirls	Kiehkurat
+	Snowflakes	Lumihiutaleet
+	Bubbles	Kuplat
+	Sunbursts	Auringonsäteet
+	Motif Tool	Aihetyökalu
+	Contour Split Lines	Ääriviivajakoviivat
+	Keep Motif	Säilytä aihe
+	Keep the motif in My Motifs, for any design	Säilytä aihe kohteessa Omat aiheet mitä tahansa mallia varten
+	My Motifs	Omat aiheet
+	Forget Motif	Unohda aihe
+	Buttonholes	Napinlävet
+	Straight	Suora
+	Keyhole	Avaimenreikä
+	Count	Määrä
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Rivit muodon poikki: ylös on tiheämpi. Vedä pistettä; lisää piste kaksoisnapsauttamalla; poista piste napsauttamalla sitä hiiren kakkospainikkeella.
+	Embroidery Lettering	Kirjontateksti
+	Load Embroidery Font	Lataa kirjontafontti
+	Embroidery Fonts	Kirjontafontit
+	Load Embroidery Font…	Lataa kirjontafontti…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Fonttikansio Ink/Stitch-muodossa: font.json ja sen merkit
+	Load an embroidery font to set text with it.	Lataa kirjontafontti, jotta voit kirjoittaa tekstiä sillä.
+	Sews well at	Ompeleutuu hyvin koossa
+	Place Lettering	Sijoita teksti
+	Edit Lettering	Muokkaa tekstiä
+	Update Lettering	Päivitä teksti
+	Load this lettering's font to change it:	Lataa tämän tekstin fontti muuttaaksesi sitä:
+	Arch	Kaari
+	Valley	Laakso
+	Forget Font	Unohda fontti
+	Unload the font and stop loading its folder	Poista fontti käytöstä ja lopeta sen kansion lataaminen
+	Forget Embroidery Font	Unohda kirjontafontti
+	Team Names	Joukkuenimet
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Valitse kirjontafontilla kirjoitettu teksti: jokaiselle nimelle kirjoitetaan konetiedosto, jossa teksti on vaihdettu siihen.
+	One name a line	Yksi nimi riville
+	Import Names…	Tuo nimet…
+	The first column of a CSV table, or a text file of one name a line	CSV-taulukon ensimmäinen sarake tai tekstitiedosto, jossa on yksi nimi riville
+	Names	Nimet
+	Export One File per Name…	Vie yksi tiedosto nimeä kohti…
+	Team name files written	Joukkuenimitiedostot kirjoitettu
+	Export Team Names	Vie joukkuenimet
+	Read Team Names	Lue joukkuenimet
+	Monogram	Monogrammi
+	Load an embroidery font (Embroidery Lettering) to make monograms.	Lataa kirjontafontti (Kirjontateksti) tehdäksesi monogrammeja.
+	Initials	Nimikirjaimet
+	In a line	Rivissä
+	Scallops	Kampaukset
+	Border	Reunus
+	Place Monogram	Sijoita monogrammi
+	New Embroidery Font	Uusi kirjontafontti
+	Save Embroidery Font…	Tallenna kirjontafontti…
+	Add Glyphs	Lisää merkkejä
+	Font Properties	Fontin ominaisuudet
+	Kern Glyph Pair	Parivälistä merkkipari
+	Font Info	Fontin tiedot
+	Save Embroidery Font	Tallenna kirjontafontti
+	Edit Embroidery Font	Muokkaa kirjontafonttia
+	Merge Embroidery Font	Yhdistä kirjontafontti
+	New Embroidery Font from Type	Uusi kirjontafontti tekstistä
+	Font Creator	Fonttien luonti
+	Capitals' height	Isojen kirjainten korkeus
+	Line spacing	Riviväli
+	Space width	Välilyönnin leveys
+	As typed	Kuten kirjoitettu
+	Capitals	Isot kirjaimet
+	Small letters	Pienet kirjaimet
+	Letter case	Kirjainkoko
+	Sews well from	Ompeleutuu hyvin alkaen
+	Sews well up to	Ompeleutuu hyvin enintään
+	Still to digitize	Vielä digitoitavana
+	Show this glyph	Näytä tämä merkki
+	Not digitized yet: show its artboard	Ei vielä digitoitu: näytä sen piirtoalusta
+	Glyphs to add	Lisättävät merkit
+	Kerning (mm closer)	Parivälistys (mm lähemmäs)
+	Pair	Pari
+	Kern	Parivälistä
+	Merge glyphs from	Yhdistä merkit kohteesta
+	Test text	Testiteksti
+	Try in a New Document	Kokeile uudessa asiakirjassa
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Luo kirjontafontti: asiakirja, jossa on piirtoalusta jokaiselle digitoitavalle merkille.
+	Type family	Fonttiperhe
+	New Font from Type	Uusi fontti tekstistä
+	Edit Font	Muokkaa fonttia
+	Assign to Glyph	Määritä merkkiin
+	Selection to glyph	Valinta merkiksi
+	The selected art becomes the glyph, moved onto its artboard	Valitusta kuvituksesta tulee merkki, joka siirretään sen piirtoalustalle
+	Sew order	Ompelujärjestys
+	Left to right	Vasemmalta oikealle
+	Right to left	Oikealta vasemmalle
+	Centre out	Keskeltä ulospäin
+	Closest	Lähin
+	Along the baseline	Perusviivaa pitkin
+	Where needed	Tarvittaessa
+	After each letter	Jokaisen kirjaimen jälkeen
+	After each word	Jokaisen sanan jälkeen
+	After each line	Jokaisen rivin jälkeen
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Fontin suunnittelukokojen ulkopuolella: sen pistot voivat tulla liian tiheiksi tai liian pitkiksi
+	Adjust Letter	Säädä kirjainta
+	One letter: moved, scaled or turned, kept when the lettering is set again	Yksi kirjain: siirretty, skaalattu tai käännetty, ja se säilyy, kun teksti asetetaan uudelleen
+	Move along	Siirrä eteenpäin
+	Move down	Siirrä alas
+	Reset Letter	Palauta kirjain
+	3D Puff	3D-vaahto
+	3D puff	3D-vaahto
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	Vaahtomuovin päälle ommeltu satiini: tiheä, ei alustikkausta, päät suljettu. Ompele se omalla värillään, jotta vaahtomuovi voidaan asettaa pysäytyksen kohdalla
+	Sew Puff Last	Ompele vaahto viimeisenä
+	Click to Stitch	Napsauta ja ompele
+	Click-to-Stitch Tool	Napsauta ja ompele -työkalu
+	Fill without holes	Täyttö ilman reikiä
+	Centre line	Keskiviiva
+	Stitch as	Ompele muodossa
+	Click a region of an image to stitch it	Ompele kuvan alue napsauttamalla sitä
+	Send to Machine	Lähetä koneeseen
+	Machine Folders	Konekansiot
+	Add Machine Folder…	Lisää konekansio…
+	A USB stick, the machine's folder or a network share the machine reads	USB-tikku, koneen kansio tai verkkojako, jota kone lukee
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Lisää kansio, jota koneesi lukee: USB-tikku, sen kansio tai verkkojako.
+	Machine folder	Konekansio
+	Send	Lähetä
+	Sent:	Lähetetty:
+	Forget Folder	Unohda kansio
+	Triple run	Kolminkertainen juoksupisto
+	Partial cover	Osittainen peitto
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	konetiedoston koodaus epäonnistui
+	Worksheet	Työlomake
+	Outline Around	Ääriviiva ympärille
+	Octagon	Kahdeksankulmio
+	Shield	Kilpi
+	Ornament	Koriste
+	Multi-Hooping	Monikehystys
+	Basting first	Harsinta ensin
+	Basting round	Harsinta ympäri
+	The design	Malli
+	The hoop	Kehys
+	Basting margin	Harsinnan marginaali
+	Design notes	Mallin muistiinpanot
+	Printed on worksheets	Tulostetaan työlomakkeille
+	Cost a piece	Hinta kappaleelta
+	Estimate cost	Arvioi hinta
+	Cost settings	Hinta-asetukset
+	Per 1000 stitches	1000 pistoa kohti
+	Machine time an hour	Konetunnin hinta
+	Thread per 1000 m	Lanka 1000 m kohti
+	Set-up an order	Tilauksen käyttöönotto
+	Machine heads	Konepäät
+	Currency	Valuutta
+	Cost Estimate	Hinta-arvio
+	Colorways	Värivaihtoehdot
+	New Colorway	Uusi värivaihtoehto
+	Use Colorway	Käytä värivaihtoehtoa
+	Colorway Thread	Värivaihtoehdon lanka
+	Rename Colorway	Nimeä värivaihtoehto uudelleen
+	Delete Colorway	Poista värivaihtoehto
+	Colorway	Värivaihtoehto
+	The design's own	Mallin oma
+	Own colour block	Oma värilohko
+	Where it falls	Missä se on
+	Centre	Keskellä
+	Top left	Ylhäällä vasemmalla
+	Top right	Ylhäällä oikealla
+	Bottom left	Alhaalla vasemmalla
+	Bottom right	Alhaalla oikealla
+	Start at	Aloita kohdasta
+	End at	Lopeta kohtaan
+	Stabiliser	Tukikangas
+	Tear-away	Revittävä
+	Cut-away	Leikattava
+	No-show mesh	Näkymätön verkko
+	Wash-away	Vesiliukoinen
+	Scatter Copies	Sirottele kopioita
+	Appliqué letters	Applikointikirjaimet
+	Each letter a patch of fabric: placement line, tack-down and cover	Jokainen kirjain on kangaspala: sijoitusviiva, kiinnitystikkaus ja peitto
+	Letters sewn	Ommellut kirjaimet
+	As the font has them	Kuten fontissa
+	Small text	Pieni teksti
+	Under 6 mm	Alle 6 mm
+	Place Along Selected Line	Sijoita valittua viivaa pitkin
+	The text along the selected line or shape, from its start	Teksti valitun viivan tai muodon mukaisesti sen alusta alkaen
+	Monogram Templates	Monogrammimallipohjat
+	Save Monogram Template	Tallenna monogrammimallipohja
+	Delete Monogram Template	Poista monogrammimallipohja
+	Template name	Mallipohjan nimi
+	Delete Template	Poista mallipohja
+	Lay Out Team Names	Asettele joukkuenimet
+	Team Names Worksheet	Joukkuenimien työlomake
+	Lay Out Together	Asettele yhteen
+	Every name in one design, in rows and columns, for a large hoop or patches	Kaikki nimet yhdessä mallissa riveinä ja sarakkeina suurta kehystä tai merkkejä varten
+	Names Worksheet	Nimien työlomake
+	Each name with its size, stitches and sewing time, and the totals	Jokainen nimi kokoineen, pistoineen ja ompeluaikoineen sekä yhteissummat
+	Design Library	Mallikirjasto
+	Design Catalogue	Malliluettelo
+	No folder chosen	Kansiota ei ole valittu
+	Choose Folder…	Valitse kansio…
+	Newest	Uusimmat
+	Most stitches	Eniten pistoja
+	Largest	Suurimmat
+	Designs	Mallit
+	Couldn't be read	Ei voitu lukea
+	stitches	pistoa
+	colours	väriä
+	Print Catalogue	Tulosta luettelo
+	A sheet of the designs found, to print or save as PDF	Arkki löydetyistä malleista tulostettavaksi tai PDF-tallennettavaksi
+@msg	larger than {_1} MB	suurempi kuin {_1} MB
+@msg	not a machine file: .{ext}	ei konetiedosto: .{ext}
+	Batch Output	Erätuloste
+	Output Profiles	Tulosteprofiilit
+	Save Output Profile	Tallenna tulosteprofiili
+	Delete Output Profile	Poista tulosteprofiili
+	Batch Convert	Eräkäsittelymuunnos
+	files written	tiedostoa kirjoitettu
+	Machine formats (none ticked: the machine's)	Konemuodot (jos mitään ei ole valittu: koneen oma)
+	Production	Tuotanto
+	Approval	Hyväksyntä
+	Placement template	Sijoitusmalli
+	The design file too	Myös mallitiedosto
+	Write to Folder…	Kirjoita kansioon…
+	Machine files, worksheet PDF and design, named alike	Konetiedostot, työlomake-PDF ja malli samannimisinä
+	Write Again	Kirjoita uudelleen
+	Profile name	Profiilin nimi
+	Save Profile	Tallenna profiili
+	Profile	Profiili
+	Convert to	Muunna muotoon
+	Convert All	Muunna kaikki
+	Each design found written again in this format beside it	Jokainen löydetty malli kirjoitetaan uudelleen tässä muodossa sen viereen
+	Converted:	Muunnettu:
+	couldn't be read:	ei voitu lukea:
+	Product Visualizer	Tuotevisualisointi
+@msg	product outline: {e}	tuotteen ääriviiva: {e}
+	Exports	Viennit
+	Nothing exported yet in this session.	Tässä istunnossa ei ole vielä viety mitään.
+	Again	Uudelleen
+	Export it again, as it was asked, from this document	Vie se uudelleen tästä asiakirjasta samoin kuin pyydettiin
+	Export History	Vientihistoria
+	Clear Export History	Tyhjennä vientihistoria
+	Export Again	Vie uudelleen
+	Export Stitch Image	Vie pistokuva
+	Export Stitch Image…	Vie pistokuva…
+	Stitch List CSV (.csv)…	Pistoluettelo CSV (.csv)…
+	Stitch List JSON (.json)…	Pistoluettelo JSON (.json)…
+	G-code (.gcode)…	G-koodi (.gcode)…
+	Stitch Image PNG (.png)…	Pistokuva PNG (.png)…
+@msg	PNG encoding failed: {e}	PNG-koodaus epäonnistui: {e}
+@msg	the design has no stitches	mallissa ei ole pistoja
+@msg	the image would be {w} × {h} pixels: lower ppmm	kuvasta tulisi {w} × {h} pikseliä: pienennä ppmm-arvoa
+	Smallest That Fits	Pienin sopiva
+	The smallest hoop that holds the design, turned if that fits better	Pienin kehys, johon malli mahtuu, käännettynä, jos se sopii paremmin
+	Rotate Hoop	Käännä kehys
+	Custom Hoops	Omat kehykset
+	Hoop name	Kehyksen nimi
+	Save Hoop	Tallenna kehys
+	Delete Hoop	Poista kehys
+	Hoops	Kehykset
+	Choose Smallest Hoop	Valitse pienin kehys
+	Save Custom Hoop	Tallenna oma kehys
+	Delete Custom Hoop	Poista oma kehys
+	Turn the hue	Käännä sävyä
+	One colour	Yksi väri
+	Inverted	Käänteinen
+	Recolour	Väritä uudelleen
+	Recolour Threads	Väritä langat uudelleen
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Jokainen lanka muutetaan värimallin mukaan ja sovitetaan mallin karttaan; kumoaminen palauttaa ne
+	Garment Background	Vaatteen tausta
+	Garment Photo…	Vaatteen valokuva…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Valokuva vaatteesta mallin takana luonnollisessa koossa lukitulla mallitasolla, jota ei koskaan ommella
+	Import Chart…	Tuo kartta…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	Oma lankakartta CSV-tiedostosta (koodi, nimi ja väri langalle) tai GIMP-paletista (.gpl)
+	Export Chart…	Vie kartta…
+	Thread Charts	Lankakartat
+	Import Thread Chart	Tuo lankakartta
+	Export Thread Chart	Vie lankakartta
+	Save Thread Chart	Tallenna lankakartta
+	Delete Thread Chart	Poista lankakartta
+	Design Templates	Mallipohjat
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	Säilytä tämän mallin sivu, kuvitus, kehys, kangas ja asetukset uusien mallien pohjaksi
+	New from Design Template	Uusi mallipohjasta
+	Save as Design Template	Tallenna mallipohjaksi
+	Delete Design Template	Poista mallipohja
+	Print Stitch View	Tulosta pistonäkymä
+	Job Orders	Työtilaukset
+	Customer	Asiakas
+	Due (YYYY-MM-DD)	Eräpäivä (VVVV-KK-PP)
+	New Job for This Design	Uusi työ tälle mallille
+	In production	Tuotannossa
+	Cancelled	Peruttu
+	New Job Order	Uusi työtilaus
+	Update Job Order	Päivitä työtilaus
+	Delete Job Order	Poista työtilaus
+	Job Worksheet	Työn työlomake
+	Job Output	Työn tuloste
+	Clipart	Clipart
+	Click a motif to place it, digitized, in the middle of the page.	Napsauta aihetta sijoittaaksesi sen digitoituna sivun keskelle.
+	Embroidery Clipart	Kirjonta-clipart
+	Insert Clipart	Lisää clipart
+	Send When Ready	Lähetä, kun valmis
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Lisää malli tämän kansion jonoon: se kirjoitetaan heti, jos kansio on saatavilla, muuten heti kun se on
+	Waiting for the folder	Odotetaan kansiota
+	Send queue	Lähetysjono
+	waiting	odottaa
+	sent	lähetetty
+	failed	epäonnistui
+	Clear Sent	Tyhjennä lähetetyt
+	Send Queue	Lähetysjono
+	Add to Send Queue	Lisää lähetysjonoon
+	Send Waiting Designs	Lähetä odottavat mallit
+	Remove from Send Queue	Poista lähetysjonosta
+@msg	the queued file is damaged	jonossa oleva tiedosto on vioittunut
+	Centred	Keskitetty
+	In the hoop	Kehyksessä
+	Worksheet Setup	Työlomakkeen asetukset
+	Merge Colours	Yhdistä värit
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Samanväriset tai lähes samanväriset langat yhdistetään ja niiden värilohkot liitetään; kumoaminen palauttaa ne
+	Lettering Kiosk	Tekstikioski
+	Kiosk Lettering	Kioskiteksti
+	Type a name and make the design	Kirjoita nimi ja luo malli
+	No embroidery font is loaded: ask the shop to load one.	Kirjontafonttia ei ole ladattu: pyydä liikettä lataamaan sellainen.
+	As large as fits	Niin suuri kuin mahtuu
+	Make Design	Luo malli
+	T-shirt	T-paita
+	Polo shirt	Pikeepaita
+	Hoodie	Huppari
+	Tote bag	Kangaskassi
+	Towel	Pyyhe
+	Product	Tuote
+	Show on Product	Näytä tuotteessa
+	Back to the Design	Takaisin malliin
+	Save Machine File…	Tallenna konetiedosto…
+	Next Name	Seuraava nimi
+	PIN	PIN
+	Leave Kiosk	Poistu kioskista
+	Leaving the kiosk will take this PIN	Kioskista poistuminen vaatii tämän PIN-koodin
+	Snapback	Snapback-lippis
+	Trucker cap	Rekkalippis
+	Dad cap	Dad cap -lippis
+	Image Colours	Kuvan värit
+	Prepare Image	Valmistele kuva
+	Photo Stitch	Valokuvakirjonta
+	Convert Stitches to Objects	Muunna pistot objekteiksi
+	Colour Preview	Väriesikatselu
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Kuvan pehmennetty kopio näissä väreissä täplät siivottuina digitoitavaksi tai napsauttamalla ommeltavaksi
+	Colours	Värit
+	background, not sewn	tausta, ei ommella
+	thread changes	langanvaihdot
+	threads sewn	ommellut langat
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Ompele valokuva itsensä päälle siksak-viivoina, yhtenä mutkittelevana juoksupistona tai sen väreinä
+	Sequins	Paljetit
+	Beads	Helmet
+	Rhinestones	Strassit
+	Cord	Nyöri
+	Boring	Lävistys
+	Along the line	Viivaa pitkin
+	Fill the shape	Täytä muoto
+	Round the edge	Reunan ympäri
+	At each point	Jokaisessa pisteessä
+	Bead length	Helmen pituus
+	Cord width	Nyörin leveys
+	Edge width	Reunan leveys
+	Honeycomb	Hunajakenno
+	Packing	Pakkaus
+	Three	Kolme
+	Fixing	Kiinnitys
+	Flip every other	Käännä joka toinen
+	Colour	Väri
+	Thread colour	Langan väri
+	Stop before	Pysäytys ennen
+	Rhinestones aren't sewn: export their template to cut and set them	Strasseja ei ommella: vie niiden malli leikkaamista ja kiinnittämistä varten
+	Decoration Sizes	Koristeiden koot
+	Count Decorations	Laske koristeet
+	Cut File	Leikkaustiedosto
+	Sew the pieces together	Ompele palat yhteen
+	Fabric colour	Kankaan väri
+	Plain	Yksivärinen
+	Check	Ruudullinen
+	Denim	Farkku
+	Felt	Huopa
+	Fabric pattern	Kankaan kuvio
+	Pattern colour	Kuvion väri
+	Combine Appliqué	Yhdistä applikointi
+	Prepare Appliqué	Valmistele applikointi
+	Coil	Kierre
+	Square loop	Neliösilmukka
+	Foil	Folio
+	Shown with the design, not sewn	Näytetään mallin kanssa, ei ommella
+	StitchFoundry Help	StitchFoundry-ohje
+	Tips	Vinkit
+	Search help	Hae ohjeesta
+	Nothing found	Mitään ei löytynyt
+	Help Topics	Ohjeaiheet
+	Help Topic	Ohjeaihe
+	Help for Tool	Työkalun ohje
+	New Design for Hoop	Uusi malli kehykselle
+	Sample Designs	Esimerkkimallit
+	Open Sample Design	Avaa esimerkkimalli
+	Start a design for your hoop	Aloita malli kehyksellesi
+	Your first design	Ensimmäinen mallisi
+	Draw shapes, place a picture or type text.	Piirrä muotoja, sijoita kuva tai kirjoita tekstiä.
+	Choose how each part is stitched: satin, fill, run and more.	Valitse, miten kukin osa ommellaan: satiini, täyttö, juoksupisto ja muuta.
+	Watch it sew with the stitch player and check it.	Katso, miten se ommellaan pistosoittimella, ja tarkista se.
+	Export the file for your machine.	Vie tiedosto koneellesi.
+	Learn how	Opi miten
+	Try a sample	Kokeile esimerkkiä
+	Heart patch	Sydänmerkki
+	Sun and moon	Aurinko ja kuu
+	Appliqué star	Applikointitähti
+	Tip:	Vinkki:
+	More tips	Lisää vinkkejä
+	A new design the size of this hoop's sewing field	Uusi malli tämän kehyksen ompelualueen kokoisena
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Piirrä kaltevuusviiva muodon poikki asettaaksesi sen pistokulman; kaksi tai useampi viiva saa pistot kääntymään.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Ompele sijoitetun kuvan alue napsauttamalla sitä; suurenna toleranssia ottaaksesi mukaan enemmän sen sävyjä.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Siirrä valittuja neulanpistoja vetämällä, lisää pisto Alt-napsauttamalla, Delete poistaa ne.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Napsauta vuorotellen palstan toista puolta ja sitten toista; Enter tai Escape lopettaa.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	Vasemman alakulman valitsin asettaa siveltimen, leveyden, tiheyden, pituuden ja muodon.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Kirjoita tekstisi ja valitse sitten kirjontafontti Kirjontateksti-paneelista, jotta se ommellaan siististi.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Valitse kuvitus ja valitse Kirjonta › Muunna kuvitus kirjonnaksi digitoidaksesi sen yhdellä kertaa.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Satiini sopii enintään noin 7 mm leveille muodoille; leveämmät alueet ommellaan paremmin tatamitäyttönä.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Valitse kehys Kirjonta-paneelista nähdäksesi ompelualueen mallin ympärillä.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Kirjonta-valikon Tarkista malli löytää tiheät kerrokset, pitkät pistot ja liian pienen tekstin ommeltavaksi.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Katso mallin ompelu pistosoittimella Pistojärjestys-kohdassa ennen kuin lähetät sen.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Vie valitsemalla Kirjonta › Vie konetiedosto ja valitse koneesi muoto.
+	Save as Default	Tallenna oletukseksi
+	Clear Default	Tyhjennä oletus
+	Every new design starts with these properties	Jokainen uusi malli alkaa näillä ominaisuuksilla
+	New designs take the built-in properties again	Uudet mallit saavat taas sisäänrakennetut ominaisuudet
+	All Tools, Ungrouped	Kaikki työkalut, ryhmittelemättä
+	Toolbar: All Tools, Ungrouped	Työkalurivi: Kaikki työkalut, ryhmittelemättä
+	Push compensation	Työntökompensaatio
+	{n} very short stitches can break the thread	{n} hyvin lyhyttä pistoa voi katkaista langan
+	Satin only {n} mm wide sinks into the fabric	Vain {n} mm leveä satiini uppoaa kankaaseen
+	Fill stitches {n} mm long can ripple after washing	{n} mm pitkät täyttöpistot voivat rypistyä pesun jälkeen
+	Sewn on clothing	Ommellaan vaatteisiin
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	Pitkät pistot tarttuvat vaatteissa 7 mm:stä alkaen, muissa tuotteissa 12,1 mm:stä
+	Short stitches under	Lyhyet pistot alle
+	Narrow satin under	Kapea satiini alle
+	Short fill stitches under	Lyhyet täyttöpistot alle
+	Edge run and zigzag	Reunan juoksupisto ja siksak
+	Satin underlay	Satiinin alustikkaus
+	Edge run under fills	Reunan juoksupisto täyttöjen alla
+	New to digitizing? Read the basics	Uusi digitoinnissa? Lue perusteet
+	Density Map	Tiheyskartta
+	Density map	Tiheyskartta
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Väritä malli sen mukaan, kuinka paksulti lanka on: sininen yksi kerros, punainen niin tiheä kuin Tarkista malli ilmoittaa
+	Calibrate Life Size…	Kalibroi luonnollinen koko…
+	Calibrate Life Size	Kalibroi luonnollinen koko
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Pidä viivainta tai pankkikorttia näyttöä vasten ja muuta kokoa, kunnes merkit täsmäävät. Todellinen koko näyttää sitten mallit luonnollisessa koossa.
+	Bank card	Pankkikortti
+	Screen points per inch	Näytön pisteitä tuumalla
+	Use This Size	Käytä tätä kokoa
+	Screen Points per Inch at Life Size	Näytön pisteitä tuumalla luonnollisessa koossa
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` on luku väliltä 40–400
+	Experience	Kokemus
+	New to Embroidery	Uusi kirjonnassa
+	Digitizer	Digitoija
+	Embroidery Business	Kirjontayritys
+	Everything	Kaikki
+	Showing the basics.	Näytetään perusteet.
+	Show everything	Näytä kaikki
+	New to embroidery	Uusi kirjonnassa
+	I digitize designs	Digitoin malleja
+	I run an embroidery business	Pyöritän kirjontayritystä
+	The basic tools and everyday sections, nothing more	Perustyökalut ja jokapäiväiset osiot, ei muuta
+	Every digitizing tool, rulers and the control bar	Kaikki digitointityökalut, viivaimet ja ohjauspalkki
+	Everything, with job orders and batch output	Kaikki, myös työtilaukset ja erätuloste
+	How do you work?	Miten työskentelet?
+@msg	`level` is beginner, digitizer, business or all	`level` on beginner, digitizer, business tai all
+	Echo Quilting	Kaikutikkaus
+	Background Quilting	Taustatikkaus
+	Remove Blend	Poista sulautus
+	Blend layers	Sulautuskerrokset
+	My Machine…	Oma kone…
+	Save for My Machine	Tallenna omalle koneelle
+	Which embroidery machine do you have?	Mikä kirjontakone sinulla on?
+	Measure in	Mittayksikkö
+	Save designs to	Tallenna mallit kohteeseen
+	No folder chosen yet	Kansiota ei ole vielä valittu
+	Plug in the USB stick you take to your machine, then choose it here.	Liitä USB-tikku, jonka viet koneellesi, ja valitse se tästä.
+	Husqvarna Viking (other models)	Husqvarna Viking (muut mallit)
+	Brother or Baby Lock	Brother tai Baby Lock
+	Janome or Elna	Janome tai Elna
+	Another machine (DST)	Muu kone (DST)
+	My machine:	Oma kone:
+	Tell us your machine to see its hoops and save in its format.	Kerro koneesi, niin näet sen kehykset ja voit tallentaa sen muodossa.
+	Choose My Machine	Valitse oma kone
+	Saved for your machine:	Tallennettu koneellesi:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Kangasmuoto: kone pysähtyy, jotta voit asettaa kankaan, ja ompelee sen sitten kiinni
+	A heart, a star, a flower and more, ready to sew	Sydän, tähti, kukka ja muuta, valmiina ommeltavaksi
+	A name or a few words, ready to sew	Nimi tai muutama sana, valmiina ommeltavaksi
+	A photo or drawing to turn into stitches	Valokuva tai piirros muutettavaksi pistoiksi
+	A picture	Kuva
+	Add Appliqué	Lisää applikointi
+	Add Appliqué…	Lisää applikointi…
+	Add Words	Lisää sanoja
+	Add Words…	Lisää sanoja…
+	Add a Picture…	Lisää kuva…
+	Add a Shape	Lisää muoto
+	Add a Shape…	Lisää muoto…
+	Bigger	Suurempi
+	Choose a shape	Valitse muoto
+	Click a part of the design to change how it sews.	Napsauta mallin osaa muuttaaksesi, miten se ommellaan.
+	Click a part of the design to choose it, drag it to move it	Valitse mallin osa napsauttamalla, siirrä sitä vetämällä
+	Crown	Kruunu
+	Filled	Täytetty
+	How tall	Korkeus
+	Just the outline	Pelkkä ääriviiva
+	Not sewn	Ei ommella
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Ei vielä mitään ommeltavaa. Lisää sanoja, muoto tai kuva vasemmalla olevilla painikkeilla.
+	Paw	Tassu
+	See the design sew on screen, stitch by stitch	Katso mallin ompelu näytöllä pisto pistolta
+	Sew it as	Ompele muodossa
+	Smaller	Pienempi
+	Smooth edge (satin)	Sileä reuna (satiini)
+	Start a design from the Home screen.	Aloita malli Aloitus-näytöstä.
+	Take back the last change	Peru viimeisin muutos
+	The chosen part	Valittu osa
+	The chosen parts	Valitut osat
+	The design is bigger than the hoop: make it smaller before you sew.	Malli on suurempi kuin kehys: pienennä sitä ennen ompelua.
+	Thread colours	Lankojen värit
+	Turn Into Stitches	Muunna pistoiksi
+	Turn it into stitches in your thread colours.	Muunna se pistoiksi lankojesi väreillä.
+	Watch It Sew	Katso ompelu
+	What should it say?	Mitä siinä pitäisi lukea?
+	Write the design for your machine to its USB stick or folder	Kirjoita malli koneesi USB-tikulle tai kansioon
+	Your design	Mallisi
+	Show Everything	Näytä kaikki
+@msg	the design has no page	mallissa ei ole sivua
+@msg	open or start a design first	avaa tai aloita malli ensin
+	Set My Machine	Aseta oma kone
+	Make a Design	Tee malli
+	Make a Design…	Tee malli…
+	Make a Design, Step by Step	Tee malli vaihe vaiheelta
+	Step by step: words, a shape, appliqué, a picture or a sample	Vaihe vaiheelta: sanoja, muoto, applikointi, kuva tai esimerkki
+	What would you like to make?	Mitä haluaisit tehdä?
+	A name or some words	Nimi tai sanoja
+	For towels, bags, pillows and gifts	Pyyhkeisiin, kasseihin, tyynyihin ja lahjoihin
+	A shape	Muoto
+	A heart, a star, a flower and more	Sydän, tähti, kukka ja muuta
+	An appliqué	Applikointi
+	A shape cut from fabric and sewn down	Kankaasta leikattu ja kiinni ommeltu muoto
+	A photo or a drawing turned into stitches	Pistoiksi muutettu valokuva tai piirros
+	A sample to try	Esimerkki kokeiltavaksi
+	A finished design to sew and learn from	Valmis malli ommeltavaksi ja opittavaksi
+	Which hoop will you use?	Mitä kehystä käytät?
+	Tell us your machine to see its hoops.	Kerro koneesi, niin näet sen kehykset.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Valitse kehys, johon kiinnität kankaan. Malli tehdään mahtumaan siihen.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Isot kirjaimet ovat näin korkeita. 20–30 mm sopii pyyhkeeseen, 10–15 mm paitaan.
+	Make It	Tee se
+	Which shape of fabric?	Minkä muotoinen kangas?
+	Which shape?	Mikä muoto?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Kone ompelee kankaan paikan ja pysähtyy; asetat kankaan paikalleen, kone kiinnittää sen ja pysähtyy taas, jotta voit leikata; sitten se ompelee reunan.
+	Choose a picture	Valitse kuva
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Parhaiten toimivat yksinkertaiset kuvat, joissa on muutama tasainen väri ja selkeät reunat: piirroshahmo, logo, clipart.
+	Choose a Picture…	Valitse kuva…
+	Which sample?	Mikä esimerkki?
+	Your thread colours	Lankojesi värit
+	These are sewn in this order. Click a colour to match a thread you have.	Nämä ommellaan tässä järjestyksessä. Napsauta väriä valitaksesi vastaavan langan, joka sinulla on.
+	Watch it sew	Katso ompelu
+	See the needle go stitch by stitch, in the order your machine will sew it.	Katso neulan liikkuvan pisto pistolta siinä järjestyksessä, jossa koneesi ompelee.
+	Save it	Tallenna se
+	Save for My Machine writes the file your machine sews, to its USB stick.	Tallenna omalle koneelle kirjoittaa koneesi ompeleman tiedoston sen USB-tikulle.
+	Save Design keeps a copy you can open and change later.	Tallenna malli säilyttää kopion, jonka voit avata ja jota voit muuttaa myöhemmin.
+	Save Design…	Tallenna malli…
+	Put back what Undo took back	Palauta se, minkä kumoaminen poisti
+	Start Over…	Aloita alusta…
+	Clear the design and begin again	Tyhjennä malli ja aloita uudelleen
+	Text size	Tekstin koko
+	Saved for you automatically in My Designs:	Tallennettu automaattisesti kansioon Omat mallit:
+	Start Over	Aloita alusta
+	Clear everything in this design and begin again?	Tyhjennetäänkö kaikki tästä mallista ja aloitetaanko alusta?
+	You can still get it back with Undo.	Voit vielä palauttaa sen kumoamalla.
+	Keep It	Säilytä
+	Keep Design Safe	Pidä malli tallessa
+	In-the-Hoop Projects	Kehyksessä tehtävät projektit
+	Make In-the-Hoop Project	Tee kehyksessä tehtävä projekti
+	Steps	Vaiheet
+	The machine also stops where you lay or trim fabric.	Kone pysähtyy myös, kun asetat tai leikkaat kangasta.
+	Print the Steps…	Tulosta vaiheet…
+	Change the Size?	Muutetaanko kokoa?
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	Tämä malli pysähtyy kangasta varten, jonka leikkaat mittoihin. Jos sitä suurennetaan tai pienennetään, palat eivät ehkä enää sovi.
+	Keep the Size	Säilytä koko
+	Change It Anyway	Muuta silti
+	An in-the-hoop project	Kehyksessä tehtävä projekti
+	A little pillow front, a mug rug, a coaster or an ornament	Pieni tyynynpäällinen, mukialusta, lasinalunen tai koriste
+	Which project?	Mikä projekti?
+	Sewn in a 5×7 hoop, borders and back sewn on after	Ommellaan 5×7-kehyksessä, reunukset ja tausta ommellaan jälkeenpäin
+	Finished in the hoop: batting, backing and a satin edge	Viimeistellään kehyksessä: vanu, taustakangas ja satiinireuna
+	Words (you can leave this empty)	Sanat (voit jättää tyhjäksi)
+	Little pillow front, 8″ square	Pieni tyynynpäällinen, 8″ neliö
+	Little pillow front, 9½ × 5½″	Pieni tyynynpäällinen, 9½ × 5½″
+	Mug rug, 6½ × 4½″	Mukialusta, 6½ × 4½″
+	Coaster, 3¾″ square	Lasinalunen, 3¾″ neliö
+	Round ornament, 3½″	Pyöreä koriste, 3½″
+	Quilting for a tile	Tikkaus laatalle
+	Background quilting the size of a quilting tile, block by block	Tikkauslaatan kokoinen taustatikkaus, lohko kerrallaan
+	What size is the tile?	Minkä kokoinen laatta on?
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	Lue koko laatan ikkunasta. Lohko tikataan reunasta reunaan laatan kokoisena.
+	Lines apart	Viivojen väli
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	Pidä sama kuvio ja välistys tilkkupeiton jokaisessa lohkossa, jotta lohkot jatkuvat toisiinsa.
+	Make Every Size…	Tee kaikki koot…
+	One file for each usual tile size, in a folder or on the USB stick	Yksi tiedosto kullekin tavalliselle laattakoolle kansioon tai USB-tikulle
+	Quilt blocks saved:	Tilkkulohkot tallennettu:
+	Stipple	Tiivis mutkittelu
+	Squares spiral	Neliöspiraali
+	Quilt Block Patterns	Tilkkulohkokuviot
+	Quilt Block	Tilkkulohko
+	Quilt Block Set	Tilkkulohkosarja
+	Loops	Silmukat
+	Pebbles	Pikkukivet
+	A block	Lohko
+	A border strip	Reunanauha
+	A corner	Kulma
+	In the middle (you can leave this empty)	Keskellä (voit jättää tyhjäksi)
+	Words	Sanat
+	No shape	Ei muotoa
+	Sew the shape as appliqué	Ompele muoto applikointina
+	Add a ribbon band across it	Lisää nauhakaistale sen poikki
+	Add a ribbon loop to hang it	Lisää nauhalenkki ripustamista varten
+	Clear vinyl on top (wipe-clean)	Kirkas vinyyli päällä (pyyhittävä)
+	Mark where a button goes	Merkitse napin paikka
+	Print the Cutting Templates…	Tulosta leikkuumallit…
+	In-the-Hoop Cutting Templates	Kehyksessä tehtävien projektien leikkuumallit
+	Downloaded for your machine:	Ladattu koneellesi:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	Tallenna omalle koneelle lataa mallin: kopioi se USB-tikulle, jonka viet koneellesi.
+	Downloaded:	Ladattu:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	Tallenna omalle koneelle lataa koneesi ompeleman tiedoston: kopioi se sen USB-tikulle.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Sulautus liukuväristä
+	Sew the gradient's colours blended the way it runs	Ompele liukuvärin värit sulautettuina sen kulkusuunnassa
+	Cutwork	Leikkauskirjonta
+	Tartan Fill	Tartan-täyttö
+	Test Sew-Out	Koeompelu
+	Test Sew-Outs	Koeompelut
+	Cross Stitch	Ristipisto
+	Cross Stitch Tool	Ristipistotyökalu
+	Cross Stitch from Image…	Ristipisto kuvasta…
+	Cross-Stitch Pattern Info	Ristipistokuvion tiedot
+	Cross-Stitch Pattern Settings	Ristipistokuvion asetukset
+	New Cross-Stitch Pattern…	Uusi ristipistokuvio…
+	Paint Cross Stitches	Maalaa ristipistoja
+	Brush (squares)	Sivellin (ruudut)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	Täytä ristipistoruudukon ruutuja napsauttamalla tai vetämällä; pyyhi pitämällä Alt painettuna
+	Erase	Pyyhi
+	Pattern colours	Kuvion värit
+	Add My Hoop	Lisää oma kehys
+	Brother or Baby Lock multi-needle	Brother tai Baby Lock, moninenäinen
+	Commercial multi-needle (DST)	Teollinen moninenäkone (DST)
+	Give the hoop a name	Anna kehykselle nimi
+	Hoop not listed? Add its sewing field here.	Eikö kehystä ole luettelossa? Lisää sen ompelualue tähän.
+	My hoop	Oma kehys
+	My own hoops	Omat kehykset
+	Square corners	Suorat kulmat
+	Type the hoop's width and height as numbers	Kirjoita kehyksen leveys ja korkeus numeroina
+	in	in
+	Chenille	Chenille
+	Chenille Stitch	Chenille-pisto
+	Chenille Stops	Chenille-pysäytykset
+	Compound Chenille…	Yhdistetty chenille…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	Sammaltäyttö, jonka ennen ja jälkeen ommellaan ketjureunukset, ryhmänä muodon paikalla
+	Chain	Ketju
+	Chenille stops	Chenille-pysäytykset
+	Lockstitch	Tikkipisto
+	Moss	Sammal
+	Moss pattern	Sammalkuvio
+	Needle height	Neulan korkeus
+	Start	Alku
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	sammal ompelee täyttöjä ja juoksupistoja: anna satiinille ensin täyttö- tai juoksupisto
+	Get Embroidery Fonts…	Hae kirjontafontteja…
+	About the library	Tietoja kirjastosta
+	Download Again	Lataa uudelleen
+	Download fonts from an embroidery font library, ready for lettering	Lataa fontteja kirjontafonttikirjastosta valmiina tekstiä varten
+	Downloading	Ladataan
+	Each font comes with its own licence, in its folder.	Jokaisella fontilla on oma lisenssinsä sen kansiossa.
+	Fonts are kept in	Fontit säilytetään kansiossa
+	Get Embroidery Fonts	Hae kirjontafontteja
+	Listing the fonts…	Luetellaan fontteja…
+	Try Again	Yritä uudelleen
+	fonts	fonttia
+	is ready for lettering	on valmis tekstiä varten
+@msg	a file of the font has an unsafe name: {path}	fontin tiedostolla on vaarallinen nimi: {path}
+@msg	can't reach the font library: {e}	fonttikirjastoon ei saada yhteyttä: {e}
+@msg	downloading embroidery fonts works in the desktop app	kirjontafonttien lataaminen toimii työpöytäsovelluksessa
+@msg	the font library answered {status} for {path}	fonttikirjasto vastasi {status} kohteelle {path}
+@msg	the font library answered {status}: try again later	fonttikirjasto vastasi {status}: yritä myöhemmin uudelleen
+@msg	{_1} isn't published yet	{_1} ei ole vielä julkaistu
+	Border or Corner…	Reunus tai kulma…
+	Check Continuous Line	Tarkista yhtenäinen viiva
+	Continuous Fill	Yhtenäinen täyttö
+	Continuous Fill…	Yhtenäinen täyttö…
+	Crib (36 × 52″)	Pinnasänky (36 × 52″)
+	DXF Lines (.dxf)…	DXF-viivat (.dxf)…
+	Echo	Kaiku
+	Edge-to-Edge Rows	Reunasta reunaan -rivit
+	Edge-to-Edge Rows…	Reunasta reunaan -rivit…
+	Export Quilting Lines	Vie tikkausviivat
+	Export Quilting Lines…	Vie tikkausviivat…
+	HP-GL Plot (.plt)…	HP-GL-piirto (.plt)…
+	Join into One Line	Yhdistä yhdeksi viivaksi
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Pitkävarsitikkaus
+	Meander	Mutkittelu
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	SVG-viivat (.svg)…
+	Start and End on the Edges	Aloita ja lopeta reunoilla
+	Stitch in the Ditch	Tikkaus sauman uraan
+	Throw (50 × 65″)	Torkkupeitto (50 × 65″)
+	Twin (70 × 90″)	Twin (70 × 90″)
+	A border of the selected line	Reunus valitusta viivasta
+	Border depth	Reunuksen syvyys
+	Border length	Reunuksen pituus
+	Corner leg (0: no corner)	Kulman sivu (0: ei kulmaa)
+	Edge-to-edge rows of the selected line	Reunasta reunaan -rivit valitusta viivasta
+	Make Border	Luo reunus
+	Make Rows	Luo rivit
+	Nest the rows	Lomita rivit
+	One continuous line, ready for a longarm	Yksi yhtenäinen viiva pitkävarsikoneelle
+	Quilt height	Peiton korkeus
+	Quilt width	Peiton leveys
+	Row spacing (0: the line's height)	Rivien välistys (0: viivan korkeus)
+	joins needed: Join into One Line makes them	liitoksia tarvitaan: Yhdistä yhdeksi viivaksi luo ne
+	longest	pisin
+@msg	nothing to add	ei mitään lisättävää
+	Download All	Lataa kaikki
+	Every font not downloaded yet, one after another	Kaikki vielä lataamattomat fontit yksi kerrallaan
+	Fonts downloaded:	Fontteja ladattu:
+	failed:	epäonnistui:
+	fonts downloaded, ready for lettering	fonttia ladattu, valmiina tekstiä varten
+	Compare Designs	Vertaa malleja
+	Compare Designs…	Vertaa malleja…
+	Average stitch (mm)	Keskimääräinen pisto (mm)
+	Bobbin thread (m)	Alalanka (m)
+	Choose a machine file or the design open now	Valitse konetiedosto tai nyt avoinna oleva malli
+	Choose both designs to compare them	Valitse molemmat mallit verrataksesi niitä
+	Colour changes	Värinvaihdot
+	Differences of 10% or more are highlighted. The real test is sewing both.	Vähintään 10 %:n erot korostetaan. Todellinen testi on ommella molemmat.
+	First design	Ensimmäinen malli
+	Height (mm)	Korkeus (mm)
+	Jumps	Hypyt
+	Longest stitch (mm)	Pisin pisto (mm)
+	Open File…	Avaa tiedosto…
+	Second	Toinen
+	Second design	Toinen malli
+	Stitches over 7 mm	Yli 7 mm:n pistot
+	Stitches under 1 mm	Alle 1 mm:n pistot
+	Stops	Pysäytykset
+	This Design	Tämä malli
+	This design	Tämä malli
+	Top thread (m)	Ylälanka (m)
+	Width (mm)	Leveys (mm)
+	same	sama
+	Angular	Kulmikas
+	Away from the Line	Poispäin viivasta
+	Between Line and Object	Viivan ja objektin välissä
+	Drag out from a segment, or click two points, then click to place.	Vedä janasta tai napsauta kahta pistettä ja sijoita sitten napsauttamalla.
+	Drag out from a corner, or click two straight lines, then click to place.	Vedä kulmasta tai napsauta kahta suoraa viivaa ja sijoita sitten napsauttamalla.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Vedä ympyrästä tai kaaresta ulospäin säteelle, sisäänpäin halkaisijalle.
+	Display	Näyttö
+@msg	Unknown dimension style	Tuntematon mittatyyli
+@msg	Unknown unit	Tuntematon yksikkö
+	Direction	Suunta
+	Along the selected line	Valittua viivaa pitkin
+	Add to Design	Lisää malliin
+	Colors and Order	Värit ja järjestys
+	Paint	Maalaa
+	Print and Export	Tulosta ja vie
+	Special Machines	Erikoiskoneet
+	Split Lines	Jakoviivat
+	Stitch Direction	Pistosuunta
+	Use Line as Direction	Käytä viivaa suuntana
+	Arc Up	Kaari ylös
+	Arc Down	Kaari alas
+	To follow a line of your own, draw it first, select it, then Add Words.	Jos haluat seurata omaa viivaasi, piirrä se ensin, valitse se ja valitse sitten Lisää sanoja.
+	Ask About Embroidery…	Kysy kirjonnasta…
+	Ask About Embroidery	Kysy kirjonnasta
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Kysy mitä tahansa konekirjonnasta tai StitchFoundrysta: mitä tukikangasta käyttää, miksi lanka katkeaa, miten kirjaimet saa ommeltua siistimmin, missä jokin toiminto on. Claude voi myös muuttaa malliasi pyynnöstäsi, kun olet sallinut sen.
+	Thinking…	Mietitään…
+	Type your question, then press Enter	Kirjoita kysymyksesi ja paina Enter
+	Ask	Kysy
+	New Conversation	Uusi keskustelu
+	Include my design	Liitä mukaan mallini
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Vastaukset tulevat Claudelta omalla Anthropic API -avaimellasi, ja ne laskutetaan Anthropic-tililtäsi. Ne voivat olla vääriä: tee koeompelu ennen tärkeää työtä.
+	Change key	Vaihda avain
+@msg	Type a question first.	Kirjoita ensin kysymys.
+@msg	The question is too long: keep it under 2,000 characters.	Kysymys on liian pitkä: pidä se alle 2 000 merkissä.
+@msg	The AI declined to answer this: ask another way.	Tekoäly kieltäytyi vastaamasta tähän: kysy toisin.
+@msg	The reply had no answer: try again, or ask something narrower.	Vastauksessa ei ollut vastausta: yritä uudelleen tai kysy jotain rajatumpaa.
+@msg	Ask About Embroidery needs the desktop app for now	Kysy kirjonnasta vaatii toistaiseksi työpöytäsovelluksen
+@msg	already asking: wait for the answer	kysytään jo: odota vastausta
+	Claude wants to change your design:	Claude haluaa muuttaa malliasi:
+	Allow	Salli
+	Don't Allow	Älä salli
+	Edit › Undo takes each change back.	Muokkaa › Kumoa peruu jokaisen muutoksen.
+	Changed:	Muutettu:
+	Couldn't change:	Ei voitu muuttaa:
+	Not changed:	Ei muutettu:
+@msg	This conversation is long: start a New Conversation.	Tämä keskustelu on pitkä: aloita uusi keskustelu.
+@msg	Claude took too many steps: ask again, more simply.	Claude otti liian monta vaihetta: kysy uudelleen yksinkertaisemmin.

@@ -4946,3 +4946,1278 @@ theme	Appearance	Utseende
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+	Mode	Läge
+	Blur Mode	Oskärpeläge
+	Edge Only	Endast kant
+	Overlay Edge	Överlägg kant
+	Path Length	Banlängd
+@msg	not a VectorCraft file: {0}	inte en VectorCraft-fil: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-dokument: ett låst objekt som uppdateras när filen ändras.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	När filen öppnades utelämnades det som StitchFoundry inte kan läsa än ({what}): om du ersätter den förloras det för gott. Spara under ett annat namn för att behålla det.
+	Report a Bug…	Rapportera ett fel…
+	Add Inclination Line	Lägg till lutningslinje
+	After the selection	Efter markeringen
+	Appliqué	Applikation
+	Apply Fabric	Använd tyg
+	Artwork	Teckning
+	Auto Direction	Automatisk riktning
+	Auto Stitch Direction	Automatisk stygnriktning
+	Auto spacing	Automatiskt avstånd
+	Auto split	Automatisk delning
+	Auto-Digitize Image	Autodigitalisera bild
+	Automatic underlay	Automatiska understygn
+	Back to the start	Tillbaka till början
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	Bönstygn
+	Before the selection	Före markeringen
+	Blanket	Langettstygn
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Penseldrag
+	Calligraphy	Kalligrafi
+	Cell size	Cellstorlek
+	Centre run	Mittlöpstygn
+	Clear Inclination Lines	Rensa lutningslinjer
+	Clear Lines	Rensa linjer
+	Connectors	Förbindelser
+	Constant	Konstant
+	Contour Fill	Konturfyllning
+	Convert Artwork to Embroidery	Konvertera teckning till broderi
+	Cover stitch	Täcksöm
+	Cover width	Täckbredd
+	Cross Fill	Korsfyllning
+	Delete Inclination Line	Radera lutningslinje
+	Densities (mm)	Tätheter (mm)
+	Density	Täthet
+	Design	Design
+	Design Information	Designinformation
+	Digitizing Widget	Digitaliseringsreglage
+	Dimmed	Nedtonad
+	Direction: automatic	Riktning: automatisk
+	Direction: fixed angle	Riktning: fast vinkel
+	Direction: one inclination line	Riktning: en lutningslinje
+	Direction: turning along	Riktning: svänger längs
+	Drag across the shape to add a line; drag a bead to move it	Dra över formen för att lägga till en linje; dra en pärla för att flytta den
+	Each anchor point is a needle penetration.	Varje ankarpunkt är ett nålstick.
+	Edge run	Kantlöpstygn
+	Edge run underlay	Kantunderstygn
+	Edit Lines	Redigera linjer
+	Embroidery	Broderi
+	Embroidery Brush Tool	Broderipenselverktyg
+	Embroidery Settings	Broderiinställningar
+	Export Machine File	Exportera maskinfil
+	Export Machine File…	Exportera maskinfil…
+	Fabric	Tyg
+	Fabric color	Tygfärg
+	Fill style	Fyllningsstil
+	Fits the hoop	Ryms i ramen
+	Give objects a stitch type in the Embroidery panel.	Ge objekt en stygntyp i panelen Broderi.
+	Gradient to	Gradient till
+	Hide Digitizing Widget	Dölj digitaliseringsreglaget
+	Hoop	Ram
+	Inclination Tool	Lutningsverktyg
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Större än ramen
+	Lengths (mm)	Längder (mm)
+	Let sewing start and stop at the closest points again	Låt sömmen börja och sluta vid de närmaste punkterna igen
+	Machine Embroidery File	Maskinbroderifil
+	Manual Stitches	Manuella stygn
+	Meander Fill	Meanderfyllning
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Motiv
+	Move Inclination Line	Flytta lutningslinje
+	Needle points	Nålstick
+	New strokes	Nya penseldrag
+	No Stitches	Inga stygn
+	No hoop	Ingen ram
+	No stitches yet.	Inga stygn än.
+	Not set	Inte angivet
+	Nothing stitched yet	Inget sytt än
+	Object color	Objektfärg
+	Open a document to see its stitch sequence.	Öppna ett dokument för att se dess stygnordning.
+	Open or create a document to digitize embroidery.	Öppna eller skapa ett dokument för att digitalisera broderi.
+	Path spacing	Linjeavstånd
+	Pause	Paus
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Välj pensel, bredd, täthet och form på en ratt och rita sedan på arbetsytan
+	Place editable inclination lines (or pick the angle) automatically	Placera redigerbara lutningslinjer (eller välj vinkeln) automatiskt
+	Placement line and stop	Placeringslinje och stopp
+	Play the stitches	Spela upp stygnen
+	Pull compensation	Dragkompensation
+	Radial Fill	Radiell fyllning
+	Randomness	Slumpmässighet
+	Remove background	Ta bort bakgrunden
+	Reset Start and Stop	Återställ start och slut
+	Row offset	Radförskjutning
+	Run	Löpstygn
+	Run style	Löpstygnsstil
+	Satin	Satin
+	Satin Fill	Satinfyllning
+	Select a path, shape or compound path to give it a stitch type.	Markera en bana, form eller sammansatt bana för att ge den en stygntyp.
+	Set Inclination Lines	Ange lutningslinjer
+	Set Start and Stop	Ange start och slut
+	Set Thread	Ange tråd
+	Sew earlier	Sy tidigare
+	Sew first	Sy först
+	Sew last	Sy sist
+	Sew later	Sy senare
+	Sewing time	Sytid
+	Sewn last	Sys sist
+	Short stitches on curves	Korta stygn i kurvor
+	Show every stitch	Visa varje stygn
+	Show stitches	Visa stygn
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Enkel
+	Sort by Thread Color	Sortera efter trådfärg
+	Spiral Fill	Spiralfyllning
+	Stitch Parameters	Stygnparametrar
+	Stitch Plan	Stygnplan
+	Stitch Sequence	Stygnordning
+	Stitch Type	Stygntyp
+	Stitch length	Stygnlängd
+	Stitch type	Stygntyp
+	Stitches	Stygn
+	Stop to trim fabric	Stoppa för att klippa tyget
+	Tack-down	Fästsöm
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Avsmalnande
+	Tatami Fill	Tatamifyllning
+	Tatami underlay	Tatami-understygn
+	Thread	Tråd
+	Thread colors	Trådfärger
+	Trim after	Klipp efter
+	Trims	Klipp
+	Triple	Trippel
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Gör om bilden till stygn: smala delar blir satin, resten tatamifyllning.
+	Wave	Våg
+	Widget values	Reglagevärden
+	Width profile	Breddprofil
+	Widths (mm)	Bredder (mm)
+	Zigzag	Sicksack
+	inclination lines	lutningslinjer
+	Brush	Pensel
+	Bean	Bönstygn
+	Steil	Steil
+	Heart	Hjärta
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Autodigitalisera hittade inga former att sy: sänk Brus eller höj Färger
+@msg	Auto-Digitize: the image traced to nothing	Autodigitalisera: bilden kalkerades till ingenting
+@msg	can't open `{title}`: the file has no stitches	kan inte öppna `{title}`: filen har inga stygn
+@msg	can't open `{title}`: {e}	kan inte öppna `{title}`: {e}
+@msg	{_1} export failed: {e}	{_1}-exporten misslyckades: {e}
+	Stitch Lines	Stygnlinjer
+	Tatami	Tatami
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Av Stitchwright, baserat på VectorCraft av ArtCraft-teamet. MIT OR Apache-2.0. Typsnitt: Source Sans 3, Inter, JetBrains Mono (OFL). Ikoner: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Version {version} — digitalisering av maskinbroderi med öppen källkod, i ren Rust.
+	Machine embroidery digitizing — fast, open, scriptable.	Digitalisering av maskinbroderi — snabb, öppen, skriptbar.
+	Split Here	Dela här
+	Split the object in two at the picked stitch	Dela objektet i två vid det valda stygnet
+	Split Object	Dela objekt
+	Check settings	Kontrollera inställningar
+	Dense from (layers)	Tätt från (lager)
+	Give every stitched object the chart's closest thread	Ge varje sytt objekt den närmaste tråden i trådkartan
+	Hidden (not sewn)	Dold (sys inte)
+	Inclination lines	Lutningslinjer
+	Long stitches from	Långa stygn från
+	Match Threads to Chart	Matcha trådar mot karta
+	Omit last stitch	Utelämna sista stygnet
+	Small lettering under	Liten text under
+	Start and stop	Start och slut
+	Thread chart	Trådkarta
+	Tie style	Fästningstyp
+	Tiny objects under	Små objekt under
+	Travel by	Förflyttning via
+	Double	Dubbel
+machine	Trim	Klipp
+@plural	{n} stitch|{n} stitches	{n} stygn|{n} stygn
+@plural	{n} trim|{n} trims	{n} klipp|{n} klipp
+machine	Stop	Stopp
+	Column A/B Tool	Verktyget Kolumn A/B
+	Column A/B	Kolumn A/B
+	Tatami stitches	Tatamistygn
+	Make Current	Gör aktuell
+	New objects of this stitch type take these properties	Nya objekt med den här stygntypen får de här egenskaperna
+	Properties for New Objects	Egenskaper för nya objekt
+	Objects you give a stitch type take these properties.	Objekt som du ger en stygntyp får de här egenskaperna.
+	Fabric settings	Tyginställningar
+	Satin density	Satintäthet
+	Fill density	Fyllningstäthet
+	Fill stitch length	Stygnlängd för fyllning
+	Underlay spacing	Avstånd för understygn
+	Fill underlay	Understygn för fyllning
+	Topping	Ytfilm
+	Save as New Fabric	Spara som nytt tyg
+	Seconds per trim	Sekunder per klipp
+	Seconds per color change	Sekunder per färgbyte
+	Save to Machine	Spara i maskinen
+	Keep these settings in the machine's profile, for new designs	Behåll de här inställningarna i maskinens profil, för nya designer
+	Reset Machine	Återställ maskin
+	Put the machine's profile back to how it ships, and use it	Återställ maskinens profil till fabriksläget och använd den
+	Delete Machine	Radera maskin
+	Save as New Machine	Spara som ny maskin
+	A machine profile of your own with these settings	En egen maskinprofil med de här inställningarna
+	My Machine	Min maskin
+	A copy of this fabric to change	En kopia av det här tyget att ändra
+	Delete Fabric	Radera tyg
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Inga stilar än. Markera ett sytt objekt och skapa en stil för att återanvända dess stygnegenskaper.
+	New Embroidery Style	Ny broderistil
+	Delete Embroidery Style	Radera broderistil
+	Duplicate Embroidery Style	Duplicera broderistil
+	Redefine Embroidery Style	Omdefiniera broderistil
+	Break Link to Embroidery Style	Bryt länken till broderistil
+	Rename Embroidery Style…	Byt namn på broderistil…
+	Embroidery Styles	Broderistilar
+	Make Properties Current	Gör egenskaperna aktuella
+	Current Properties	Aktuella egenskaper
+	New Object Properties	Egenskaper för nya objekt
+	Reset Current Properties	Återställ aktuella egenskaper
+	Apply Embroidery Style	Använd broderistil
+	Rename Embroidery Style	Byt namn på broderistil
+	Save Fabric	Spara tyg
+	Machine Profiles	Maskinprofiler
+	Save Machine Profile	Spara maskinprofil
+	Delete Machine Profile	Radera maskinprofil
+	Auto Sequence	Automatisk ordning
+	Branch	Gren
+	Break Apart	Dela upp
+	Sew the objects separately again	Sy objekten separat igen
+	These objects are sewn as one path (a branch).	De här objekten sys som en bana (en gren).
+	Clear Machine Function	Rensa maskinfunktion
+	Insert Machine Function	Infoga maskinfunktion
+	Object Stitches	Objektets stygn
+@msg	`after` is −1 to {_1}	`after` är −1 till {_1}
+@msg	`{what}` is [x, y]	`{what}` är [x, y]
+@msg	`{what}` is [x, y] (numbers)	`{what}` är [x, y] (tal)
+@msg	each op needs `op`: move, delete or insert	varje op behöver `op`: move, delete eller insert
+@msg	indices are record numbers (0, 1, 2…)	index är postnummer (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	`after` saknas (−1 infogar först)
+@msg	missing `indices`	`indices` saknas
+@msg	no record {i}: the object has {len}	ingen post {i}: objektet har {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	okänt cmd `{c}`: stitch, jump, trim eller stop
+@msg	unknown op `{other}`: move, delete or insert	okänd op `{other}`: move, delete eller insert
+	Stitch Edit Tool	Stygnredigeringsverktyg
+	Stitch List	Stygnlista
+	Stop after	Stoppa efter
+	Stitches edited by hand: the shape no longer changes them.	Stygnen är handredigerade: formen ändrar dem inte längre.
+	Edit Stitches	Redigera stygn
+	Pick, move, add and delete single stitches	Välj, flytta, lägg till och radera enskilda stygn
+	Regenerate Stitches	Generera om stygn
+	Drop the hand edits and stitch the shape again	Släng handredigeringarna och sy formen på nytt
+	Freeze Stitches	Frys stygn
+	Function	Funktion
+	X (mm)	X (mm)
+	Y (mm)	Y (mm)
+	Stitch	Stygn
+	Jump	Hopp
+	Color change	Färgbyte
+	End	Slut
+	#	#
+	Open a document to see its stitches.	Öppna ett dokument för att se dess stygn.
+	Machine	Maskin
+	Machine settings	Maskininställningar
+	Longest stitch	Längsta stygn
+	Longest jump	Längsta hopp
+	Shortest stitch	Kortaste stygn
+	Trim jumps longer than	Klipp hopp längre än
+	Tie length	Fästningslängd
+	Stitches per minute	Stygn per minut
+	commercial machines	kommersiella maskiner
+	home machines	hemmaskiner
+	Remove underlying stitching	Ta bort underliggande stygn
+	Overlap	Överlappning
+	Turn	Sväng
+	Capped	Avslutad
+	Backstitch	Efterstygn
+	Check Again	Kontrollera igen
+	Check Design	Kontrollera design
+	Click to select and show it	Klicka för att markera och visa det
+	Design setting	Designinställning
+	Different on each side	Olika på varje sida
+	Double zigzag	Dubbel sicksack
+	Fill Holes	Fyll hål
+	Flip to the other side	Vänd till andra sidan
+	Lettering only {n} mm tall is hard to sew clearly	Text som bara är {n} mm hög är svår att sy tydligt
+	Look for dense spots, long stitches, tiny objects and small lettering	Leta efter täta partier, långa stygn, små objekt och liten text
+	Makes no stitches	Ger inga stygn
+	No problems found.	Inga problem hittades.
+	Passes	Varv
+	Preserve long stitches	Bevara långa stygn
+	Pull comp., side 1	Dragkomp., sida 1
+	Pull comp., side 2	Dragkomp., sida 2
+	Remove Holes	Ta bort hål
+	Reverse Stitch Direction	Vänd stygnriktningen
+	Swap Satin Sides	Byt satinsidor
+	Convert to Satin Column	Konvertera till satinkolumn
+	Stem Stitch	Stjälkstygn
+	Stem stitch	Stjälkstygn
+	Stitches up to {n} mm long can snag	Stygn upp till {n} mm långa kan fastna
+	The design is larger than the hoop	Designen är större än ramen
+	Thread Color	Trådfärg
+	Tie in	Fästning i början
+	Tie off	Fästning i slutet
+	Tiny object: may not sew cleanly	Litet objekt: kanske inte sys rent
+	Very dense: about {n} layers of thread here	Mycket tätt: ungefär {n} lager tråd här
+	Design from Prompt…	Design från beskrivning…
+	Design from Prompt	Design från beskrivning
+	Generate	Generera
+	Describe the design:	Beskriv designen:
+	Size (longest side):	Storlek (längsta sida):
+	Anthropic API key:	Anthropic API-nyckel:
+	Remember the key on this computer	Kom ihåg nyckeln på den här datorn
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude ritar teckningen med din egen Anthropic API-nyckel, debiterat ditt Anthropic-konto; sedan digitaliserar StitchFoundry den. Kontrollera stygnen innan du syr.
+	Get a key	Skaffa en nyckel
+	Drawing the design…	Ritar designen…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Beskriv en design så ritar Claude en teckning till den, och sedan digitaliserar StitchFoundry den
+	Place Artwork as Embroidery	Placera teckning som broderi
+	Place Artwork	Placera teckning
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Design placerad: {n} sytt objekt|Design placerad: {n} sydda objekt
+@msg	Enter your Anthropic API key first.	Ange din Anthropic API-nyckel först.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	API-nyckeln är ogiltig: klistra in den igen från Anthropic Console.
+@msg	Describe the design first.	Beskriv designen först.
+@msg	The description is too long: keep it under 2,000 characters.	Beskrivningen är för lång: håll den under 2 000 tecken.
+@msg	Anthropic refused the API key: {e}	Anthropic avvisade API-nyckeln: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Ditt Anthropic-konto kan inte betala för detta: {e}
+@msg	The AI service is busy: try again in a minute.	AI-tjänsten är upptagen: försök igen om en minut.
+@msg	The AI service failed (error {code}): try again later.	AI-tjänsten misslyckades (fel {code}): försök igen senare.
+@msg	The request failed (error {code}): {e}	Begäran misslyckades (fel {code}): {e}
+@msg	The AI declined to draw this: try another description.	AI:n avböjde att rita detta: prova en annan beskrivning.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Teckningen blev för detaljerad för att slutföras: be om något enklare.
+@msg	The reply had no artwork: try again.	Svaret innehöll ingen teckning: försök igen.
+@msg	Couldn't reach the AI service: {e}	Kunde inte nå AI-tjänsten: {e}
+@msg	Design from Prompt needs the desktop app for now	Design från beskrivning kräver skrivbordsappen tills vidare
+@msg	already drawing: wait for it, or Cancel	ritar redan: vänta på den, eller Avbryt
+@msg	the artwork has no shapes to stitch	teckningen har inga former att sy
+@msg	the artwork has nothing to place	teckningen har inget att placera
+@msg	the artwork can't be read: {e}	teckningen kan inte läsas: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI:n kopierar inte någon annans logotyp eller figur: {e}
+	Redraw Image with Claude…	Rita om bilden med Claude…
+	Redraw Image with Claude	Rita om bilden med Claude
+	What to change (optional):	Vad som ska ändras (valfritt):
+	Only redraw artwork you own or have permission to use.	Rita bara om teckningar som du äger eller har tillstånd att använda.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude ritar om bilden som plana färgfält med din egen Anthropic API-nyckel, debiterat ditt Anthropic-konto; sedan digitaliserar StitchFoundry den. Kontrollera stygnen innan du syr.
+	Redraw with Claude…	Rita om med Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude ritar om bilden som ren teckning i plana färger, och sedan digitaliserar StitchFoundry den
+@msg	select an image to redraw	markera en bild att rita om
+@msg	the image couldn't be read	bilden kunde inte läsas
+@msg	The image is too large to send: crop it, or place a smaller copy.	Bilden är för stor för att skickas: beskär den eller placera en mindre kopia.
+	Set Split Lines	Ange delningslinjer
+	Carve Split Lines	Rista delningslinjer
+	Clear Split Lines	Rensa delningslinjer
+	Split lines:	Delningslinjer:
+	Texture size	Texturstorlek
+	Texture angle	Texturvinkel
+	Diamonds	Ruter
+	Waves	Vågor
+	Herringbone	Fiskben
+	Bricks	Tegel
+	Circles	Cirklar
+	Scales	Fjäll
+	Hand stitch	Handstygn
+	Gap	Mellanrum
+	Jagged edges	Taggiga kanter
+	Side 1	Sida 1
+	Side 2	Sida 2
+	Jag depth	Taggdjup
+	Trapunto (travel along the outline)	Trapunto (förflyttning längs konturen)
+	Place Motif	Placera motiv
+	Loop	Ögla
+	Motif Fill	Motivfyllning
+	Motif size	Motivstorlek
+	Graded	Graderad
+	Width at end	Bredd vid slutet
+	Row spacing	Radavstånd
+	E-stitch	E-stygn
+	Rings (0: all)	Ringar (0: alla)
+	Add Laydown	Lägg till grundlager
+	Spacing profile	Avståndsprofil
+	Accordion	Dragspel
+	Fade out	Tona ut
+	Fade in	Tona in
+	Blend into	Blanda in i
+	Make Blend	Skapa blandning
+	Blend Colors	Blanda färger
+	Add Outline	Lägg till kontur
+	Satin Outline	Satinkontur
+	Bean Outline	Bönstygnskontur
+	Rectangle Border	Rektangulär bård
+	Oval Border	Oval bård
+	Rounded Border	Rundad bård
+	Motif Border	Motivbård
+	Make Motif	Skapa motiv
+	Apply Motif	Använd motiv
+	Embroidery Motifs	Broderimotiv
+	Delete Motif	Radera motiv
+	Remove the motif from the design; what sews it keeps it.	Ta bort motivet från designen; det som syr det behåller det.
+	Sculpture run	Skulpturlöpstygn
+	Triple stitch length	Stygnlängd för trippelstygn
+	Single stitch length	Stygnlängd för enkelstygn
+	Triple stitches	Trippelstygn
+	Single stitches	Enkelstygn
+	Cross style	Korsstil
+	Full cross	Helt kors
+	Half cross	Halvt kors
+	Upright cross	Upprätt kors
+	Double cross	Dubbelkors
+	Redwork	Redwork
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	Sys som en linje som slutar där den börjar; vägen mellan linjerna sys tillbaka längs dem.
+	Add Buttonholes	Lägg till knapphål
+	Straight Buttonhole	Rakt knapphål
+	Rounded Buttonhole	Rundat knapphål
+	Keyhole Buttonhole	Nyckelhålsknapphål
+	Place Ring	Placera ring
+	Satin Ring	Satinring
+	Filled Ring	Fylld ring
+	Bean Ring	Bönstygnsring
+	Hexagons	Sexhörningar
+	Chevrons	Sparrar
+	Basket weave	Korgflätning
+	Stars	Stjärnor
+	Hearts	Hjärtan
+	Leaves	Löv
+	Paired with	Parad med
+	Sew as	Sy som
+	Motifs	Motiv
+	Motif length (× width)	Motivlängd (× bredd)
+	String stitch	Strängstygn
+	Chord length	Kordalängd
+	Automatic Knife	Automatisk kniv
+	3D effect	3D-effekt
+	Globe out	Välv utåt
+	Globe in	Välv inåt
+	Fill Along Lines	Fyll längs linjer
+	Clear Flow Lines	Rensa flödeslinjer
+	Rows follow lines:	Raderna följer linjer:
+	Set Flow Lines	Ange flödeslinjer
+	Carving Stamps	Ristningsstämplar
+	Carve Stamp	Rista stämpel
+	Flower	Blomma
+	Sun	Sol
+	Moon	Måne
+	Snowflake	Snöflinga
+	Paw Print	Tassavtryck
+	Swirl	Virvel
+	Shell	Snäcka
+	Butterfly	Fjäril
+	Clover	Klöver
+	Show Repeats	Visa upprepningar
+	Repeats across	Upprepningar på bredden
+	Repeats down	Upprepningar på höjden
+	Gap between repeats	Mellanrum mellan upprepningar
+	Stripes	Ränder
+	Slants	Snedstreck
+	Pinstripes	Kritstreck
+	Lattice	Galler
+	Arches	Bågar
+	Spirals	Spiraler
+	Pyramids	Pyramider
+	Ripples	Krusningar
+	Greek key	Grekisk bård
+	Crosses	Kors
+	Quatrefoils	Fyrpass
+	Flowers	Blommor
+	Trefoils	Trepass
+	Moons	Månar
+	Arrows	Pilar
+	Nested diamonds	Kapslade ruter
+	Argyle	Argyle
+	Wicker	Flätverk
+	Feathers	Fjädrar
+	Paisley	Paisley
+	Swirls	Virvlar
+	Snowflakes	Snöflingor
+	Bubbles	Bubblor
+	Sunbursts	Solstrålar
+	Motif Tool	Motivverktyg
+	Contour Split Lines	Konturdelningslinjer
+	Keep Motif	Behåll motiv
+	Keep the motif in My Motifs, for any design	Behåll motivet i Mina motiv, för alla designer
+	My Motifs	Mina motiv
+	Forget Motif	Glöm motiv
+	Buttonholes	Knapphål
+	Straight	Rak
+	Keyhole	Nyckelhål
+	Count	Antal
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Rader över formen: uppåt är tätare. Dra en punkt; dubbelklicka för att lägga till en; högerklicka på en för att ta bort den.
+	Embroidery Lettering	Broderitext
+	Load Embroidery Font	Läs in broderitypsnitt
+	Embroidery Fonts	Broderitypsnitt
+	Load Embroidery Font…	Läs in broderitypsnitt…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	En typsnittsmapp i Ink/Stitch-format: font.json och dess glyfer
+	Load an embroidery font to set text with it.	Läs in ett broderitypsnitt för att sätta text med det.
+	Sews well at	Sys bra vid
+	Place Lettering	Placera text
+	Edit Lettering	Redigera text
+	Update Lettering	Uppdatera text
+	Load this lettering's font to change it:	Läs in textens typsnitt för att ändra den:
+	Arch	Båge
+	Valley	Dal
+	Forget Font	Glöm typsnitt
+	Unload the font and stop loading its folder	Ta bort typsnittet och sluta läsa in dess mapp
+	Forget Embroidery Font	Glöm broderitypsnitt
+	Team Names	Lagnamn
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Markera text satt i ett broderitypsnitt: en maskinfil skrivs för varje namn, med texten ändrad till det.
+	One name a line	Ett namn per rad
+	Import Names…	Importera namn…
+	The first column of a CSV table, or a text file of one name a line	Första kolumnen i en CSV-tabell, eller en textfil med ett namn per rad
+	Names	Namn
+	Export One File per Name…	Exportera en fil per namn…
+	Team name files written	Filer med lagnamn har skrivits
+	Export Team Names	Exportera lagnamn
+	Read Team Names	Läs lagnamn
+	Monogram	Monogram
+	Load an embroidery font (Embroidery Lettering) to make monograms.	Läs in ett broderitypsnitt (Broderitext) för att skapa monogram.
+	Initials	Initialer
+	In a line	På en rad
+	Scallops	Uddar
+	Border	Bård
+	Place Monogram	Placera monogram
+	New Embroidery Font	Nytt broderitypsnitt
+	Save Embroidery Font…	Spara broderitypsnitt…
+	Add Glyphs	Lägg till glyfer
+	Font Properties	Typsnittsegenskaper
+	Kern Glyph Pair	Kerna glyfpar
+	Font Info	Typsnittsinformation
+	Save Embroidery Font	Spara broderitypsnitt
+	Edit Embroidery Font	Redigera broderitypsnitt
+	Merge Embroidery Font	Sammanfoga broderitypsnitt
+	New Embroidery Font from Type	Nytt broderitypsnitt från vanligt typsnitt
+	Font Creator	Typsnittsskapare
+	Capitals' height	Versalhöjd
+	Line spacing	Radavstånd
+	Space width	Mellanslagsbredd
+	As typed	Som det skrevs
+	Capitals	Versaler
+	Small letters	Gemener
+	Letter case	Skiftläge
+	Sews well from	Sys bra från
+	Sews well up to	Sys bra upp till
+	Still to digitize	Återstår att digitalisera
+	Show this glyph	Visa den här glyfen
+	Not digitized yet: show its artboard	Inte digitaliserad än: visa dess rityta
+	Glyphs to add	Glyfer att lägga till
+	Kerning (mm closer)	Kerning (mm närmare)
+	Pair	Par
+	Kern	Kerna
+	Merge glyphs from	Sammanfoga glyfer från
+	Test text	Testtext
+	Try in a New Document	Prova i ett nytt dokument
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Skapa ett broderitypsnitt: ett dokument med en rityta för varje glyf som ska digitaliseras.
+	Type family	Typsnittsfamilj
+	New Font from Type	Nytt typsnitt från vanligt typsnitt
+	Edit Font	Redigera typsnitt
+	Assign to Glyph	Tilldela till glyf
+	Selection to glyph	Markering till glyf
+	The selected art becomes the glyph, moved onto its artboard	Den markerade teckningen blir glyfen, flyttad till dess rityta
+	Sew order	Syordning
+	Left to right	Vänster till höger
+	Right to left	Höger till vänster
+	Centre out	Inifrån och ut
+	Closest	Närmast
+	Along the baseline	Längs baslinjen
+	Where needed	Där det behövs
+	After each letter	Efter varje bokstav
+	After each word	Efter varje ord
+	After each line	Efter varje rad
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Utanför de storlekar typsnittet gjordes för: stygnen kan bli för täta eller för långa
+	Adjust Letter	Justera bokstav
+	One letter: moved, scaled or turned, kept when the lettering is set again	En bokstav: flyttad, skalad eller vriden, behålls när texten sätts på nytt
+	Move along	Flytta längs
+	Move down	Flytta nedåt
+	Reset Letter	Återställ bokstav
+	3D Puff	3D-puff
+	3D puff	3D-puff
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	Satin som sys över skumgummi: tät, utan understygn, med avslutade ändar. Sy den i en egen färg, så att skummet läggs på vid stoppet
+	Sew Puff Last	Sy puff sist
+	Click to Stitch	Klicka för att sy
+	Click-to-Stitch Tool	Verktyget Klicka för att sy
+	Fill without holes	Fyll utan hål
+	Centre line	Mittlinje
+	Stitch as	Sy som
+	Click a region of an image to stitch it	Klicka på ett område i en bild för att sy det
+	Send to Machine	Skicka till maskin
+	Machine Folders	Maskinmappar
+	Add Machine Folder…	Lägg till maskinmapp…
+	A USB stick, the machine's folder or a network share the machine reads	Ett USB-minne, maskinens mapp eller en nätverksresurs som maskinen läser
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Lägg till mappen som din maskin läser: ett USB-minne, dess mapp eller en nätverksresurs.
+	Machine folder	Maskinmapp
+	Send	Skicka
+	Sent:	Skickat:
+	Forget Folder	Glöm mapp
+	Triple run	Trippelstygn
+	Partial cover	Delvis täckning
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	maskinfilen kunde inte kodas
+	Worksheet	Arbetsblad
+	Outline Around	Kontur runt
+	Octagon	Åttahörning
+	Shield	Sköld
+	Ornament	Ornament
+	Multi-Hooping	Flera inramningar
+	Basting first	Tråckla först
+	Basting round	Tråckla runt
+	The design	Designen
+	The hoop	Ramen
+	Basting margin	Tråcklingsmarginal
+	Design notes	Designanteckningar
+	Printed on worksheets	Skrivs ut på arbetsblad
+	Cost a piece	Kostnad per styck
+	Estimate cost	Uppskatta kostnad
+	Cost settings	Kostnadsinställningar
+	Per 1000 stitches	Per 1 000 stygn
+	Machine time an hour	Maskintid per timme
+	Thread per 1000 m	Tråd per 1 000 m
+	Set-up an order	Uppstart per order
+	Machine heads	Maskinhuvuden
+	Currency	Valuta
+	Cost Estimate	Kostnadsuppskattning
+	Colorways	Färgvarianter
+	New Colorway	Ny färgvariant
+	Use Colorway	Använd färgvariant
+	Colorway Thread	Färgvariantens tråd
+	Rename Colorway	Byt namn på färgvariant
+	Delete Colorway	Radera färgvariant
+	Colorway	Färgvariant
+	The design's own	Designens egen
+	Own colour block	Eget färgblock
+	Where it falls	Där det hamnar
+	Centre	Mitten
+	Top left	Uppe till vänster
+	Top right	Uppe till höger
+	Bottom left	Nere till vänster
+	Bottom right	Nere till höger
+	Start at	Börja vid
+	End at	Sluta vid
+	Stabiliser	Mellanlägg
+	Tear-away	Rivbart
+	Cut-away	Klippbart
+	No-show mesh	Osynligt nät
+	Wash-away	Vattenlösligt
+	Scatter Copies	Sprid kopior
+	Appliqué letters	Applikationsbokstäver
+	Each letter a patch of fabric: placement line, tack-down and cover	Varje bokstav en tyglapp: placeringslinje, fästsöm och täcksöm
+	Letters sewn	Bokstäver som sys
+	As the font has them	Som typsnittet har dem
+	Small text	Liten text
+	Under 6 mm	Under 6 mm
+	Place Along Selected Line	Placera längs markerad linje
+	The text along the selected line or shape, from its start	Texten längs den markerade linjen eller formen, från dess början
+	Monogram Templates	Monogrammallar
+	Save Monogram Template	Spara monogrammall
+	Delete Monogram Template	Radera monogrammall
+	Template name	Mallnamn
+	Delete Template	Radera mall
+	Lay Out Team Names	Lägg ut lagnamn
+	Team Names Worksheet	Arbetsblad för lagnamn
+	Lay Out Together	Lägg ut tillsammans
+	Every name in one design, in rows and columns, for a large hoop or patches	Alla namn i en design, i rader och kolumner, för en stor ram eller tygmärken
+	Names Worksheet	Arbetsblad för namn
+	Each name with its size, stitches and sewing time, and the totals	Varje namn med storlek, stygn och sytid, samt totalsummor
+	Design Library	Designbibliotek
+	Design Catalogue	Designkatalog
+	No folder chosen	Ingen mapp vald
+	Choose Folder…	Välj mapp…
+	Newest	Nyast
+	Most stitches	Flest stygn
+	Largest	Störst
+	Designs	Designer
+	Couldn't be read	Kunde inte läsas
+	stitches	stygn
+	colours	färger
+	Print Catalogue	Skriv ut katalog
+	A sheet of the designs found, to print or save as PDF	Ett blad med de hittade designerna, att skriva ut eller spara som PDF
+@msg	larger than {_1} MB	större än {_1} MB
+@msg	not a machine file: .{ext}	inte en maskinfil: .{ext}
+	Batch Output	Batchutdata
+	Output Profiles	Utdataprofiler
+	Save Output Profile	Spara utdataprofil
+	Delete Output Profile	Radera utdataprofil
+	Batch Convert	Batchkonvertera
+	files written	filer skrivna
+	Machine formats (none ticked: the machine's)	Maskinformat (inga markerade: maskinens)
+	Production	Produktion
+	Approval	Godkännande
+	Placement template	Placeringsmall
+	The design file too	Även designfilen
+	Write to Folder…	Skriv till mapp…
+	Machine files, worksheet PDF and design, named alike	Maskinfiler, arbetsblads-PDF och design, med samma namn
+	Write Again	Skriv igen
+	Profile name	Profilnamn
+	Save Profile	Spara profil
+	Profile	Profil
+	Convert to	Konvertera till
+	Convert All	Konvertera alla
+	Each design found written again in this format beside it	Varje hittad design skrivs på nytt i det här formatet bredvid originalet
+	Converted:	Konverterade:
+	couldn't be read:	kunde inte läsas:
+	Product Visualizer	Produktvisualisering
+@msg	product outline: {e}	produktkontur: {e}
+	Exports	Exporter
+	Nothing exported yet in this session.	Inget har exporterats än under den här sessionen.
+	Again	Igen
+	Export it again, as it was asked, from this document	Exportera igen, som det begärdes, från det här dokumentet
+	Export History	Exporthistorik
+	Clear Export History	Rensa exporthistorik
+	Export Again	Exportera igen
+	Export Stitch Image	Exportera stygnbild
+	Export Stitch Image…	Exportera stygnbild…
+	Stitch List CSV (.csv)…	Stygnlista CSV (.csv)…
+	Stitch List JSON (.json)…	Stygnlista JSON (.json)…
+	G-code (.gcode)…	G-kod (.gcode)…
+	Stitch Image PNG (.png)…	Stygnbild PNG (.png)…
+@msg	PNG encoding failed: {e}	PNG-kodningen misslyckades: {e}
+@msg	the design has no stitches	designen har inga stygn
+@msg	the image would be {w} × {h} pixels: lower ppmm	bilden skulle bli {w} × {h} pixlar: sänk ppmm
+	Smallest That Fits	Minsta som passar
+	The smallest hoop that holds the design, turned if that fits better	Den minsta ramen som rymmer designen, vriden om det passar bättre
+	Rotate Hoop	Rotera ram
+	Custom Hoops	Egna ramar
+	Hoop name	Ramnamn
+	Save Hoop	Spara ram
+	Delete Hoop	Radera ram
+	Hoops	Ramar
+	Choose Smallest Hoop	Välj minsta ram
+	Save Custom Hoop	Spara egen ram
+	Delete Custom Hoop	Radera egen ram
+	Turn the hue	Vrid nyansen
+	One colour	En färg
+	Inverted	Inverterad
+	Recolour	Färga om
+	Recolour Threads	Färga om trådar
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Varje tråd ändras enligt schemat och matchas mot designens karta; Ångra återställer dem
+	Garment Background	Plaggbakgrund
+	Garment Photo…	Foto av plagg…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Ett foto av plagget bakom designen, i naturlig storlek, på ett låst malllager som aldrig sys
+	Import Chart…	Importera karta…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	En egen trådkarta från en CSV-fil (kod, namn och färg per tråd) eller en GIMP-palett (.gpl)
+	Export Chart…	Exportera karta…
+	Thread Charts	Trådkartor
+	Import Thread Chart	Importera trådkarta
+	Export Thread Chart	Exportera trådkarta
+	Save Thread Chart	Spara trådkarta
+	Delete Thread Chart	Radera trådkarta
+	Design Templates	Designmallar
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	Behåll den här designens sida, teckning, ram, tyg och inställningar att starta nya designer från
+	New from Design Template	Ny från designmall
+	Save as Design Template	Spara som designmall
+	Delete Design Template	Radera designmall
+	Print Stitch View	Skriv ut stygnvy
+	Job Orders	Arbetsordrar
+	Customer	Kund
+	Due (YYYY-MM-DD)	Förfaller (ÅÅÅÅ-MM-DD)
+	New Job for This Design	Ny order för den här designen
+	In production	I produktion
+	Cancelled	Avbruten
+	New Job Order	Ny arbetsorder
+	Update Job Order	Uppdatera arbetsorder
+	Delete Job Order	Radera arbetsorder
+	Job Worksheet	Orderarbetsblad
+	Job Output	Orderutdata
+	Clipart	Clipart
+	Click a motif to place it, digitized, in the middle of the page.	Klicka på ett motiv för att placera det, digitaliserat, mitt på sidan.
+	Embroidery Clipart	Brodericlipart
+	Insert Clipart	Infoga clipart
+	Send When Ready	Skicka när klar
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Köa designen för den här mappen: den skrivs nu om mappen finns, annars så snart den finns
+	Waiting for the folder	Väntar på mappen
+	Send queue	Sändningskö
+	waiting	väntar
+	sent	skickad
+	failed	misslyckades
+	Clear Sent	Rensa skickade
+	Send Queue	Sändningskö
+	Add to Send Queue	Lägg till i sändningskön
+	Send Waiting Designs	Skicka väntande designer
+	Remove from Send Queue	Ta bort från sändningskön
+@msg	the queued file is damaged	den köade filen är skadad
+	Centred	Centrerad
+	In the hoop	I ramen
+	Worksheet Setup	Utskriftsformat för arbetsblad
+	Merge Colours	Sammanfoga färger
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Trådar med samma eller närliggande färg slås ihop och deras färgblock sammanfogas; Ångra återställer dem
+	Lettering Kiosk	Textkiosk
+	Kiosk Lettering	Kiosktext
+	Type a name and make the design	Skriv ett namn och skapa designen
+	No embroidery font is loaded: ask the shop to load one.	Inget broderitypsnitt är inläst: be butiken läsa in ett.
+	As large as fits	Så stor som ryms
+	Make Design	Skapa design
+	T-shirt	T-shirt
+	Polo shirt	Pikétröja
+	Hoodie	Huvtröja
+	Tote bag	Tygkasse
+	Towel	Handduk
+	Product	Produkt
+	Show on Product	Visa på produkt
+	Back to the Design	Tillbaka till designen
+	Save Machine File…	Spara maskinfil…
+	Next Name	Nästa namn
+	PIN	PIN-kod
+	Leave Kiosk	Lämna kiosken
+	Leaving the kiosk will take this PIN	För att lämna kiosken krävs den här PIN-koden
+	Snapback	Snapback
+	Trucker cap	Truckerkeps
+	Dad cap	Dad cap
+	Image Colours	Bildfärger
+	Prepare Image	Förbered bild
+	Photo Stitch	Fotostygn
+	Convert Stitches to Objects	Konvertera stygn till objekt
+	Colour Preview	Färgförhandsvisning
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	En utjämnad kopia av bilden i de här färgerna, rensad från fläckar, att digitalisera eller klicka för att sy
+	Colours	Färger
+	background, not sewn	bakgrund, sys inte
+	thread changes	trådbyten
+	threads sewn	sydda trådar
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Sy fotot över sig självt som sicksacklinjer, ett slingrande löpstygn eller dess färger
+	Sequins	Paljetter
+	Beads	Pärlor
+	Rhinestones	Strass
+	Cord	Snodd
+	Boring	Hålbroderi
+	Along the line	Längs linjen
+	Fill the shape	Fyll formen
+	Round the edge	Runt kanten
+	At each point	Vid varje punkt
+	Bead length	Pärllängd
+	Cord width	Snoddbredd
+	Edge width	Kantbredd
+	Honeycomb	Bikaka
+	Packing	Packning
+	Three	Tre
+	Fixing	Fastsättning
+	Flip every other	Vänd varannan
+	Colour	Färg
+	Thread colour	Trådfärg
+	Stop before	Stoppa före
+	Rhinestones aren't sewn: export their template to cut and set them	Strass sys inte: exportera mallen för dem för att skära ut och fästa dem
+	Decoration Sizes	Dekorationsstorlekar
+	Count Decorations	Räkna dekorationer
+	Cut File	Skärfil
+	Sew the pieces together	Sy ihop bitarna
+	Fabric colour	Tygfärg
+	Plain	Enfärgat
+	Check	Rutigt
+	Denim	Denim
+	Felt	Filt
+	Fabric pattern	Tygmönster
+	Pattern colour	Mönsterfärg
+	Combine Appliqué	Kombinera applikation
+	Prepare Appliqué	Förbered applikation
+	Coil	Spiral
+	Square loop	Fyrkantsögla
+	Foil	Folie
+	Shown with the design, not sewn	Visas med designen, sys inte
+	StitchFoundry Help	StitchFoundry-hjälp
+	Tips	Tips
+	Search help	Sök i hjälpen
+	Nothing found	Inget hittades
+	Help Topics	Hjälpavsnitt
+	Help Topic	Hjälpavsnitt
+	Help for Tool	Hjälp för verktyg
+	New Design for Hoop	Ny design för ram
+	Sample Designs	Exempeldesigner
+	Open Sample Design	Öppna exempeldesign
+	Start a design for your hoop	Starta en design för din ram
+	Your first design	Din första design
+	Draw shapes, place a picture or type text.	Rita former, placera en bild eller skriv text.
+	Choose how each part is stitched: satin, fill, run and more.	Välj hur varje del sys: satin, fyllning, löpstygn och mer.
+	Watch it sew with the stitch player and check it.	Se den sys i stygnspelaren och kontrollera den.
+	Export the file for your machine.	Exportera filen för din maskin.
+	Learn how	Lär dig hur
+	Try a sample	Prova ett exempel
+	Heart patch	Hjärtmärke
+	Sun and moon	Sol och måne
+	Appliqué star	Applikationsstjärna
+	Tip:	Tips:
+	More tips	Fler tips
+	A new design the size of this hoop's sewing field	En ny design i storlek med den här ramens syfält
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Rita en lutningslinje över en form för att ange dess stygnvinkel; två eller fler linjer får stygnen att svänga.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Klicka på ett område i en placerad bild för att sy det; höj Tolerans för att ta med fler av dess nyanser.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Dra valda nålstick för att flytta dem, Alt-klicka på ett stygn för att lägga till ett, Delete tar bort dem.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Klicka på ena sidan av kolumnen, sedan på den andra, växelvis; Enter eller Escape avslutar.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	Ratten i nedre vänstra hörnet anger pensel, bredd, täthet, längd och form.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Skriv din text och välj sedan ett broderitypsnitt i panelen Broderitext så att den sys rent.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Markera teckning och välj Broderi › Konvertera teckning till broderi för att digitalisera den i ett steg.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Satin passar former upp till ungefär 7 mm breda; bredare ytor sys bättre som tatamifyllning.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Välj en ram i panelen Broderi för att se syfältet runt designen.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Kontrollera design i menyn Broderi hittar täta lager, långa stygn och text som är för liten att sy.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Se designen sys med stygnspelaren i Stygnordning innan du skickar den.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Exportera med Broderi › Exportera maskinfil och välj din maskins format.
+	Save as Default	Spara som standard
+	Clear Default	Rensa standard
+	Every new design starts with these properties	Varje ny design börjar med de här egenskaperna
+	New designs take the built-in properties again	Nya designer får de inbyggda egenskaperna igen
+	All Tools, Ungrouped	Alla verktyg, ogrupperade
+	Toolbar: All Tools, Ungrouped	Verktygsfält: Alla verktyg, ogrupperade
+	Push compensation	Tryckkompensation
+	{n} very short stitches can break the thread	{n} mycket korta stygn kan bryta tråden
+	Satin only {n} mm wide sinks into the fabric	Satin som bara är {n} mm bred sjunker ner i tyget
+	Fill stitches {n} mm long can ripple after washing	Fyllningsstygn som är {n} mm långa kan bli vågiga efter tvätt
+	Sewn on clothing	Sys på kläder
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	Långa stygn fastnar från 7 mm på kläder, 12,1 mm på andra föremål
+	Short stitches under	Korta stygn under
+	Narrow satin under	Smal satin under
+	Short fill stitches under	Korta fyllningsstygn under
+	Edge run and zigzag	Kantlöpstygn och sicksack
+	Satin underlay	Satinunderstygn
+	Edge run under fills	Kantlöpstygn under fyllningar
+	New to digitizing? Read the basics	Ny på digitalisering? Läs grunderna
+	Density Map	Täthetskarta
+	Density map	Täthetskarta
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Färga designen efter hur tjock tråden ligger: blått ett lager, rött så tätt som Kontrollera design varnar för
+	Calibrate Life Size…	Kalibrera naturlig storlek…
+	Calibrate Life Size	Kalibrera naturlig storlek
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Håll en linjal eller ett bankkort mot skärmen och ändra storleken tills markeringarna stämmer. Verklig storlek visar sedan designer i naturlig storlek.
+	Bank card	Bankkort
+	Screen points per inch	Skärmpunkter per tum
+	Use This Size	Använd den här storleken
+	Screen Points per Inch at Life Size	Skärmpunkter per tum i naturlig storlek
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` är ett tal från 40 till 400
+	Experience	Erfarenhet
+	New to Embroidery	Ny på broderi
+	Digitizer	Digitaliserare
+	Embroidery Business	Broderiföretag
+	Everything	Allt
+	Showing the basics.	Visar grunderna.
+	Show everything	Visa allt
+	New to embroidery	Ny på broderi
+	I digitize designs	Jag digitaliserar designer
+	I run an embroidery business	Jag driver ett broderiföretag
+	The basic tools and everyday sections, nothing more	De grundläggande verktygen och vardagliga avsnitten, inget mer
+	Every digitizing tool, rulers and the control bar	Alla digitaliseringsverktyg, linjaler och kontrollfältet
+	Everything, with job orders and batch output	Allt, med arbetsordrar och batchutdata
+	How do you work?	Hur arbetar du?
+@msg	`level` is beginner, digitizer, business or all	`level` är beginner, digitizer, business eller all
+	Echo Quilting	Ekoquiltning
+	Background Quilting	Bakgrundsquiltning
+	Remove Blend	Ta bort blandning
+	Blend layers	Blanda lager
+	My Machine…	Min maskin…
+	Save for My Machine	Spara för min maskin
+	Which embroidery machine do you have?	Vilken broderimaskin har du?
+	Measure in	Mät i
+	Save designs to	Spara designer i
+	No folder chosen yet	Ingen mapp vald än
+	Plug in the USB stick you take to your machine, then choose it here.	Sätt i USB-minnet som du tar med till maskinen och välj det här.
+	Husqvarna Viking (other models)	Husqvarna Viking (andra modeller)
+	Brother or Baby Lock	Brother eller Baby Lock
+	Janome or Elna	Janome eller Elna
+	Another machine (DST)	En annan maskin (DST)
+	My machine:	Min maskin:
+	Tell us your machine to see its hoops and save in its format.	Ange din maskin för att se dess ramar och spara i dess format.
+	Choose My Machine	Välj min maskin
+	Saved for your machine:	Sparat för din maskin:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	En tygform: maskinen stannar så att du kan lägga på tyget och syr sedan fast det
+	A heart, a star, a flower and more, ready to sew	Ett hjärta, en stjärna, en blomma och mer, redo att sy
+	A name or a few words, ready to sew	Ett namn eller några ord, redo att sy
+	A photo or drawing to turn into stitches	Ett foto eller en teckning att göra om till stygn
+	A picture	En bild
+	Add Appliqué	Lägg till applikation
+	Add Appliqué…	Lägg till applikation…
+	Add Words	Lägg till ord
+	Add Words…	Lägg till ord…
+	Add a Picture…	Lägg till en bild…
+	Add a Shape	Lägg till en form
+	Add a Shape…	Lägg till en form…
+	Bigger	Större
+	Choose a shape	Välj en form
+	Click a part of the design to change how it sews.	Klicka på en del av designen för att ändra hur den sys.
+	Click a part of the design to choose it, drag it to move it	Klicka på en del av designen för att välja den, dra för att flytta den
+	Crown	Krona
+	Filled	Fylld
+	How tall	Hur hög
+	Just the outline	Bara konturen
+	Not sewn	Sys inte
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Inget att sy än. Lägg till ord, en form eller en bild med knapparna till vänster.
+	Paw	Tass
+	See the design sew on screen, stitch by stitch	Se designen sys på skärmen, stygn för stygn
+	Sew it as	Sy den som
+	Smaller	Mindre
+	Smooth edge (satin)	Slät kant (satin)
+	Start a design from the Home screen.	Starta en design från startskärmen.
+	Take back the last change	Ångra den senaste ändringen
+	The chosen part	Den valda delen
+	The chosen parts	De valda delarna
+	The design is bigger than the hoop: make it smaller before you sew.	Designen är större än ramen: gör den mindre innan du syr.
+	Thread colours	Trådfärger
+	Turn Into Stitches	Gör om till stygn
+	Turn it into stitches in your thread colours.	Gör om den till stygn i dina trådfärger.
+	Watch It Sew	Se den sys
+	What should it say?	Vad ska det stå?
+	Write the design for your machine to its USB stick or folder	Skriv designen för din maskin till dess USB-minne eller mapp
+	Your design	Din design
+	Show Everything	Visa allt
+@msg	the design has no page	designen har ingen sida
+@msg	open or start a design first	öppna eller starta en design först
+	Set My Machine	Ange min maskin
+	Make a Design	Skapa en design
+	Make a Design…	Skapa en design…
+	Make a Design, Step by Step	Skapa en design steg för steg
+	Step by step: words, a shape, appliqué, a picture or a sample	Steg för steg: ord, en form, applikation, en bild eller ett exempel
+	What would you like to make?	Vad vill du skapa?
+	A name or some words	Ett namn eller några ord
+	For towels, bags, pillows and gifts	För handdukar, väskor, kuddar och presenter
+	A shape	En form
+	A heart, a star, a flower and more	Ett hjärta, en stjärna, en blomma och mer
+	An appliqué	En applikation
+	A shape cut from fabric and sewn down	En form som klipps ut ur tyg och sys fast
+	A photo or a drawing turned into stitches	Ett foto eller en teckning som görs om till stygn
+	A sample to try	Ett exempel att prova
+	A finished design to sew and learn from	En färdig design att sy och lära sig av
+	Which hoop will you use?	Vilken ram ska du använda?
+	Tell us your machine to see its hoops.	Ange din maskin för att se dess ramar.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Välj ramen du ska spänna tyget i. Designen görs så att den passar.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Versalerna är så här höga. 20 till 30 mm passar en handduk; 10 till 15 mm en skjorta.
+	Make It	Skapa den
+	Which shape of fabric?	Vilken form på tyget?
+	Which shape?	Vilken form?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Maskinen syr där tyget ska ligga och stannar; du lägger på tyget, den syr fast det och stannar igen så att du kan klippa; sedan syr den kanten.
+	Choose a picture	Välj en bild
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Enkla bilder med några få plana färger och tydliga kanter fungerar bäst: en tecknad figur, en logotyp, clipart.
+	Choose a Picture…	Välj en bild…
+	Which sample?	Vilket exempel?
+	Your thread colours	Dina trådfärger
+	These are sewn in this order. Click a colour to match a thread you have.	De sys i den här ordningen. Klicka på en färg för att matcha en tråd du har.
+	Watch it sew	Se den sys
+	See the needle go stitch by stitch, in the order your machine will sew it.	Se nålen gå stygn för stygn, i den ordning din maskin syr den.
+	Save it	Spara den
+	Save for My Machine writes the file your machine sews, to its USB stick.	Spara för min maskin skriver filen som din maskin syr till dess USB-minne.
+	Save Design keeps a copy you can open and change later.	Spara design behåller en kopia som du kan öppna och ändra senare.
+	Save Design…	Spara design…
+	Put back what Undo took back	Återställ det som Ångra tog bort
+	Start Over…	Börja om…
+	Clear the design and begin again	Rensa designen och börja om
+	Text size	Textstorlek
+	Saved for you automatically in My Designs:	Sparas automatiskt åt dig i Mina designer:
+	Start Over	Börja om
+	Clear everything in this design and begin again?	Rensa allt i den här designen och börja om?
+	You can still get it back with Undo.	Du kan fortfarande få tillbaka det med Ångra.
+	Keep It	Behåll den
+	Keep Design Safe	Spara designen säkert
+	In-the-Hoop Projects	In-the-hoop-projekt
+	Make In-the-Hoop Project	Skapa in-the-hoop-projekt
+	Steps	Steg
+	The machine also stops where you lay or trim fabric.	Maskinen stannar också där du lägger på eller klipper tyg.
+	Print the Steps…	Skriv ut stegen…
+	Change the Size?	Ändra storleken?
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	Den här designen stannar för tyg som du klipper till. Görs den större eller mindre kanske bitarna inte passar längre.
+	Keep the Size	Behåll storleken
+	Change It Anyway	Ändra ändå
+	An in-the-hoop project	Ett in-the-hoop-projekt
+	A little pillow front, a mug rug, a coaster or an ornament	En liten kuddframsida, en muggmatta, ett glasunderlägg eller ett ornament
+	Which project?	Vilket projekt?
+	Sewn in a 5×7 hoop, borders and back sewn on after	Sys i en 5×7-ram, kanter och baksida sys på efteråt
+	Finished in the hoop: batting, backing and a satin edge	Färdigställs i ramen: vadd, baksida och en satinkant
+	Words (you can leave this empty)	Ord (du kan lämna detta tomt)
+	Little pillow front, 8″ square	Liten kuddframsida, 8″ kvadratisk
+	Little pillow front, 9½ × 5½″	Liten kuddframsida, 9½ × 5½″
+	Mug rug, 6½ × 4½″	Muggmatta, 6½ × 4½″
+	Coaster, 3¾″ square	Glasunderlägg, 3¾″ kvadratiskt
+	Round ornament, 3½″	Runt ornament, 3½″
+	Quilting for a tile	Quiltning för en ruta
+	Background quilting the size of a quilting tile, block by block	Bakgrundsquiltning i storlek med en quiltruta, block för block
+	What size is the tile?	Hur stor är rutan?
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	Läs av storleken i rutans fönster. Blocket quiltas kant till kant, i rutans storlek.
+	Lines apart	Linjeavstånd
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	Behåll samma mönster och avstånd för alla block i ett täcke, så att blocken flyter in i varandra.
+	Make Every Size…	Skapa alla storlekar…
+	One file for each usual tile size, in a folder or on the USB stick	En fil för varje vanlig rutstorlek, i en mapp eller på USB-minnet
+	Quilt blocks saved:	Quiltblock sparade:
+	Stipple	Stippling
+	Squares spiral	Fyrkantsspiral
+	Quilt Block Patterns	Quiltblocksmönster
+	Quilt Block	Quiltblock
+	Quilt Block Set	Quiltblocksuppsättning
+	Loops	Öglor
+	Pebbles	Småsten
+	A block	Ett block
+	A border strip	En bårdremsa
+	A corner	Ett hörn
+	In the middle (you can leave this empty)	I mitten (du kan lämna detta tomt)
+	Words	Ord
+	No shape	Ingen form
+	Sew the shape as appliqué	Sy formen som applikation
+	Add a ribbon band across it	Lägg till ett band tvärs över
+	Add a ribbon loop to hang it	Lägg till en bandögla att hänga den i
+	Clear vinyl on top (wipe-clean)	Klar vinyl ovanpå (avtorkningsbar)
+	Mark where a button goes	Markera var en knapp ska sitta
+	Print the Cutting Templates…	Skriv ut tillskärningsmallarna…
+	In-the-Hoop Cutting Templates	Tillskärningsmallar för in-the-hoop
+	Downloaded for your machine:	Hämtat för din maskin:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	Spara för min maskin laddar ned designen: kopiera den till USB-minnet som du tar med till maskinen.
+	Downloaded:	Hämtat:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	Spara för min maskin laddar ned filen som din maskin syr: kopiera den till dess USB-minne.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Blandning från gradient
+	Sew the gradient's colours blended the way it runs	Sy gradientens färger blandade i dess riktning
+	Cutwork	Utskärning
+	Tartan Fill	Tartanfyllning
+	Test Sew-Out	Provsömnad
+	Test Sew-Outs	Provsömnader
+	Cross Stitch	Korsstygn
+	Cross Stitch Tool	Korsstygnsverktyg
+	Cross Stitch from Image…	Korsstygn från bild…
+	Cross-Stitch Pattern Info	Information om korsstygnsmönster
+	Cross-Stitch Pattern Settings	Inställningar för korsstygnsmönster
+	New Cross-Stitch Pattern…	Nytt korsstygnsmönster…
+	Paint Cross Stitches	Måla korsstygn
+	Brush (squares)	Pensel (rutor)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	Klicka eller dra på ett korsstygnsrutnät för att fylla dess rutor; håll ned Alt för att radera
+	Erase	Radera
+	Pattern colours	Mönsterfärger
+	Add My Hoop	Lägg till min ram
+	Brother or Baby Lock multi-needle	Brother eller Baby Lock flernålsmaskin
+	Commercial multi-needle (DST)	Kommersiell flernålsmaskin (DST)
+	Give the hoop a name	Ge ramen ett namn
+	Hoop not listed? Add its sewing field here.	Finns inte ramen i listan? Lägg till dess syfält här.
+	My hoop	Min ram
+	My own hoops	Mina egna ramar
+	Square corners	Raka hörn
+	Type the hoop's width and height as numbers	Skriv ramens bredd och höjd som tal
+	in	in
+	Chenille	Chenille
+	Chenille Stitch	Chenillestygn
+	Chenille Stops	Chenillestopp
+	Compound Chenille…	Sammansatt chenille…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	En mossfyllning med kedjekanter som sys före och efter den, i en grupp på formens plats
+	Chain	Kedja
+	Chenille stops	Chenillestopp
+	Lockstitch	Låsstygn
+	Moss	Mossa
+	Moss pattern	Mossmönster
+	Needle height	Nålhöjd
+	Start	Start
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	mossa syr fyllningar och löpstygn: ge satinen en fyllning eller ett löpstygn först
+	Get Embroidery Fonts…	Hämta broderitypsnitt…
+	About the library	Om biblioteket
+	Download Again	Ladda ned igen
+	Download fonts from an embroidery font library, ready for lettering	Ladda ned typsnitt från ett bibliotek med broderitypsnitt, redo för text
+	Downloading	Laddar ned
+	Each font comes with its own licence, in its folder.	Varje typsnitt har sin egen licens, i sin mapp.
+	Fonts are kept in	Typsnitten sparas i
+	Get Embroidery Fonts	Hämta broderitypsnitt
+	Listing the fonts…	Listar typsnitten…
+	Try Again	Försök igen
+	fonts	typsnitt
+	is ready for lettering	är redo för text
+@msg	a file of the font has an unsafe name: {path}	en fil i typsnittet har ett osäkert namn: {path}
+@msg	can't reach the font library: {e}	kan inte nå typsnittsbiblioteket: {e}
+@msg	downloading embroidery fonts works in the desktop app	nedladdning av broderitypsnitt fungerar i skrivbordsappen
+@msg	the font library answered {status} for {path}	typsnittsbiblioteket svarade {status} för {path}
+@msg	the font library answered {status}: try again later	typsnittsbiblioteket svarade {status}: försök igen senare
+@msg	{_1} isn't published yet	{_1} är inte publicerat än
+	Border or Corner…	Bård eller hörn…
+	Check Continuous Line	Kontrollera sammanhängande linje
+	Continuous Fill	Sammanhängande fyllning
+	Continuous Fill…	Sammanhängande fyllning…
+	Crib (36 × 52″)	Spjälsäng (36 × 52″)
+	DXF Lines (.dxf)…	DXF-linjer (.dxf)…
+	Echo	Eko
+	Edge-to-Edge Rows	Rader kant till kant
+	Edge-to-Edge Rows…	Rader kant till kant…
+	Export Quilting Lines	Exportera quiltlinjer
+	Export Quilting Lines…	Exportera quiltlinjer…
+	HP-GL Plot (.plt)…	HP-GL-plot (.plt)…
+	Join into One Line	Slå ihop till en linje
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Långarmsquiltning
+	Meander	Meander
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	SVG-linjer (.svg)…
+	Start and End on the Edges	Börja och sluta vid kanterna
+	Stitch in the Ditch	Sy i sömmen
+	Throw (50 × 65″)	Pläd (50 × 65″)
+	Twin (70 × 90″)	Enkelsäng (70 × 90″)
+	A border of the selected line	En bård av den markerade linjen
+	Border depth	Bårddjup
+	Border length	Bårdlängd
+	Corner leg (0: no corner)	Hörnben (0: inget hörn)
+	Edge-to-edge rows of the selected line	Rader kant till kant av den markerade linjen
+	Make Border	Skapa bård
+	Make Rows	Skapa rader
+	Nest the rows	Kapsla raderna
+	One continuous line, ready for a longarm	En sammanhängande linje, redo för en långarm
+	Quilt height	Täckets höjd
+	Quilt width	Täckets bredd
+	Row spacing (0: the line's height)	Radavstånd (0: linjens höjd)
+	joins needed: Join into One Line makes them	sammanfogningar behövs: Slå ihop till en linje skapar dem
+	longest	längsta
+@msg	nothing to add	inget att lägga till
+	Download All	Ladda ned alla
+	Every font not downloaded yet, one after another	Alla typsnitt som inte laddats ned än, ett efter ett
+	Fonts downloaded:	Nedladdade typsnitt:
+	failed:	misslyckades:
+	fonts downloaded, ready for lettering	typsnitt nedladdade, redo för text
+	Compare Designs	Jämför designer
+	Compare Designs…	Jämför designer…
+	Average stitch (mm)	Genomsnittligt stygn (mm)
+	Bobbin thread (m)	Undertråd (m)
+	Choose a machine file or the design open now	Välj en maskinfil eller den design som är öppen nu
+	Choose both designs to compare them	Välj båda designerna för att jämföra dem
+	Colour changes	Färgbyten
+	Differences of 10% or more are highlighted. The real test is sewing both.	Skillnader på 10 % eller mer framhävs. Det verkliga testet är att sy båda.
+	First design	Första designen
+	Height (mm)	Höjd (mm)
+	Jumps	Hopp
+	Longest stitch (mm)	Längsta stygn (mm)
+	Open File…	Öppna fil…
+	Second	Andra
+	Second design	Andra designen
+	Stitches over 7 mm	Stygn över 7 mm
+	Stitches under 1 mm	Stygn under 1 mm
+	Stops	Stopp
+	This Design	Den här designen
+	This design	Den här designen
+	Top thread (m)	Övertråd (m)
+	Width (mm)	Bredd (mm)
+	same	samma
+	Angular	Vinkel
+	Away from the Line	Bort från linjen
+	Between Line and Object	Mellan linje och objekt
+	Drag out from a segment, or click two points, then click to place.	Dra ut från ett segment eller klicka på två punkter, och klicka sedan för att placera.
+	Drag out from a corner, or click two straight lines, then click to place.	Dra ut från ett hörn eller klicka på två raka linjer, och klicka sedan för att placera.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Dra ut från en cirkel eller båge för dess radie, inåt för dess diameter.
+	Display	Visning
+@msg	Unknown dimension style	Okänd måttstil
+@msg	Unknown unit	Okänd enhet
+	Direction	Riktning
+	Along the selected line	Längs den markerade linjen
+	Add to Design	Lägg till i designen
+	Colors and Order	Färger och ordning
+	Paint	Måla
+	Print and Export	Skriv ut och exportera
+	Special Machines	Specialmaskiner
+	Split Lines	Delningslinjer
+	Stitch Direction	Stygnriktning
+	Use Line as Direction	Använd linje som riktning
+	Arc Up	Båge uppåt
+	Arc Down	Båge nedåt
+	To follow a line of your own, draw it first, select it, then Add Words.	Om du vill följa en egen linje ritar du den först, markerar den och väljer sedan Lägg till ord.
+	Ask About Embroidery…	Fråga om broderi…
+	Ask About Embroidery	Fråga om broderi
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Fråga vad som helst om maskinbroderi eller StitchFoundry: vilket mellanlägg du ska använda, varför tråden går av, hur bokstäver sys renare, var en funktion finns. Claude kan också ändra din design när du ber om det, efter att du tillåtit det.
+	Thinking…	Tänker…
+	Type your question, then press Enter	Skriv din fråga och tryck sedan på Enter
+	Ask	Fråga
+	New Conversation	Ny konversation
+	Include my design	Inkludera min design
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Svaren kommer från Claude med din egen Anthropic API-nyckel, debiterat ditt Anthropic-konto. De kan vara fel: provsy innan ett viktigt arbete.
+	Change key	Byt nyckel
+@msg	Type a question first.	Skriv en fråga först.
+@msg	The question is too long: keep it under 2,000 characters.	Frågan är för lång: håll den under 2 000 tecken.
+@msg	The AI declined to answer this: ask another way.	AI:n avböjde att svara på detta: fråga på ett annat sätt.
+@msg	The reply had no answer: try again, or ask something narrower.	Svaret innehöll inget svar: försök igen, eller fråga något snävare.
+@msg	Ask About Embroidery needs the desktop app for now	Fråga om broderi kräver skrivbordsappen tills vidare
+@msg	already asking: wait for the answer	frågar redan: vänta på svaret
+	Claude wants to change your design:	Claude vill ändra din design:
+	Allow	Tillåt
+	Don't Allow	Tillåt inte
+	Edit › Undo takes each change back.	Redigera › Ångra tar tillbaka varje ändring.
+	Changed:	Ändrat:
+	Couldn't change:	Kunde inte ändra:
+	Not changed:	Inte ändrat:
+@msg	This conversation is long: start a New Conversation.	Den här konversationen är lång: starta en ny konversation.
+@msg	Claude took too many steps: ask again, more simply.	Claude tog för många steg: fråga igen, enklare.

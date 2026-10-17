@@ -4836,3 +4836,1268 @@ mark-style	Japanese	Japońskie
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+@msg	not a VectorCraft file: {0}	to nie jest plik VectorCraft: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	Dokumenty VectorCraft: jeden zablokowany obiekt, aktualizowany przy zmianie pliku.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Przy otwieraniu pominięto to, czego StitchFoundry jeszcze nie odczytuje ({what}): zastąpienie pliku utraci to bezpowrotnie. Zapisz pod inną nazwą, aby to zachować.
+	Report a Bug…	Zgłoś błąd…
+	Add Inclination Line	Dodaj linię nachylenia
+	After the selection	Po zaznaczeniu
+	Appliqué	Aplikacja
+	Apply Fabric	Zastosuj tkaninę
+	Artwork	Kompozycja
+	Auto Direction	Kierunek automatyczny
+	Auto Stitch Direction	Automatyczny kierunek ściegu
+	Auto spacing	Automatyczne odstępy
+	Auto split	Automatyczny podział
+	Auto-Digitize Image	Automatycznie digitalizuj obraz
+	Automatic underlay	Automatyczny podkład
+	Back to the start	Z powrotem do początku
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	Ścieg wielokrotny
+	Before the selection	Przed zaznaczeniem
+	Blanket	Ścieg kocykowy
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Pociągnięcie pędzlem
+	Calligraphy	Kaligrafia
+	Cell size	Rozmiar komórki
+	Centre run	Ścieg prosty środkiem
+	Clear Inclination Lines	Wyczyść linie nachylenia
+	Clear Lines	Wyczyść linie
+	Connectors	Łączniki
+	Constant	Stały
+	Contour Fill	Wypełnienie konturowe
+	Convert Artwork to Embroidery	Konwertuj kompozycję na haft
+	Cover stitch	Ścieg kryjący
+	Cover width	Szerokość krycia
+	Cross Fill	Wypełnienie krzyżowe
+	Delete Inclination Line	Usuń linię nachylenia
+	Densities (mm)	Gęstości (mm)
+	Density	Gęstość
+	Design	Projekt
+	Design Information	Informacje o projekcie
+	Digitizing Widget	Widżet digitalizacji
+	Dimmed	Przyciemnione
+	Direction: automatic	Kierunek: automatyczny
+	Direction: fixed angle	Kierunek: stały kąt
+	Direction: one inclination line	Kierunek: jedna linia nachylenia
+	Direction: turning along	Kierunek: obracany wzdłuż
+	Drag across the shape to add a line; drag a bead to move it	Przeciągnij przez kształt, aby dodać linię; przeciągnij koralik, aby go przesunąć
+	Each anchor point is a needle penetration.	Każdy punkt kontrolny to jedno wkłucie igły.
+	Edge run	Ścieg prosty po krawędzi
+	Edge run underlay	Podkład po krawędzi
+	Edit Lines	Edytuj linie
+	Embroidery	Haft
+	Embroidery Brush Tool	Narzędzie Pędzel hafciarski
+	Embroidery Settings	Ustawienia haftu
+	Export Machine File	Eksportuj plik hafciarki
+	Export Machine File…	Eksportuj plik hafciarki…
+	Fabric	Tkanina
+	Fabric color	Kolor tkaniny
+	Fill style	Styl wypełnienia
+	Fits the hoop	Mieści się w tamborku
+	Give objects a stitch type in the Embroidery panel.	Nadaj obiektom typ ściegu w panelu Haft.
+	Gradient to	Gradient do
+	Hide Digitizing Widget	Ukryj widżet digitalizacji
+	Hoop	Tamborek
+	Inclination Tool	Narzędzie Nachylenie
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Większy niż tamborek
+	Lengths (mm)	Długości (mm)
+	Let sewing start and stop at the closest points again	Pozwól, by szycie znów zaczynało się i kończyło w najbliższych punktach
+	Machine Embroidery File	Plik haftu maszynowego
+	Manual Stitches	Ściegi ręczne
+	Meander Fill	Wypełnienie meandrowe
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Motyw
+	Move Inclination Line	Przesuń linię nachylenia
+	Needle points	Wkłucia igły
+	New strokes	Nowe pociągnięcia
+	No Stitches	Brak ściegów
+	No hoop	Bez tamborka
+	No stitches yet.	Brak ściegów.
+	Not set	Nie ustawiono
+	Nothing stitched yet	Jeszcze nic nie wyhaftowano
+	Object color	Kolor obiektu
+	Open a document to see its stitch sequence.	Otwórz dokument, aby zobaczyć kolejność ściegów.
+	Open or create a document to digitize embroidery.	Otwórz lub utwórz dokument, aby digitalizować haft.
+	Path spacing	Odstęp ścieżek
+	Pause	Pauza
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Wybierz pędzel, szerokość, gęstość i kształt z tarczy, a potem rysuj na płótnie
+	Place editable inclination lines (or pick the angle) automatically	Automatycznie umieść edytowalne linie nachylenia (lub wybierz kąt)
+	Placement line and stop	Linia pozycjonująca i zatrzymanie
+	Play the stitches	Odtwórz ściegi
+	Pull compensation	Kompensacja ściągania
+	Radial Fill	Wypełnienie promieniste
+	Randomness	Losowość
+	Remove background	Usuń tło
+	Reset Start and Stop	Resetuj początek i koniec
+	Row offset	Przesunięcie rzędów
+	Run	Ścieg prosty
+	Run style	Styl ściegu prostego
+	Satin	Satyna
+	Satin Fill	Wypełnienie satynowe
+	Select a path, shape or compound path to give it a stitch type.	Zaznacz ścieżkę, kształt lub ścieżkę złożoną, aby nadać jej typ ściegu.
+	Set Inclination Lines	Ustaw linie nachylenia
+	Set Start and Stop	Ustaw początek i koniec
+	Set Thread	Ustaw nić
+	Sew earlier	Szyj wcześniej
+	Sew first	Szyj jako pierwsze
+	Sew last	Szyj jako ostatnie
+	Sew later	Szyj później
+	Sewing time	Czas szycia
+	Sewn last	Szyte jako ostatnie
+	Short stitches on curves	Krótkie ściegi na łukach
+	Show every stitch	Pokaż każdy ścieg
+	Show stitches	Pokaż ściegi
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Pojedynczy
+	Sort by Thread Color	Sortuj według koloru nici
+	Spiral Fill	Wypełnienie spiralne
+	Stitch Parameters	Parametry ściegu
+	Stitch Plan	Plan ściegów
+	Stitch Sequence	Kolejność ściegów
+	Stitch Type	Typ ściegu
+	Stitch length	Długość ściegu
+	Stitch type	Typ ściegu
+	Stitches	Ściegi
+	Stop to trim fabric	Zatrzymaj, aby przyciąć tkaninę
+	Tack-down	Ścieg mocujący
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Zwężany
+	Tatami Fill	Wypełnienie tatami
+	Tatami underlay	Podkład tatami
+	Thread	Nić
+	Thread colors	Kolory nici
+	Trim after	Obetnij nić po
+	Trims	Obcięcia nici
+	Triple	Potrójny
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Zamień obraz na ściegi: wąskie części stają się satyną, reszta wypełnieniem tatami.
+	Wave	Fala
+	Widget values	Wartości widżetu
+	Width profile	Profil szerokości
+	Widths (mm)	Szerokości (mm)
+	Zigzag	Zygzak
+	inclination lines	linie nachylenia
+	Brush	Pędzel
+	Length	Długość
+	Bean	Wielokrotny
+	Steil	Steil
+	Heart	Serce
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Automatyczna digitalizacja nie znalazła kształtów do wyhaftowania: zmniejsz Szum lub zwiększ Kolory
+@msg	Auto-Digitize: the image traced to nothing	Automatyczna digitalizacja: obrys obrazu nic nie dał
+@msg	can't open `{title}`: the file has no stitches	nie można otworzyć `{title}`: plik nie zawiera ściegów
+@msg	can't open `{title}`: {e}	nie można otworzyć `{title}`: {e}
+@msg	{_1} export failed: {e}	Eksport {_1} nie powiódł się: {e}
+	Stitch Lines	Linie ściegów
+	Tatami	Tatami
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Stitchwright, na podstawie VectorCraft zespołu ArtCraft. MIT OR Apache-2.0. Czcionki: Source Sans 3, Inter, JetBrains Mono (OFL). Ikony: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Wersja {version} — otwartoźródłowa digitalizacja haftu maszynowego w czystym Ruście.
+	Machine embroidery digitizing — fast, open, scriptable.	Digitalizacja haftu maszynowego — szybka, otwarta, skryptowalna.
+	Split Here	Podziel tutaj
+	Split the object in two at the picked stitch	Podziel obiekt na dwa w wybranym ściegu
+	Split Object	Podziel obiekt
+	Check settings	Sprawdź ustawienia
+	Dense from (layers)	Gęsto od (warstw)
+	Give every stitched object the chart's closest thread	Przypisz każdemu haftowanemu obiektowi najbliższą nić z tabeli nici
+	Hidden (not sewn)	Ukryty (nieszyty)
+	Inclination lines	Linie nachylenia
+	Long stitches from	Długie ściegi od
+	Match Threads to Chart	Dopasuj nici do tabeli
+	Omit last stitch	Pomiń ostatni ścieg
+	Small lettering under	Małe napisy poniżej
+	Start and stop	Początek i koniec
+	Thread chart	Tabela nici
+	Tie style	Styl zabezpieczenia
+	Tiny objects under	Drobne obiekty poniżej
+	Travel by	Przejście przez
+	Double	Podwójny
+machine	Trim	Obcięcie nici
+@plural	{n} stitch|{n} stitches	{n} ścieg|{n} ściegi|{n} ściegów
+@plural	{n} trim|{n} trims	{n} obcięcie nici|{n} obcięcia nici|{n} obcięć nici
+machine	Stop	Zatrzymanie
+	Column A/B Tool	Narzędzie Kolumna A/B
+	Column A/B	Kolumna A/B
+	Tatami stitches	Ściegi tatami
+	Make Current	Ustaw jako bieżące
+	New objects of this stitch type take these properties	Nowe obiekty tego typu ściegu przyjmują te właściwości
+	Properties for New Objects	Właściwości nowych obiektów
+	Objects you give a stitch type take these properties.	Obiekty, którym nadasz typ ściegu, przyjmują te właściwości.
+	Fabric settings	Ustawienia tkaniny
+	Satin density	Gęstość satyny
+	Fill density	Gęstość wypełnienia
+	Fill stitch length	Długość ściegu wypełnienia
+	Underlay spacing	Odstęp podkładu
+	Fill underlay	Podkład wypełnienia
+	Topping	Flizelina wierzchnia
+	Save as New Fabric	Zapisz jako nową tkaninę
+	Seconds per trim	Sekundy na obcięcie nici
+	Seconds per color change	Sekundy na zmianę koloru
+	Save to Machine	Zapisz w hafciarce
+	Keep these settings in the machine's profile, for new designs	Zachowaj te ustawienia w profilu hafciarki dla nowych projektów
+	Reset Machine	Resetuj hafciarkę
+	Put the machine's profile back to how it ships, and use it	Przywróć fabryczny profil hafciarki i użyj go
+	Delete Machine	Usuń hafciarkę
+	Save as New Machine	Zapisz jako nową hafciarkę
+	A machine profile of your own with these settings	Własny profil hafciarki z tymi ustawieniami
+	My Machine	Moja hafciarka
+	A copy of this fabric to change	Kopia tej tkaniny do zmiany
+	Delete Fabric	Usuń tkaninę
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Brak stylów. Zaznacz haftowany obiekt i utwórz styl, aby ponownie używać jego właściwości ściegu.
+	New Embroidery Style	Nowy styl haftu
+	Delete Embroidery Style	Usuń styl haftu
+	Duplicate Embroidery Style	Powiel styl haftu
+	Redefine Embroidery Style	Zdefiniuj ponownie styl haftu
+	Break Link to Embroidery Style	Zerwij łącze ze stylem haftu
+	Rename Embroidery Style…	Zmień nazwę stylu haftu…
+	Embroidery Styles	Style haftu
+	Make Properties Current	Ustaw właściwości jako bieżące
+	Current Properties	Bieżące właściwości
+	New Object Properties	Właściwości nowych obiektów
+	Reset Current Properties	Resetuj bieżące właściwości
+	Apply Embroidery Style	Zastosuj styl haftu
+	Rename Embroidery Style	Zmień nazwę stylu haftu
+	Save Fabric	Zapisz tkaninę
+	Machine Profiles	Profile hafciarek
+	Save Machine Profile	Zapisz profil hafciarki
+	Delete Machine Profile	Usuń profil hafciarki
+	Auto Sequence	Automatyczna kolejność
+	Branch	Gałąź
+	Break Apart	Rozdziel
+	Sew the objects separately again	Szyj obiekty znowu osobno
+	These objects are sewn as one path (a branch).	Te obiekty są szyte jako jedna ścieżka (gałąź).
+	Clear Machine Function	Wyczyść funkcję hafciarki
+	Insert Machine Function	Wstaw funkcję hafciarki
+	Object Stitches	Ściegi obiektu
+@msg	`after` is −1 to {_1}	`after` to wartość od −1 do {_1}
+@msg	`{what}` is [x, y]	`{what}` to [x, y]
+@msg	`{what}` is [x, y] (numbers)	`{what}` to [x, y] (liczby)
+@msg	each op needs `op`: move, delete or insert	każda operacja wymaga `op`: move, delete lub insert
+@msg	indices are record numbers (0, 1, 2…)	indeksy to numery rekordów (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	brak `after` (−1 wstawia na początku)
+@msg	missing `indices`	brak `indices`
+@msg	no record {i}: the object has {len}	brak rekordu {i}: obiekt ma ich {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	nieznane polecenie `{c}`: stitch, jump, trim lub stop
+@msg	unknown op `{other}`: move, delete or insert	nieznana operacja `{other}`: move, delete lub insert
+	Stitch Edit Tool	Narzędzie Edycja ściegów
+	Stitch List	Lista ściegów
+	Stop after	Zatrzymanie po
+	Stitches edited by hand: the shape no longer changes them.	Ściegi edytowane ręcznie: kształt już ich nie zmienia.
+	Edit Stitches	Edytuj ściegi
+	Pick, move, add and delete single stitches	Wybieraj, przesuwaj, dodawaj i usuwaj pojedyncze ściegi
+	Regenerate Stitches	Wygeneruj ściegi ponownie
+	Drop the hand edits and stitch the shape again	Odrzuć ręczne zmiany i wygeneruj ściegi kształtu od nowa
+	Freeze Stitches	Zamroź ściegi
+	Function	Funkcja
+	X (mm)	X (mm)
+	Y (mm)	Y (mm)
+	Stitch	Ścieg
+	Jump	Przeskok
+	Color change	Zmiana koloru
+	End	Koniec
+	#	#
+	Open a document to see its stitches.	Otwórz dokument, aby zobaczyć jego ściegi.
+	Machine	Hafciarka
+	Machine settings	Ustawienia hafciarki
+	Longest stitch	Najdłuższy ścieg
+	Longest jump	Najdłuższy przeskok
+	Shortest stitch	Najkrótszy ścieg
+	Trim jumps longer than	Obcinaj nić przy przeskokach dłuższych niż
+	Tie length	Długość zabezpieczenia
+	Stitches per minute	Ściegi na minutę
+	commercial machines	hafciarki przemysłowe
+	home machines	hafciarki domowe
+	Remove underlying stitching	Usuń ściegi pod spodem
+	Overlap	Zakładka
+	Turn	Obrót
+	Capped	Zakończone
+	Backstitch	Ścieg wsteczny
+	Check Again	Sprawdź ponownie
+	Check Design	Sprawdź projekt
+	Click to select and show it	Kliknij, aby zaznaczyć i pokazać
+	Design setting	Ustawienie projektu
+	Different on each side	Różne po obu stronach
+	Double zigzag	Podwójny zygzak
+	Fill Holes	Wypełnij otwory
+	Flip to the other side	Przenieś na drugą stronę
+	Lettering only {n} mm tall is hard to sew clearly	Napis o wysokości tylko {n} mm trudno wyszyć wyraźnie
+	Look for dense spots, long stitches, tiny objects and small lettering	Szukaj zbyt gęstych miejsc, długich ściegów, drobnych obiektów i małych napisów
+	Makes no stitches	Nie tworzy ściegów
+	No problems found.	Nie znaleziono problemów.
+	Passes	Przejścia
+	Preserve long stitches	Zachowaj długie ściegi
+	Pull comp., side 1	Kompens. ściągania, strona 1
+	Pull comp., side 2	Kompens. ściągania, strona 2
+	Remove Holes	Usuń otwory
+	Reverse Stitch Direction	Odwróć kierunek ściegu
+	Swap Satin Sides	Zamień strony satyny
+	Convert to Satin Column	Konwertuj na kolumnę satynową
+	Stem Stitch	Ścieg sznureczkowy
+	Stem stitch	Ścieg sznureczkowy
+	Stitches up to {n} mm long can snag	Ściegi o długości do {n} mm mogą się zaczepiać
+	The design is larger than the hoop	Projekt jest większy niż tamborek
+	Thread Color	Kolor nici
+	Tie in	Zabezpieczenie na początku
+	Tie off	Zabezpieczenie na końcu
+	Tiny object: may not sew cleanly	Drobny obiekt: może nie wyszyć się czysto
+	Very dense: about {n} layers of thread here	Bardzo gęsto: około {n} warstw nici w tym miejscu
+	Design from Prompt…	Projekt z opisu…
+	Design from Prompt	Projekt z opisu
+	Generate	Generuj
+	Describe the design:	Opisz projekt:
+	Size (longest side):	Rozmiar (dłuższy bok):
+	Anthropic API key:	Klucz API Anthropic:
+	Remember the key on this computer	Zapamiętaj klucz na tym komputerze
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude rysuje kompozycję przy użyciu Twojego własnego klucza API Anthropic, a opłaty obciążają Twoje konto Anthropic; następnie StitchFoundry ją digitalizuje. Sprawdź ściegi przed szyciem.
+	Get a key	Uzyskaj klucz
+	Drawing the design…	Rysowanie projektu…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Opisz projekt, a Claude narysuje do niego kompozycję, którą StitchFoundry następnie zdigitalizuje
+	Place Artwork as Embroidery	Umieść kompozycję jako haft
+	Place Artwork	Umieść kompozycję
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Umieszczono projekt: {n} haftowany obiekt|Umieszczono projekt: {n} haftowane obiekty|Umieszczono projekt: {n} haftowanych obiektów
+@msg	Enter your Anthropic API key first.	Najpierw wprowadź klucz API Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Klucz API jest nieprawidłowy: wklej go ponownie z Anthropic Console.
+@msg	Describe the design first.	Najpierw opisz projekt.
+@msg	The description is too long: keep it under 2,000 characters.	Opis jest za długi: zmieść się w 2000 znaków.
+@msg	Anthropic refused the API key: {e}	Anthropic odrzucił klucz API: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Twoje konto Anthropic nie może za to zapłacić: {e}
+@msg	The AI service is busy: try again in a minute.	Usługa AI jest zajęta: spróbuj ponownie za minutę.
+@msg	The AI service failed (error {code}): try again later.	Usługa AI zawiodła (błąd {code}): spróbuj ponownie później.
+@msg	The request failed (error {code}): {e}	Żądanie nie powiodło się (błąd {code}): {e}
+@msg	The AI declined to draw this: try another description.	AI odmówiła narysowania tego: spróbuj innego opisu.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Rysunek stał się zbyt szczegółowy, by go ukończyć: poproś o coś prostszego.
+@msg	The reply had no artwork: try again.	Odpowiedź nie zawierała kompozycji: spróbuj ponownie.
+@msg	Couldn't reach the AI service: {e}	Nie udało się połączyć z usługą AI: {e}
+@msg	Design from Prompt needs the desktop app for now	Projekt z opisu wymaga na razie aplikacji desktopowej
+@msg	already drawing: wait for it, or Cancel	rysowanie już trwa: poczekaj na nie lub kliknij Anuluj
+@msg	the artwork has no shapes to stitch	kompozycja nie ma kształtów do wyhaftowania
+@msg	the artwork has nothing to place	kompozycja nie ma nic do umieszczenia
+@msg	the artwork can't be read: {e}	nie można odczytać kompozycji: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI nie skopiuje cudzego logo ani postaci: {e}
+	Redraw Image with Claude…	Przerysuj obraz za pomocą Claude…
+	Redraw Image with Claude	Przerysuj obraz za pomocą Claude
+	What to change (optional):	Co zmienić (opcjonalnie):
+	Only redraw artwork you own or have permission to use.	Przerysowuj tylko kompozycje, które są Twoją własnością lub na których użycie masz zgodę.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude przerysowuje obraz jako grafikę w płaskich kolorach przy użyciu Twojego własnego klucza API Anthropic, a opłaty obciążają Twoje konto Anthropic; następnie StitchFoundry ją digitalizuje. Sprawdź ściegi przed szyciem.
+	Redraw with Claude…	Przerysuj za pomocą Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude przerysowuje obraz jako czystą grafikę w płaskich kolorach, a następnie StitchFoundry ją digitalizuje
+@msg	select an image to redraw	zaznacz obraz do przerysowania
+@msg	the image couldn't be read	nie można odczytać obrazu
+@msg	The image is too large to send: crop it, or place a smaller copy.	Obraz jest za duży do wysłania: przytnij go lub umieść mniejszą kopię.
+	Set Split Lines	Ustaw linie podziału
+	Carve Split Lines	Wyrzeźbij linie podziału
+	Clear Split Lines	Wyczyść linie podziału
+	Split lines:	Linie podziału:
+	Texture size	Rozmiar tekstury
+	Texture angle	Kąt tekstury
+	Diamonds	Romby
+	Waves	Fale
+	Herringbone	Jodełka
+	Bricks	Cegiełki
+	Circles	Okręgi
+	Scales	Łuski
+	Hand stitch	Ścieg ręczny
+	Gap	Przerwa
+	Jagged edges	Postrzępione krawędzie
+	Side 1	Strona 1
+	Side 2	Strona 2
+	Jag depth	Głębokość postrzępienia
+	Trapunto (travel along the outline)	Trapunto (przejście wzdłuż konturu)
+	Place Motif	Umieść motyw
+	Loop	Pętla
+	Motif Fill	Wypełnienie motywem
+	Motif size	Rozmiar motywu
+	Graded	Stopniowany
+	Width at end	Szerokość na końcu
+	Row spacing	Odstęp rzędów
+	E-stitch	Ścieg E
+	Rings (0: all)	Pierścienie (0: wszystkie)
+	Add Laydown	Dodaj ścieg bazowy
+	Spacing profile	Profil odstępów
+	Accordion	Harmonijka
+	Fade out	Zanikanie
+	Fade in	Narastanie
+	Blend into	Przejście w
+	Make Blend	Utwórz przejście
+	Blend Colors	Przejście kolorów
+	Add Outline	Dodaj kontur
+	Satin Outline	Kontur satynowy
+	Bean Outline	Kontur ściegiem wielokrotnym
+	Rectangle Border	Ramka prostokątna
+	Oval Border	Ramka owalna
+	Rounded Border	Ramka zaokrąglona
+	Motif Border	Ramka z motywu
+	Make Motif	Utwórz motyw
+	Apply Motif	Zastosuj motyw
+	Embroidery Motifs	Motywy haftu
+	Delete Motif	Usuń motyw
+	Remove the motif from the design; what sews it keeps it.	Usuń motyw z projektu; to, co go szyje, zachowuje go.
+	Sculpture run	Ścieg rzeźbiący
+	Triple stitch length	Długość ściegu potrójnego
+	Single stitch length	Długość ściegu pojedynczego
+	Triple stitches	Ściegi potrójne
+	Single stitches	Ściegi pojedyncze
+	Cross style	Styl krzyżyka
+	Full cross	Pełny krzyżyk
+	Half cross	Półkrzyżyk
+	Upright cross	Krzyżyk prosty
+	Double cross	Podwójny krzyżyk
+	Redwork	Redwork
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	Szyte jako jedna linia, która kończy się tam, gdzie się zaczyna; droga między liniami jest powtarzana wzdłuż nich.
+	Add Buttonholes	Dodaj dziurki
+	Straight Buttonhole	Dziurka prosta
+	Rounded Buttonhole	Dziurka zaokrąglona
+	Keyhole Buttonhole	Dziurka z oczkiem
+	Place Ring	Umieść pierścień
+	Satin Ring	Pierścień satynowy
+	Filled Ring	Pierścień wypełniony
+	Bean Ring	Pierścień ściegiem wielokrotnym
+	Hexagons	Sześciokąty
+	Chevrons	Szewrony
+	Basket weave	Splot koszykowy
+	Stars	Gwiazdy
+	Hearts	Serca
+	Leaves	Liście
+	Paired with	W parze z
+	Sew as	Szyj jako
+	Motifs	Motywy
+	Motif length (× width)	Długość motywu (× szerokość)
+	String stitch	Ścieg sznurkowy
+	Chord length	Długość cięciwy
+	Automatic Knife	Automatyczny nóż
+	3D effect	Efekt 3D
+	Globe out	Wypukłość na zewnątrz
+	Globe in	Wypukłość do wewnątrz
+	Fill Along Lines	Wypełnienie wzdłuż linii
+	Clear Flow Lines	Wyczyść linie przepływu
+	Rows follow lines:	Rzędy podążają za liniami:
+	Set Flow Lines	Ustaw linie przepływu
+	Carving Stamps	Stemple rzeźbiące
+	Carve Stamp	Wyrzeźbij stempel
+	Flower	Kwiat
+	Sun	Słońce
+	Moon	Księżyc
+	Snowflake	Płatek śniegu
+	Paw Print	Ślad łapy
+	Swirl	Zawijas
+	Shell	Muszla
+	Butterfly	Motyl
+	Clover	Koniczyna
+	Show Repeats	Pokaż powtórzenia
+	Repeats across	Powtórzenia w poziomie
+	Repeats down	Powtórzenia w pionie
+	Gap between repeats	Odstęp między powtórzeniami
+	Stripes	Paski
+	Slants	Skosy
+	Pinstripes	Prążki
+	Lattice	Kratownica
+	Arches	Łuki
+	Spirals	Spirale
+	Pyramids	Piramidy
+	Ripples	Zmarszczki
+	Greek key	Meander grecki
+	Crosses	Krzyże
+	Quatrefoils	Czterolistki
+	Flowers	Kwiaty
+	Trefoils	Trójliście
+	Moons	Księżyce
+	Arrows	Strzałki
+	Nested diamonds	Zagnieżdżone romby
+	Argyle	Argyle
+	Wicker	Wiklina
+	Feathers	Pióra
+	Paisley	Paisley
+	Swirls	Zawijasy
+	Snowflakes	Płatki śniegu
+	Bubbles	Bąbelki
+	Sunbursts	Promienie słońca
+	Motif Tool	Narzędzie Motyw
+	Contour Split Lines	Konturowe linie podziału
+	Keep Motif	Zachowaj motyw
+	Keep the motif in My Motifs, for any design	Zachowaj motyw w Moich motywach dla dowolnego projektu
+	My Motifs	Moje motywy
+	Forget Motif	Zapomnij motyw
+	Buttonholes	Dziurki
+	Straight	Prosta
+	Keyhole	Z oczkiem
+	Count	Liczba
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Rzędy w poprzek kształtu: w górę jest gęściej. Przeciągnij punkt; kliknij dwukrotnie, aby dodać punkt; kliknij punkt prawym przyciskiem, aby go usunąć.
+	Embroidery Lettering	Napisy hafciarskie
+	Load Embroidery Font	Wczytaj czcionkę hafciarską
+	Embroidery Fonts	Czcionki hafciarskie
+	Load Embroidery Font…	Wczytaj czcionkę hafciarską…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Folder czcionki w formacie Ink/Stitch: font.json i jego glify
+	Load an embroidery font to set text with it.	Wczytaj czcionkę hafciarską, aby nią składać tekst.
+	Sews well at	Dobrze się szyje przy
+	Place Lettering	Umieść napis
+	Edit Lettering	Edytuj napis
+	Update Lettering	Aktualizuj napis
+	Load this lettering's font to change it:	Wczytaj czcionkę tego napisu, aby go zmienić:
+	Arch	Łuk
+	Valley	Dolina
+	Forget Font	Zapomnij czcionkę
+	Unload the font and stop loading its folder	Wyładuj czcionkę i przestań wczytywać jej folder
+	Forget Embroidery Font	Zapomnij czcionkę hafciarską
+	Team Names	Nazwiska drużyny
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Zaznacz napis złożony czcionką hafciarską: dla każdego nazwiska zostanie zapisany plik hafciarki z napisem ustawionym na to nazwisko.
+	One name a line	Jedno nazwisko w wierszu
+	Import Names…	Importuj nazwiska…
+	The first column of a CSV table, or a text file of one name a line	Pierwsza kolumna tabeli CSV lub plik tekstowy z jednym nazwiskiem w wierszu
+	Names	Nazwiska
+	Export One File per Name…	Eksportuj jeden plik na nazwisko…
+	Team name files written	Zapisano pliki z nazwiskami drużyny
+	Export Team Names	Eksportuj nazwiska drużyny
+	Read Team Names	Wczytaj nazwiska drużyny
+	Monogram	Monogram
+	Load an embroidery font (Embroidery Lettering) to make monograms.	Wczytaj czcionkę hafciarską (Napisy hafciarskie), aby tworzyć monogramy.
+	Initials	Inicjały
+	In a line	W linii
+	Scallops	Festony
+	Border	Ramka
+	Place Monogram	Umieść monogram
+	New Embroidery Font	Nowa czcionka hafciarska
+	Save Embroidery Font…	Zapisz czcionkę hafciarską…
+	Add Glyphs	Dodaj glify
+	Font Properties	Właściwości czcionki
+	Kern Glyph Pair	Kerning pary glifów
+	Font Info	Informacje o czcionce
+	Save Embroidery Font	Zapisz czcionkę hafciarską
+	Edit Embroidery Font	Edytuj czcionkę hafciarską
+	Merge Embroidery Font	Scal czcionkę hafciarską
+	New Embroidery Font from Type	Nowa czcionka hafciarska z kroju pisma
+	Font Creator	Kreator czcionek
+	Capitals' height	Wysokość wersalików
+	Line spacing	Odstęp między wierszami
+	Space width	Szerokość spacji
+	As typed	Jak wpisano
+	Capitals	Wersaliki
+	Small letters	Małe litery
+	Letter case	Wielkość liter
+	Sews well from	Dobrze się szyje od
+	Sews well up to	Dobrze się szyje do
+	Still to digitize	Do zdigitalizowania
+	Show this glyph	Pokaż ten glif
+	Not digitized yet: show its artboard	Jeszcze niezdigitalizowany: pokaż jego obszar kompozycji
+	Glyphs to add	Glify do dodania
+	Kerning (mm closer)	Kerning (mm bliżej)
+	Pair	Para
+	Kern	Kerning
+	Merge glyphs from	Scal glify z
+	Test text	Tekst testowy
+	Try in a New Document	Wypróbuj w nowym dokumencie
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Utwórz czcionkę hafciarską: dokument z obszarem kompozycji dla każdego glifu do zdigitalizowania.
+	Type family	Rodzina kroju
+	New Font from Type	Nowa czcionka z kroju pisma
+	Edit Font	Edytuj czcionkę
+	Assign to Glyph	Przypisz do glifu
+	Selection to glyph	Zaznaczenie do glifu
+	The selected art becomes the glyph, moved onto its artboard	Zaznaczona grafika staje się glifem i zostaje przeniesiona na jego obszar kompozycji
+	Sew order	Kolejność szycia
+	Left to right	Od lewej do prawej
+	Right to left	Od prawej do lewej
+	Centre out	Od środka na zewnątrz
+	Closest	Najbliższe
+	Along the baseline	Wzdłuż linii bazowej
+	Where needed	Gdzie potrzeba
+	After each letter	Po każdej literze
+	After each word	Po każdym słowie
+	After each line	Po każdym wierszu
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Poza rozmiarami, dla których zaprojektowano czcionkę: ściegi mogą wyjść zbyt gęste lub zbyt długie
+	Adjust Letter	Dopasuj literę
+	One letter: moved, scaled or turned, kept when the lettering is set again	Jedna litera: przesunięta, przeskalowana lub obrócona, zachowana przy ponownym składaniu napisu
+	Move along	Przesuń wzdłuż
+	Move down	Przesuń w dół
+	Reset Letter	Resetuj literę
+	3D Puff	Haft 3D Puff
+	3D puff	Haft 3D puff
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	Satyna szyta na piance: gęsta, bez podkładu, z zamkniętymi końcami. Szyj ją we własnym kolorze, aby przy zatrzymaniu położyć piankę
+	Sew Puff Last	Szyj puff na końcu
+	Click to Stitch	Kliknij, aby wyhaftować
+	Click-to-Stitch Tool	Narzędzie Kliknij i haftuj
+	Fill without holes	Wypełnienie bez otworów
+	Centre line	Linia środkowa
+	Stitch as	Haftuj jako
+	Click a region of an image to stitch it	Kliknij obszar obrazu, aby go wyhaftować
+	Send to Machine	Wyślij do hafciarki
+	Machine Folders	Foldery hafciarki
+	Add Machine Folder…	Dodaj folder hafciarki…
+	A USB stick, the machine's folder or a network share the machine reads	Pamięć USB, folder hafciarki lub udział sieciowy odczytywany przez hafciarkę
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Dodaj folder odczytywany przez hafciarkę: pamięć USB, jej folder lub udział sieciowy.
+	Machine folder	Folder hafciarki
+	Send	Wyślij
+	Sent:	Wysłano:
+	Forget Folder	Zapomnij folder
+	Triple run	Potrójny ścieg prosty
+	Partial cover	Częściowe krycie
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	nie udało się zakodować pliku hafciarki
+	Worksheet	Karta pracy
+	Outline Around	Kontur dookoła
+	Octagon	Ośmiokąt
+	Shield	Tarcza
+	Ornament	Ornament
+	Multi-Hooping	Wielokrotne tamborkowanie
+	Basting first	Najpierw fastrygowanie
+	Basting round	Fastryga dookoła
+	The design	Projekt
+	The hoop	Tamborek
+	Basting margin	Margines fastrygi
+	Design notes	Uwagi do projektu
+	Printed on worksheets	Drukowane na kartach pracy
+	Cost a piece	Koszt sztuki
+	Estimate cost	Szacuj koszt
+	Cost settings	Ustawienia kosztów
+	Per 1000 stitches	Za 1000 ściegów
+	Machine time an hour	Czas pracy hafciarki za godzinę
+	Thread per 1000 m	Nić za 1000 m
+	Set-up an order	Przygotowanie zamówienia
+	Machine heads	Głowice hafciarki
+	Currency	Waluta
+	Cost Estimate	Szacunek kosztów
+	Colorways	Warianty kolorystyczne
+	New Colorway	Nowy wariant kolorystyczny
+	Use Colorway	Użyj wariantu kolorystycznego
+	Colorway Thread	Nić wariantu kolorystycznego
+	Rename Colorway	Zmień nazwę wariantu kolorystycznego
+	Delete Colorway	Usuń wariant kolorystyczny
+	Colorway	Wariant kolorystyczny
+	The design's own	Własny kolor projektu
+	Own colour block	Własny blok kolorów
+	Where it falls	Tam, gdzie wypada
+	Centre	Środek
+	Top left	Lewy górny
+	Top right	Prawy górny
+	Bottom left	Lewy dolny
+	Bottom right	Prawy dolny
+	Start at	Zacznij w
+	End at	Zakończ w
+	Stabiliser	Stabilizator
+	Tear-away	Odrywany
+	Cut-away	Wycinany
+	No-show mesh	Siateczka niewidoczna
+	Wash-away	Rozpuszczalny w wodzie
+	Scatter Copies	Rozrzuć kopie
+	Appliqué letters	Litery aplikacyjne
+	Each letter a patch of fabric: placement line, tack-down and cover	Każda litera to łata z tkaniny: linia pozycjonująca, ścieg mocujący i krycie
+	Letters sewn	Szyte litery
+	As the font has them	Tak jak w czcionce
+	Small text	Mały tekst
+	Under 6 mm	Poniżej 6 mm
+	Place Along Selected Line	Umieść wzdłuż zaznaczonej linii
+	The text along the selected line or shape, from its start	Tekst wzdłuż zaznaczonej linii lub kształtu, od jego początku
+	Monogram Templates	Szablony monogramów
+	Save Monogram Template	Zapisz szablon monogramu
+	Delete Monogram Template	Usuń szablon monogramu
+	Template name	Nazwa szablonu
+	Delete Template	Usuń szablon
+	Lay Out Team Names	Rozmieść nazwiska drużyny
+	Team Names Worksheet	Karta pracy nazwisk drużyny
+	Lay Out Together	Rozmieść razem
+	Every name in one design, in rows and columns, for a large hoop or patches	Wszystkie nazwiska w jednym projekcie, w wierszach i kolumnach, dla dużego tamborka lub naszywek
+	Names Worksheet	Karta pracy nazwisk
+	Each name with its size, stitches and sewing time, and the totals	Każde nazwisko z rozmiarem, liczbą ściegów i czasem szycia oraz sumy
+	Design Library	Biblioteka projektów
+	Design Catalogue	Katalog projektów
+	No folder chosen	Nie wybrano folderu
+	Choose Folder…	Wybierz folder…
+	Newest	Najnowsze
+	Most stitches	Najwięcej ściegów
+	Largest	Największe
+	Designs	Projekty
+	Couldn't be read	Nie można odczytać
+	stitches	ściegi
+	colours	kolory
+	Print Catalogue	Drukuj katalog
+	A sheet of the designs found, to print or save as PDF	Arkusz znalezionych projektów do wydrukowania lub zapisania jako PDF
+@msg	larger than {_1} MB	większy niż {_1} MB
+@msg	not a machine file: .{ext}	to nie jest plik hafciarki: .{ext}
+	Batch Output	Wyjście wsadowe
+	Output Profiles	Profile wyjściowe
+	Save Output Profile	Zapisz profil wyjściowy
+	Delete Output Profile	Usuń profil wyjściowy
+	Batch Convert	Konwersja wsadowa
+	files written	zapisane pliki
+	Machine formats (none ticked: the machine's)	Formaty hafciarek (brak zaznaczenia: format hafciarki)
+	Production	Produkcja
+	Approval	Zatwierdzenie
+	Placement template	Szablon pozycjonowania
+	The design file too	Także plik projektu
+	Write to Folder…	Zapisz do folderu…
+	Machine files, worksheet PDF and design, named alike	Pliki hafciarki, karta pracy PDF i projekt o takich samych nazwach
+	Write Again	Zapisz ponownie
+	Profile name	Nazwa profilu
+	Save Profile	Zapisz profil
+	Profile	Profil
+	Convert to	Konwertuj na
+	Convert All	Konwertuj wszystkie
+	Each design found written again in this format beside it	Każdy znaleziony projekt zapisany ponownie w tym formacie obok oryginału
+	Converted:	Przekonwertowano:
+	couldn't be read:	nie można odczytać:
+	Product Visualizer	Wizualizator produktu
+@msg	product outline: {e}	kontur produktu: {e}
+	Exports	Eksporty
+	Nothing exported yet in this session.	W tej sesji nic jeszcze nie wyeksportowano.
+	Again	Ponownie
+	Export it again, as it was asked, from this document	Wyeksportuj ponownie z tego dokumentu, tak jak zlecono
+	Export History	Historia eksportu
+	Clear Export History	Wyczyść historię eksportu
+	Export Again	Eksportuj ponownie
+	Export Stitch Image	Eksportuj obraz ściegów
+	Export Stitch Image…	Eksportuj obraz ściegów…
+	Stitch List CSV (.csv)…	Lista ściegów CSV (.csv)…
+	Stitch List JSON (.json)…	Lista ściegów JSON (.json)…
+	G-code (.gcode)…	G-code (.gcode)…
+	Stitch Image PNG (.png)…	Obraz ściegów PNG (.png)…
+@msg	PNG encoding failed: {e}	Kodowanie PNG nie powiodło się: {e}
+@msg	the design has no stitches	projekt nie zawiera ściegów
+@msg	the image would be {w} × {h} pixels: lower ppmm	obraz miałby {w} × {h} pikseli: zmniejsz ppmm
+	Smallest That Fits	Najmniejszy pasujący
+	The smallest hoop that holds the design, turned if that fits better	Najmniejszy tamborek mieszczący projekt, obrócony, jeśli tak lepiej pasuje
+	Rotate Hoop	Obróć tamborek
+	Custom Hoops	Własne tamborki
+	Hoop name	Nazwa tamborka
+	Save Hoop	Zapisz tamborek
+	Delete Hoop	Usuń tamborek
+	Hoops	Tamborki
+	Choose Smallest Hoop	Wybierz najmniejszy tamborek
+	Save Custom Hoop	Zapisz własny tamborek
+	Delete Custom Hoop	Usuń własny tamborek
+	Turn the hue	Obróć odcień
+	One colour	Jeden kolor
+	Grey	Szary
+	Inverted	Odwrócony
+	Recolour	Zmień kolory
+	Recolour Threads	Zmień kolory nici
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Każda nić zmieniona według schematu i dopasowana do tabeli nici projektu; cofnięcie przywraca poprzednie
+	Garment Background	Tło odzieży
+	Garment Photo…	Zdjęcie odzieży…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Zdjęcie odzieży za projektem, w naturalnej wielkości, na zablokowanej warstwie szablonu, która nigdy nie jest haftowana
+	Import Chart…	Importuj tabelę…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	Własna tabela nici z pliku CSV (kod, nazwa i kolor dla każdej nici) lub palety GIMP (.gpl)
+	Export Chart…	Eksportuj tabelę…
+	Thread Charts	Tabele nici
+	Import Thread Chart	Importuj tabelę nici
+	Export Thread Chart	Eksportuj tabelę nici
+	Save Thread Chart	Zapisz tabelę nici
+	Delete Thread Chart	Usuń tabelę nici
+	Design Templates	Szablony projektów
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	Zachowaj stronę, grafikę, tamborek, tkaninę i ustawienia tego projektu jako punkt wyjścia dla nowych projektów
+	New from Design Template	Nowy z szablonu projektu
+	Save as Design Template	Zapisz jako szablon projektu
+	Delete Design Template	Usuń szablon projektu
+	Print Stitch View	Drukuj widok ściegów
+	Job Orders	Zlecenia
+	Customer	Klient
+	Due (YYYY-MM-DD)	Termin (RRRR-MM-DD)
+	New Job for This Design	Nowe zlecenie dla tego projektu
+	In production	W produkcji
+	Cancelled	Anulowane
+	New Job Order	Nowe zlecenie
+	Update Job Order	Aktualizuj zlecenie
+	Delete Job Order	Usuń zlecenie
+	Job Worksheet	Karta pracy zlecenia
+	Job Output	Wyjście zlecenia
+	Clipart	Clipart
+	Click a motif to place it, digitized, in the middle of the page.	Kliknij motyw, aby umieścić go zdigitalizowany na środku strony.
+	Embroidery Clipart	Clipart hafciarski
+	Insert Clipart	Wstaw clipart
+	Send When Ready	Wyślij, gdy gotowe
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Dodaj projekt do kolejki dla tego folderu: zostanie zapisany teraz, jeśli folder jest dostępny, a w przeciwnym razie, gdy tylko się pojawi
+	Waiting for the folder	Oczekiwanie na folder
+	Send queue	Kolejka wysyłania
+	waiting	oczekuje
+	sent	wysłano
+	failed	niepowodzenie
+	Clear Sent	Wyczyść wysłane
+	Send Queue	Kolejka wysyłania
+	Add to Send Queue	Dodaj do kolejki wysyłania
+	Send Waiting Designs	Wyślij oczekujące projekty
+	Remove from Send Queue	Usuń z kolejki wysyłania
+@msg	the queued file is damaged	plik w kolejce jest uszkodzony
+	Centred	Wyśrodkowany
+	In the hoop	W tamborku
+	Worksheet Setup	Ustawienia karty pracy
+	Merge Colours	Scal kolory
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Nici o tym samym lub zbliżonym kolorze połączone w jedną, a ich bloki kolorów złączone; cofnięcie przywraca poprzednie
+	Lettering Kiosk	Kiosk napisów
+	Kiosk Lettering	Napisy w kiosku
+	Type a name and make the design	Wpisz nazwisko i utwórz projekt
+	No embroidery font is loaded: ask the shop to load one.	Nie wczytano czcionki hafciarskiej: poproś obsługę sklepu o jej wczytanie.
+	As large as fits	Tak duży, jak się zmieści
+	Make Design	Utwórz projekt
+	T-shirt	T-shirt
+	Polo shirt	Koszulka polo
+	Hoodie	Bluza z kapturem
+	Tote bag	Torba na zakupy
+	Towel	Ręcznik
+	Product	Produkt
+	Show on Product	Pokaż na produkcie
+	Back to the Design	Wróć do projektu
+	Save Machine File…	Zapisz plik hafciarki…
+	Next Name	Następne nazwisko
+	PIN	PIN
+	Leave Kiosk	Opuść kiosk
+	Leaving the kiosk will take this PIN	Opuszczenie kiosku będzie wymagać tego kodu PIN
+	Snapback	Snapback
+	Trucker cap	Czapka trucker
+	Dad cap	Czapka baseballowa
+	Image Colours	Kolory obrazu
+	Prepare Image	Przygotuj obraz
+	Photo Stitch	Haft fotograficzny
+	Convert Stitches to Objects	Konwertuj ściegi na obiekty
+	Colour Preview	Podgląd kolorów
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Wygładzona kopia obrazu w tych kolorach, oczyszczona z drobin, do digitalizacji lub haftowania kliknięciem
+	Colours	Kolory
+	background, not sewn	tło, nieszyte
+	thread changes	zmiany nici
+	threads sewn	szyte nici
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Wyszyj zdjęcie na nim samym jako linie zygzakowe, jeden meandrujący ścieg lub jego kolory
+	Sequins	Cekiny
+	Beads	Koraliki
+	Rhinestones	Kryształki
+	Cord	Sznurek
+	Boring	Dziurkowanie
+	Along the line	Wzdłuż linii
+	Fill the shape	Wypełnij kształt
+	Round the edge	Wokół krawędzi
+	At each point	W każdym punkcie
+	Bead length	Długość koralika
+	Cord width	Szerokość sznurka
+	Edge width	Szerokość krawędzi
+	Honeycomb	Plaster miodu
+	Packing	Upakowanie
+	Three	Trzy
+	Fixing	Mocowanie
+	Flip every other	Odwracaj co drugi
+	Colour	Kolor
+	Thread colour	Kolor nici
+	Stop before	Zatrzymanie przed
+	Rhinestones aren't sewn: export their template to cut and set them	Kryształki nie są szyte: wyeksportuj ich szablon, aby je wyciąć i osadzić
+	Decoration Sizes	Rozmiary dekoracji
+	Count Decorations	Policz dekoracje
+	Cut File	Plik do wycinania
+	Sew the pieces together	Zszyj elementy razem
+	Fabric colour	Kolor tkaniny
+	Plain	Gładka
+	Check	Krata
+	Denim	Dżins
+	Felt	Filc
+	Fabric pattern	Wzór tkaniny
+	Pattern colour	Kolor wzoru
+	Combine Appliqué	Połącz aplikacje
+	Prepare Appliqué	Przygotuj aplikację
+	Coil	Spirala
+	Square loop	Pętla kwadratowa
+	Foil	Folia
+	Shown with the design, not sewn	Pokazane z projektem, nieszyte
+	StitchFoundry Help	Pomoc StitchFoundry
+	Tips	Wskazówki
+	Search help	Szukaj w pomocy
+	Nothing found	Nic nie znaleziono
+	Help Topics	Tematy pomocy
+	Help Topic	Temat pomocy
+	Help for Tool	Pomoc dotycząca narzędzia
+	New Design for Hoop	Nowy projekt dla tamborka
+	Sample Designs	Przykładowe projekty
+	Open Sample Design	Otwórz przykładowy projekt
+	Start a design for your hoop	Zacznij projekt dla swojego tamborka
+	Your first design	Twój pierwszy projekt
+	Draw shapes, place a picture or type text.	Narysuj kształty, umieść obraz lub wpisz tekst.
+	Choose how each part is stitched: satin, fill, run and more.	Wybierz, jak ma być szyta każda część: satyna, wypełnienie, ścieg prosty i inne.
+	Watch it sew with the stitch player and check it.	Zobacz, jak się szyje, w odtwarzaczu ściegów i sprawdź projekt.
+	Export the file for your machine.	Wyeksportuj plik dla swojej hafciarki.
+	Learn how	Dowiedz się jak
+	Try a sample	Wypróbuj przykład
+	Heart patch	Naszywka z sercem
+	Sun and moon	Słońce i księżyc
+	Appliqué star	Gwiazda z aplikacją
+	Tip:	Wskazówka:
+	More tips	Więcej wskazówek
+	A new design the size of this hoop's sewing field	Nowy projekt o rozmiarze pola szycia tego tamborka
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Narysuj linię nachylenia w poprzek kształtu, aby ustawić kąt ściegu; dwie lub więcej linii sprawiają, że ściegi skręcają.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Kliknij obszar umieszczonego obrazu, aby go wyhaftować; zwiększ Tolerancję, aby objąć więcej jego odcieni.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Przeciągnij wybrane wkłucia igły, aby je przesunąć, kliknij ścieg z Alt, aby dodać wkłucie, a Delete je usuwa.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Klikaj na przemian po jednej i po drugiej stronie kolumny; Enter lub Esc kończy.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	Tarcza w lewym dolnym rogu ustawia pędzel, szerokość, gęstość, długość i kształt.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Wpisz tekst, a następnie wybierz czcionkę hafciarską w panelu Napisy, aby szył się czysto.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Zaznacz grafikę i wybierz Haft › Konwertuj kompozycję na haft, aby zdigitalizować ją w jednym kroku.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Satyna nadaje się do kształtów o szerokości do około 7 mm; szersze obszary lepiej szyć wypełnieniem tatami.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Wybierz tamborek w panelu Haft, aby zobaczyć pole szycia wokół projektu.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Sprawdź projekt w menu Haft wykrywa gęste warstwy, długie ściegi i tekst zbyt mały do wyszycia.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Przed wysłaniem obejrzyj szycie projektu w odtwarzaczu ściegów w panelu Kolejność ściegów.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Eksportuj poleceniem Haft › Eksportuj plik hafciarki i wybierz format swojej hafciarki.
+	Save as Default	Zapisz jako domyślne
+	Clear Default	Wyczyść domyślne
+	Every new design starts with these properties	Każdy nowy projekt zaczyna się z tymi właściwościami
+	New designs take the built-in properties again	Nowe projekty znów przyjmują wbudowane właściwości
+	All Tools, Ungrouped	Wszystkie narzędzia, bez grupowania
+	Toolbar: All Tools, Ungrouped	Pasek narzędzi: wszystkie narzędzia, bez grupowania
+	Push compensation	Kompensacja wypychania
+	{n} very short stitches can break the thread	Bardzo krótkie ściegi ({n}) mogą zerwać nić
+	Satin only {n} mm wide sinks into the fabric	Satyna o szerokości tylko {n} mm zapada się w tkaninę
+	Fill stitches {n} mm long can ripple after washing	Ściegi wypełnienia o długości {n} mm mogą się marszczyć po praniu
+	Sewn on clothing	Szyte na odzieży
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	Długie ściegi zaczepiają się od 7 mm na odzieży, od 12,1 mm na innych przedmiotach
+	Short stitches under	Krótkie ściegi poniżej
+	Narrow satin under	Wąska satyna poniżej
+	Short fill stitches under	Krótkie ściegi wypełnienia poniżej
+	Edge run and zigzag	Ścieg po krawędzi i zygzak
+	Satin underlay	Podkład satyny
+	Edge run under fills	Ścieg po krawędzi pod wypełnieniami
+	New to digitizing? Read the basics	Dopiero zaczynasz digitalizację? Przeczytaj podstawy
+	Density Map	Mapa gęstości
+	Density map	Mapa gęstości
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Koloruj projekt według grubości warstwy nici: niebieski to jedna warstwa, czerwony to gęstość oznaczana przez Sprawdź projekt
+	Calibrate Life Size…	Kalibruj rzeczywisty rozmiar…
+	Calibrate Life Size	Kalibruj rzeczywisty rozmiar
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Przyłóż do ekranu linijkę lub kartę bankową i zmieniaj rozmiar, aż oznaczenia się zgodzą. Wtedy Rzeczywisty rozmiar pokazuje projekty w naturalnej wielkości.
+	Bank card	Karta bankowa
+	Screen points per inch	Punkty ekranu na cal
+	Use This Size	Użyj tego rozmiaru
+	Screen Points per Inch at Life Size	Punkty ekranu na cal w rzeczywistym rozmiarze
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` to liczba od 40 do 400
+	Experience	Doświadczenie
+	New to Embroidery	Początkujący w hafcie
+	Digitizer	Digitalizator
+	Embroidery Business	Firma hafciarska
+	Everything	Wszystko
+	Showing the basics.	Pokazywane są podstawy.
+	Show everything	Pokaż wszystko
+	New to embroidery	Dopiero zaczynam haftować
+	I digitize designs	Digitalizuję projekty
+	I run an embroidery business	Prowadzę firmę hafciarską
+	The basic tools and everyday sections, nothing more	Podstawowe narzędzia i codzienne sekcje, nic więcej
+	Every digitizing tool, rulers and the control bar	Wszystkie narzędzia digitalizacji, linijki i pasek sterowania
+	Everything, with job orders and batch output	Wszystko, wraz ze zleceniami i wyjściem wsadowym
+	How do you work?	Jak pracujesz?
+@msg	`level` is beginner, digitizer, business or all	`level` to beginner, digitizer, business lub all
+	Echo Quilting	Pikowanie echem
+	Background Quilting	Pikowanie tła
+	Remove Blend	Usuń przejście
+	Blend layers	Warstwy przejścia
+	My Machine…	Moja hafciarka…
+	Save for My Machine	Zapisz dla mojej hafciarki
+	Which embroidery machine do you have?	Jaką masz hafciarkę?
+	Measure in	Jednostki miary
+	Save designs to	Zapisuj projekty do
+	No folder chosen yet	Nie wybrano jeszcze folderu
+	Plug in the USB stick you take to your machine, then choose it here.	Podłącz pamięć USB, którą przenosisz do hafciarki, a następnie wybierz ją tutaj.
+	Husqvarna Viking (other models)	Husqvarna Viking (inne modele)
+	Brother or Baby Lock	Brother lub Baby Lock
+	Janome or Elna	Janome lub Elna
+	Another machine (DST)	Inna hafciarka (DST)
+	My machine:	Moja hafciarka:
+	Tell us your machine to see its hoops and save in its format.	Wskaż swoją hafciarkę, aby zobaczyć jej tamborki i zapisywać w jej formacie.
+	Choose My Machine	Wybierz moją hafciarkę
+	Saved for your machine:	Zapisano dla Twojej hafciarki:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Kształt z tkaniny: hafciarka zatrzymuje się, abyś położył tkaninę, a potem ją przyszywa
+	A heart, a star, a flower and more, ready to sew	Serce, gwiazda, kwiat i więcej, gotowe do szycia
+	A name or a few words, ready to sew	Imię lub kilka słów, gotowe do szycia
+	A photo or drawing to turn into stitches	Zdjęcie lub rysunek do zamiany na ściegi
+	A picture	Obraz
+	Add Appliqué	Dodaj aplikację
+	Add Appliqué…	Dodaj aplikację…
+	Add Words	Dodaj słowa
+	Add Words…	Dodaj słowa…
+	Add a Picture…	Dodaj obraz…
+	Add a Shape	Dodaj kształt
+	Add a Shape…	Dodaj kształt…
+	Bigger	Większy
+	Choose a shape	Wybierz kształt
+	Click a part of the design to change how it sews.	Kliknij część projektu, aby zmienić sposób jej szycia.
+	Click a part of the design to choose it, drag it to move it	Kliknij część projektu, aby ją wybrać, przeciągnij, aby ją przesunąć
+	Crown	Korona
+	Filled	Wypełniony
+	How tall	Wysokość
+	Just the outline	Tylko kontur
+	Not sewn	Nieszyte
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Nie ma jeszcze nic do szycia. Dodaj słowa, kształt lub obraz przyciskami po lewej.
+	Paw	Łapa
+	See the design sew on screen, stitch by stitch	Zobacz na ekranie, jak projekt się szyje, ścieg po ściegu
+	Sew it as	Szyj jako
+	Smaller	Mniejszy
+	Smooth edge (satin)	Gładka krawędź (satyna)
+	Start a design from the Home screen.	Zacznij projekt na stronie startowej.
+	Take back the last change	Cofnij ostatnią zmianę
+	The chosen part	Wybrana część
+	The chosen parts	Wybrane części
+	The design is bigger than the hoop: make it smaller before you sew.	Projekt jest większy niż tamborek: zmniejsz go przed szyciem.
+	Thread colours	Kolory nici
+	Turn Into Stitches	Zamień na ściegi
+	Turn it into stitches in your thread colours.	Zamień na ściegi w Twoich kolorach nici.
+	Watch It Sew	Zobacz, jak się szyje
+	What should it say?	Co ma być napisane?
+	Write the design for your machine to its USB stick or folder	Zapisz projekt dla swojej hafciarki na jej pamięć USB lub do folderu
+	Your design	Twój projekt
+	Show Everything	Pokaż wszystko
+@msg	the design has no page	projekt nie ma strony
+@msg	open or start a design first	najpierw otwórz lub rozpocznij projekt
+	Set My Machine	Ustaw moją hafciarkę
+	Make a Design	Utwórz projekt
+	Make a Design…	Utwórz projekt…
+	Make a Design, Step by Step	Utwórz projekt krok po kroku
+	Step by step: words, a shape, appliqué, a picture or a sample	Krok po kroku: słowa, kształt, aplikacja, obraz lub przykład
+	What would you like to make?	Co chcesz zrobić?
+	A name or some words	Imię lub kilka słów
+	For towels, bags, pillows and gifts	Na ręczniki, torby, poduszki i prezenty
+	A shape	Kształt
+	A heart, a star, a flower and more	Serce, gwiazda, kwiat i więcej
+	An appliqué	Aplikacja
+	A shape cut from fabric and sewn down	Kształt wycięty z tkaniny i przyszyty
+	A photo or a drawing turned into stitches	Zdjęcie lub rysunek zamieniony na ściegi
+	A sample to try	Przykład do wypróbowania
+	A finished design to sew and learn from	Gotowy projekt do wyszycia i nauki
+	Which hoop will you use?	Którego tamborka użyjesz?
+	Tell us your machine to see its hoops.	Wskaż swoją hafciarkę, aby zobaczyć jej tamborki.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Wybierz tamborek, w który włożysz tkaninę. Projekt zostanie do niego dopasowany.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Taką wysokość mają wielkie litery. Na ręcznik pasuje 20–30 mm, na koszulę 10–15 mm.
+	Make It	Utwórz
+	Which shape of fabric?	Jaki kształt tkaniny?
+	Which shape?	Jaki kształt?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Hafciarka wyszywa miejsce na tkaninę i się zatrzymuje; kładziesz tkaninę, hafciarka ją przyszywa i znów się zatrzymuje, abyś ją przyciął; potem obszywa krawędź.
+	Choose a picture	Wybierz obraz
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Najlepiej sprawdzają się proste obrazy z kilkoma płaskimi kolorami i wyraźnymi krawędziami: rysunek kreskówkowy, logo, clipart.
+	Choose a Picture…	Wybierz obraz…
+	Which sample?	Który przykład?
+	Your thread colours	Twoje kolory nici
+	These are sewn in this order. Click a colour to match a thread you have.	Są szyte w tej kolejności. Kliknij kolor, aby dopasować go do nici, którą masz.
+	Watch it sew	Zobacz, jak się szyje
+	See the needle go stitch by stitch, in the order your machine will sew it.	Zobacz igłę ścieg po ściegu, w kolejności, w jakiej uszyje to Twoja hafciarka.
+	Save it	Zapisz
+	Save for My Machine writes the file your machine sews, to its USB stick.	Zapisz dla mojej hafciarki zapisuje plik, który szyje Twoja hafciarka, na jej pamięć USB.
+	Save Design keeps a copy you can open and change later.	Zapisz projekt zachowuje kopię, którą możesz później otworzyć i zmienić.
+	Save Design…	Zapisz projekt…
+	Put back what Undo took back	Przywróć to, co cofnięto
+	Start Over…	Zacznij od nowa…
+	Clear the design and begin again	Wyczyść projekt i zacznij od nowa
+	Text size	Rozmiar tekstu
+	Saved for you automatically in My Designs:	Automatycznie zapisano w Moich projektach:
+	Start Over	Zacznij od nowa
+	Clear everything in this design and begin again?	Wyczyścić wszystko w tym projekcie i zacząć od nowa?
+	You can still get it back with Undo.	Nadal możesz to przywrócić poleceniem Cofnij.
+	Keep It	Zachowaj
+	Keep Design Safe	Zabezpiecz projekt
+	In-the-Hoop Projects	Projekty w tamborku
+	Make In-the-Hoop Project	Utwórz projekt w tamborku
+	Steps	Kroki
+	The machine also stops where you lay or trim fabric.	Hafciarka zatrzymuje się też tam, gdzie kładziesz lub przycinasz tkaninę.
+	Print the Steps…	Drukuj kroki…
+	Change the Size?	Zmienić rozmiar?
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	Ten projekt zatrzymuje się na tkaninę przyciętą na wymiar. Po powiększeniu lub zmniejszeniu elementy mogą już nie pasować.
+	Keep the Size	Zachowaj rozmiar
+	Change It Anyway	Zmień mimo to
+	An in-the-hoop project	Projekt w tamborku
+	A little pillow front, a mug rug, a coaster or an ornament	Przód małej poduszki, podkładka pod kubek, podstawka lub ozdoba
+	Which project?	Który projekt?
+	Sewn in a 5×7 hoop, borders and back sewn on after	Szyte w tamborku 5×7, z obszyciem i tyłem doszytymi później
+	Finished in the hoop: batting, backing and a satin edge	Wykończone w tamborku: ocieplina, spód i krawędź satynowa
+	Words (you can leave this empty)	Słowa (możesz zostawić puste)
+	Little pillow front, 8″ square	Przód małej poduszki, kwadrat 8″
+	Little pillow front, 9½ × 5½″	Przód małej poduszki, 9½ × 5½″
+	Mug rug, 6½ × 4½″	Podkładka pod kubek, 6½ × 4½″
+	Coaster, 3¾″ square	Podstawka, kwadrat 3¾″
+	Round ornament, 3½″	Okrągła ozdoba, 3½″
+	Quilting for a tile	Pikowanie dla kafla
+	Background quilting the size of a quilting tile, block by block	Pikowanie tła o rozmiarze kafla pikowania, blok po bloku
+	What size is the tile?	Jaki rozmiar ma kafel?
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	Odczytaj rozmiar w oknie kafla. Blok jest pikowany od krawędzi do krawędzi, w rozmiarze kafla.
+	Lines apart	Odstęp linii
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	Zachowaj ten sam wzór i odstępy dla każdego bloku kołdry, aby bloki płynnie przechodziły jeden w drugi.
+	Make Every Size…	Utwórz wszystkie rozmiary…
+	One file for each usual tile size, in a folder or on the USB stick	Jeden plik dla każdego typowego rozmiaru kafla, w folderze lub na pamięci USB
+	Quilt blocks saved:	Zapisano bloki pikowania:
+	Stipple	Punktowanie (stipple)
+	Squares spiral	Spirala z kwadratów
+	Quilt Block Patterns	Wzory bloków pikowania
+	Quilt Block	Blok pikowania
+	Quilt Block Set	Zestaw bloków pikowania
+	Loops	Pętelki
+	Pebbles	Kamyki
+	A block	Blok
+	A border strip	Pas obramowania
+	A corner	Narożnik
+	In the middle (you can leave this empty)	Na środku (możesz zostawić puste)
+	Words	Słowa
+	No shape	Bez kształtu
+	Sew the shape as appliqué	Szyj kształt jako aplikację
+	Add a ribbon band across it	Dodaj pasek wstążki w poprzek
+	Add a ribbon loop to hang it	Dodaj pętelkę ze wstążki do zawieszenia
+	Clear vinyl on top (wipe-clean)	Przezroczysty winyl na wierzchu (zmywalny)
+	Mark where a button goes	Zaznacz miejsce na guzik
+	Print the Cutting Templates…	Drukuj szablony do wycinania…
+	In-the-Hoop Cutting Templates	Szablony do wycinania dla projektów w tamborku
+	Downloaded for your machine:	Pobrano dla Twojej hafciarki:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	Zapisz dla mojej hafciarki pobiera projekt: skopiuj go na pamięć USB, którą przenosisz do hafciarki.
+	Downloaded:	Pobrano:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	Zapisz dla mojej hafciarki pobiera plik, który szyje Twoja hafciarka: skopiuj go na jej pamięć USB.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Przejście z gradientu
+	Sew the gradient's colours blended the way it runs	Szyj kolory gradientu z przejściem w kierunku jego biegu
+	Cutwork	Haft ażurowy
+	Tartan Fill	Wypełnienie w kratę szkocką
+	Test Sew-Out	Próbne wyszycie
+	Test Sew-Outs	Próbne wyszycia
+	Cross Stitch	Haft krzyżykowy
+	Cross Stitch Tool	Narzędzie Haft krzyżykowy
+	Cross Stitch from Image…	Haft krzyżykowy z obrazu…
+	Cross-Stitch Pattern Info	Informacje o wzorze haftu krzyżykowego
+	Cross-Stitch Pattern Settings	Ustawienia wzoru haftu krzyżykowego
+	New Cross-Stitch Pattern…	Nowy wzór haftu krzyżykowego…
+	Paint Cross Stitches	Maluj krzyżyki
+	Brush (squares)	Pędzel (kratki)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	Kliknij lub przeciągnij po siatce haftu krzyżykowego, aby wypełnić jej kratki; przytrzymaj Alt, aby wymazać
+	Erase	Wymaż
+	Pattern colours	Kolory wzoru
+	Add My Hoop	Dodaj mój tamborek
+	Brother or Baby Lock multi-needle	Brother lub Baby Lock wieloigłowa
+	Commercial multi-needle (DST)	Przemysłowa wieloigłowa (DST)
+	Give the hoop a name	Nadaj tamborkowi nazwę
+	Hoop not listed? Add its sewing field here.	Brak tamborka na liście? Dodaj tutaj jego pole szycia.
+	My hoop	Mój tamborek
+	My own hoops	Moje własne tamborki
+	Square corners	Kwadratowe narożniki
+	Type the hoop's width and height as numbers	Wpisz szerokość i wysokość tamborka jako liczby
+	in	in
+	Chenille	Szenil
+	Chenille Stitch	Ścieg szenilowy
+	Chenille Stops	Zatrzymania szenilu
+	Compound Chenille…	Złożony szenil…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	Wypełnienie mchowe z obramowaniem łańcuszkowym szytym przed nim i po nim, w grupie w miejscu kształtu
+	Chain	Łańcuszek
+	Chenille stops	Zatrzymania szenilu
+	Lockstitch	Ścieg stębnowy
+	Moss	Mech
+	Moss pattern	Wzór mchu
+	Needle height	Wysokość igły
+	Start	Początek
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	mech szyje wypełnienia i ściegi proste: najpierw nadaj satynie ścieg wypełnienia lub prosty
+	Get Embroidery Fonts…	Pobierz czcionki hafciarskie…
+	About the library	O bibliotece
+	Download Again	Pobierz ponownie
+	Download fonts from an embroidery font library, ready for lettering	Pobierz czcionki z biblioteki czcionek hafciarskich, gotowe do napisów
+	Downloading	Pobieranie
+	Each font comes with its own licence, in its folder.	Każda czcionka ma własną licencję w swoim folderze.
+	Fonts are kept in	Czcionki są przechowywane w
+	Get Embroidery Fonts	Pobierz czcionki hafciarskie
+	Listing the fonts…	Pobieranie listy czcionek…
+	Try Again	Spróbuj ponownie
+	fonts	czcionki
+	is ready for lettering	jest gotowa do napisów
+@msg	a file of the font has an unsafe name: {path}	plik czcionki ma niebezpieczną nazwę: {path}
+@msg	can't reach the font library: {e}	nie można połączyć z biblioteką czcionek: {e}
+@msg	downloading embroidery fonts works in the desktop app	pobieranie czcionek hafciarskich działa w aplikacji desktopowej
+@msg	the font library answered {status} for {path}	biblioteka czcionek odpowiedziała {status} dla {path}
+@msg	the font library answered {status}: try again later	biblioteka czcionek odpowiedziała {status}: spróbuj ponownie później
+@msg	{_1} isn't published yet	{_1} nie jest jeszcze opublikowana
+	Border or Corner…	Obramowanie lub narożnik…
+	Check Continuous Line	Sprawdź linię ciągłą
+	Continuous Fill	Wypełnienie ciągłe
+	Continuous Fill…	Wypełnienie ciągłe…
+	Crib (36 × 52″)	Łóżeczko (36 × 52″)
+	DXF Lines (.dxf)…	Linie DXF (.dxf)…
+	Echo	Echo
+	Edge-to-Edge Rows	Rzędy od krawędzi do krawędzi
+	Edge-to-Edge Rows…	Rzędy od krawędzi do krawędzi…
+	Export Quilting Lines	Eksportuj linie pikowania
+	Export Quilting Lines…	Eksportuj linie pikowania…
+	HP-GL Plot (.plt)…	Ploter HP-GL (.plt)…
+	Join into One Line	Połącz w jedną linię
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Pikowanie maszyną longarm
+	Meander	Meander
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Linie SVG (.svg)…
+	Start and End on the Edges	Zaczynaj i kończ na krawędziach
+	Stitch in the Ditch	Pikowanie w szwie
+	Throw (50 × 65″)	Narzuta (50 × 65″)
+	Twin (70 × 90″)	Pojedyncze (70 × 90″)
+	A border of the selected line	Obramowanie z zaznaczonej linii
+	Border depth	Głębokość obramowania
+	Border length	Długość obramowania
+	Corner leg (0: no corner)	Ramię narożnika (0: bez narożnika)
+	Edge-to-edge rows of the selected line	Rzędy od krawędzi do krawędzi z zaznaczonej linii
+	Make Border	Utwórz obramowanie
+	Make Rows	Utwórz rzędy
+	Nest the rows	Zagnieźdź rzędy
+	One continuous line, ready for a longarm	Jedna ciągła linia, gotowa dla maszyny longarm
+	Quilt height	Wysokość kołdry
+	Quilt width	Szerokość kołdry
+	Row spacing (0: the line's height)	Odstęp rzędów (0: wysokość linii)
+	joins needed: Join into One Line makes them	wymagane połączenia: utworzy je Połącz w jedną linię
+	longest	najdłuższe
+@msg	nothing to add	nic do dodania
+	Download All	Pobierz wszystkie
+	Every font not downloaded yet, one after another	Każda jeszcze niepobrana czcionka, jedna po drugiej
+	Fonts downloaded:	Pobrane czcionki:
+	failed:	niepowodzenia:
+	fonts downloaded, ready for lettering	czcionki pobrane, gotowe do napisów
+	Compare Designs	Porównaj projekty
+	Compare Designs…	Porównaj projekty…
+	Average stitch (mm)	Średni ścieg (mm)
+	Bobbin thread (m)	Nić dolna (m)
+	Choose a machine file or the design open now	Wybierz plik hafciarki lub aktualnie otwarty projekt
+	Choose both designs to compare them	Wybierz oba projekty, aby je porównać
+	Colour changes	Zmiany kolorów
+	Differences of 10% or more are highlighted. The real test is sewing both.	Różnice wynoszące 10% lub więcej są wyróżnione. Prawdziwym testem jest wyszycie obu.
+	First design	Pierwszy projekt
+	Height (mm)	Wysokość (mm)
+	Jumps	Przeskoki
+	Longest stitch (mm)	Najdłuższy ścieg (mm)
+	Open File…	Otwórz plik…
+	Second	Drugi
+	Second design	Drugi projekt
+	Stitches over 7 mm	Ściegi powyżej 7 mm
+	Stitches under 1 mm	Ściegi poniżej 1 mm
+	Stops	Zatrzymania
+	This Design	Ten projekt
+	This design	Ten projekt
+	Top thread (m)	Nić górna (m)
+	Width (mm)	Szerokość (mm)
+	same	bez zmian
+	X:	X:
+	Y:	Y:
+	Direction	Kierunek
+	Along the selected line	Wzdłuż zaznaczonej linii
+	Add to Design	Dodaj do projektu
+	Colors and Order	Kolory i kolejność
+	Paint	Malowanie
+	Print and Export	Drukowanie i eksport
+	Special Machines	Specjalne hafciarki
+	Split Lines	Linie podziału
+	Stitch Direction	Kierunek ściegu
+	Use Line as Direction	Użyj linii jako kierunku
+	Arc Up	Łuk w górę
+	Arc Down	Łuk w dół
+	To follow a line of your own, draw it first, select it, then Add Words.	Aby tekst podążał za własną linią, najpierw ją narysuj, zaznacz, a potem użyj Dodaj słowa.
+	Ask About Embroidery…	Zapytaj o haft…
+	Ask About Embroidery	Zapytaj o haft
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Zapytaj o cokolwiek dotyczącego haftu maszynowego lub StitchFoundry: jakiego stabilizatora użyć, dlaczego nić się zrywa, jak sprawić, by litery szyły się czyściej, gdzie jest dana funkcja. Claude może też zmienić Twój projekt, gdy o to poprosisz, po wyrażeniu przez Ciebie zgody.
+	Thinking…	Myślenie…
+	Type your question, then press Enter	Wpisz pytanie i naciśnij Enter
+	Ask	Zapytaj
+	New Conversation	Nowa rozmowa
+	Include my design	Dołącz mój projekt
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Odpowiedzi pochodzą od Claude i używają Twojego własnego klucza API Anthropic, a opłaty obciążają Twoje konto Anthropic. Mogą być błędne: przed ważną pracą wykonaj próbne wyszycie.
+	Change key	Zmień klucz
+@msg	Type a question first.	Najpierw wpisz pytanie.
+@msg	The question is too long: keep it under 2,000 characters.	Pytanie jest za długie: zmieść się w 2000 znaków.
+@msg	The AI declined to answer this: ask another way.	AI odmówiła odpowiedzi na to: zapytaj inaczej.
+@msg	The reply had no answer: try again, or ask something narrower.	Odpowiedź nie zawierała treści: spróbuj ponownie lub zapytaj o coś węższego.
+@msg	Ask About Embroidery needs the desktop app for now	Zapytaj o haft wymaga na razie aplikacji desktopowej
+@msg	already asking: wait for the answer	pytanie już trwa: poczekaj na odpowiedź
+	Claude wants to change your design:	Claude chce zmienić Twój projekt:
+	Allow	Zezwól
+	Don't Allow	Nie zezwalaj
+	Edit › Undo takes each change back.	Edycja › Cofnij wycofuje każdą zmianę.
+	Changed:	Zmieniono:
+	Couldn't change:	Nie udało się zmienić:
+	Not changed:	Bez zmian:
+@msg	This conversation is long: start a New Conversation.	Ta rozmowa jest długa: rozpocznij Nową rozmowę.
+@msg	Claude took too many steps: ask again, more simply.	Claude wykonał zbyt wiele kroków: zapytaj ponownie, prościej.

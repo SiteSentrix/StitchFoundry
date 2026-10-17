@@ -99,7 +99,7 @@ git remote add upstream https://github.com/storytold/vectorcraft   # once
 git fetch upstream main && git merge upstream/main
 ```
 
-- The 11 translation catalogs conflict whenever both sides add rows. Merge them row by row
+- The translation catalogs conflict whenever both sides add rows. Merge them row by row
   (context + source): keep both sides' rows, our renames (StitchFoundry) and our removals
   (Discord, the old product strings), and carry upstream's translations of a renamed string over
   under its new name. A language upstream makes complete (`complete_menus`, `COMPLETE_MESSAGES`)
@@ -227,7 +227,9 @@ Working and tested (see [`embroidery.md`](embroidery.md) for behaviour):
   (generic, PEC, JEF), design statistics (stitches, trims, colours, time, thread).
 - TrueView shaded-thread canvas, stitch lines, connectors, needle points, fabric tint,
   stitch player, Stitch Sequence panel (grouped by thread, reorder, sort by colour).
-- Embroidery menu, toolbar section, Embroidery panel; translations in 11 languages;
+- Embroidery menu, toolbar section, Embroidery panel; translations in 11 languages (19 with
+  Bulgarian, Greek, Finnish, Hungarian, Korean, Polish, Swedish and Vietnamese, 2026-10-17, drafted
+  with AI assistance and awaiting native review; Brazilian Portuguese has its menus only);
   pathfinder keeps stitch settings (holes via Minus Front).
 - Tests: `sf-core` 62, `sf-formats` 43, engine embroidery 10, tools 2, plus the workspace's
   5,173 overall.

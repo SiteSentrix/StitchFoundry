@@ -4972,3 +4972,1278 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	no symbol named `{n}`	няма символ с име `{n}`
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+	Mode	Режим
+	Blur Mode	Режим на размазване
+	Edge Only	Само ръбове
+	Overlay Edge	Наслагване на ръбове
+	Path Length	Дължина на пътя
+@msg	`{key}` must be an array of these names: {_1}	`{key}` трябва да бъде масив от тези имена: {_1}
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	слоевете на файла не бяха прочетени ({_1}): той се зарежда като страницата си, в един слой
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	слоевете на файла не бяха прочетени от данните му за редактиране ({_1}): те идват от PDF частта му
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` трябва да бъде grayscale, rgb, hsb, cmyk или websafe
+@msg	the Color Picker is not open	палитрата с цвят не е отворена
+@msg	the screen color sampler is already open	инструментът за вземане на цвят от екрана вече е отворен
+@msg	this system has no screen color sampler	тази система няма инструмент за вземане на цвят от екрана
+@msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	Документи на VectorCraft: един заключен обект, който се обновява при промяна на файла.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Отварянето му пропусна това, което StitchFoundry все още не може да прочете ({what}): замяната му го губи завинаги. Запазете под друго име, за да го запазите.
+	Report a Bug…	Докладване на грешка…
+	Add Inclination Line	Добавяне на линия на наклона
+	After the selection	След селекцията
+	Appliqué	Апликация
+	Apply Fabric	Прилагане на плат
+	Artwork	Илюстрация
+	Auto Direction	Автоматична посока
+	Auto Stitch Direction	Автоматична посока на бодовете
+	Auto spacing	Автоматично разстояние
+	Auto split	Автоматично разделяне
+	Auto-Digitize Image	Автоматично дигитализиране на изображение
+	Automatic underlay	Автоматична подложка
+	Back to the start	Обратно към началото
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	Бийн бод
+	Before the selection	Преди селекцията
+	Blanket	Обшивен бод
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Щрих с четка
+	Calligraphy	Калиграфия
+	Cell size	Размер на клетката
+	Centre run	Прав бод по средата
+	Clear Inclination Lines	Изчистване на линиите на наклона
+	Clear Lines	Изчистване на линиите
+	Connectors	Съединители
+	Constant	Постоянна
+	Contour Fill	Контурно запълване
+	Convert Artwork to Embroidery	Преобразуване на илюстрацията в бродерия
+	Cover stitch	Покриващ бод
+	Cover width	Ширина на покритието
+	Cross Fill	Кръстосано запълване
+	Delete Inclination Line	Изтриване на линия на наклона
+	Densities (mm)	Плътности (мм)
+	Density	Плътност
+	Design	Дизайн
+	Design Information	Информация за дизайна
+	Digitizing Widget	Джаджа за дигитализиране
+	Dimmed	Затъмнено
+	Direction: automatic	Посока: автоматична
+	Direction: fixed angle	Посока: фиксиран ъгъл
+	Direction: one inclination line	Посока: една линия на наклона
+	Direction: turning along	Посока: завиваща
+	Drag across the shape to add a line; drag a bead to move it	Плъзнете през формата, за да добавите линия; плъзнете мънисто, за да го преместите
+	Each anchor point is a needle penetration.	Всяка опорна точка е убождане на иглата.
+	Edge run	Прав бод по ръба
+	Edge run underlay	Подложка по ръба
+	Edit Lines	Редактиране на линиите
+	Embroidery	Бродерия
+	Embroidery Brush Tool	Инструмент „Четка за бродерия“
+	Embroidery Settings	Настройки на бродерията
+	Export Machine File	Експортиране на машинен файл
+	Export Machine File…	Експортиране на машинен файл…
+	Fabric	Плат
+	Fabric color	Цвят на плата
+	Fill style	Стил на запълването
+	Fits the hoop	Побира се в гергефа
+	Give objects a stitch type in the Embroidery panel.	Задайте вид бод на обектите в панела „Бродерия“.
+	Gradient to	Градиент към
+	Hide Digitizing Widget	Скриване на джаджата за дигитализиране
+	Hoop	Гергеф
+	Inclination Tool	Инструмент „Наклон“
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	По-голям от гергефа
+	Lengths (mm)	Дължини (мм)
+	Let sewing start and stop at the closest points again	Шиенето отново да започва и спира в най-близките точки
+	Machine Embroidery File	Файл за бродираща машина
+	Manual Stitches	Ръчни бодове
+	Meander Fill	Меандрово запълване
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Мотив
+	Move Inclination Line	Преместване на линия на наклона
+	Needle points	Точки на иглата
+	New strokes	Нови щрихи
+	No Stitches	Без бодове
+	No hoop	Без гергеф
+	No stitches yet.	Все още няма бодове.
+	Not set	Не е зададено
+	Nothing stitched yet	Все още нищо не е бродирано
+	Object color	Цвят на обекта
+	Open a document to see its stitch sequence.	Отворете документ, за да видите последователността на бодовете.
+	Open or create a document to digitize embroidery.	Отворете или създайте документ, за да дигитализирате бродерия.
+	Path spacing	Разстояние между пътищата
+	Pause	Пауза
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Изберете четка, ширина, плътност и форма от диска, след което рисувайте върху платното
+	Place editable inclination lines (or pick the angle) automatically	Автоматично поставяне на редактируеми линии на наклона (или избор на ъгъла)
+	Placement line and stop	Линия за позициониране и спиране
+	Play the stitches	Възпроизвеждане на бодовете
+	Pull compensation	Компенсация на свиването
+	Radial Fill	Радиално запълване
+	Randomness	Случайност
+	Remove background	Премахване на фона
+	Reset Start and Stop	Нулиране на начало и край
+	Row offset	Отместване на редовете
+	Run	Прав бод
+	Run style	Стил на правия бод
+	Satin	Сатен
+	Satin Fill	Сатенено запълване
+	Select a path, shape or compound path to give it a stitch type.	Изберете път, форма или съставен път, за да му зададете вид бод.
+	Set Inclination Lines	Задаване на линии на наклона
+	Set Start and Stop	Задаване на начало и край
+	Set Thread	Задаване на конец
+	Sew earlier	Шиене по-рано
+	Sew first	Шиене първо
+	Sew last	Шиене последно
+	Sew later	Шиене по-късно
+	Sewing time	Време за шиене
+	Sewn last	Шие се последно
+	Short stitches on curves	Къси бодове по кривите
+	Show every stitch	Показване на всеки бод
+	Show stitches	Показване на бодовете
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Единичен
+	Sort by Thread Color	Сортиране по цвят на конеца
+	Spiral Fill	Спирално запълване
+	Stitch Parameters	Параметри на бода
+	Stitch Plan	План на бодовете
+	Stitch Sequence	Последователност на бодовете
+	Stitch Type	Вид бод
+	Stitch length	Дължина на бода
+	Stitch type	Вид бод
+	Stitches	Бодове
+	Stop to trim fabric	Спиране за изрязване на плата
+	Tack-down	Прихващане
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Стеснен
+	Tatami Fill	Запълване татами
+	Tatami underlay	Подложка татами
+	Thread	Конец
+	Thread colors	Цветове на конците
+	Trim after	Отрязване след
+	Trims	Отрязвания
+	Triple	Троен
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Превръщане на изображението в бодове: тесните части стават сатен, останалото – запълване татами.
+	Wave	Вълна
+	Widget values	Стойности на джаджата
+	Width profile	Профил на ширината
+	Widths (mm)	Ширини (мм)
+	Zigzag	Зигзаг
+	inclination lines	линии на наклона
+	Brush	Четка
+	Bean	Бийн
+	Steil	Steil
+	Heart	Сърце
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Автоматичното дигитализиране не намери форми за бродиране: намалете „Шум“ или увеличете „Цветове“
+@msg	Auto-Digitize: the image traced to nothing	Автоматично дигитализиране: изображението не даде резултат при трасирането
+@msg	can't open `{title}`: the file has no stitches	`{title}` не може да се отвори: файлът няма бодове
+@msg	can't open `{title}`: {e}	`{title}` не може да се отвори: {e}
+@msg	{_1} export failed: {e}	Експортирането в {_1} не успя: {e}
+	Stitch Lines	Линии на бодовете
+	Tatami	Татами
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	От Stitchwright, на основата на VectorCraft от екипа на ArtCraft. MIT OR Apache-2.0. Шрифтове: Source Sans 3, Inter, JetBrains Mono (OFL). Икони: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Версия {version} — дигитализиране на машинна бродерия с отворен код, изцяло на Rust.
+	Machine embroidery digitizing — fast, open, scriptable.	Дигитализиране на машинна бродерия — бързо, отворено, с възможност за скриптове.
+	Split Here	Разделяне тук
+	Split the object in two at the picked stitch	Разделяне на обекта на две при избрания бод
+	Split Object	Разделяне на обекта
+	Check settings	Проверка на настройките
+	Dense from (layers)	Плътно от (слоеве)
+	Give every stitched object the chart's closest thread	Задаване на всеки бродиран обект на най-близкия конец от картата
+	Hidden (not sewn)	Скрит (не се шие)
+	Inclination lines	Линии на наклона
+	Long stitches from	Дълги бодове от
+	Match Threads to Chart	Съпоставяне на конците с картата
+	Omit last stitch	Пропускане на последния бод
+	Small lettering under	Малки надписи под
+	Start and stop	Начало и край
+	Thread chart	Карта на конците
+	Tie style	Стил на закрепване
+	Tiny objects under	Малки обекти под
+	Travel by	Преход чрез
+	Double	Двоен
+machine	Trim	Отрязване
+@plural	{n} stitch|{n} stitches	{n} бод|{n} бода
+@plural	{n} trim|{n} trims	{n} отрязване|{n} отрязвания
+machine	Stop	Спиране
+	Column A/B Tool	Инструмент „Колона A/B“
+	Column A/B	Колона A/B
+	Tatami stitches	Бодове татами
+	Make Current	Задаване като текущи
+	New objects of this stitch type take these properties	Новите обекти от този вид бод получават тези свойства
+	Properties for New Objects	Свойства за нови обекти
+	Objects you give a stitch type take these properties.	Обектите, на които зададете вид бод, получават тези свойства.
+	Fabric settings	Настройки на плата
+	Satin density	Плътност на сатена
+	Fill density	Плътност на запълването
+	Fill stitch length	Дължина на бода при запълване
+	Underlay spacing	Разстояние на подложката
+	Fill underlay	Подложка на запълването
+	Topping	Покривен слой
+	Save as New Fabric	Запазване като нов плат
+	Seconds per trim	Секунди за отрязване
+	Seconds per color change	Секунди за смяна на цвета
+	Save to Machine	Запазване в машината
+	Keep these settings in the machine's profile, for new designs	Запазване на тези настройки в профила на машината, за нови дизайни
+	Reset Machine	Нулиране на машината
+	Put the machine's profile back to how it ships, and use it	Връщане на профила на машината към фабричния и използването му
+	Delete Machine	Изтриване на машина
+	Save as New Machine	Запазване като нова машина
+	A machine profile of your own with these settings	Собствен профил на машина с тези настройки
+	My Machine	Моята машина
+	A copy of this fabric to change	Копие на този плат за промяна
+	Delete Fabric	Изтриване на плат
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Все още няма стилове. Изберете бродиран обект и създайте стил, за да използвате отново свойствата на бодовете му.
+	New Embroidery Style	Нов стил на бродерия
+	Delete Embroidery Style	Изтриване на стил на бродерия
+	Duplicate Embroidery Style	Дублиране на стил на бродерия
+	Redefine Embroidery Style	Предефиниране на стил на бродерия
+	Break Link to Embroidery Style	Прекъсване на връзката към стила на бродерия
+	Rename Embroidery Style…	Преименуване на стил на бродерия…
+	Embroidery Styles	Стилове на бродерия
+	Make Properties Current	Задаване на свойствата като текущи
+	Current Properties	Текущи свойства
+	New Object Properties	Свойства на нови обекти
+	Reset Current Properties	Нулиране на текущите свойства
+	Apply Embroidery Style	Прилагане на стил на бродерия
+	Rename Embroidery Style	Преименуване на стил на бродерия
+	Save Fabric	Запазване на плата
+	Machine Profiles	Профили на машини
+	Save Machine Profile	Запазване на профил на машина
+	Delete Machine Profile	Изтриване на профил на машина
+	Auto Sequence	Автоматична последователност
+	Branch	Разклонение
+	Break Apart	Разделяне
+	Sew the objects separately again	Отделно шиене на обектите отново
+	These objects are sewn as one path (a branch).	Тези обекти се шият като един път (разклонение).
+	Clear Machine Function	Изчистване на машинната функция
+	Insert Machine Function	Вмъкване на машинна функция
+	Object Stitches	Бодове на обекта
+@msg	`after` is −1 to {_1}	`after` е от −1 до {_1}
+@msg	`{what}` is [x, y]	`{what}` е [x, y]
+@msg	`{what}` is [x, y] (numbers)	`{what}` е [x, y] (числа)
+@msg	each op needs `op`: move, delete or insert	всяка операция изисква `op`: move, delete или insert
+@msg	indices are record numbers (0, 1, 2…)	индексите са номера на записи (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	липсва `after` (−1 вмъква първи)
+@msg	missing `indices`	липсва `indices`
+@msg	no record {i}: the object has {len}	няма запис {i}: обектът има {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	неизвестна команда `{c}`: stitch, jump, trim или stop
+@msg	unknown op `{other}`: move, delete or insert	неизвестна операция `{other}`: move, delete или insert
+	Stitch Edit Tool	Инструмент „Редактиране на бодове“
+	Stitch List	Списък с бодове
+	Stop after	Спиране след
+	Stitches edited by hand: the shape no longer changes them.	Бодовете са редактирани ръчно: формата вече не ги променя.
+	Edit Stitches	Редактиране на бодовете
+	Pick, move, add and delete single stitches	Избор, преместване, добавяне и изтриване на отделни бодове
+	Regenerate Stitches	Повторно генериране на бодовете
+	Drop the hand edits and stitch the shape again	Отхвърляне на ръчните редакции и повторно бродиране на формата
+	Freeze Stitches	Замразяване на бодовете
+	Function	Функция
+	X (mm)	X (мм)
+	Y (mm)	Y (мм)
+	Stitch	Бод
+	Jump	Скок
+	Color change	Смяна на цвета
+	End	Край
+	#	#
+	Open a document to see its stitches.	Отворете документ, за да видите бодовете му.
+	Machine	Машина
+	Machine settings	Настройки на машината
+	Longest stitch	Най-дълъг бод
+	Longest jump	Най-дълъг скок
+	Shortest stitch	Най-къс бод
+	Trim jumps longer than	Отрязване на скокове, по-дълги от
+	Tie length	Дължина на закрепването
+	Stitches per minute	Бодове в минута
+	commercial machines	промишлени машини
+	home machines	домашни машини
+	Remove underlying stitching	Премахване на бодовете отдолу
+	Overlap	Застъпване
+	Turn	Завъртане
+	Capped	Затворени краища
+	Backstitch	Обратен бод
+	Check Again	Нова проверка
+	Check Design	Проверка на дизайна
+	Click to select and show it	Щракнете, за да го изберете и покажете
+	Design setting	Настройка на дизайна
+	Different on each side	Различно от всяка страна
+	Double zigzag	Двоен зигзаг
+	Fill Holes	Запълване на дупките
+	Flip to the other side	Обръщане към другата страна
+	Lettering only {n} mm tall is hard to sew clearly	Надпис с височина само {n} мм трудно се шие ясно
+	Look for dense spots, long stitches, tiny objects and small lettering	Търсене на плътни места, дълги бодове, малки обекти и дребни надписи
+	Makes no stitches	Не създава бодове
+	No problems found.	Не са открити проблеми.
+	Passes	Преминавания
+	Preserve long stitches	Запазване на дългите бодове
+	Pull comp., side 1	Компенсация на свиването, страна 1
+	Pull comp., side 2	Компенсация на свиването, страна 2
+	Remove Holes	Премахване на дупките
+	Reverse Stitch Direction	Обръщане на посоката на бодовете
+	Swap Satin Sides	Размяна на страните на сатена
+	Convert to Satin Column	Преобразуване в сатенена колона
+	Stem Stitch	Стеблов бод
+	Stem stitch	Стеблов бод
+	Stitches up to {n} mm long can snag	Бодове с дължина до {n} мм могат да се закачат
+	The design is larger than the hoop	Дизайнът е по-голям от гергефа
+	Thread Color	Цвят на конеца
+	Tie in	Закрепване в началото
+	Tie off	Закрепване в края
+	Tiny object: may not sew cleanly	Малък обект: може да не се ушие чисто
+	Very dense: about {n} layers of thread here	Много плътно: около {n} слоя конец тук
+	Design from Prompt…	Дизайн от описание…
+	Design from Prompt	Дизайн от описание
+	Generate	Генериране
+	Describe the design:	Опишете дизайна:
+	Size (longest side):	Размер (по-дългата страна):
+	Anthropic API key:	API ключ за Anthropic:
+	Remember the key on this computer	Запомняне на ключа на този компютър
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude рисува илюстрацията с вашия собствен API ключ за Anthropic, като разходите се начисляват по вашия акаунт в Anthropic; след това StitchFoundry я дигитализира. Проверете бодовете, преди да шиете.
+	Get a key	Вземете ключ
+	Drawing the design…	Рисуване на дизайна…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Опишете дизайн и Claude ще нарисува илюстрация за него, след което StitchFoundry ще я дигитализира
+	Place Artwork as Embroidery	Поставяне на илюстрация като бродерия
+	Place Artwork	Поставяне на илюстрация
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Дизайнът е поставен: {n} бродиран обект|Дизайнът е поставен: {n} бродирани обекта
+@msg	Enter your Anthropic API key first.	Първо въведете своя API ключ за Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	API ключът не е валиден: поставете го отново от Anthropic Console.
+@msg	Describe the design first.	Първо опишете дизайна.
+@msg	The description is too long: keep it under 2,000 characters.	Описанието е твърде дълго: нека бъде под 2000 знака.
+@msg	Anthropic refused the API key: {e}	Anthropic отхвърли API ключа: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Вашият акаунт в Anthropic не може да плати за това: {e}
+@msg	The AI service is busy: try again in a minute.	AI услугата е заета: опитайте отново след минута.
+@msg	The AI service failed (error {code}): try again later.	AI услугата не успя (грешка {code}): опитайте отново по-късно.
+@msg	The request failed (error {code}): {e}	Заявката не успя (грешка {code}): {e}
+@msg	The AI declined to draw this: try another description.	AI отказа да нарисува това: опитайте с друго описание.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Рисунката стана твърде подробна, за да бъде завършена: поискайте нещо по-просто.
+@msg	The reply had no artwork: try again.	Отговорът не съдържаше илюстрация: опитайте отново.
+@msg	Couldn't reach the AI service: {e}	Няма връзка с AI услугата: {e}
+@msg	Design from Prompt needs the desktop app for now	„Дизайн от описание“ засега изисква десктоп приложението
+@msg	already drawing: wait for it, or Cancel	рисуването вече тече: изчакайте го или изберете „Отказ“
+@msg	the artwork has no shapes to stitch	илюстрацията няма форми за бродиране
+@msg	the artwork has nothing to place	илюстрацията няма нищо за поставяне
+@msg	the artwork can't be read: {e}	илюстрацията не може да бъде прочетена: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI няма да копира чуждо лого или персонаж: {e}
+	Redraw Image with Claude…	Прерисуване на изображението с Claude…
+	Redraw Image with Claude	Прерисуване на изображението с Claude
+	What to change (optional):	Какво да се промени (по избор):
+	Only redraw artwork you own or have permission to use.	Прерисувайте само илюстрации, които притежавате или имате разрешение да използвате.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude прерисува изображението като илюстрация с плътни цветове с вашия собствен API ключ за Anthropic, като разходите се начисляват по вашия акаунт в Anthropic; след това StitchFoundry я дигитализира. Проверете бодовете, преди да шиете.
+	Redraw with Claude…	Прерисуване с Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude прерисува изображението като изчистена илюстрация с плътни цветове, след което StitchFoundry я дигитализира
+@msg	select an image to redraw	изберете изображение за прерисуване
+@msg	the image couldn't be read	изображението не може да бъде прочетено
+@msg	The image is too large to send: crop it, or place a smaller copy.	Изображението е твърде голямо за изпращане: изрежете го или поставете по-малко копие.
+	Set Split Lines	Задаване на линии на разделяне
+	Carve Split Lines	Изрязване на линии на разделяне
+	Clear Split Lines	Изчистване на линиите на разделяне
+	Split lines:	Линии на разделяне:
+	Texture size	Размер на текстурата
+	Texture angle	Ъгъл на текстурата
+	Diamonds	Ромбове
+	Waves	Вълни
+	Herringbone	Рибена кост
+	Bricks	Тухли
+	Circles	Кръгове
+	Scales	Люспи
+	Hand stitch	Ръчен бод
+	Gap	Междина
+	Jagged edges	Назъбени ръбове
+	Side 1	Страна 1
+	Side 2	Страна 2
+	Jag depth	Дълбочина на назъбването
+	Trapunto (travel along the outline)	Трапунто (преход по контура)
+	Place Motif	Поставяне на мотив
+	Loop	Примка
+	Motif Fill	Запълване с мотив
+	Motif size	Размер на мотива
+	Graded	Градуиран
+	Width at end	Ширина в края
+	Row spacing	Разстояние между редовете
+	E-stitch	E-бод
+	Rings (0: all)	Пръстени (0: всички)
+	Add Laydown	Добавяне на основа
+	Spacing profile	Профил на разстоянието
+	Accordion	Акордеон
+	Fade out	Избледняване
+	Fade in	Появяване
+	Blend into	Преливане в
+	Make Blend	Създаване на преливане
+	Blend Colors	Преливане на цветове
+	Add Outline	Добавяне на контур
+	Satin Outline	Сатенен контур
+	Bean Outline	Контур с бийн бод
+	Rectangle Border	Правоъгълна рамка
+	Oval Border	Овална рамка
+	Rounded Border	Заоблена рамка
+	Motif Border	Рамка от мотиви
+	Make Motif	Създаване на мотив
+	Apply Motif	Прилагане на мотив
+	Embroidery Motifs	Мотиви за бродерия
+	Delete Motif	Изтриване на мотив
+	Remove the motif from the design; what sews it keeps it.	Премахване на мотива от дизайна; това, което го шие, го запазва.
+	Sculpture run	Скулптурен прав бод
+	Triple stitch length	Дължина на тройния бод
+	Single stitch length	Дължина на единичния бод
+	Triple stitches	Тройни бодове
+	Single stitches	Единични бодове
+	Cross style	Стил на кръстчето
+	Full cross	Пълно кръстче
+	Half cross	Половин кръстче
+	Upright cross	Изправено кръстче
+	Double cross	Двойно кръстче
+	Redwork	Редуърк
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	Шие се като една линия, която свършва там, където започва; преходът между линиите минава отново по тях.
+	Add Buttonholes	Добавяне на илици
+	Straight Buttonhole	Права илика
+	Rounded Buttonhole	Заоблена илика
+	Keyhole Buttonhole	Илика с око
+	Place Ring	Поставяне на пръстен
+	Satin Ring	Сатенен пръстен
+	Filled Ring	Запълнен пръстен
+	Bean Ring	Пръстен с бийн бод
+	Hexagons	Шестоъгълници
+	Chevrons	Шеврони
+	Basket weave	Кошничарска плетка
+	Stars	Звезди
+	Hearts	Сърца
+	Leaves	Листа
+	Paired with	Сдвоено с
+	Sew as	Шиене като
+	Motifs	Мотиви
+	Motif length (× width)	Дължина на мотива (× ширина)
+	String stitch	Нишковиден бод
+	Chord length	Дължина на хордата
+	Automatic Knife	Автоматичен нож
+	3D effect	3D ефект
+	Globe out	Изпъкнало
+	Globe in	Вдлъбнато
+	Fill Along Lines	Запълване по линии
+	Clear Flow Lines	Изчистване на линиите на потока
+	Rows follow lines:	Редовете следват линии:
+	Set Flow Lines	Задаване на линии на потока
+	Carving Stamps	Релефни печати
+	Carve Stamp	Релефен печат
+	Flower	Цвете
+	Sun	Слънце
+	Moon	Луна
+	Snowflake	Снежинка
+	Paw Print	Лапичка
+	Swirl	Завъртулка
+	Shell	Мида
+	Butterfly	Пеперуда
+	Clover	Детелина
+	Show Repeats	Показване на повторенията
+	Repeats across	Повторения хоризонтално
+	Repeats down	Повторения вертикално
+	Gap between repeats	Разстояние между повторенията
+	Stripes	Ивици
+	Slants	Наклонени линии
+	Pinstripes	Тънки райета
+	Lattice	Решетка
+	Arches	Арки
+	Spirals	Спирали
+	Pyramids	Пирамиди
+	Ripples	Вълнички
+	Greek key	Гръцки меандър
+	Crosses	Кръстчета
+	Quatrefoils	Четирилистници
+	Flowers	Цветя
+	Trefoils	Трилистници
+	Moons	Луни
+	Arrows	Стрелки
+	Nested diamonds	Вложени ромбове
+	Argyle	Аргайл
+	Wicker	Плетеница
+	Feathers	Пера
+	Paisley	Пейсли
+	Swirls	Завъртулки
+	Snowflakes	Снежинки
+	Bubbles	Мехурчета
+	Sunbursts	Слънчеви лъчи
+	Motif Tool	Инструмент „Мотив“
+	Contour Split Lines	Контурни линии на разделяне
+	Keep Motif	Запазване на мотива
+	Keep the motif in My Motifs, for any design	Запазване на мотива в „Моите мотиви“, за всеки дизайн
+	My Motifs	Моите мотиви
+	Forget Motif	Забравяне на мотива
+	Buttonholes	Илици
+	Straight	Права
+	Keyhole	С око
+	Count	Брой
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Редове през формата: нагоре е по-плътно. Плъзнете точка; щракнете двукратно, за да добавите; щракнете с десния бутон върху точка, за да я премахнете.
+	Embroidery Lettering	Надписи за бродерия
+	Load Embroidery Font	Зареждане на шрифт за бродерия
+	Embroidery Fonts	Шрифтове за бродерия
+	Load Embroidery Font…	Зареждане на шрифт за бродерия…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Папка с шрифт във формата на Ink/Stitch: font.json и неговите глифи
+	Load an embroidery font to set text with it.	Заредете шрифт за бродерия, за да пишете текст с него.
+	Sews well at	Шие се добре при
+	Place Lettering	Поставяне на надпис
+	Edit Lettering	Редактиране на надпис
+	Update Lettering	Обновяване на надпис
+	Load this lettering's font to change it:	Заредете шрифта на този надпис, за да го промените:
+	Arch	Арка
+	Valley	Долина
+	Forget Font	Забравяне на шрифта
+	Unload the font and stop loading its folder	Премахване на шрифта и спиране на зареждането на папката му
+	Forget Embroidery Font	Забравяне на шрифта за бродерия
+	Team Names	Имена на отбора
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Изберете надпис с шрифт за бродерия: за всяко име се записва машинен файл с надписа, зададен на него.
+	One name a line	По едно име на ред
+	Import Names…	Импортиране на имена…
+	The first column of a CSV table, or a text file of one name a line	Първата колона на CSV таблица или текстов файл с по едно име на ред
+	Names	Имена
+	Export One File per Name…	Експортиране на отделен файл за всяко име…
+	Team name files written	Файловете с имената на отбора са записани
+	Export Team Names	Експортиране на имената на отбора
+	Read Team Names	Четене на имената на отбора
+	Monogram	Монограм
+	Load an embroidery font (Embroidery Lettering) to make monograms.	Заредете шрифт за бродерия („Надписи за бродерия“), за да правите монограми.
+	Initials	Инициали
+	In a line	В ред
+	Scallops	Фестони
+	Border	Рамка
+	Place Monogram	Поставяне на монограм
+	New Embroidery Font	Нов шрифт за бродерия
+	Save Embroidery Font…	Запазване на шрифт за бродерия…
+	Add Glyphs	Добавяне на глифи
+	Font Properties	Свойства на шрифта
+	Kern Glyph Pair	Кернинг на двойка глифи
+	Font Info	Информация за шрифта
+	Save Embroidery Font	Запазване на шрифт за бродерия
+	Edit Embroidery Font	Редактиране на шрифт за бродерия
+	Merge Embroidery Font	Сливане на шрифт за бродерия
+	New Embroidery Font from Type	Нов шрифт за бродерия от текстов шрифт
+	Font Creator	Създаване на шрифтове
+	Capitals' height	Височина на главните букви
+	Line spacing	Междуредие
+	Space width	Ширина на интервала
+	As typed	Както е въведено
+	Capitals	Главни букви
+	Small letters	Малки букви
+	Letter case	Регистър на буквите
+	Sews well from	Шие се добре от
+	Sews well up to	Шие се добре до
+	Still to digitize	Остава за дигитализиране
+	Show this glyph	Показване на този глиф
+	Not digitized yet: show its artboard	Още не е дигитализиран: показване на работната му област
+	Glyphs to add	Глифи за добавяне
+	Kerning (mm closer)	Кернинг (мм по-близо)
+	Pair	Двойка
+	Kern	Кернинг
+	Merge glyphs from	Сливане на глифи от
+	Test text	Пробен текст
+	Try in a New Document	Опитване в нов документ
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Създаване на шрифт за бродерия: документ с работна област за всеки глиф за дигитализиране.
+	Type family	Семейство шрифтове
+	New Font from Type	Нов шрифт от текстов шрифт
+	Edit Font	Редактиране на шрифта
+	Assign to Glyph	Присвояване на глиф
+	Selection to glyph	Селекция към глиф
+	The selected art becomes the glyph, moved onto its artboard	Избраната илюстрация става глиф и се премества в работната му област
+	Sew order	Ред на шиене
+	Left to right	Отляво надясно
+	Right to left	Отдясно наляво
+	Centre out	От центъра навън
+	Closest	Най-близко
+	Along the baseline	По базовата линия
+	Where needed	Където е нужно
+	After each letter	След всяка буква
+	After each word	След всяка дума
+	After each line	След всеки ред
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Извън размерите, за които е създаден шрифтът: бодовете му може да станат твърде плътни или твърде дълги
+	Adjust Letter	Настройване на буква
+	One letter: moved, scaled or turned, kept when the lettering is set again	Една буква: преместена, мащабирана или завъртяна, запазва се при повторно задаване на надписа
+	Move along	Преместване напред
+	Move down	Преместване надолу
+	Reset Letter	Нулиране на буквата
+	3D Puff	3D Puff
+	3D puff	3D puff
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	Сатен, ушит върху пяна: плътен, без подложка, със затворени краища. Шийте го в отделен цвят, за да поставите пяната при спирането
+	Sew Puff Last	Шиене на Puff последно
+	Click to Stitch	Бродиране с щракване
+	Click-to-Stitch Tool	Инструмент „Бродиране с щракване“
+	Fill without holes	Запълване без дупки
+	Centre line	Централна линия
+	Stitch as	Бродиране като
+	Click a region of an image to stitch it	Щракнете върху област от изображение, за да я бродирате
+	Send to Machine	Изпращане към машината
+	Machine Folders	Папки на машината
+	Add Machine Folder…	Добавяне на папка на машината…
+	A USB stick, the machine's folder or a network share the machine reads	USB памет, папката на машината или мрежова папка, която машината чете
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Добавете папката, която машината ви чете: USB памет, нейната папка или мрежова папка.
+	Machine folder	Папка на машината
+	Send	Изпращане
+	Sent:	Изпратено:
+	Forget Folder	Забравяне на папката
+	Triple run	Троен прав бод
+	Partial cover	Частично покритие
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	машинният файл не можа да бъде кодиран
+	Worksheet	Работен лист
+	Outline Around	Контур около
+	Octagon	Осмоъгълник
+	Shield	Щит
+	Ornament	Орнамент
+	Multi-Hooping	Многократно поставяне в гергеф
+	Basting first	Първо тропоска
+	Basting round	Тропоска наоколо
+	The design	Дизайнът
+	The hoop	Гергефът
+	Basting margin	Отстъп на тропоската
+	Design notes	Бележки към дизайна
+	Printed on worksheets	Отпечатва се в работните листове
+	Cost a piece	Цена на брой
+	Estimate cost	Оценка на разходите
+	Cost settings	Настройки на разходите
+	Per 1000 stitches	За 1000 бода
+	Machine time an hour	Машинно време на час
+	Thread per 1000 m	Конец за 1000 м
+	Set-up an order	Подготовка на поръчка
+	Machine heads	Глави на машината
+	Currency	Валута
+	Cost Estimate	Оценка на разходите
+	Colorways	Цветови варианти
+	New Colorway	Нов цветови вариант
+	Use Colorway	Използване на цветовия вариант
+	Colorway Thread	Конец на цветовия вариант
+	Rename Colorway	Преименуване на цветовия вариант
+	Delete Colorway	Изтриване на цветовия вариант
+	Colorway	Цветови вариант
+	The design's own	Собственият на дизайна
+	Own colour block	Собствен цветови блок
+	Where it falls	Където попадне
+	Centre	Център
+	Top left	Горе вляво
+	Top right	Горе вдясно
+	Bottom left	Долу вляво
+	Bottom right	Долу вдясно
+	Start at	Начало при
+	End at	Край при
+	Stabiliser	Стабилизатор
+	Tear-away	Откъсваем
+	Cut-away	Изрязваем
+	No-show mesh	Невидима мрежа
+	Wash-away	Водоразтворим
+	Scatter Copies	Разпръскване на копия
+	Appliqué letters	Букви с апликация
+	Each letter a patch of fabric: placement line, tack-down and cover	Всяка буква е парче плат: линия за позициониране, прихващане и покритие
+	Letters sewn	Шити букви
+	As the font has them	Както са в шрифта
+	Small text	Дребен текст
+	Under 6 mm	Под 6 мм
+	Place Along Selected Line	Поставяне по избраната линия
+	The text along the selected line or shape, from its start	Текстът по избраната линия или форма, от нейното начало
+	Monogram Templates	Шаблони за монограми
+	Save Monogram Template	Запазване на шаблон за монограм
+	Delete Monogram Template	Изтриване на шаблон за монограм
+	Template name	Име на шаблона
+	Delete Template	Изтриване на шаблона
+	Lay Out Team Names	Подреждане на имената на отбора
+	Team Names Worksheet	Работен лист с имената на отбора
+	Lay Out Together	Подреждане заедно
+	Every name in one design, in rows and columns, for a large hoop or patches	Всички имена в един дизайн, в редове и колони, за голям гергеф или емблеми
+	Names Worksheet	Работен лист с имена
+	Each name with its size, stitches and sewing time, and the totals	Всяко име с размера, бодовете и времето за шиене, както и общите суми
+	Design Library	Библиотека с дизайни
+	Design Catalogue	Каталог с дизайни
+	No folder chosen	Няма избрана папка
+	Choose Folder…	Избор на папка…
+	Newest	Най-нови
+	Most stitches	Най-много бодове
+	Largest	Най-големи
+	Designs	Дизайни
+	Couldn't be read	Не можа да бъде прочетен
+	stitches	бода
+	colours	цвята
+	Print Catalogue	Печат на каталога
+	A sheet of the designs found, to print or save as PDF	Лист с намерените дизайни, за печат или запазване като PDF
+@msg	larger than {_1} MB	по-голям от {_1} МБ
+@msg	not a machine file: .{ext}	не е машинен файл: .{ext}
+	Batch Output	Пакетен изход
+	Output Profiles	Изходни профили
+	Save Output Profile	Запазване на изходен профил
+	Delete Output Profile	Изтриване на изходен профил
+	Batch Convert	Пакетно преобразуване
+	files written	записани файла
+	Machine formats (none ticked: the machine's)	Машинни формати (ако няма отметнати: тези на машината)
+	Production	Производство
+	Approval	Одобрение
+	Placement template	Шаблон за позициониране
+	The design file too	И файла на дизайна
+	Write to Folder…	Записване в папка…
+	Machine files, worksheet PDF and design, named alike	Машинни файлове, PDF с работен лист и дизайн, с еднакви имена
+	Write Again	Повторно записване
+	Profile name	Име на профила
+	Save Profile	Запазване на профила
+	Profile	Профил
+	Convert to	Преобразуване в
+	Convert All	Преобразуване на всички
+	Each design found written again in this format beside it	Всеки намерен дизайн се записва отново в този формат до оригинала
+	Converted:	Преобразувани:
+	couldn't be read:	не можаха да бъдат прочетени:
+	Product Visualizer	Визуализация върху продукт
+@msg	product outline: {e}	контур на продукта: {e}
+	Exports	Експортирания
+	Nothing exported yet in this session.	В тази сесия още нищо не е експортирано.
+	Again	Отново
+	Export it again, as it was asked, from this document	Повторно експортиране от този документ, както е било зададено
+	Export History	История на експортиранията
+	Clear Export History	Изчистване на историята на експортиранията
+	Export Again	Повторно експортиране
+	Export Stitch Image	Експортиране на изображение на бодовете
+	Export Stitch Image…	Експортиране на изображение на бодовете…
+	Stitch List CSV (.csv)…	Списък с бодове CSV (.csv)…
+	Stitch List JSON (.json)…	Списък с бодове JSON (.json)…
+	G-code (.gcode)…	G-code (.gcode)…
+	Stitch Image PNG (.png)…	Изображение на бодовете PNG (.png)…
+@msg	PNG encoding failed: {e}	PNG кодирането не успя: {e}
+@msg	the design has no stitches	дизайнът няма бодове
+@msg	the image would be {w} × {h} pixels: lower ppmm	изображението би било {w} × {h} пиксела: намалете ppmm
+	Smallest That Fits	Най-малкият, в който се побира
+	The smallest hoop that holds the design, turned if that fits better	Най-малкият гергеф, който побира дизайна, завъртян, ако така се побира по-добре
+	Rotate Hoop	Завъртане на гергефа
+	Custom Hoops	Потребителски гергефи
+	Hoop name	Име на гергефа
+	Save Hoop	Запазване на гергефа
+	Delete Hoop	Изтриване на гергефа
+	Hoops	Гергефи
+	Choose Smallest Hoop	Избор на най-малкия гергеф
+	Save Custom Hoop	Запазване на потребителски гергеф
+	Delete Custom Hoop	Изтриване на потребителски гергеф
+	Turn the hue	Завъртане на оттенъка
+	One colour	Един цвят
+	Inverted	Инвертирано
+	Recolour	Преоцветяване
+	Recolour Threads	Преоцветяване на конците
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Всеки конец се променя по схемата и се съпоставя с картата на дизайна; отмяната ги връща
+	Garment Background	Фон на дрехата
+	Garment Photo…	Снимка на дрехата…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Снимка на дрехата зад дизайна, в реален размер, върху заключен слой шаблон, който никога не се бродира
+	Import Chart…	Импортиране на карта…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	Собствена карта на конците от CSV файл (код, име и цвят за всеки конец) или палитра на GIMP (.gpl)
+	Export Chart…	Експортиране на карта…
+	Thread Charts	Карти на конците
+	Import Thread Chart	Импортиране на карта на конците
+	Export Thread Chart	Експортиране на карта на конците
+	Save Thread Chart	Запазване на карта на конците
+	Delete Thread Chart	Изтриване на карта на конците
+	Design Templates	Шаблони за дизайни
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	Запазване на страницата, илюстрацията, гергефа, плата и настройките на този дизайн, за да започвате нови дизайни от тях
+	New from Design Template	Нов от шаблон за дизайн
+	Save as Design Template	Запазване като шаблон за дизайн
+	Delete Design Template	Изтриване на шаблон за дизайн
+	Print Stitch View	Печат на изгледа на бодовете
+	Job Orders	Поръчки
+	Customer	Клиент
+	Due (YYYY-MM-DD)	Срок (ГГГГ-ММ-ДД)
+	New Job for This Design	Нова поръчка за този дизайн
+	In production	В производство
+	Cancelled	Отказана
+	New Job Order	Нова поръчка
+	Update Job Order	Обновяване на поръчката
+	Delete Job Order	Изтриване на поръчката
+	Job Worksheet	Работен лист на поръчката
+	Job Output	Изход на поръчката
+	Clipart	Клипарт
+	Click a motif to place it, digitized, in the middle of the page.	Щракнете върху мотив, за да го поставите, дигитализиран, в средата на страницата.
+	Embroidery Clipart	Клипарт за бродерия
+	Insert Clipart	Вмъкване на клипарт
+	Send When Ready	Изпращане при готовност
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Поставяне на дизайна на опашка за тази папка: записва се сега, ако папката е налична, иначе веднага щом се появи
+	Waiting for the folder	Изчакване на папката
+	Send queue	Опашка за изпращане
+	waiting	изчаква
+	sent	изпратено
+	failed	неуспешно
+	Clear Sent	Изчистване на изпратените
+	Send Queue	Опашка за изпращане
+	Add to Send Queue	Добавяне към опашката за изпращане
+	Send Waiting Designs	Изпращане на чакащите дизайни
+	Remove from Send Queue	Премахване от опашката за изпращане
+@msg	the queued file is damaged	файлът в опашката е повреден
+	Centred	Центрирано
+	In the hoop	В гергефа
+	Worksheet Setup	Настройка на работния лист
+	Merge Colours	Сливане на цветове
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Конците с еднакъв или близък цвят се обединяват в един, а цветовите им блокове се съединяват; отмяната ги връща
+	Lettering Kiosk	Киоск за надписи
+	Kiosk Lettering	Надписи в киоска
+	Type a name and make the design	Въведете име и създайте дизайна
+	No embroidery font is loaded: ask the shop to load one.	Няма зареден шрифт за бродерия: помолете магазина да зареди такъв.
+	As large as fits	Възможно най-голям
+	Make Design	Създаване на дизайн
+	T-shirt	Тениска
+	Polo shirt	Поло риза
+	Hoodie	Суитшърт с качулка
+	Tote bag	Пазарска чанта
+	Towel	Хавлия
+	Product	Продукт
+	Show on Product	Показване върху продукта
+	Back to the Design	Обратно към дизайна
+	Save Machine File…	Запазване на машинен файл…
+	Next Name	Следващо име
+	PIN	ПИН
+	Leave Kiosk	Излизане от киоска
+	Leaving the kiosk will take this PIN	За излизане от киоска ще е нужен този ПИН
+	Snapback	Шапка снапбек
+	Trucker cap	Шапка с мрежа
+	Dad cap	Шапка с козирка
+	Image Colours	Цветове на изображението
+	Prepare Image	Подготовка на изображението
+	Photo Stitch	Фотобродерия
+	Convert Stitches to Objects	Преобразуване на бодовете в обекти
+	Colour Preview	Преглед на цветовете
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Изгладено копие на изображението в тези цветове, с изчистени петънца, за дигитализиране или бродиране с щракване
+	Colours	Цветове
+	background, not sewn	фон, не се шие
+	thread changes	смени на конеца
+	threads sewn	ушити конци
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Ушиване на снимката върху себе си като зигзаг линии, една криволичеща линия или нейните цветове
+	Sequins	Пайети
+	Beads	Мъниста
+	Rhinestones	Кристали
+	Cord	Шнур
+	Boring	Перфориране
+	Along the line	По линията
+	Fill the shape	Запълване на формата
+	Round the edge	Около ръба
+	At each point	Във всяка точка
+	Bead length	Дължина на мънистото
+	Cord width	Ширина на шнура
+	Edge width	Ширина на ръба
+	Honeycomb	Пчелна пита
+	Packing	Наслагване
+	Three	Три
+	Fixing	Закрепване
+	Flip every other	Обръщане на всеки втори
+	Colour	Цвят
+	Thread colour	Цвят на конеца
+	Stop before	Спиране преди
+	Rhinestones aren't sewn: export their template to cut and set them	Кристалите не се шият: експортирайте шаблона им, за да ги изрежете и поставите
+	Decoration Sizes	Размери на декорациите
+	Count Decorations	Преброяване на декорациите
+	Cut File	Файл за изрязване
+	Sew the pieces together	Съшиване на частите
+	Fabric colour	Цвят на плата
+	Plain	Едноцветен
+	Check	Каре
+	Denim	Деним
+	Felt	Филц
+	Fabric pattern	Шарка на плата
+	Pattern colour	Цвят на шарката
+	Combine Appliqué	Комбиниране на апликации
+	Prepare Appliqué	Подготовка на апликация
+	Coil	Спирала
+	Square loop	Квадратна примка
+	Foil	Фолио
+	Shown with the design, not sewn	Показва се с дизайна, не се шие
+	StitchFoundry Help	Помощ за StitchFoundry
+	Tips	Съвети
+	Search help	Търсене в помощта
+	Nothing found	Нищо не е намерено
+	Help Topics	Теми в помощта
+	Help Topic	Тема в помощта
+	Help for Tool	Помощ за инструмента
+	New Design for Hoop	Нов дизайн за гергеф
+	Sample Designs	Примерни дизайни
+	Open Sample Design	Отваряне на примерен дизайн
+	Start a design for your hoop	Започнете дизайн за своя гергеф
+	Your first design	Вашият първи дизайн
+	Draw shapes, place a picture or type text.	Нарисувайте форми, поставете картина или въведете текст.
+	Choose how each part is stitched: satin, fill, run and more.	Изберете как да се бродира всяка част: сатен, запълване, прав бод и други.
+	Watch it sew with the stitch player and check it.	Гледайте как се шие с плейъра на бодовете и го проверете.
+	Export the file for your machine.	Експортирайте файла за своята машина.
+	Learn how	Научете как
+	Try a sample	Пробвайте пример
+	Heart patch	Емблема сърце
+	Sun and moon	Слънце и луна
+	Appliqué star	Звезда с апликация
+	Tip:	Съвет:
+	More tips	Още съвети
+	A new design the size of this hoop's sewing field	Нов дизайн с размера на полето за шиене на този гергеф
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Начертайте линия на наклона през форма, за да зададете ъгъла на бодовете ѝ; две или повече линии карат бодовете да завиват.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Щракнете върху област от поставено изображение, за да я бродирате; увеличете „Толеранс“, за да обхване повече от нюансите му.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Плъзнете избраните точки на иглата, за да ги преместите, Alt+щракване върху бод добавя нов, Delete ги премахва.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Щраквайте последователно ту от едната страна на колоната, ту от другата; Enter или Escape приключва.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	Дискът в долния ляв ъгъл задава четката, ширината, плътността, дължината и формата.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Въведете текста си, след това изберете шрифт за бродерия в панела „Надписи“, за да се шие чисто.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Изберете илюстрация и изберете Бродерия › Преобразуване на илюстрацията в бродерия, за да я дигитализирате с една стъпка.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Сатенът е подходящ за форми с ширина до около 7 мм; по-широките зони се шият по-добре като запълване татами.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Изберете гергеф в панела „Бродерия“, за да видите полето за шиене около дизайна.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	„Проверка на дизайна“ в менюто „Бродерия“ открива плътни слоеве, дълги бодове и текст, твърде малък за шиене.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Гледайте как се шие дизайнът с плейъра на бодовете в „Последователност на бодовете“, преди да го изпратите.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Експортирайте с Бродерия › Експортиране на машинен файл и изберете формата на своята машина.
+	Save as Default	Запазване като стандартни
+	Clear Default	Изчистване на стандартните
+	Every new design starts with these properties	Всеки нов дизайн започва с тези свойства
+	New designs take the built-in properties again	Новите дизайни отново получават вградените свойства
+	All Tools, Ungrouped	Всички инструменти, разгрупирани
+	Toolbar: All Tools, Ungrouped	Лента с инструменти: Всички инструменти, разгрупирани
+	Push compensation	Компенсация на разтягането
+	{n} very short stitches can break the thread	{n} много къси бода могат да скъсат конеца
+	Satin only {n} mm wide sinks into the fabric	Сатен с ширина само {n} мм потъва в плата
+	Fill stitches {n} mm long can ripple after washing	Бодове на запълване с дължина {n} мм могат да се набръчкат след пране
+	Sewn on clothing	Шие се върху дрехи
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	Дългите бодове се закачат от 7 мм върху дрехи и от 12,1 мм върху други изделия
+	Short stitches under	Къси бодове под
+	Narrow satin under	Тесен сатен под
+	Short fill stitches under	Къси бодове на запълване под
+	Edge run and zigzag	Прав бод по ръба и зигзаг
+	Satin underlay	Подложка на сатена
+	Edge run under fills	Прав бод по ръба под запълванията
+	New to digitizing? Read the basics	Нови сте в дигитализирането? Прочетете основите
+	Density Map	Карта на плътността
+	Density map	Карта на плътността
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Оцветяване на дизайна според дебелината на конеца: синьо за един слой, червено за плътността, която „Проверка на дизайна“ отбелязва
+	Calibrate Life Size…	Калибриране на реален размер…
+	Calibrate Life Size	Калибриране на реален размер
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Допрете линийка или банкова карта до екрана и променяйте размера, докато маркировките съвпаднат. Тогава „Действителен размер“ показва дизайните в реален размер.
+	Bank card	Банкова карта
+	Screen points per inch	Точки на екрана на инч
+	Use This Size	Използване на този размер
+	Screen Points per Inch at Life Size	Точки на екрана на инч при реален размер
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` е число от 40 до 400
+	Experience	Опит
+	New to Embroidery	Начинаещ в бродерията
+	Digitizer	Дигитализатор
+	Embroidery Business	Бизнес с бродерия
+	Everything	Всичко
+	Showing the basics.	Показване на основните неща.
+	Show everything	Показване на всичко
+	New to embroidery	Начинаещ в бродерията
+	I digitize designs	Дигитализирам дизайни
+	I run an embroidery business	Имам бизнес с бродерия
+	The basic tools and everyday sections, nothing more	Основните инструменти и ежедневните раздели, нищо повече
+	Every digitizing tool, rulers and the control bar	Всички инструменти за дигитализиране, линийките и контролната лента
+	Everything, with job orders and batch output	Всичко, с поръчки и пакетен изход
+	How do you work?	Как работите?
+@msg	`level` is beginner, digitizer, business or all	`level` е beginner, digitizer, business или all
+	Echo Quilting	Ехо капитониране
+	Background Quilting	Фоново капитониране
+	Remove Blend	Премахване на преливането
+	Blend layers	Слоеве на преливането
+	My Machine…	Моята машина…
+	Save for My Machine	Запазване за моята машина
+	Which embroidery machine do you have?	Каква бродираща машина имате?
+	Measure in	Мерни единици
+	Save designs to	Запазване на дизайните в
+	No folder chosen yet	Все още няма избрана папка
+	Plug in the USB stick you take to your machine, then choose it here.	Включете USB паметта, която носите до машината, и я изберете тук.
+	Husqvarna Viking (other models)	Husqvarna Viking (други модели)
+	Brother or Baby Lock	Brother или Baby Lock
+	Janome or Elna	Janome или Elna
+	Another machine (DST)	Друга машина (DST)
+	My machine:	Моята машина:
+	Tell us your machine to see its hoops and save in its format.	Посочете машината си, за да видите гергефите ѝ и да запазвате в нейния формат.
+	Choose My Machine	Избор на моята машина
+	Saved for your machine:	Запазено за вашата машина:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Форма от плат: машината спира, за да поставите плата, след което го пришива
+	A heart, a star, a flower and more, ready to sew	Сърце, звезда, цвете и още, готови за шиене
+	A name or a few words, ready to sew	Име или няколко думи, готови за шиене
+	A photo or drawing to turn into stitches	Снимка или рисунка, която да се превърне в бодове
+	A picture	Картина
+	Add Appliqué	Добавяне на апликация
+	Add Appliqué…	Добавяне на апликация…
+	Add Words	Добавяне на думи
+	Add Words…	Добавяне на думи…
+	Add a Picture…	Добавяне на картина…
+	Add a Shape	Добавяне на форма
+	Add a Shape…	Добавяне на форма…
+	Bigger	По-голямо
+	Choose a shape	Изберете форма
+	Click a part of the design to change how it sews.	Щракнете върху част от дизайна, за да промените как се шие.
+	Click a part of the design to choose it, drag it to move it	Щракнете върху част от дизайна, за да я изберете, плъзнете я, за да я преместите
+	Crown	Корона
+	Filled	Запълнено
+	How tall	Височина
+	Just the outline	Само контурът
+	Not sewn	Не се шие
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Още няма нищо за шиене. Добавете думи, форма или картина с бутоните вляво.
+	Paw	Лапа
+	See the design sew on screen, stitch by stitch	Вижте как дизайнът се шие на екрана, бод по бод
+	Sew it as	Шиене като
+	Smaller	По-малко
+	Smooth edge (satin)	Гладък ръб (сатен)
+	Start a design from the Home screen.	Започнете дизайн от началния екран.
+	Take back the last change	Отмяна на последната промяна
+	The chosen part	Избраната част
+	The chosen parts	Избраните части
+	The design is bigger than the hoop: make it smaller before you sew.	Дизайнът е по-голям от гергефа: намалете го, преди да шиете.
+	Thread colours	Цветове на конците
+	Turn Into Stitches	Превръщане в бодове
+	Turn it into stitches in your thread colours.	Превърнете го в бодове с вашите цветове на конците.
+	Watch It Sew	Гледайте как се шие
+	What should it say?	Какво да пише?
+	Write the design for your machine to its USB stick or folder	Записване на дизайна за машината ви на нейната USB памет или папка
+	Your design	Вашият дизайн
+	Show Everything	Показване на всичко
+@msg	the design has no page	дизайнът няма страница
+@msg	open or start a design first	първо отворете или започнете дизайн
+	Set My Machine	Задаване на моята машина
+	Make a Design	Създаване на дизайн
+	Make a Design…	Създаване на дизайн…
+	Make a Design, Step by Step	Създаване на дизайн стъпка по стъпка
+	Step by step: words, a shape, appliqué, a picture or a sample	Стъпка по стъпка: думи, форма, апликация, картина или пример
+	What would you like to make?	Какво бихте искали да направите?
+	A name or some words	Име или няколко думи
+	For towels, bags, pillows and gifts	За хавлии, чанти, възглавници и подаръци
+	A shape	Форма
+	A heart, a star, a flower and more	Сърце, звезда, цвете и още
+	An appliqué	Апликация
+	A shape cut from fabric and sewn down	Форма, изрязана от плат и пришита
+	A photo or a drawing turned into stitches	Снимка или рисунка, превърната в бодове
+	A sample to try	Пример за опитване
+	A finished design to sew and learn from	Готов дизайн за шиене и учене
+	Which hoop will you use?	Кой гергеф ще използвате?
+	Tell us your machine to see its hoops.	Посочете машината си, за да видите гергефите ѝ.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Изберете гергефа, в който ще поставите плата. Дизайнът се прави така, че да се побере в него.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Главните букви са с тази височина. 20 до 30 мм са подходящи за хавлия; 10 до 15 мм за риза.
+	Make It	Създаване
+	Which shape of fabric?	Каква форма плат?
+	Which shape?	Каква форма?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Машината ушива мястото на плата и спира; поставяте плата, тя го прихваща и спира отново, за да го изрежете; след това ушива ръба.
+	Choose a picture	Изберете картина
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Най-добре се получават прости картини с няколко плътни цвята и ясни ръбове: анимация, лого, клипарт.
+	Choose a Picture…	Избор на картина…
+	Which sample?	Кой пример?
+	Your thread colours	Вашите цветове на конците
+	These are sewn in this order. Click a colour to match a thread you have.	Те се шият в този ред. Щракнете върху цвят, за да го съпоставите с конец, който имате.
+	Watch it sew	Гледайте как се шие
+	See the needle go stitch by stitch, in the order your machine will sew it.	Вижте как иглата минава бод по бод, в реда, в който машината ви ще го ушие.
+	Save it	Запазете го
+	Save for My Machine writes the file your machine sews, to its USB stick.	„Запазване за моята машина“ записва файла, който машината ви шие, на нейната USB памет.
+	Save Design keeps a copy you can open and change later.	„Запазване на дизайна“ съхранява копие, което можете да отворите и промените по-късно.
+	Save Design…	Запазване на дизайна…
+	Put back what Undo took back	Връщане на това, което „Отмени“ е отменило
+	Start Over…	Започване отначало…
+	Clear the design and begin again	Изчистване на дизайна и започване отново
+	Text size	Размер на текста
+	Saved for you automatically in My Designs:	Автоматично запазено за вас в „Моите дизайни“:
+	Start Over	Започване отначало
+	Clear everything in this design and begin again?	Да се изчисти ли всичко в този дизайн и да се започне отново?
+	You can still get it back with Undo.	Все още можете да го върнете с „Отмени“.
+	Keep It	Запазване
+	Keep Design Safe	Съхраняване на дизайна
+	In-the-Hoop Projects	Проекти в гергефа
+	Make In-the-Hoop Project	Създаване на проект в гергефа
+	Steps	Стъпки
+	The machine also stops where you lay or trim fabric.	Машината спира и там, където поставяте или изрязвате плат.
+	Print the Steps…	Печат на стъпките…
+	Change the Size?	Промяна на размера?
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	Този дизайн спира за плат, изрязан по мярка. Ако се уголеми или смали, парчетата може вече да не пасват.
+	Keep the Size	Запазване на размера
+	Change It Anyway	Промяна въпреки това
+	An in-the-hoop project	Проект в гергефа
+	A little pillow front, a mug rug, a coaster or an ornament	Лицева част на малка възглавничка, подложка за чаша с място за хапка, подложка за чаша или орнамент
+	Which project?	Кой проект?
+	Sewn in a 5×7 hoop, borders and back sewn on after	Шие се в гергеф 5×7, а рамките и гърбът се пришиват след това
+	Finished in the hoop: batting, backing and a satin edge	Завършва се в гергефа: вата, подплата и сатенен ръб
+	Words (you can leave this empty)	Думи (можете да оставите празно)
+	Little pillow front, 8″ square	Лицева част на малка възглавничка, 8″ квадрат
+	Little pillow front, 9½ × 5½″	Лицева част на малка възглавничка, 9½ × 5½″
+	Mug rug, 6½ × 4½″	Подложка за чаша с място за хапка, 6½ × 4½″
+	Coaster, 3¾″ square	Подложка за чаша, 3¾″ квадрат
+	Round ornament, 3½″	Кръгъл орнамент, 3½″
+	Quilting for a tile	Капитониране за блок
+	Background quilting the size of a quilting tile, block by block	Фоново капитониране с размера на капитониращ блок, блок по блок
+	What size is the tile?	Какъв е размерът на блока?
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	Прочетете размера в прозореца на блока. Блокът се капитонира от край до край, с размера на блока.
+	Lines apart	Разстояние между линиите
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	Запазете същата шарка и разстояние за всеки блок на юргана, за да преминават блоковете един в друг.
+	Make Every Size…	Създаване на всички размери…
+	One file for each usual tile size, in a folder or on the USB stick	По един файл за всеки обичаен размер на блок, в папка или на USB паметта
+	Quilt blocks saved:	Запазени блокове за юрган:
+	Stipple	Стипъл
+	Squares spiral	Квадратна спирала
+	Quilt Block Patterns	Шарки за блокове на юрган
+	Quilt Block	Блок за юрган
+	Quilt Block Set	Комплект блокове за юрган
+	Loops	Примки
+	Pebbles	Камъчета
+	A block	Блок
+	A border strip	Бордюрна лента
+	A corner	Ъгъл
+	In the middle (you can leave this empty)	В средата (можете да оставите празно)
+	Words	Думи
+	No shape	Без форма
+	Sew the shape as appliqué	Шиене на формата като апликация
+	Add a ribbon band across it	Добавяне на лента през нея
+	Add a ribbon loop to hang it	Добавяне на панделка за окачване
+	Clear vinyl on top (wipe-clean)	Прозрачен винил отгоре (лесно почистване)
+	Mark where a button goes	Отбелязване на мястото за копче
+	Print the Cutting Templates…	Печат на шаблоните за изрязване…
+	In-the-Hoop Cutting Templates	Шаблони за изрязване за проекти в гергефа
+	Downloaded for your machine:	Изтеглено за вашата машина:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	„Запазване за моята машина“ изтегля дизайна: копирайте го на USB паметта, която носите до машината.
+	Downloaded:	Изтеглено:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	„Запазване за моята машина“ изтегля файла, който машината ви шие: копирайте го на нейната USB памет.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Преливане от градиент
+	Sew the gradient's colours blended the way it runs	Шиене на цветовете на градиента, преливащи се по посоката му
+	Cutwork	Ришелийо
+	Tartan Fill	Запълване шотландско каре
+	Test Sew-Out	Пробно ушиване
+	Test Sew-Outs	Пробни ушивания
+	Cross Stitch	Кръстат бод
+	Cross Stitch Tool	Инструмент „Кръстат бод“
+	Cross Stitch from Image…	Кръстат бод от изображение…
+	Cross-Stitch Pattern Info	Информация за схемата за кръстат бод
+	Cross-Stitch Pattern Settings	Настройки на схемата за кръстат бод
+	New Cross-Stitch Pattern…	Нова схема за кръстат бод…
+	Paint Cross Stitches	Рисуване с кръстати бодове
+	Brush (squares)	Четка (квадратчета)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	Щракнете или плъзнете върху мрежа за кръстат бод, за да запълните квадратчетата ѝ; задръжте Alt, за да изтриете
+	Erase	Гума
+	Pattern colours	Цветове на схемата
+	Add My Hoop	Добавяне на мой гергеф
+	Brother or Baby Lock multi-needle	Brother или Baby Lock с много игли
+	Commercial multi-needle (DST)	Промишлена машина с много игли (DST)
+	Give the hoop a name	Дайте име на гергефа
+	Hoop not listed? Add its sewing field here.	Гергефът го няма в списъка? Добавете полето му за шиене тук.
+	My hoop	Моят гергеф
+	My own hoops	Моите гергефи
+	Square corners	Прави ъгли
+	Type the hoop's width and height as numbers	Въведете ширината и височината на гергефа като числа
+	in	in
+	Chenille	Шенил
+	Chenille Stitch	Шенилен бод
+	Chenille Stops	Спирания при шенил
+	Compound Chenille…	Съставен шенил…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	Запълване мъх с верижни рамки, ушити преди и след него, в група на мястото на формата
+	Chain	Верижен бод
+	Chenille stops	Спирания при шенил
+	Lockstitch	Заключващ бод
+	Moss	Мъх
+	Moss pattern	Шарка мъх
+	Needle height	Височина на иглата
+	Start	Начало
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	мъхът шие запълвания и прави бодове: първо задайте на сатена запълване или прав бод
+	Get Embroidery Fonts…	Изтегляне на шрифтове за бродерия…
+	About the library	За библиотеката
+	Download Again	Повторно изтегляне
+	Download fonts from an embroidery font library, ready for lettering	Изтегляне на шрифтове от библиотека с шрифтове за бродерия, готови за надписи
+	Downloading	Изтегляне
+	Each font comes with its own licence, in its folder.	Всеки шрифт идва със собствен лиценз в папката си.
+	Fonts are kept in	Шрифтовете се съхраняват в
+	Get Embroidery Fonts	Изтегляне на шрифтове за бродерия
+	Listing the fonts…	Изброяване на шрифтовете…
+	Try Again	Опитайте отново
+	fonts	шрифта
+	is ready for lettering	е готов за надписи
+@msg	a file of the font has an unsafe name: {path}	файл от шрифта има опасно име: {path}
+@msg	can't reach the font library: {e}	няма връзка с библиотеката с шрифтове: {e}
+@msg	downloading embroidery fonts works in the desktop app	изтеглянето на шрифтове за бродерия работи в десктоп приложението
+@msg	the font library answered {status} for {path}	библиотеката с шрифтове отговори {status} за {path}
+@msg	the font library answered {status}: try again later	библиотеката с шрифтове отговори {status}: опитайте отново по-късно
+@msg	{_1} isn't published yet	{_1} все още не е публикуван
+	Border or Corner…	Рамка или ъгъл…
+	Check Continuous Line	Проверка на непрекъснатата линия
+	Continuous Fill	Непрекъснато запълване
+	Continuous Fill…	Непрекъснато запълване…
+	Crib (36 × 52″)	Детско легло (36 × 52″)
+	DXF Lines (.dxf)…	DXF линии (.dxf)…
+	Echo	Ехо
+	Edge-to-Edge Rows	Редове от край до край
+	Edge-to-Edge Rows…	Редове от край до край…
+	Export Quilting Lines	Експортиране на линиите за капитониране
+	Export Quilting Lines…	Експортиране на линиите за капитониране…
+	HP-GL Plot (.plt)…	HP-GL чертеж (.plt)…
+	Join into One Line	Съединяване в една линия
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Капитониране с дълго рамо
+	Meander	Меандър
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	SVG линии (.svg)…
+	Start and End on the Edges	Начало и край по ръбовете
+	Stitch in the Ditch	Шев в шева
+	Throw (50 × 65″)	Одеяло (50 × 65″)
+	Twin (70 × 90″)	Единично легло (70 × 90″)
+	A border of the selected line	Рамка от избраната линия
+	Border depth	Дълбочина на рамката
+	Border length	Дължина на рамката
+	Corner leg (0: no corner)	Рамо на ъгъла (0: без ъгъл)
+	Edge-to-edge rows of the selected line	Редове от край до край от избраната линия
+	Make Border	Създаване на рамка
+	Make Rows	Създаване на редове
+	Nest the rows	Вплитане на редовете
+	One continuous line, ready for a longarm	Една непрекъсната линия, готова за машина с дълго рамо
+	Quilt height	Височина на юргана
+	Quilt width	Ширина на юргана
+	Row spacing (0: the line's height)	Разстояние между редовете (0: височината на линията)
+	joins needed: Join into One Line makes them	нужни съединявания: „Съединяване в една линия“ ги създава
+	longest	най-дълъг
+@msg	nothing to add	няма нищо за добавяне
+	Download All	Изтегляне на всички
+	Every font not downloaded yet, one after another	Всички още неизтеглени шрифтове, един след друг
+	Fonts downloaded:	Изтеглени шрифтове:
+	failed:	неуспешни:
+	fonts downloaded, ready for lettering	изтеглени шрифта, готови за надписи
+	Compare Designs	Сравняване на дизайни
+	Compare Designs…	Сравняване на дизайни…
+	Average stitch (mm)	Среден бод (мм)
+	Bobbin thread (m)	Долен конец (м)
+	Choose a machine file or the design open now	Изберете машинен файл или отворения в момента дизайн
+	Choose both designs to compare them	Изберете и двата дизайна, за да ги сравните
+	Colour changes	Смени на цвета
+	Differences of 10% or more are highlighted. The real test is sewing both.	Разлики от 10% или повече са осветени. Истинската проверка е да ушиете и двата.
+	First design	Първи дизайн
+	Height (mm)	Височина (мм)
+	Jumps	Скокове
+	Longest stitch (mm)	Най-дълъг бод (мм)
+	Open File…	Отваряне на файл…
+	Second	Втори
+	Second design	Втори дизайн
+	Stitches over 7 mm	Бодове над 7 мм
+	Stitches under 1 mm	Бодове под 1 мм
+	Stops	Спирания
+	This Design	Този дизайн
+	This design	Този дизайн
+	Top thread (m)	Горен конец (м)
+	Width (mm)	Ширина (мм)
+	same	същото
+	Direction	Посока
+	Along the selected line	По избраната линия
+	Add to Design	Добавяне към дизайна
+	Colors and Order	Цветове и ред
+	Paint	Рисуване
+	Print and Export	Печат и експортиране
+	Special Machines	Специални машини
+	Split Lines	Линии на разделяне
+	Stitch Direction	Посока на бодовете
+	Use Line as Direction	Използване на линията като посока
+	Arc Up	Дъга нагоре
+	Arc Down	Дъга надолу
+	To follow a line of your own, draw it first, select it, then Add Words.	За да следвате собствена линия, първо я начертайте, изберете я и след това „Добавяне на думи“.
+	Ask About Embroidery…	Питане за бродерия…
+	Ask About Embroidery	Питане за бродерия
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Питайте каквото и да е за машинната бродерия или StitchFoundry: кой стабилизатор да използвате, защо се къса конецът, как буквите да се шият по-чисто, къде се намира дадена функция. Claude може и да промени дизайна ви, когато поискате, след като му разрешите.
+	Thinking…	Мисля…
+	Type your question, then press Enter	Въведете въпроса си и натиснете Enter
+	Ask	Питане
+	New Conversation	Нов разговор
+	Include my design	Включване на моя дизайн
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Отговорите идват от Claude с вашия собствен API ключ за Anthropic, като разходите се начисляват по вашия акаунт в Anthropic. Те може да са грешни: направете пробно ушиване преди важно изделие.
+	Change key	Смяна на ключа
+@msg	Type a question first.	Първо въведете въпрос.
+@msg	The question is too long: keep it under 2,000 characters.	Въпросът е твърде дълъг: нека бъде под 2000 знака.
+@msg	The AI declined to answer this: ask another way.	AI отказа да отговори на това: попитайте по друг начин.
+@msg	The reply had no answer: try again, or ask something narrower.	Отговорът не съдържаше отговор: опитайте отново или задайте по-конкретен въпрос.
+@msg	Ask About Embroidery needs the desktop app for now	„Питане за бродерия“ засега изисква десктоп приложението
+@msg	already asking: wait for the answer	вече се пита: изчакайте отговора
+	Claude wants to change your design:	Claude иска да промени дизайна ви:
+	Allow	Разрешаване
+	Don't Allow	Без разрешение
+	Edit › Undo takes each change back.	Редактиране › Отмени връща всяка промяна.
+	Changed:	Променено:
+	Couldn't change:	Не можа да се промени:
+	Not changed:	Непроменено:
+@msg	This conversation is long: start a New Conversation.	Този разговор е дълъг: започнете нов разговор.
+@msg	Claude took too many steps: ask again, more simply.	Claude направи твърде много стъпки: попитайте отново, по-просто.
+	Digitizing	Дигитализиране
+	Embroidery Basics	Основи на бродерията

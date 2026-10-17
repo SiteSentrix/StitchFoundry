@@ -4532,3 +4532,1297 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+	Create PDF layers from top-level layers	최상위 레이어에서 PDF 레이어 만들기
+	Mojikumi	모지쿠미
+	Name 40%	이름 40%
+	Name* @ 66.67 % (RGB/Preview)	Name* @ 66.67 % (RGB/미리 보기)
+	Name* @ 66.67% (RGB/Preview)	Name* @ 66.67% (RGB/미리 보기)
+	Opacity: 50% Multiply	불투명도: 50% 곱하기
+	Opacity: Default	불투명도: 기본값
+	Rectangle: Sunshine	사각형: Sunshine
+	Saving Poster.vectorcraft	Poster.vectorcraft 저장 중
+effect	Points	포인트
+	Source Sans 3	Source Sans 3
+@msg	this kind of brush has no options dialog yet	이 종류의 브러시에는 아직 옵션 대화상자가 없습니다
+@msg	not a VectorCraft file: {0}	VectorCraft 파일이 아닙니다: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 문서: 잠긴 개체 하나로, 파일이 바뀌면 업데이트됩니다.
+	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	아트워크, 색상, 문자 스타일을 여기로 끌어 놓아 여러 문서에서 재사용하세요. 라이브러리는 이 컴퓨터에 저장되며 계정이 필요 없습니다.
+	1 Color Job	1도 인쇄
+	2 Color Job	2도 인쇄
+	3 Color Job	3도 인쇄
+	CMYK Equivalents	CMYK 대응 색상
+	3 x 3 Average	3 x 3 평균
+	5 x 5 Average	5 x 5 평균
+	PDF File	PDF 파일
+	CMYK profile in effect	적용 중인 CMYK 프로파일
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	파일을 열 때 StitchFoundry가 아직 읽지 못하는 내용({what})이 제외되었습니다. 덮어쓰면 해당 내용이 영구적으로 사라집니다. 보존하려면 다른 이름으로 저장하세요.
+	Report a Bug…	버그 신고…
+	Add Inclination Line	경사선 추가
+	After the selection	선택 항목 다음
+	Appliqué	아플리케
+	Apply Fabric	원단 적용
+	Artwork	아트워크
+	Auto Direction	자동 방향
+	Auto Stitch Direction	자동 스티치 방향
+	Auto spacing	자동 간격
+	Auto split	자동 분할
+	Auto-Digitize Image	이미지 자동 디지타이징
+	Automatic underlay	자동 언더레이
+	Back to the start	처음으로
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	빈 스티치
+	Before the selection	선택 항목 앞
+	Blanket	블랭킷
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	브러시 선
+	Calligraphy	캘리그래피
+	Cell size	셀 크기
+	Centre run	중앙 런
+	Clear Inclination Lines	경사선 지우기
+	Clear Lines	선 지우기
+	Connectors	연결선
+	Constant	일정
+	Contour Fill	윤곽 채우기
+	Convert Artwork to Embroidery	아트워크를 자수로 변환
+	Cover stitch	덮음 스티치
+	Cover width	덮음 너비
+	Cross	크로스
+	Cross Fill	크로스 채우기
+	Delete Inclination Line	경사선 삭제
+	Densities (mm)	밀도(mm)
+	Density	밀도
+	Design	디자인
+	Design Information	디자인 정보
+	Digitizing Widget	디지타이징 위젯
+	Dimmed	흐리게
+	Direction: automatic	방향: 자동
+	Direction: fixed angle	방향: 고정 각도
+	Direction: one inclination line	방향: 경사선 하나
+	Direction: turning along	방향: 따라 회전
+	Drag across the shape to add a line; drag a bead to move it	도형을 가로질러 드래그하여 선 추가, 구슬을 드래그하여 이동
+	Each anchor point is a needle penetration.	각 앵커 포인트가 바늘땀 하나입니다.
+	Edge run	가장자리 런
+	Edge run underlay	가장자리 런 언더레이
+	Edit Lines	선 편집
+	Embroidery	자수
+	Embroidery Brush Tool	자수 브러시 도구
+	Embroidery Settings	자수 설정
+	Export Machine File	기계 파일 내보내기
+	Export Machine File…	기계 파일 내보내기…
+	Fabric	원단
+	Fabric color	원단 색상
+	Feather	페더
+	Fill style	채우기 스타일
+	Fits the hoop	후프에 맞음
+	Give objects a stitch type in the Embroidery panel.	자수 패널에서 개체에 스티치 유형을 지정하세요.
+	Gradient to	그레이디언트 대상
+	Hide Digitizing Widget	디지타이징 위젯 숨기기
+	Hoop	후프
+	Inclination Tool	경사선 도구
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	후프보다 큼
+	Lengths (mm)	길이(mm)
+	Let sewing start and stop at the closest points again	바느질 시작과 끝을 다시 가장 가까운 지점으로 설정
+	Machine Embroidery File	기계 자수 파일
+	Manual Stitches	수동 스티치
+	Meander Fill	미앤더 채우기
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	모티프
+	Move Inclination Line	경사선 이동
+	Needle points	바늘땀
+	New strokes	새 선
+	No Stitches	스티치 없음
+	No hoop	후프 없음
+	No stitches yet.	아직 스티치가 없습니다.
+	Not set	설정 안 됨
+	Nothing stitched yet	아직 바느질된 항목 없음
+	Object color	개체 색상
+	Open a document to see its stitch sequence.	문서를 열면 스티치 순서를 볼 수 있습니다.
+	Open or create a document to digitize embroidery.	자수를 디지타이징하려면 문서를 열거나 만드세요.
+	Path spacing	패스 간격
+	Pause	일시 정지
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	다이얼에서 브러시, 너비, 밀도, 모양을 고른 다음 캔버스에 그리기
+	Place editable inclination lines (or pick the angle) automatically	편집 가능한 경사선을 자동으로 배치(또는 각도 선택)
+	Placement line and stop	배치선 후 정지
+	Play the stitches	스티치 재생
+	Pull compensation	당김 보정
+	Radial Fill	방사형 채우기
+	Randomness	무작위성
+	Remove background	배경 제거
+	Reset Start and Stop	시작과 끝 재설정
+	Row offset	행 오프셋
+	Run	런
+	Run style	런 스타일
+	Satin	새틴
+	Satin Fill	새틴 채우기
+	Scallop	스캘럽
+	Select a path, shape or compound path to give it a stitch type.	패스, 도형 또는 컴파운드 패스를 선택하여 스티치 유형을 지정하세요.
+	Set Inclination Lines	경사선 설정
+	Set Start and Stop	시작과 끝 설정
+	Set Thread	실 설정
+	Sew earlier	먼저 바느질
+	Sew first	맨 처음 바느질
+	Sew last	맨 나중 바느질
+	Sew later	나중에 바느질
+	Sewing time	바느질 시간
+	Sewn last	마지막으로 바느질됨
+	Short stitches on curves	곡선에 짧은 스티치
+	Show every stitch	모든 스티치 표시
+	Show stitches	스티치 표시
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	단일
+	Sort by Thread Color	실 색상별 정렬
+	Spiral Fill	나선형 채우기
+	Stitch Parameters	스티치 매개변수
+	Stitch Plan	스티치 계획
+	Stitch Sequence	스티치 순서
+	Stitch Type	스티치 유형
+	Stitch length	스티치 길이
+	Stitch type	스티치 유형
+	Stitches	스티치
+	Stop to trim fabric	원단 트리밍을 위해 정지
+	Tack-down	고정 스티치
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	가늘어지는
+	Tatami Fill	타타미 채우기
+	Tatami underlay	타타미 언더레이
+	Thread	실
+	Thread colors	실 색상
+	Trim after	다음에 트림
+	Trims	트림
+	Triple	3중
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	이미지를 스티치로 변환: 좁은 부분은 새틴, 나머지는 타타미 채우기가 됩니다.
+	Wave	물결
+	Widget values	위젯 값
+	Width profile	너비 프로파일
+	Widths (mm)	너비(mm)
+	Zigzag	지그재그
+	inclination lines	경사선
+	Brush	브러시
+	Length	길이
+	Bean	빈
+	Steil	스테일
+	Triangle	삼각형
+	Hexagon	육각형
+	Heart	하트
+	Arrow	화살표
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	자동 디지타이징에서 스티치할 도형을 찾지 못했습니다: 노이즈를 낮추거나 색상 수를 높이세요
+@msg	Auto-Digitize: the image traced to nothing	자동 디지타이징: 이미지를 추적한 결과가 없습니다
+@msg	can't open `{title}`: the file has no stitches	`{title}`을(를) 열 수 없습니다: 파일에 스티치가 없습니다
+@msg	can't open `{title}`: {e}	`{title}`을(를) 열 수 없습니다: {e}
+@msg	{_1} export failed: {e}	{_1} 내보내기 실패: {e}
+	Stitch Lines	스티치 선
+	Tatami	타타미
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Stitchwright 제작, ArtCraft 팀의 VectorCraft 기반. MIT OR Apache-2.0. 글꼴: Source Sans 3, Inter, JetBrains Mono (OFL). 아이콘: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	버전 {version} — 순수 Rust로 만든 오픈 소스 기계 자수 디지타이징.
+	Machine embroidery digitizing — fast, open, scriptable.	기계 자수 디지타이징 — 빠르고, 열려 있고, 스크립트로 제어 가능.
+	Split Here	여기서 분할
+	Split the object in two at the picked stitch	선택한 스티치에서 개체를 둘로 분할
+	Split Object	개체 분할
+	Check settings	설정 확인
+	Dense from (layers)	밀집 기준(레이어 수)
+	Give every stitched object the chart's closest thread	바느질되는 모든 개체에 차트에서 가장 가까운 실 지정
+	Hidden (not sewn)	숨김(바느질 안 함)
+	Inclination lines	경사선
+	Long stitches from	긴 스티치 기준
+	Match Threads to Chart	실을 차트에 맞추기
+	Omit last stitch	마지막 스티치 생략
+	Small lettering under	작은 글자 기준(이하)
+	Start and stop	시작과 끝
+	Thread chart	실 차트
+	Tie style	매듭 방식
+	Tiny objects under	작은 개체 기준(이하)
+	Travel by	이동 방식
+	Double	2중
+machine	Trim	트림
+@plural	{n} stitch|{n} stitches	스티치 {n}개|스티치 {n}개
+@plural	{n} trim|{n} trims	트림 {n}회|트림 {n}회
+machine	Stop	정지
+	Column A/B Tool	열 A/B 도구
+	Column A/B	열 A/B
+	Tatami stitches	타타미 스티치
+	Make Current	현재 값으로 만들기
+	New objects of this stitch type take these properties	이 스티치 유형의 새 개체에 이 속성이 적용됩니다
+	Properties for New Objects	새 개체 속성
+	Objects you give a stitch type take these properties.	스티치 유형을 지정한 개체에 이 속성이 적용됩니다.
+	Reset to Defaults	기본값으로 재설정
+	Fabric settings	원단 설정
+	Satin density	새틴 밀도
+	Fill density	채우기 밀도
+	Fill stitch length	채우기 스티치 길이
+	Underlay spacing	언더레이 간격
+	Fill underlay	채우기 언더레이
+	Topping	토핑
+	Save as New Fabric	새 원단으로 저장
+	Seconds per trim	트림당 초
+	Seconds per color change	색상 변경당 초
+	Save to Machine	기계에 저장
+	Keep these settings in the machine's profile, for new designs	새 디자인에 쓸 수 있도록 이 설정을 기계 프로파일에 보관
+	Reset Machine	기계 재설정
+	Put the machine's profile back to how it ships, and use it	기계 프로파일을 출고 상태로 되돌리고 사용
+	Delete Machine	기계 삭제
+	Save as New Machine	새 기계로 저장
+	A machine profile of your own with these settings	이 설정을 사용하는 나만의 기계 프로파일
+	My Machine	내 기계
+	A copy of this fabric to change	변경할 이 원단의 사본
+	Delete Fabric	원단 삭제
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	아직 스타일이 없습니다. 바느질된 개체를 선택하고 스타일을 만들어 스티치 속성을 재사용하세요.
+	New Embroidery Style	새 자수 스타일
+	Delete Embroidery Style	자수 스타일 삭제
+	Duplicate Embroidery Style	자수 스타일 복제
+	Redefine Embroidery Style	자수 스타일 재정의
+	Break Link to Embroidery Style	자수 스타일 링크 끊기
+	Rename Embroidery Style…	자수 스타일 이름 바꾸기…
+	Embroidery Styles	자수 스타일
+	Make Properties Current	속성을 현재 값으로 만들기
+	Current Properties	현재 속성
+	New Object Properties	새 개체 속성
+	Reset Current Properties	현재 속성 재설정
+	Apply Embroidery Style	자수 스타일 적용
+	Rename Embroidery Style	자수 스타일 이름 바꾸기
+	Save Fabric	원단 저장
+	Machine Profiles	기계 프로파일
+	Save Machine Profile	기계 프로파일 저장
+	Delete Machine Profile	기계 프로파일 삭제
+	Auto Sequence	자동 순서
+	Branch	분기
+	Break Apart	분리
+	Sew the objects separately again	개체를 다시 따로 바느질
+	These objects are sewn as one path (a branch).	이 개체들은 하나의 패스(분기)로 바느질됩니다.
+	Clear Machine Function	기계 기능 지우기
+	Insert Machine Function	기계 기능 삽입
+	Object Stitches	개체 스티치
+@msg	`after` is −1 to {_1}	`after`는 −1~{_1}입니다
+@msg	`{what}` is [x, y]	`{what}`은(는) [x, y]입니다
+@msg	`{what}` is [x, y] (numbers)	`{what}`은(는) [x, y](숫자)입니다
+@msg	each op needs `op`: move, delete or insert	각 op에는 `op`가 필요합니다: move, delete 또는 insert
+@msg	indices are record numbers (0, 1, 2…)	indices는 레코드 번호입니다(0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	`after`가 없습니다(−1은 맨 앞에 삽입)
+@msg	missing `indices`	`indices`가 없습니다
+@msg	no record {i}: the object has {len}	레코드 {i}이(가) 없습니다: 개체의 레코드 수는 {len}입니다
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	알 수 없는 cmd `{c}`: stitch, jump, trim 또는 stop이어야 합니다
+@msg	unknown op `{other}`: move, delete or insert	알 수 없는 op `{other}`: move, delete 또는 insert이어야 합니다
+	Stitch Edit Tool	스티치 편집 도구
+	Stitch List	스티치 목록
+	Stop after	다음에 정지
+	Stitches edited by hand: the shape no longer changes them.	수동으로 편집한 스티치: 도형이 더 이상 이 스티치를 바꾸지 않습니다.
+	Edit Stitches	스티치 편집
+	Pick, move, add and delete single stitches	개별 스티치 선택, 이동, 추가, 삭제
+	Regenerate Stitches	스티치 재생성
+	Drop the hand edits and stitch the shape again	수동 편집을 버리고 도형을 다시 스티치
+	Freeze Stitches	스티치 고정
+	Function	기능
+	X (mm)	X(mm)
+	Y (mm)	Y(mm)
+	Stitch	스티치
+	Jump	점프
+	Color change	색상 변경
+	End	끝
+	#	#
+	Open a document to see its stitches.	문서를 열면 스티치를 볼 수 있습니다.
+	Machine	기계
+	Machine settings	기계 설정
+	Longest stitch	최장 스티치
+	Longest jump	최장 점프
+	Shortest stitch	최단 스티치
+	Trim jumps longer than	다음보다 긴 점프 트림
+	Tie length	매듭 길이
+	Stitches per minute	분당 스티치 수
+	commercial machines	상업용 기계
+	home machines	가정용 기계
+	Remove underlying stitching	아래쪽 스티치 제거
+	Overlap	겹침
+	Turn	회전
+	Capped	막힌 끝
+	Backstitch	되박음질
+	Check Again	다시 검사
+	Check Design	디자인 검사
+	Click to select and show it	클릭하여 선택하고 표시
+	Design setting	디자인 설정
+	Different on each side	양쪽이 다름
+	Double zigzag	2중 지그재그
+	Fill Holes	구멍 채우기
+	Flip to the other side	반대쪽으로 뒤집기
+	Lettering only {n} mm tall is hard to sew clearly	높이가 {n}mm밖에 안 되는 글자는 선명하게 바느질하기 어렵습니다
+	Look for dense spots, long stitches, tiny objects and small lettering	밀집된 곳, 긴 스티치, 작은 개체, 작은 글자 찾기
+	Makes no stitches	스티치를 만들지 않음
+	No problems found.	문제가 없습니다.
+	Passes	패스 수
+	Preserve long stitches	긴 스티치 유지
+	Pull comp., side 1	당김 보정, 1쪽
+	Pull comp., side 2	당김 보정, 2쪽
+	Remove Holes	구멍 제거
+	Reverse Stitch Direction	스티치 방향 반전
+	Swap Satin Sides	새틴 양쪽 바꾸기
+	Convert to Satin Column	새틴 열로 변환
+	Stem Stitch	스템 스티치
+	Stem stitch	스템 스티치
+	Stitches up to {n} mm long can snag	{n}mm까지 긴 스티치는 걸릴 수 있습니다
+	The design is larger than the hoop	디자인이 후프보다 큽니다
+	Thread Color	실 색상
+	Tie in	매듭 시작
+	Tie off	매듭 마무리
+	Tiny object: may not sew cleanly	작은 개체: 깔끔하게 바느질되지 않을 수 있음
+	Very dense: about {n} layers of thread here	매우 밀집: 이곳에 실이 약 {n}겹
+	Design from Prompt…	프롬프트로 디자인…
+	Design from Prompt	프롬프트로 디자인
+	Generate	생성
+	Describe the design:	디자인 설명:
+	Size (longest side):	크기(긴 변):
+	Anthropic API key:	Anthropic API 키:
+	Remember the key on this computer	이 컴퓨터에 키 기억
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude가 사용자의 Anthropic API 키로 아트워크를 그리며 비용은 사용자의 Anthropic 계정에 청구됩니다. 그런 다음 StitchFoundry가 디지타이징합니다. 바느질하기 전에 스티치를 확인하세요.
+	Get a key	키 받기
+	Drawing the design…	디자인 그리는 중…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	디자인을 설명하면 Claude가 아트워크를 그리고 StitchFoundry가 디지타이징합니다
+	Place Artwork as Embroidery	아트워크를 자수로 가져오기
+	Place Artwork	아트워크 가져오기
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	디자인 배치됨: 바느질 개체 {n}개|디자인 배치됨: 바느질 개체 {n}개
+@msg	Enter your Anthropic API key first.	먼저 Anthropic API 키를 입력하세요.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	API 키가 올바르지 않습니다: Anthropic Console에서 다시 붙여넣으세요.
+@msg	Describe the design first.	먼저 디자인을 설명하세요.
+@msg	The description is too long: keep it under 2,000 characters.	설명이 너무 깁니다: 2,000자 이내로 줄이세요.
+@msg	Anthropic refused the API key: {e}	Anthropic이 API 키를 거부했습니다: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Anthropic 계정으로 결제할 수 없습니다: {e}
+@msg	The AI service is busy: try again in a minute.	AI 서비스가 바쁩니다: 1분 후에 다시 시도하세요.
+@msg	The AI service failed (error {code}): try again later.	AI 서비스에서 오류가 발생했습니다(오류 {code}): 나중에 다시 시도하세요.
+@msg	The request failed (error {code}): {e}	요청이 실패했습니다(오류 {code}): {e}
+@msg	The AI declined to draw this: try another description.	AI가 이 그림 그리기를 거절했습니다: 다른 설명을 시도하세요.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	그림이 너무 복잡해져 완성할 수 없습니다: 더 단순한 것을 요청하세요.
+@msg	The reply had no artwork: try again.	응답에 아트워크가 없습니다: 다시 시도하세요.
+@msg	Couldn't reach the AI service: {e}	AI 서비스에 연결할 수 없습니다: {e}
+@msg	Design from Prompt needs the desktop app for now	프롬프트로 디자인은 현재 데스크톱 앱에서만 사용할 수 있습니다
+@msg	already drawing: wait for it, or Cancel	이미 그리는 중입니다: 기다리거나 취소하세요
+@msg	the artwork has no shapes to stitch	아트워크에 스티치할 도형이 없습니다
+@msg	the artwork has nothing to place	아트워크에 배치할 항목이 없습니다
+@msg	the artwork can't be read: {e}	아트워크를 읽을 수 없습니다: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI는 다른 사람의 로고나 캐릭터를 복제하지 않습니다: {e}
+	Redraw Image with Claude…	Claude로 이미지 다시 그리기…
+	Redraw Image with Claude	Claude로 이미지 다시 그리기
+	What to change (optional):	변경할 내용(선택 사항):
+	Only redraw artwork you own or have permission to use.	소유하고 있거나 사용 권한이 있는 아트워크만 다시 그리세요.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude가 사용자의 Anthropic API 키로 이미지를 단색 평면 아트로 다시 그리며 비용은 사용자의 Anthropic 계정에 청구됩니다. 그런 다음 StitchFoundry가 디지타이징합니다. 바느질하기 전에 스티치를 확인하세요.
+	Redraw with Claude…	Claude로 다시 그리기…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude가 이미지를 깔끔한 단색 평면 아트로 다시 그리고 StitchFoundry가 디지타이징합니다
+@msg	select an image to redraw	다시 그릴 이미지를 선택하세요
+@msg	the image couldn't be read	이미지를 읽을 수 없습니다
+@msg	The image is too large to send: crop it, or place a smaller copy.	이미지가 너무 커서 보낼 수 없습니다: 자르거나 더 작은 사본을 가져오세요.
+	Set Split Lines	분할선 설정
+	Carve Split Lines	분할선으로 나누기
+	Clear Split Lines	분할선 지우기
+	Split lines:	분할선:
+	Texture size	질감 크기
+	Texture angle	질감 각도
+	Diamonds	다이아몬드
+	Waves	물결
+	Herringbone	헤링본
+	Bricks	벽돌
+	Circles	원
+	Scales	비늘
+	Hand stitch	손바느질
+	Gap	간격
+	Jagged edges	들쭉날쭉한 가장자리
+	Side 1	1쪽
+	Side 2	2쪽
+	Jag depth	들쭉날쭉 깊이
+	Trapunto (travel along the outline)	트라푼토(윤곽선을 따라 이동)
+	Place Motif	모티프 배치
+	Leaf	잎
+	Loop	고리
+	Motif Fill	모티프 채우기
+	Motif size	모티프 크기
+	Graded	단계적
+	Width at end	끝 너비
+	Row spacing	행 간격
+	E-stitch	E 스티치
+	Rings (0: all)	링(0: 전체)
+	Add Laydown	레이다운 추가
+	Spacing profile	간격 프로파일
+	Accordion	아코디언
+	Fade out	페이드 아웃
+	Fade in	페이드 인
+	Blend into	다음으로 혼합
+	Make Blend	블렌드 만들기
+	Blend Colors	색상 혼합
+	Add Outline	윤곽선 추가
+	Satin Outline	새틴 윤곽선
+	Bean Outline	빈 윤곽선
+	Rectangle Border	사각형 테두리
+	Oval Border	타원 테두리
+	Rounded Border	둥근 테두리
+	Motif Border	모티프 테두리
+	Make Motif	모티프 만들기
+	Apply Motif	모티프 적용
+	Embroidery Motifs	자수 모티프
+	Delete Motif	모티프 삭제
+	Remove the motif from the design; what sews it keeps it.	디자인에서 모티프를 제거합니다. 모티프로 바느질하는 개체는 그대로 유지됩니다.
+	Sculpture run	조각 런
+	Triple stitch length	3중 스티치 길이
+	Single stitch length	단일 스티치 길이
+	Triple stitches	3중 스티치
+	Single stitches	단일 스티치
+	Cross style	크로스 스타일
+	Full cross	풀 크로스
+	Half cross	하프 크로스
+	Upright cross	수직 크로스
+	Double cross	더블 크로스
+	Redwork	레드워크
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	시작한 곳에서 끝나는 하나의 선으로 바느질되며, 선 사이 이동은 선을 따라 되짚어 갑니다.
+	Add Buttonholes	단춧구멍 추가
+	Straight Buttonhole	일자 단춧구멍
+	Rounded Buttonhole	둥근 단춧구멍
+	Keyhole Buttonhole	열쇠 구멍 단춧구멍
+	Place Ring	링 배치
+	Satin Ring	새틴 링
+	Filled Ring	채운 링
+	Bean Ring	빈 링
+	Hexagons	육각형
+	Chevrons	셰브론
+	Basket weave	바구니 짜임
+	Stars	별
+	Hearts	하트
+	Leaves	잎
+	Paired with	짝
+	Sew as	바느질 방식
+	Motifs	모티프
+	Motif length (× width)	모티프 길이(× 너비)
+	String stitch	스트링 스티치
+	Chord length	현 길이
+	Automatic Knife	자동 나이프
+	3D effect	3D 효과
+	Globe out	볼록하게
+	Globe in	오목하게
+	Fill Along Lines	선을 따라 채우기
+	Clear Flow Lines	흐름선 지우기
+	Rows follow lines:	행이 따르는 선:
+	Set Flow Lines	흐름선 설정
+	Carving Stamps	카빙 스탬프
+	Carve Stamp	스탬프 새기기
+	Flower	꽃
+	Sun	해
+	Moon	달
+	Snowflake	눈송이
+	Paw Print	발자국
+	Swirl	소용돌이
+	Shell	조개
+	Butterfly	나비
+	Clover	클로버
+	Show Repeats	반복 표시
+	Repeats across	가로 반복
+	Repeats down	세로 반복
+	Gap between repeats	반복 간격
+	Stripes	줄무늬
+	Slants	사선
+	Pinstripes	가는 줄무늬
+	Lattice	격자
+	Arches	아치
+	Spirals	나선
+	Pyramids	피라미드
+	Ripples	잔물결
+	Greek key	그리스 뇌문
+	Crosses	십자
+	Quatrefoils	사엽 문양
+	Flowers	꽃
+	Trefoils	삼엽 문양
+	Moons	달
+	Arrows	화살표
+	Nested diamonds	겹친 다이아몬드
+	Argyle	아가일
+	Wicker	고리버들
+	Feathers	깃털
+	Paisley	페이즐리
+	Swirls	소용돌이
+	Snowflakes	눈송이
+	Bubbles	거품
+	Sunbursts	햇살
+	Motif Tool	모티프 도구
+	Contour Split Lines	윤곽 분할선
+	Keep Motif	모티프 보관
+	Keep the motif in My Motifs, for any design	모든 디자인에서 쓸 수 있도록 내 모티프에 보관
+	My Motifs	내 모티프
+	Forget Motif	모티프 삭제
+	Buttonholes	단춧구멍
+	Straight	일자
+	Keyhole	열쇠 구멍
+	Count	개수
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	도형을 가로지르는 행: 위로 갈수록 촘촘합니다. 점을 드래그하고, 두 번 클릭하여 추가하고, 마우스 오른쪽 버튼을 클릭하여 제거하세요.
+	Embroidery Lettering	자수 레터링
+	Load Embroidery Font	자수 글꼴 불러오기
+	Embroidery Fonts	자수 글꼴
+	Load Embroidery Font…	자수 글꼴 불러오기…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Ink/Stitch 형식의 글꼴 폴더: font.json과 글리프
+	Load an embroidery font to set text with it.	자수 글꼴을 불러와 텍스트를 입력하세요.
+	Sews well at	적정 크기
+	Place Lettering	레터링 배치
+	Edit Lettering	레터링 편집
+	Update Lettering	레터링 업데이트
+	Load this lettering's font to change it:	이 레터링을 변경하려면 글꼴을 불러오세요:
+	Arch	아치
+	Valley	밸리
+	Forget Font	글꼴 지우기
+	Unload the font and stop loading its folder	글꼴을 내리고 해당 폴더를 더 이상 불러오지 않음
+	Forget Embroidery Font	자수 글꼴 지우기
+	Team Names	팀 이름
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	자수 글꼴로 된 레터링을 선택하세요: 이름마다 해당 이름으로 레터링을 바꾼 기계 파일이 기록됩니다.
+	One name a line	한 줄에 이름 하나
+	Import Names…	이름 가져오기…
+	The first column of a CSV table, or a text file of one name a line	CSV 표의 첫 번째 열, 또는 한 줄에 이름 하나씩 적은 텍스트 파일
+	Names	이름
+	Export One File per Name…	이름마다 파일 하나씩 내보내기…
+	Team name files written	팀 이름 파일을 기록했습니다
+	Export Team Names	팀 이름 내보내기
+	Read Team Names	팀 이름 읽기
+	Monogram	모노그램
+	Load an embroidery font (Embroidery Lettering) to make monograms.	모노그램을 만들려면 자수 글꼴을 불러오세요(자수 레터링).
+	Initials	이니셜
+	In a line	한 줄로
+	Scallops	스캘럽
+	Border	테두리
+	Place Monogram	모노그램 배치
+	New Embroidery Font	새 자수 글꼴
+	Save Embroidery Font…	자수 글꼴 저장…
+	Add Glyphs	글리프 추가
+	Font Properties	글꼴 속성
+	Kern Glyph Pair	글리프 쌍 커닝
+	Font Info	글꼴 정보
+	Save Embroidery Font	자수 글꼴 저장
+	Edit Embroidery Font	자수 글꼴 편집
+	Merge Embroidery Font	자수 글꼴 병합
+	New Embroidery Font from Type	문자 글꼴에서 새 자수 글꼴
+	Font Creator	글꼴 제작기
+	Capitals' height	대문자 높이
+	Line spacing	줄 간격
+	Space width	공백 너비
+	As typed	입력한 대로
+	Capitals	대문자
+	Small letters	소문자
+	Letter case	대소문자
+	Sews well from	적정 최소 크기
+	Sews well up to	적정 최대 크기
+	Still to digitize	디지타이징할 항목
+	Show this glyph	이 글리프 표시
+	Not digitized yet: show its artboard	아직 디지타이징 안 됨: 아트보드 표시
+	Glyphs to add	추가할 글리프
+	Kerning (mm closer)	커닝(mm만큼 좁히기)
+	Pair	쌍
+	Kern	커닝
+	Merge glyphs from	글리프 병합 원본
+	Test text	테스트 텍스트
+	Try in a New Document	새 문서에서 시험
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	자수 글꼴 만들기: 디지타이징할 글리프마다 아트보드가 있는 문서입니다.
+	Type family	문자 글꼴 패밀리
+	New Font from Type	문자 글꼴에서 새 글꼴
+	Edit Font	글꼴 편집
+	Assign to Glyph	글리프에 지정
+	Selection to glyph	선택 항목을 글리프로
+	The selected art becomes the glyph, moved onto its artboard	선택한 아트워크가 글리프가 되어 해당 아트보드로 이동합니다
+	Sew order	바느질 순서
+	Left to right	왼쪽에서 오른쪽
+	Right to left	오른쪽에서 왼쪽
+	Centre out	가운데에서 바깥으로
+	Closest	가장 가까운 순
+	Along the baseline	기준선을 따라
+	Where needed	필요한 곳에
+	After each letter	글자마다
+	After each word	단어마다
+	After each line	줄마다
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	글꼴이 만들어진 크기 범위 밖입니다: 스티치가 너무 촘촘하거나 너무 길어질 수 있습니다
+	Adjust Letter	글자 조정
+	One letter: moved, scaled or turned, kept when the lettering is set again	글자 하나: 이동, 크기 조정 또는 회전하며, 레터링을 다시 설정해도 유지됩니다
+	Move along	가로 이동
+	Move down	아래로 이동
+	Reset Letter	글자 재설정
+	3D Puff	3D 퍼프
+	3D puff	3D 퍼프
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	폼 위에 바느질하는 새틴: 촘촘하고, 언더레이가 없으며, 끝이 막혀 있습니다. 정지 시점에 폼을 올릴 수 있도록 별도 색상으로 바느질하세요
+	Sew Puff Last	퍼프를 마지막에 바느질
+	Click to Stitch	클릭하여 스티치
+	Click-to-Stitch Tool	클릭하여 스티치 도구
+	Fill without holes	구멍 없이 채우기
+	Centre line	중심선
+	Stitch as	스티치 방식
+	Click a region of an image to stitch it	이미지의 영역을 클릭하여 스티치하기
+	Send to Machine	기계로 보내기
+	Machine Folders	기계 폴더
+	Add Machine Folder…	기계 폴더 추가…
+	A USB stick, the machine's folder or a network share the machine reads	USB 메모리, 기계의 폴더 또는 기계가 읽는 네트워크 공유
+	Add the folder your machine reads: a USB stick, its folder or a network share.	기계가 읽는 폴더를 추가하세요: USB 메모리, 기계의 폴더 또는 네트워크 공유.
+	Machine folder	기계 폴더
+	Send	보내기
+	Sent:	보냄:
+	Forget Folder	폴더 지우기
+	Triple run	3중 런
+	Partial cover	부분 덮기
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	기계 파일을 인코딩하지 못했습니다
+	Worksheet	작업지
+	Outline Around	둘레 윤곽선
+	Oval	타원
+	Octagon	팔각형
+	Shield	방패
+	Ornament	장식
+	Multi-Hooping	멀티 후핑
+	Basting first	시침질 먼저
+	Basting round	둘레 시침질
+	The design	디자인
+	The hoop	후프
+	Basting margin	시침질 여백
+	Design notes	디자인 메모
+	Printed on worksheets	작업지에 인쇄됨
+	Cost a piece	개당 비용
+	Estimate cost	비용 추정
+	Cost settings	비용 설정
+	Per 1000 stitches	1000스티치당
+	Machine time an hour	시간당 기계 비용
+	Thread per 1000 m	실 1000m당
+	Set-up an order	주문당 준비
+	Machine heads	기계 헤드 수
+	Currency	통화
+	Cost Estimate	비용 추정
+	Colorways	컬러웨이
+	New Colorway	새 컬러웨이
+	Use Colorway	컬러웨이 사용
+	Colorway Thread	컬러웨이 실
+	Rename Colorway	컬러웨이 이름 바꾸기
+	Delete Colorway	컬러웨이 삭제
+	Colorway	컬러웨이
+	The design's own	디자인 원래 색상
+	Own colour block	별도 색상 블록
+	Where it falls	위치대로
+	Centre	가운데
+	Top left	왼쪽 위
+	Top right	오른쪽 위
+	Bottom left	왼쪽 아래
+	Bottom right	오른쪽 아래
+	Start at	시작 위치
+	End at	끝 위치
+	Stabiliser	심지
+	Tear-away	찢는 심지
+	Cut-away	자르는 심지
+	No-show mesh	노쇼 메시
+	Wash-away	수용성 심지
+	Scatter Copies	사본 흩뿌리기
+	Appliqué letters	아플리케 글자
+	Each letter a patch of fabric: placement line, tack-down and cover	글자마다 원단 패치: 배치선, 고정 스티치, 덮음
+	Letters sewn	바느질할 글자
+	As the font has them	글꼴에 있는 대로
+	Small text	작은 텍스트
+	Under 6 mm	6mm 미만
+	Place Along Selected Line	선택한 선을 따라 배치
+	The text along the selected line or shape, from its start	선택한 선이나 도형을 따라 시작점부터 텍스트 배치
+	Monogram Templates	모노그램 템플릿
+	Save Monogram Template	모노그램 템플릿 저장
+	Delete Monogram Template	모노그램 템플릿 삭제
+	Template name	템플릿 이름
+	Delete Template	템플릿 삭제
+	Lay Out Team Names	팀 이름 배치
+	Team Names Worksheet	팀 이름 작업지
+	Lay Out Together	함께 배치
+	Every name in one design, in rows and columns, for a large hoop or patches	큰 후프나 패치용으로 모든 이름을 행과 열로 한 디자인에 배치
+	Names Worksheet	이름 작업지
+	Each name with its size, stitches and sewing time, and the totals	이름별 크기, 스티치 수, 바느질 시간과 합계
+	Design Library	디자인 라이브러리
+	Design Catalogue	디자인 카탈로그
+	No folder chosen	선택한 폴더 없음
+	Choose Folder…	폴더 선택…
+	Newest	최신순
+	Most stitches	스티치 많은 순
+	Largest	가장 큰 순
+	Designs	디자인
+	Couldn't be read	읽을 수 없음
+	stitches	스티치
+	colours	색상
+	Print Catalogue	카탈로그 인쇄
+	A sheet of the designs found, to print or save as PDF	찾은 디자인을 모은 시트로, 인쇄하거나 PDF로 저장
+@msg	larger than {_1} MB	{_1}MB보다 큽니다
+@msg	not a machine file: .{ext}	기계 파일이 아닙니다: .{ext}
+	Batch Output	일괄 출력
+	Output Profiles	출력 프로파일
+	Save Output Profile	출력 프로파일 저장
+	Delete Output Profile	출력 프로파일 삭제
+	Batch Convert	일괄 변환
+	files written	기록한 파일
+	Machine formats (none ticked: the machine's)	기계 형식(선택하지 않으면 기계의 형식)
+	Production	생산용
+	Approval	승인용
+	Placement template	배치 템플릿
+	The design file too	디자인 파일도
+	Write to Folder…	폴더에 기록…
+	Machine files, worksheet PDF and design, named alike	기계 파일, 작업지 PDF, 디자인을 같은 이름으로
+	Write Again	다시 기록
+	Profile name	프로파일 이름
+	Save Profile	프로파일 저장
+	Profile	프로파일
+	Convert to	변환 형식
+	Convert All	모두 변환
+	Each design found written again in this format beside it	찾은 각 디자인을 이 형식으로 옆에 다시 기록
+	Converted:	변환됨:
+	couldn't be read:	읽을 수 없음:
+	Product Visualizer	제품 시각화
+@msg	product outline: {e}	제품 윤곽선: {e}
+	Exports	내보내기
+	Nothing exported yet in this session.	이 세션에서 아직 내보낸 항목이 없습니다.
+	Again	다시
+	Export it again, as it was asked, from this document	이 문서에서 요청한 그대로 다시 내보내기
+	Export History	내보내기 기록
+	Clear Export History	내보내기 기록 지우기
+	Export Again	다시 내보내기
+	Export Stitch Image	스티치 이미지 내보내기
+	Export Stitch Image…	스티치 이미지 내보내기…
+	Stitch List CSV (.csv)…	스티치 목록 CSV (.csv)…
+	Stitch List JSON (.json)…	스티치 목록 JSON (.json)…
+	G-code (.gcode)…	G-code (.gcode)…
+	Stitch Image PNG (.png)…	스티치 이미지 PNG (.png)…
+@msg	PNG encoding failed: {e}	PNG 인코딩 실패: {e}
+@msg	the design has no stitches	디자인에 스티치가 없습니다
+@msg	the image would be {w} × {h} pixels: lower ppmm	이미지가 {w} × {h}픽셀이 됩니다: ppmm을 낮추세요
+	Smallest That Fits	맞는 가장 작은 후프
+	The smallest hoop that holds the design, turned if that fits better	디자인이 들어가는 가장 작은 후프(돌리면 더 잘 맞으면 회전)
+	Rotate Hoop	후프 회전
+	Custom Hoops	사용자 후프
+	Hoop name	후프 이름
+	Save Hoop	후프 저장
+	Delete Hoop	후프 삭제
+	Hoops	후프
+	Choose Smallest Hoop	가장 작은 후프 선택
+	Save Custom Hoop	사용자 후프 저장
+	Delete Custom Hoop	사용자 후프 삭제
+	Turn the hue	색조 돌리기
+	One colour	단색
+	Grey	회색
+	Inverted	반전
+	Recolour	색상 재지정
+	Recolour Threads	실 색상 재지정
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	모든 실을 구성표에 따라 바꾸고 디자인의 차트에 맞춥니다. 실행 취소하면 되돌아갑니다
+	Garment Background	의류 배경
+	Garment Photo…	의류 사진…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	디자인 뒤에 실물 크기로 놓이는 의류 사진으로, 바느질되지 않는 잠긴 템플릿 레이어에 있습니다
+	Import Chart…	차트 가져오기…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	CSV 파일(실마다 코드, 이름, 색상) 또는 GIMP 팔레트(.gpl)로 만든 나만의 실 차트
+	Export Chart…	차트 내보내기…
+	Thread Charts	실 차트
+	Import Thread Chart	실 차트 가져오기
+	Export Thread Chart	실 차트 내보내기
+	Save Thread Chart	실 차트 저장
+	Delete Thread Chart	실 차트 삭제
+	Design Templates	디자인 템플릿
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	이 디자인의 페이지, 아트워크, 후프, 원단, 설정을 보관하여 새 디자인의 시작점으로 사용
+	New from Design Template	디자인 템플릿에서 새로 만들기
+	Save as Design Template	디자인 템플릿으로 저장
+	Delete Design Template	디자인 템플릿 삭제
+	Print Stitch View	스티치 보기 인쇄
+	Job Orders	작업 주문
+	Customer	고객
+	Due (YYYY-MM-DD)	납기(YYYY-MM-DD)
+	New Job for This Design	이 디자인으로 새 작업
+	In production	생산 중
+	Cancelled	취소됨
+	New Job Order	새 작업 주문
+	Update Job Order	작업 주문 업데이트
+	Delete Job Order	작업 주문 삭제
+	Job Worksheet	작업 작업지
+	Job Output	작업 출력
+	Clipart	클립아트
+	Click a motif to place it, digitized, in the middle of the page.	모티프를 클릭하면 디지타이징된 상태로 페이지 가운데에 배치됩니다.
+	Embroidery Clipart	자수 클립아트
+	Insert Clipart	클립아트 삽입
+	Send When Ready	준비되면 보내기
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	이 폴더로 디자인을 대기열에 추가: 폴더가 있으면 지금 기록하고, 없으면 폴더가 생기는 즉시 기록합니다
+	Waiting for the folder	폴더 대기 중
+	Send queue	보내기 대기열
+	waiting	대기 중
+	sent	보냄
+	failed	실패
+	Clear Sent	보낸 항목 지우기
+	Send Queue	보내기 대기열
+	Add to Send Queue	보내기 대기열에 추가
+	Send Waiting Designs	대기 중인 디자인 보내기
+	Remove from Send Queue	보내기 대기열에서 제거
+@msg	the queued file is damaged	대기열의 파일이 손상되었습니다
+	Centred	가운데 정렬
+	In the hoop	후프 안
+	Worksheet Setup	작업지 설정
+	Merge Colours	색상 병합
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	같거나 비슷한 색상의 실을 하나로 합치고 색상 블록을 이었습니다. 실행 취소하면 되돌아갑니다
+	Lettering Kiosk	레터링 키오스크
+	Kiosk Lettering	키오스크 레터링
+	Type a name and make the design	이름을 입력하고 디자인 만들기
+	No embroidery font is loaded: ask the shop to load one.	불러온 자수 글꼴이 없습니다: 매장에 글꼴을 불러와 달라고 요청하세요.
+	As large as fits	맞는 최대 크기
+	Make Design	디자인 만들기
+	T-shirt	티셔츠
+	Polo shirt	폴로 셔츠
+	Hoodie	후드티
+	Tote bag	토트백
+	Towel	수건
+	Product	제품
+	Show on Product	제품에 표시
+	Back to the Design	디자인으로 돌아가기
+	Save Machine File…	기계 파일 저장…
+	Next Name	다음 이름
+	PIN	PIN
+	Leave Kiosk	키오스크 나가기
+	Leaving the kiosk will take this PIN	키오스크를 나가려면 이 PIN이 필요합니다
+	Snapback	스냅백
+	Trucker cap	트러커 캡
+	Dad cap	대드 캡
+	Image Colours	이미지 색상
+	Prepare Image	이미지 준비
+	Photo Stitch	사진 스티치
+	Convert Stitches to Objects	스티치를 개체로 변환
+	Colour Preview	색상 미리 보기
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	이 색상으로 매끄럽게 다듬고 잡티를 정리한 이미지 사본으로, 디지타이징하거나 클릭하여 스티치할 수 있습니다
+	Colours	색상
+	background, not sewn	배경, 바느질 안 함
+	thread changes	실 교체
+	threads sewn	바느질하는 실
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	사진을 지그재그 선, 구불구불한 런 하나, 또는 색상별로 겹쳐 바느질
+	Sequins	스팽글
+	Beads	비즈
+	Rhinestones	라인스톤
+	Cord	코드
+	Boring	보링
+	Along the line	선을 따라
+	Fill the shape	도형 채우기
+	Round the edge	가장자리 둘레
+	At each point	각 점에
+	Bead length	비즈 길이
+	Cord width	코드 너비
+	Edge width	가장자리 너비
+	Honeycomb	벌집
+	Packing	배열
+	Three	3개
+	Fixing	고정
+	Flip every other	하나 걸러 뒤집기
+	Colour	색상
+	Thread colour	실 색상
+	Stop before	다음 전에 정지
+	Rhinestones aren't sewn: export their template to cut and set them	라인스톤은 바느질되지 않습니다: 템플릿을 내보내 자르고 붙이세요
+	Decoration Sizes	장식 크기
+	Count Decorations	장식 개수
+	Cut File	커팅 파일
+	Sew the pieces together	조각 이어 바느질
+	Fabric colour	원단 색상
+	Plain	무지
+	Check	체크
+	Denim	데님
+	Felt	펠트
+	Fabric pattern	원단 무늬
+	Pattern colour	무늬 색상
+	Combine Appliqué	아플리케 결합
+	Prepare Appliqué	아플리케 준비
+	Coil	코일
+	Square loop	사각 고리
+	Foil	포일
+	Shown with the design, not sewn	디자인과 함께 표시, 바느질 안 함
+	StitchFoundry Help	StitchFoundry 도움말
+	Guide	안내서
+	Tips	팁
+	Search help	도움말 검색
+	Nothing found	찾은 항목 없음
+	Help Topics	도움말 항목
+	Help Topic	도움말 항목
+	Help for Tool	도구 도움말
+	New Design for Hoop	후프에 맞춘 새 디자인
+	Sample Designs	예제 디자인
+	Open Sample Design	예제 디자인 열기
+	Start a design for your hoop	내 후프에 맞춰 디자인 시작
+	Your first design	첫 번째 디자인
+	Draw shapes, place a picture or type text.	도형을 그리거나, 그림을 가져오거나, 텍스트를 입력하세요.
+	Choose how each part is stitched: satin, fill, run and more.	각 부분의 스티치 방식을 고르세요: 새틴, 채우기, 런 등.
+	Watch it sew with the stitch player and check it.	스티치 플레이어로 바느질 과정을 보고 검사하세요.
+	Export the file for your machine.	기계용 파일을 내보내세요.
+	Learn how	방법 알아보기
+	Try a sample	예제 사용해 보기
+	Heart patch	하트 패치
+	Sun and moon	해와 달
+	Appliqué star	아플리케 별
+	Tip:	팁:
+	More tips	팁 더 보기
+	A new design the size of this hoop's sewing field	이 후프의 바느질 영역 크기로 새 디자인
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	도형을 가로질러 경사선을 그려 스티치 각도를 설정하세요. 선이 둘 이상이면 스티치가 방향을 틉니다.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	가져온 이미지의 영역을 클릭하여 스티치하세요. 허용치를 높이면 더 많은 색조가 포함됩니다.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	선택한 바늘땀을 드래그하여 이동하고, Alt-클릭하여 스티치를 추가하고, Delete로 제거하세요.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	열의 한쪽을 클릭한 다음 다른 쪽을 번갈아 클릭하세요. Enter 또는 Escape로 끝냅니다.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	왼쪽 아래 모서리의 다이얼에서 브러시, 너비, 밀도, 길이, 모양을 설정합니다.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	텍스트를 입력한 다음 레터링 패널에서 자수 글꼴을 골라야 깔끔하게 바느질됩니다.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	아트워크를 선택하고 자수 › 아트워크를 자수로 변환을 선택하면 한 번에 디지타이징됩니다.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	새틴은 약 7mm 너비까지의 도형에 알맞습니다. 더 넓은 영역은 타타미 채우기가 더 잘 바느질됩니다.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	자수 패널에서 후프를 선택하면 디자인 둘레의 바느질 영역이 보입니다.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	자수 메뉴의 디자인 검사는 밀집된 레이어, 긴 스티치, 바느질하기에 너무 작은 텍스트를 찾습니다.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	보내기 전에 스티치 순서의 스티치 플레이어로 디자인이 바느질되는 과정을 보세요.
+	Export with Embroidery › Export Machine File and pick your machine's format.	자수 › 기계 파일 내보내기로 내보내고 기계의 형식을 고르세요.
+	Save as Default	기본값으로 저장
+	Clear Default	기본값 지우기
+	Every new design starts with these properties	모든 새 디자인이 이 속성으로 시작합니다
+	New designs take the built-in properties again	새 디자인이 다시 기본 제공 속성을 사용합니다
+	All Tools, Ungrouped	모든 도구, 그룹 해제
+	Toolbar: All Tools, Ungrouped	도구 막대: 모든 도구, 그룹 해제
+	Push compensation	밀림 보정
+	{n} very short stitches can break the thread	매우 짧은 스티치 {n}개는 실이 끊어질 수 있습니다
+	Satin only {n} mm wide sinks into the fabric	너비가 {n}mm밖에 안 되는 새틴은 원단 속에 묻힙니다
+	Fill stitches {n} mm long can ripple after washing	{n}mm 길이의 채우기 스티치는 세탁 후 주름질 수 있습니다
+	Sewn on clothing	의류에 바느질
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	긴 스티치는 의류에서 7mm, 기타 제품에서 12.1mm부터 걸립니다
+	Short stitches under	짧은 스티치 기준(미만)
+	Narrow satin under	좁은 새틴 기준(미만)
+	Short fill stitches under	짧은 채우기 스티치 기준(미만)
+	Edge run and zigzag	가장자리 런과 지그재그
+	Satin underlay	새틴 언더레이
+	Edge run under fills	채우기 아래 가장자리 런
+	New to digitizing? Read the basics	디지타이징이 처음이신가요? 기본 사항 읽기
+	Density Map	밀도 맵
+	Density map	밀도 맵
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	실이 쌓인 깊이에 따라 디자인 색칠: 파랑은 한 겹, 빨강은 디자인 검사가 표시하는 밀도
+	Calibrate Life Size…	실제 크기 보정…
+	Calibrate Life Size	실제 크기 보정
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	자나 은행 카드를 화면에 대고 눈금이 맞을 때까지 크기를 바꾸세요. 그러면 실제 크기 보기에서 디자인이 실물 크기로 표시됩니다.
+	Bank card	은행 카드
+	Screen points per inch	인치당 화면 포인트
+	Use This Size	이 크기 사용
+	Screen Points per Inch at Life Size	실제 크기 기준 인치당 화면 포인트
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch`는 40~400 사이의 숫자입니다
+	Experience	경험 수준
+	New to Embroidery	자수 입문자
+	Digitizer	디지타이저
+	Embroidery Business	자수 사업자
+	Everything	전체
+	Showing the basics.	기본 항목을 표시하는 중입니다.
+	Show everything	모두 표시
+	New to embroidery	자수가 처음입니다
+	I digitize designs	디자인을 디지타이징합니다
+	I run an embroidery business	자수 사업을 운영합니다
+	The basic tools and everyday sections, nothing more	기본 도구와 자주 쓰는 섹션만
+	Every digitizing tool, rulers and the control bar	모든 디지타이징 도구, 눈금자, 컨트롤 막대
+	Everything, with job orders and batch output	작업 주문과 일괄 출력을 포함한 모든 기능
+	How do you work?	어떻게 작업하시나요?
+@msg	`level` is beginner, digitizer, business or all	`level`은 beginner, digitizer, business 또는 all입니다
+	Echo Quilting	에코 퀼팅
+	Background Quilting	배경 퀼팅
+	Remove Blend	블렌드 제거
+	Blend layers	블렌드 레이어 수
+	My Machine…	내 기계…
+	Save for My Machine	내 기계용으로 저장
+	Which embroidery machine do you have?	어떤 자수기를 가지고 계신가요?
+	Measure in	측정 단위
+	Save designs to	디자인 저장 위치
+	No folder chosen yet	아직 선택한 폴더 없음
+	Plug in the USB stick you take to your machine, then choose it here.	기계에 꽂을 USB 메모리를 연결한 다음 여기에서 선택하세요.
+	Husqvarna Viking (other models)	Husqvarna Viking(기타 모델)
+	Brother or Baby Lock	Brother 또는 Baby Lock
+	Janome or Elna	Janome 또는 Elna
+	Another machine (DST)	다른 기계(DST)
+	My machine:	내 기계:
+	Tell us your machine to see its hoops and save in its format.	기계를 알려 주시면 해당 후프를 보여 드리고 그 형식으로 저장합니다.
+	Choose My Machine	내 기계 선택
+	Saved for your machine:	내 기계용으로 저장됨:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	원단 모양: 기계가 멈추면 원단을 올려놓고, 기계가 원단을 박아 고정합니다
+	A heart, a star, a flower and more, ready to sew	하트, 별, 꽃 등 바로 바느질할 수 있는 모양
+	A name or a few words, ready to sew	바로 바느질할 수 있는 이름이나 짧은 문구
+	A photo or drawing to turn into stitches	스티치로 바꿀 사진이나 그림
+	A picture	그림
+	Add Appliqué	아플리케 추가
+	Add Appliqué…	아플리케 추가…
+	Add Words	문구 추가
+	Add Words…	문구 추가…
+	Add a Picture…	그림 추가…
+	Add a Shape	모양 추가
+	Add a Shape…	모양 추가…
+	Bigger	크게
+	Choose a shape	모양 선택
+	Click a part of the design to change how it sews.	디자인의 한 부분을 클릭하여 바느질 방식을 바꾸세요.
+	Click a part of the design to choose it, drag it to move it	디자인의 한 부분을 클릭하여 선택하고, 드래그하여 이동하세요
+	Crown	왕관
+	Filled	채움
+	How tall	높이
+	Just the outline	윤곽선만
+	Not sewn	바느질 안 함
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	아직 바느질할 항목이 없습니다. 왼쪽 버튼으로 문구, 모양 또는 그림을 추가하세요.
+	Paw	발바닥
+	See the design sew on screen, stitch by stitch	화면에서 디자인이 한 땀씩 바느질되는 모습 보기
+	Sew it as	바느질 방식
+	Smaller	작게
+	Smooth edge (satin)	매끄러운 가장자리(새틴)
+	Start a design from the Home screen.	홈 화면에서 디자인을 시작하세요.
+	Take back the last change	마지막 변경 취소
+	The chosen part	선택한 부분
+	The chosen parts	선택한 부분
+	The design is bigger than the hoop: make it smaller before you sew.	디자인이 후프보다 큽니다: 바느질하기 전에 크기를 줄이세요.
+	Thread colours	실 색상
+	Turn Into Stitches	스티치로 변환
+	Turn it into stitches in your thread colours.	내 실 색상으로 스티치로 변환합니다.
+	Watch It Sew	바느질 보기
+	What should it say?	어떤 문구를 넣을까요?
+	Write the design for your machine to its USB stick or folder	내 기계용 디자인을 USB 메모리나 폴더에 기록
+	Your design	내 디자인
+	Show Everything	모두 표시
+@msg	the design has no page	디자인에 페이지가 없습니다
+@msg	open or start a design first	먼저 디자인을 열거나 시작하세요
+	Set My Machine	내 기계 설정
+	Make a Design	디자인 만들기
+	Make a Design…	디자인 만들기…
+	Make a Design, Step by Step	단계별로 디자인 만들기
+	Step by step: words, a shape, appliqué, a picture or a sample	단계별: 문구, 모양, 아플리케, 그림 또는 예제
+	What would you like to make?	무엇을 만들고 싶으신가요?
+	A name or some words	이름이나 문구
+	For towels, bags, pillows and gifts	수건, 가방, 쿠션, 선물용
+	A shape	모양
+	A heart, a star, a flower and more	하트, 별, 꽃 등
+	An appliqué	아플리케
+	A shape cut from fabric and sewn down	원단을 모양대로 잘라 박아 고정
+	A photo or a drawing turned into stitches	스티치로 바꾼 사진이나 그림
+	A sample to try	사용해 볼 예제
+	A finished design to sew and learn from	바느질하며 배울 수 있는 완성된 디자인
+	Which hoop will you use?	어떤 후프를 사용하시나요?
+	Tell us your machine to see its hoops.	기계를 알려 주시면 해당 후프를 보여 드립니다.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	원단을 끼울 후프를 고르세요. 디자인이 후프에 맞게 만들어집니다.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	대문자 높이입니다. 수건에는 20~30mm, 셔츠에는 10~15mm가 알맞습니다.
+	Make It	만들기
+	Which shape of fabric?	어떤 모양의 원단인가요?
+	Which shape?	어떤 모양인가요?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	기계가 원단 놓을 자리를 바느질하고 멈춥니다. 원단을 올려놓으면 박아 고정한 뒤 다시 멈추니 원단을 다듬으세요. 그런 다음 가장자리를 바느질합니다.
+	Choose a picture	그림 선택
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	단색 몇 가지와 뚜렷한 윤곽선으로 된 단순한 그림이 가장 좋습니다: 만화, 로고, 클립아트.
+	Choose a Picture…	그림 선택…
+	Which sample?	어떤 예제인가요?
+	Your thread colours	내 실 색상
+	These are sewn in this order. Click a colour to match a thread you have.	이 순서대로 바느질됩니다. 색상을 클릭하여 가지고 있는 실에 맞추세요.
+	Watch it sew	바느질 보기
+	See the needle go stitch by stitch, in the order your machine will sew it.	기계가 바느질할 순서대로 바늘이 한 땀씩 움직이는 모습을 보세요.
+	Save it	저장하기
+	Save for My Machine writes the file your machine sews, to its USB stick.	내 기계용으로 저장은 기계가 바느질할 파일을 USB 메모리에 기록합니다.
+	Save Design keeps a copy you can open and change later.	디자인 저장은 나중에 열어 바꿀 수 있는 사본을 보관합니다.
+	Save Design…	디자인 저장…
+	Put back what Undo took back	실행 취소한 내용 되살리기
+	Start Over…	처음부터 다시…
+	Clear the design and begin again	디자인을 지우고 다시 시작
+	Text size	텍스트 크기
+	Saved for you automatically in My Designs:	내 디자인에 자동으로 저장됨:
+	Start Over	처음부터 다시
+	Clear everything in this design and begin again?	이 디자인의 모든 내용을 지우고 다시 시작하시겠습니까?
+	You can still get it back with Undo.	실행 취소로 여전히 되돌릴 수 있습니다.
+	Keep It	유지
+	Keep Design Safe	디자인 안전하게 보관
+	In-the-Hoop Projects	인더후프 프로젝트
+	Make In-the-Hoop Project	인더후프 프로젝트 만들기
+	Steps	단계
+	The machine also stops where you lay or trim fabric.	원단을 올리거나 다듬을 때에도 기계가 멈춥니다.
+	Print the Steps…	단계 인쇄…
+	Change the Size?	크기를 바꾸시겠습니까?
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	이 디자인은 크기에 맞춰 자른 원단을 위해 멈춥니다. 크기를 키우거나 줄이면 조각이 더 이상 맞지 않을 수 있습니다.
+	Keep the Size	크기 유지
+	Change It Anyway	그래도 바꾸기
+	An in-the-hoop project	인더후프 프로젝트
+	A little pillow front, a mug rug, a coaster or an ornament	작은 쿠션 앞면, 머그 러그, 컵받침 또는 장식
+	Which project?	어떤 프로젝트인가요?
+	Sewn in a 5×7 hoop, borders and back sewn on after	5×7 후프에서 바느질하고, 테두리와 뒷면은 나중에 바느질
+	Finished in the hoop: batting, backing and a satin edge	후프 안에서 완성: 솜, 뒷감, 새틴 가장자리
+	Words (you can leave this empty)	문구(비워 두어도 됩니다)
+	Little pillow front, 8″ square	작은 쿠션 앞면, 8″ 정사각형
+	Little pillow front, 9½ × 5½″	작은 쿠션 앞면, 9½ × 5½″
+	Mug rug, 6½ × 4½″	머그 러그, 6½ × 4½″
+	Coaster, 3¾″ square	컵받침, 3¾″ 정사각형
+	Round ornament, 3½″	둥근 장식, 3½″
+	Quilting for a tile	타일용 퀼팅
+	Background quilting the size of a quilting tile, block by block	퀼팅 타일 크기의 배경 퀼팅, 블록 단위
+	What size is the tile?	타일 크기가 얼마인가요?
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	타일 창에서 크기를 확인하세요. 블록은 타일 크기로 가장자리에서 가장자리까지 퀼팅됩니다.
+	Lines apart	선 간격
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	퀼트의 모든 블록에 같은 패턴과 간격을 유지하면 블록이 서로 자연스럽게 이어집니다.
+	Make Every Size…	모든 크기 만들기…
+	One file for each usual tile size, in a folder or on the USB stick	일반적인 타일 크기마다 파일 하나씩, 폴더나 USB 메모리에
+	Quilt blocks saved:	저장한 퀼트 블록:
+	Stipple	스티플
+	Squares spiral	사각 나선
+	Quilt Block Patterns	퀼트 블록 패턴
+	Quilt Block	퀼트 블록
+	Quilt Block Set	퀼트 블록 세트
+	Loops	고리
+	Pebbles	조약돌
+	A block	블록
+	A border strip	테두리 띠
+	A corner	모서리
+	In the middle (you can leave this empty)	가운데(비워 두어도 됩니다)
+	Words	문구
+	No shape	모양 없음
+	Sew the shape as appliqué	모양을 아플리케로 바느질
+	Add a ribbon band across it	가로지르는 리본 띠 추가
+	Add a ribbon loop to hang it	걸 수 있는 리본 고리 추가
+	Clear vinyl on top (wipe-clean)	위에 투명 비닐(닦을 수 있음)
+	Mark where a button goes	단추 위치 표시
+	Print the Cutting Templates…	재단 템플릿 인쇄…
+	In-the-Hoop Cutting Templates	인더후프 재단 템플릿
+	Downloaded for your machine:	내 기계용으로 다운로드됨:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	내 기계용으로 저장은 디자인을 다운로드합니다: 기계에 꽂을 USB 메모리에 복사하세요.
+	Downloaded:	다운로드됨:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	내 기계용으로 저장은 기계가 바느질할 파일을 다운로드합니다: USB 메모리에 복사하세요.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	그레이디언트에서 블렌드
+	Sew the gradient's colours blended the way it runs	그레이디언트의 색상을 진행 방향대로 혼합하여 바느질
+	Cutwork	컷워크
+	Tartan Fill	타탄 채우기
+	Test Sew-Out	시험 바느질
+	Test Sew-Outs	시험 바느질
+	Cross Stitch	십자수
+	Cross Stitch Tool	십자수 도구
+	Cross Stitch from Image…	이미지에서 십자수…
+	Cross-Stitch Pattern Info	십자수 도안 정보
+	Cross-Stitch Pattern Settings	십자수 도안 설정
+	New Cross-Stitch Pattern…	새 십자수 도안…
+	Paint Cross Stitches	십자수 칠하기
+	Brush (squares)	브러시(칸)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	십자수 격자를 클릭하거나 드래그하여 칸을 채우고, Alt를 누르면 지웁니다
+	Erase	지우기
+	Pattern colours	도안 색상
+	Add My Hoop	내 후프 추가
+	Brother or Baby Lock multi-needle	Brother 또는 Baby Lock 다침기
+	Commercial multi-needle (DST)	상업용 다침기(DST)
+	Give the hoop a name	후프 이름 지정
+	Hoop not listed? Add its sewing field here.	목록에 없는 후프인가요? 여기에서 바느질 영역을 추가하세요.
+	My hoop	내 후프
+	My own hoops	나만의 후프
+	Square corners	각진 모서리
+	Type the hoop's width and height as numbers	후프의 너비와 높이를 숫자로 입력하세요
+	in	in
+	Chenille	셔닐
+	Chenille Stitch	셔닐 스티치
+	Chenille Stops	셔닐 정지
+	Compound Chenille…	복합 셔닐…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	앞뒤로 체인 테두리를 바느질한 모스 채우기로, 도형 자리에 그룹으로 배치
+	Chain	체인
+	Chenille stops	셔닐 정지
+	Lockstitch	본봉
+	Moss	모스
+	Moss pattern	모스 패턴
+	Needle height	바늘 높이
+	Start	시작
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	모스는 채우기와 런을 바느질합니다: 먼저 새틴에 채우기 또는 런 스티치를 지정하세요
+	Get Embroidery Fonts…	자수 글꼴 받기…
+	About the library	라이브러리 정보
+	Download Again	다시 다운로드
+	Download fonts from an embroidery font library, ready for lettering	자수 글꼴 라이브러리에서 레터링에 바로 쓸 수 있는 글꼴 다운로드
+	Downloading	다운로드 중
+	Each font comes with its own licence, in its folder.	각 글꼴의 라이선스는 해당 폴더에 들어 있습니다.
+	Fonts are kept in	글꼴 보관 위치
+	Get Embroidery Fonts	자수 글꼴 받기
+	Listing the fonts…	글꼴 목록 가져오는 중…
+	Try Again	다시 시도
+	fonts	글꼴
+	is ready for lettering	레터링에 사용할 준비가 되었습니다
+@msg	a file of the font has an unsafe name: {path}	글꼴 파일 이름이 안전하지 않습니다: {path}
+@msg	can't reach the font library: {e}	글꼴 라이브러리에 연결할 수 없습니다: {e}
+@msg	downloading embroidery fonts works in the desktop app	자수 글꼴 다운로드는 데스크톱 앱에서 작동합니다
+@msg	the font library answered {status} for {path}	글꼴 라이브러리가 {path}에 대해 {status}을(를) 응답했습니다
+@msg	the font library answered {status}: try again later	글꼴 라이브러리가 {status}을(를) 응답했습니다: 나중에 다시 시도하세요
+@msg	{_1} isn't published yet	{_1}은(는) 아직 공개되지 않았습니다
+	Border or Corner…	테두리 또는 모서리…
+	Check Continuous Line	연속선 검사
+	Continuous Fill	연속 채우기
+	Continuous Fill…	연속 채우기…
+	Crib (36 × 52″)	아기 침대(36 × 52″)
+	DXF Lines (.dxf)…	DXF 선 (.dxf)…
+	Echo	에코
+	Edge-to-Edge Rows	가장자리 간 행
+	Edge-to-Edge Rows…	가장자리 간 행…
+	Export Quilting Lines	퀼팅 선 내보내기
+	Export Quilting Lines…	퀼팅 선 내보내기…
+	HP-GL Plot (.plt)…	HP-GL 플롯 (.plt)…
+	Join into One Line	한 선으로 잇기
+	King (108 × 108″)	킹(108 × 108″)
+	Longarm Quilting	롱암 퀼팅
+	Meander	미앤더
+	Queen (90 × 108″)	퀸(90 × 108″)
+	SVG Lines (.svg)…	SVG 선 (.svg)…
+	Start and End on the Edges	가장자리에서 시작하고 끝내기
+	Stitch in the Ditch	스티치 인 더 디치
+	Throw (50 × 65″)	스로(50 × 65″)
+	Twin (70 × 90″)	트윈(70 × 90″)
+	A border of the selected line	선택한 선으로 만든 테두리
+	Border depth	테두리 깊이
+	Border length	테두리 길이
+	Corner leg (0: no corner)	모서리 다리(0: 모서리 없음)
+	Edge-to-edge rows of the selected line	선택한 선으로 만든 가장자리 간 행
+	Make Border	테두리 만들기
+	Make Rows	행 만들기
+	Nest the rows	행 맞물리기
+	One continuous line, ready for a longarm	롱암용 하나의 연속선
+	Quilt height	퀼트 높이
+	Quilt width	퀼트 너비
+	Row spacing (0: the line's height)	행 간격(0: 선 높이)
+	joins needed: Join into One Line makes them	잇기 필요: 한 선으로 잇기로 만드세요
+	longest	최장
+@msg	nothing to add	추가할 항목이 없습니다
+	Download All	모두 다운로드
+	Every font not downloaded yet, one after another	아직 다운로드하지 않은 모든 글꼴을 차례로
+	Fonts downloaded:	다운로드한 글꼴:
+	failed:	실패:
+	fonts downloaded, ready for lettering	글꼴을 다운로드했습니다. 레터링에 사용할 수 있습니다
+	Compare Designs	디자인 비교
+	Compare Designs…	디자인 비교…
+	Average stitch (mm)	평균 스티치(mm)
+	Bobbin thread (m)	밑실(m)
+	Choose a machine file or the design open now	기계 파일 또는 지금 열려 있는 디자인 선택
+	Choose both designs to compare them	비교할 두 디자인을 모두 선택하세요
+	Colour changes	색상 변경
+	Differences of 10% or more are highlighted. The real test is sewing both.	10% 이상 차이는 강조 표시됩니다. 진짜 시험은 둘 다 바느질해 보는 것입니다.
+	First design	첫 번째 디자인
+	Height (mm)	높이(mm)
+	Jumps	점프
+	Longest stitch (mm)	최장 스티치(mm)
+	Open File…	파일 열기…
+	Second	두 번째
+	Second design	두 번째 디자인
+	Stitches over 7 mm	7mm 초과 스티치
+	Stitches under 1 mm	1mm 미만 스티치
+	Stops	정지
+	This Design	이 디자인
+	This design	이 디자인
+	Top thread (m)	윗실(m)
+	Width (mm)	너비(mm)
+	same	같음
+	Direction	방향
+	Along the selected line	선택한 선을 따라
+	Add to Design	디자인에 추가
+	Colors and Order	색상과 순서
+	Paint	칠하기
+	Print and Export	인쇄 및 내보내기
+	Special Machines	특수 기계
+	Split Lines	분할선
+	Stitch Direction	스티치 방향
+	Use Line as Direction	선을 방향으로 사용
+	Arc Up	위로 아치
+	Arc Down	아래로 아치
+	To follow a line of your own, draw it first, select it, then Add Words.	원하는 선을 따르게 하려면 먼저 선을 그리고 선택한 다음 문구 추가를 누르세요.
+	Ask About Embroidery…	자수에 대해 질문…
+	Ask About Embroidery	자수에 대해 질문
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	기계 자수나 StitchFoundry에 대해 무엇이든 물어보세요: 어떤 심지를 쓸지, 실이 왜 끊어지는지, 글자를 더 깔끔하게 바느질하는 방법, 기능이 어디 있는지 등. 요청하면 허용한 뒤에 Claude가 디자인을 바꿀 수도 있습니다.
+	Thinking…	생각하는 중…
+	Type your question, then press Enter	질문을 입력하고 Enter를 누르세요
+	Ask	질문
+	New Conversation	새 대화
+	Include my design	내 디자인 포함
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	답변은 사용자의 Anthropic API 키로 Claude가 제공하며 비용은 사용자의 Anthropic 계정에 청구됩니다. 답변이 틀릴 수 있으니 중요한 작업 전에는 시험 바느질을 해 보세요.
+	Change key	키 변경
+@msg	Type a question first.	먼저 질문을 입력하세요.
+@msg	The question is too long: keep it under 2,000 characters.	질문이 너무 깁니다: 2,000자 이내로 줄이세요.
+@msg	The AI declined to answer this: ask another way.	AI가 이 질문에 답하기를 거절했습니다: 다르게 질문해 보세요.
+@msg	The reply had no answer: try again, or ask something narrower.	응답에 답변이 없습니다: 다시 시도하거나 더 좁은 범위로 질문하세요.
+@msg	Ask About Embroidery needs the desktop app for now	자수에 대해 질문은 현재 데스크톱 앱에서만 사용할 수 있습니다
+@msg	already asking: wait for the answer	이미 질문하는 중입니다: 답변을 기다리세요
+	Claude wants to change your design:	Claude가 디자인을 바꾸려고 합니다:
+	Allow	허용
+	Don't Allow	허용 안 함
+	Edit › Undo takes each change back.	편집 › 실행 취소로 각 변경을 되돌릴 수 있습니다.
+	Changed:	변경됨:
+	Couldn't change:	변경할 수 없음:
+	Not changed:	변경 안 됨:
+@msg	This conversation is long: start a New Conversation.	대화가 깁니다: 새 대화를 시작하세요.
+@msg	Claude took too many steps: ask again, more simply.	Claude가 너무 많은 단계를 거쳤습니다: 더 간단하게 다시 질문하세요.

@@ -4548,3 +4548,1280 @@ theme	Appearance	Giao diện
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
+
+# StitchFoundry: the embroidery strings (drafted with AI assistance from the English meaning;
+# not yet reviewed by a native speaker)
+effect	Points	Điểm
+@msg	this kind of brush has no options dialog yet	loại cọ này chưa có hộp thoại tùy chọn
+@msg	not a VectorCraft file: {0}	không phải tệp VectorCraft: {0}
+	VectorCraft documents: one locked object, updated when the file changes.	Tài liệu VectorCraft: một đối tượng bị khóa, cập nhật khi tệp thay đổi.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Khi mở, những phần StitchFoundry chưa đọc được ({what}) đã bị bỏ qua: thay thế sẽ mất chúng vĩnh viễn. Hãy lưu với tên khác để giữ lại.
+	Report a Bug…	Báo lỗi…
+	Add Inclination Line	Thêm đường hướng mũi
+	After the selection	Sau vùng chọn
+	Appliqué	Đắp vải (appliqué)
+	Apply Fabric	Áp dụng vải
+	Artwork	Tác phẩm
+	Auto Direction	Hướng tự động
+	Auto Stitch Direction	Tự động đặt hướng mũi
+	Auto spacing	Khoảng cách tự động
+	Auto split	Tự động chia
+	Auto-Digitize Image	Tự động số hóa ảnh
+	Automatic underlay	Lớp lót tự động
+	Back to the start	Về điểm bắt đầu
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Barudan DSB (.dsb)…	Barudan DSB (.dsb)…
+	Bean Run	Mũi bean
+	Before the selection	Trước vùng chọn
+	Blanket	Mũi chăn
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Nét cọ
+	Calligraphy	Thư pháp
+	Cell size	Kích thước ô
+	Centre run	Mũi chạy giữa
+	Clear Inclination Lines	Xóa các đường hướng mũi
+	Clear Lines	Xóa các đường
+	Connectors	Đường nối
+	Constant	Không đổi
+	Contour Fill	Tô theo đường viền
+	Convert Artwork to Embroidery	Chuyển tác phẩm thành mẫu thêu
+	Cover stitch	Mũi phủ
+	Cover width	Chiều rộng phủ
+	Cross	Chữ thập
+	Cross Fill	Tô chữ thập
+	Delete Inclination Line	Xóa đường hướng mũi
+	Densities (mm)	Mật độ (mm)
+	Density	Mật độ
+	Design	Mẫu thêu
+	Design Information	Thông tin mẫu thêu
+	Digitizing Widget	Tiện ích số hóa
+	Dimmed	Làm mờ
+	Direction: automatic	Hướng: tự động
+	Direction: fixed angle	Hướng: góc cố định
+	Direction: one inclination line	Hướng: một đường hướng mũi
+	Direction: turning along	Hướng: xoay theo
+	Drag across the shape to add a line; drag a bead to move it	Kéo ngang qua hình để thêm một đường; kéo một hạt để di chuyển nó
+	Each anchor point is a needle penetration.	Mỗi điểm neo là một lần kim đâm xuống.
+	Edge run	Mũi chạy viền
+	Edge run underlay	Lớp lót chạy viền
+	Edit Lines	Sửa các đường
+	Embroidery	Thêu
+	Embroidery Brush Tool	Công cụ Cọ thêu
+	Embroidery Settings	Cài đặt thêu
+	Export Machine File	Xuất tệp máy thêu
+	Export Machine File…	Xuất tệp máy thêu…
+	Fabric	Vải
+	Fabric color	Màu vải
+	Feather	Lông vũ
+	Fill style	Kiểu tô
+	Fits the hoop	Vừa khung thêu
+	Give objects a stitch type in the Embroidery panel.	Gán kiểu mũi cho đối tượng trong bảng Thêu.
+	Gradient to	Chuyển sắc tới
+	Hide Digitizing Widget	Ẩn tiện ích số hóa
+	Hoop	Khung thêu
+	Inclination Tool	Công cụ Hướng mũi
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Lớn hơn khung thêu
+	Lengths (mm)	Độ dài (mm)
+	Let sewing start and stop at the closest points again	Để việc thêu lại bắt đầu và kết thúc ở các điểm gần nhất
+	Machine Embroidery File	Tệp máy thêu
+	Manual Stitches	Mũi thêu thủ công
+	Meander Fill	Tô uốn lượn
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Mô-típ
+	Move Inclination Line	Di chuyển đường hướng mũi
+	Needle points	Điểm kim
+	New strokes	Nét mới
+	No Stitches	Không có mũi thêu
+	No hoop	Không có khung thêu
+	No stitches yet.	Chưa có mũi thêu nào.
+	Not set	Chưa đặt
+	Nothing stitched yet	Chưa thêu gì
+	Object color	Màu đối tượng
+	Open a document to see its stitch sequence.	Mở một tài liệu để xem thứ tự mũi thêu.
+	Open or create a document to digitize embroidery.	Mở hoặc tạo một tài liệu để số hóa mẫu thêu.
+	Path spacing	Khoảng cách đường
+	Pause	Tạm dừng
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Chọn cọ, chiều rộng, mật độ và hình dạng từ vòng xoay, rồi vẽ trên vùng vẽ
+	Place editable inclination lines (or pick the angle) automatically	Tự động đặt các đường hướng mũi có thể sửa (hoặc chọn góc)
+	Placement line and stop	Đường định vị và dừng máy
+	Play the stitches	Phát các mũi thêu
+	Pull compensation	Bù co kéo
+	Radial Fill	Tô tỏa tròn
+	Randomness	Độ ngẫu nhiên
+	Remove background	Xóa nền
+	Reset Start and Stop	Đặt lại điểm đầu và điểm cuối
+	Row offset	Độ lệch hàng
+	Run	Mũi chạy
+	Run style	Kiểu mũi chạy
+	Satin	Satin
+	Satin Fill	Tô satin
+	Scallop	Vỏ sò
+	Select a path, shape or compound path to give it a stitch type.	Chọn một đường dẫn, hình hoặc đường dẫn phức để gán kiểu mũi cho nó.
+	Set Inclination Lines	Đặt các đường hướng mũi
+	Set Start and Stop	Đặt điểm đầu và điểm cuối
+	Set Thread	Đặt chỉ
+	Sew earlier	Thêu sớm hơn
+	Sew first	Thêu đầu tiên
+	Sew last	Thêu cuối cùng
+	Sew later	Thêu muộn hơn
+	Sewing time	Thời gian thêu
+	Sewn last	Thêu sau cùng
+	Short stitches on curves	Mũi ngắn ở đường cong
+	Show every stitch	Hiện mọi mũi thêu
+	Show stitches	Hiện mũi thêu
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Đơn
+	Sort by Thread Color	Sắp xếp theo màu chỉ
+	Spiral Fill	Tô xoắn ốc
+	Stitch Parameters	Thông số mũi thêu
+	Stitch Plan	Kế hoạch mũi thêu
+	Stitch Sequence	Thứ tự mũi thêu
+	Stitch Type	Kiểu mũi
+	Stitch length	Độ dài mũi
+	Stitch type	Kiểu mũi
+	Stitches	Mũi thêu
+	Stop to trim fabric	Dừng để cắt vải
+	Tack-down	Mũi chặn
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Thon dần
+	Tatami Fill	Tô tatami
+	Tatami underlay	Lớp lót tatami
+	Thread	Chỉ
+	Thread colors	Màu chỉ
+	Trim after	Cắt chỉ sau
+	Trims	Lần cắt chỉ
+	Triple	Ba lớp
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Biến ảnh thành mũi thêu: phần hẹp thành satin, phần còn lại tô tatami.
+	Wave	Sóng
+	Widget values	Giá trị tiện ích
+	Width profile	Hồ sơ chiều rộng
+	Widths (mm)	Chiều rộng (mm)
+	Zigzag	Zigzag
+	inclination lines	đường hướng mũi
+	Brush	Cọ
+	Length	Độ dài
+	Bean	Bean
+	Steil	Steil
+	Triangle	Tam giác
+	Hexagon	Lục giác
+	Heart	Trái tim
+	Arrow	Mũi tên
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Tự động số hóa không tìm thấy hình nào để thêu: giảm Nhiễu hoặc tăng Màu sắc
+@msg	Auto-Digitize: the image traced to nothing	Tự động số hóa: vector hóa ảnh không ra hình nào
+@msg	can't open `{title}`: the file has no stitches	không thể mở `{title}`: tệp không có mũi thêu
+@msg	can't open `{title}`: {e}	không thể mở `{title}`: {e}
+@msg	{_1} export failed: {e}	xuất {_1} thất bại: {e}
+	Stitch Lines	Đường mũi thêu
+	Tatami	Tatami
+	By Stitchwright, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Bởi Stitchwright, dựa trên VectorCraft của nhóm ArtCraft. MIT OR Apache-2.0. Phông chữ: Source Sans 3, Inter, JetBrains Mono (OFL). Biểu tượng: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Phiên bản {version} — phần mềm số hóa thêu máy mã nguồn mở viết hoàn toàn bằng Rust.
+	Machine embroidery digitizing — fast, open, scriptable.	Số hóa thêu máy — nhanh, mở, có thể lập trình.
+	Split Here	Chia tại đây
+	Split the object in two at the picked stitch	Chia đối tượng làm hai tại mũi thêu đã chọn
+	Split Object	Chia đối tượng
+	Check settings	Kiểm tra cài đặt
+	Dense from (layers)	Dày đặc từ (lớp)
+	Give every stitched object the chart's closest thread	Gán cho mỗi đối tượng thêu màu chỉ gần nhất trong bảng màu chỉ
+	Hidden (not sewn)	Ẩn (không thêu)
+	Inclination lines	Đường hướng mũi
+	Long stitches from	Mũi dài từ
+	Match Threads to Chart	Khớp chỉ với bảng màu chỉ
+	Omit last stitch	Bỏ mũi cuối
+	Small lettering under	Chữ nhỏ dưới
+	Start and stop	Bắt đầu và kết thúc
+	Thread chart	Bảng màu chỉ
+	Tie style	Kiểu chốt mũi
+	Tiny objects under	Đối tượng tí hon dưới
+	Travel by	Di chuyển bằng
+	Double	Đôi
+machine	Trim	Cắt chỉ
+@plural	{n} stitch|{n} stitches	{n} mũi thêu
+@plural	{n} trim|{n} trims	{n} lần cắt chỉ
+machine	Stop	Dừng máy
+	Column A/B Tool	Công cụ Cột A/B
+	Column A/B	Cột A/B
+	Tatami stitches	Mũi tatami
+	Make Current	Đặt làm hiện hành
+	New objects of this stitch type take these properties	Đối tượng mới có kiểu mũi này nhận các thuộc tính này
+	Properties for New Objects	Thuộc tính cho đối tượng mới
+	Objects you give a stitch type take these properties.	Đối tượng bạn gán kiểu mũi sẽ nhận các thuộc tính này.
+	Reset to Defaults	Đặt lại mặc định
+	Fabric settings	Cài đặt vải
+	Satin density	Mật độ satin
+	Fill density	Mật độ tô
+	Fill stitch length	Độ dài mũi tô
+	Underlay spacing	Khoảng cách lớp lót
+	Fill underlay	Lớp lót tô
+	Topping	Màng phủ mặt
+	Save as New Fabric	Lưu thành vải mới
+	Seconds per trim	Số giây mỗi lần cắt chỉ
+	Seconds per color change	Số giây mỗi lần đổi màu
+	Save to Machine	Lưu vào máy
+	Keep these settings in the machine's profile, for new designs	Giữ các cài đặt này trong hồ sơ của máy, cho mẫu thêu mới
+	Reset Machine	Đặt lại máy
+	Put the machine's profile back to how it ships, and use it	Đưa hồ sơ của máy về như khi xuất xưởng và dùng nó
+	Delete Machine	Xóa máy
+	Save as New Machine	Lưu thành máy mới
+	A machine profile of your own with these settings	Một hồ sơ máy riêng của bạn với các cài đặt này
+	My Machine	Máy của tôi
+	A copy of this fabric to change	Một bản sao của vải này để thay đổi
+	Delete Fabric	Xóa vải
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Chưa có kiểu nào. Chọn một đối tượng thêu và tạo kiểu để dùng lại các thuộc tính mũi thêu của nó.
+	New Embroidery Style	Kiểu thêu mới
+	Delete Embroidery Style	Xóa kiểu thêu
+	Duplicate Embroidery Style	Nhân bản kiểu thêu
+	Redefine Embroidery Style	Xác định lại kiểu thêu
+	Break Link to Embroidery Style	Ngắt liên kết đến kiểu thêu
+	Rename Embroidery Style…	Đổi tên kiểu thêu…
+	Embroidery Styles	Kiểu thêu
+	Make Properties Current	Đặt thuộc tính làm hiện hành
+	Current Properties	Thuộc tính hiện hành
+	New Object Properties	Thuộc tính đối tượng mới
+	Reset Current Properties	Đặt lại thuộc tính hiện hành
+	Apply Embroidery Style	Áp dụng kiểu thêu
+	Rename Embroidery Style	Đổi tên kiểu thêu
+	Save Fabric	Lưu vải
+	Machine Profiles	Hồ sơ máy
+	Save Machine Profile	Lưu hồ sơ máy
+	Delete Machine Profile	Xóa hồ sơ máy
+	Auto Sequence	Tự động sắp thứ tự
+	Branch	Nhánh
+	Break Apart	Tách rời
+	Sew the objects separately again	Thêu lại các đối tượng riêng rẽ
+	These objects are sewn as one path (a branch).	Các đối tượng này được thêu như một đường (một nhánh).
+	Clear Machine Function	Xóa chức năng máy
+	Insert Machine Function	Chèn chức năng máy
+	Object Stitches	Mũi thêu của đối tượng
+@msg	`after` is −1 to {_1}	`after` từ −1 đến {_1}
+@msg	`{what}` is [x, y]	`{what}` là [x, y]
+@msg	`{what}` is [x, y] (numbers)	`{what}` là [x, y] (số)
+@msg	each op needs `op`: move, delete or insert	mỗi thao tác cần `op`: move, delete hoặc insert
+@msg	indices are record numbers (0, 1, 2…)	chỉ số là số thứ tự bản ghi (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	thiếu `after` (−1 chèn vào đầu)
+@msg	missing `indices`	thiếu `indices`
+@msg	no record {i}: the object has {len}	không có bản ghi {i}: đối tượng có {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	lệnh `{c}` không xác định: stitch, jump, trim hoặc stop
+@msg	unknown op `{other}`: move, delete or insert	thao tác `{other}` không xác định: move, delete hoặc insert
+	Stitch Edit Tool	Công cụ Sửa mũi thêu
+	Stitch List	Danh sách mũi thêu
+	Stop after	Dừng sau
+	Stitches edited by hand: the shape no longer changes them.	Mũi thêu đã sửa bằng tay: hình không còn thay đổi chúng nữa.
+	Edit Stitches	Sửa mũi thêu
+	Pick, move, add and delete single stitches	Chọn, di chuyển, thêm và xóa từng mũi thêu
+	Regenerate Stitches	Tạo lại mũi thêu
+	Drop the hand edits and stitch the shape again	Bỏ các sửa bằng tay và tạo lại mũi thêu cho hình
+	Freeze Stitches	Cố định mũi thêu
+	Function	Chức năng
+	X (mm)	X (mm)
+	Y (mm)	Y (mm)
+	Stitch	Mũi thêu
+	Jump	Mũi nhảy
+	Color change	Đổi màu
+	End	Kết thúc
+	#	#
+	Open a document to see its stitches.	Mở một tài liệu để xem các mũi thêu của nó.
+	Machine	Máy
+	Machine settings	Cài đặt máy
+	Longest stitch	Mũi dài nhất
+	Longest jump	Mũi nhảy dài nhất
+	Shortest stitch	Mũi ngắn nhất
+	Trim jumps longer than	Cắt chỉ khi mũi nhảy dài hơn
+	Tie length	Độ dài mũi chốt
+	Stitches per minute	Mũi mỗi phút
+	commercial machines	máy công nghiệp
+	home machines	máy gia đình
+	Remove underlying stitching	Bỏ mũi thêu bên dưới
+	Overlap	Chồng lấn
+	Turn	Xoay
+	Capped	Bịt đầu
+	Backstitch	Mũi lại
+	Check Again	Kiểm tra lại
+	Check Design	Kiểm tra mẫu thêu
+	Click to select and show it	Nhấp để chọn và hiển thị nó
+	Design setting	Cài đặt mẫu thêu
+	Different on each side	Khác nhau mỗi bên
+	Double zigzag	Zigzag đôi
+	Fill Holes	Lấp lỗ
+	Flip to the other side	Lật sang bên kia
+	Lettering only {n} mm tall is hard to sew clearly	Chữ chỉ cao {n} mm khó thêu rõ nét
+	Look for dense spots, long stitches, tiny objects and small lettering	Tìm điểm quá dày, mũi dài, đối tượng tí hon và chữ nhỏ
+	Makes no stitches	Không tạo mũi thêu nào
+	No problems found.	Không tìm thấy vấn đề nào.
+	Passes	Số lượt
+	Preserve long stitches	Giữ mũi dài
+	Pull comp., side 1	Bù co, bên 1
+	Pull comp., side 2	Bù co, bên 2
+	Remove Holes	Xóa lỗ
+	Reverse Stitch Direction	Đảo hướng mũi thêu
+	Swap Satin Sides	Hoán đổi hai bên satin
+	Convert to Satin Column	Chuyển thành cột satin
+	Stem Stitch	Mũi thân cành
+	Stem stitch	Mũi thân cành
+	Stitches up to {n} mm long can snag	Mũi dài tới {n} mm có thể bị vướng
+	The design is larger than the hoop	Mẫu thêu lớn hơn khung thêu
+	Thread Color	Màu chỉ
+	Tie in	Chốt đầu
+	Tie off	Chốt cuối
+	Tiny object: may not sew cleanly	Đối tượng tí hon: có thể thêu không sạch
+	Very dense: about {n} layers of thread here	Rất dày: khoảng {n} lớp chỉ ở đây
+	Design from Prompt…	Mẫu thêu từ mô tả…
+	Design from Prompt	Mẫu thêu từ mô tả
+	Generate	Tạo
+	Describe the design:	Mô tả mẫu thêu:
+	Size (longest side):	Kích thước (cạnh dài nhất):
+	Anthropic API key:	Khóa API Anthropic:
+	Remember the key on this computer	Ghi nhớ khóa trên máy tính này
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude vẽ tác phẩm bằng khóa API Anthropic của riêng bạn, tính phí vào tài khoản Anthropic của bạn; sau đó StitchFoundry số hóa nó. Hãy kiểm tra mũi thêu trước khi thêu.
+	Get a key	Lấy khóa
+	Drawing the design…	Đang vẽ mẫu thêu…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Mô tả một mẫu thêu và Claude sẽ vẽ tác phẩm cho nó, rồi StitchFoundry số hóa nó
+	Place Artwork as Embroidery	Đặt tác phẩm thành mẫu thêu
+	Place Artwork	Đặt tác phẩm
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Đã đặt mẫu thêu: {n} đối tượng thêu
+@msg	Enter your Anthropic API key first.	Hãy nhập khóa API Anthropic trước.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Khóa API không hợp lệ: hãy dán lại từ Anthropic Console.
+@msg	Describe the design first.	Hãy mô tả mẫu thêu trước.
+@msg	The description is too long: keep it under 2,000 characters.	Mô tả quá dài: hãy giữ dưới 2.000 ký tự.
+@msg	Anthropic refused the API key: {e}	Anthropic từ chối khóa API: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Tài khoản Anthropic của bạn không thể thanh toán cho việc này: {e}
+@msg	The AI service is busy: try again in a minute.	Dịch vụ AI đang bận: hãy thử lại sau một phút.
+@msg	The AI service failed (error {code}): try again later.	Dịch vụ AI gặp lỗi (lỗi {code}): hãy thử lại sau.
+@msg	The request failed (error {code}): {e}	Yêu cầu thất bại (lỗi {code}): {e}
+@msg	The AI declined to draw this: try another description.	AI từ chối vẽ nội dung này: hãy thử mô tả khác.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Bản vẽ trở nên quá chi tiết để hoàn thành: hãy yêu cầu thứ đơn giản hơn.
+@msg	The reply had no artwork: try again.	Câu trả lời không có tác phẩm: hãy thử lại.
+@msg	Couldn't reach the AI service: {e}	Không thể kết nối dịch vụ AI: {e}
+@msg	Design from Prompt needs the desktop app for now	Mẫu thêu từ mô tả hiện cần ứng dụng máy tính
+@msg	already drawing: wait for it, or Cancel	đang vẽ: hãy chờ, hoặc Hủy
+@msg	the artwork has no shapes to stitch	tác phẩm không có hình nào để thêu
+@msg	the artwork has nothing to place	tác phẩm không có gì để đặt
+@msg	the artwork can't be read: {e}	không thể đọc tác phẩm: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI sẽ không sao chép logo hoặc nhân vật của người khác: {e}
+	Redraw Image with Claude…	Vẽ lại ảnh bằng Claude…
+	Redraw Image with Claude	Vẽ lại ảnh bằng Claude
+	What to change (optional):	Điều cần thay đổi (tùy chọn):
+	Only redraw artwork you own or have permission to use.	Chỉ vẽ lại tác phẩm bạn sở hữu hoặc được phép sử dụng.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude vẽ lại ảnh thành tranh màu phẳng bằng khóa API Anthropic của riêng bạn, tính phí vào tài khoản Anthropic của bạn; sau đó StitchFoundry số hóa nó. Hãy kiểm tra mũi thêu trước khi thêu.
+	Redraw with Claude…	Vẽ lại bằng Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude vẽ lại ảnh thành tranh màu phẳng gọn gàng, rồi StitchFoundry số hóa nó
+@msg	select an image to redraw	hãy chọn một ảnh để vẽ lại
+@msg	the image couldn't be read	không thể đọc ảnh
+@msg	The image is too large to send: crop it, or place a smaller copy.	Ảnh quá lớn để gửi: hãy cắt bớt, hoặc đặt một bản nhỏ hơn.
+	Set Split Lines	Đặt đường chia
+	Carve Split Lines	Khắc đường chia
+	Clear Split Lines	Xóa đường chia
+	Split lines:	Đường chia:
+	Texture size	Kích thước họa tiết vân
+	Texture angle	Góc họa tiết vân
+	Diamonds	Hình thoi
+	Waves	Sóng
+	Herringbone	Xương cá
+	Bricks	Gạch
+	Circles	Hình tròn
+	Scales	Vảy
+	Hand stitch	Mũi thêu tay
+	Gap	Khe hở
+	Jagged edges	Mép răng cưa
+	Side 1	Bên 1
+	Side 2	Bên 2
+	Jag depth	Độ sâu răng cưa
+	Trapunto (travel along the outline)	Trapunto (di chuyển dọc đường viền)
+	Place Motif	Đặt mô-típ
+	Leaf	Chiếc lá
+	Loop	Vòng lặp
+	Motif Fill	Tô mô-típ
+	Motif size	Kích thước mô-típ
+	Graded	Chuyển cấp
+	Width at end	Chiều rộng ở cuối
+	Row spacing	Khoảng cách hàng
+	E-stitch	Mũi E
+	Rings (0: all)	Số vòng (0: tất cả)
+	Add Laydown	Thêm lớp đệm nền
+	Spacing profile	Hồ sơ khoảng cách
+	Accordion	Đàn xếp
+	Fade out	Mờ dần ra
+	Fade in	Hiện dần vào
+	Blend into	Hòa vào
+	Make Blend	Tạo hòa trộn
+	Blend Colors	Hòa trộn màu
+	Add Outline	Thêm đường viền
+	Satin Outline	Viền satin
+	Bean Outline	Viền bean
+	Rectangle Border	Viền chữ nhật
+	Oval Border	Viền bầu dục
+	Rounded Border	Viền bo tròn
+	Motif Border	Viền mô-típ
+	Make Motif	Tạo mô-típ
+	Apply Motif	Áp dụng mô-típ
+	Embroidery Motifs	Mô-típ thêu
+	Delete Motif	Xóa mô-típ
+	Remove the motif from the design; what sews it keeps it.	Xóa mô-típ khỏi mẫu thêu; những gì đang thêu nó vẫn giữ nó.
+	Sculpture run	Mũi chạy điêu khắc
+	Triple stitch length	Độ dài mũi ba lớp
+	Single stitch length	Độ dài mũi đơn
+	Triple stitches	Mũi ba lớp
+	Single stitches	Mũi đơn
+	Cross style	Kiểu chữ thập
+	Full cross	Chữ thập đầy đủ
+	Half cross	Nửa chữ thập
+	Upright cross	Chữ thập đứng
+	Double cross	Chữ thập đôi
+	Redwork	Redwork
+	Sewn as one line that ends where it starts; the way between lines is retraced along them.	Thêu thành một đường kết thúc tại nơi bắt đầu; đoạn nối giữa các đường được thêu lặp lại dọc theo chúng.
+	Add Buttonholes	Thêm khuyết
+	Straight Buttonhole	Khuyết thẳng
+	Rounded Buttonhole	Khuyết bo tròn
+	Keyhole Buttonhole	Khuyết mắt phượng
+	Place Ring	Đặt vòng
+	Satin Ring	Vòng satin
+	Filled Ring	Vòng tô kín
+	Bean Ring	Vòng bean
+	Hexagons	Lục giác
+	Chevrons	Chữ V
+	Basket weave	Đan rổ
+	Stars	Ngôi sao
+	Hearts	Trái tim
+	Leaves	Lá
+	Paired with	Ghép cặp với
+	Sew as	Thêu dạng
+	Motifs	Mô-típ
+	Motif length (× width)	Độ dài mô-típ (× chiều rộng)
+	String stitch	Mũi chuỗi
+	Chord length	Độ dài dây cung
+	Automatic Knife	Dao tự động
+	3D effect	Hiệu ứng 3D
+	Globe out	Phồng ra
+	Globe in	Lõm vào
+	Fill Along Lines	Tô dọc theo đường
+	Clear Flow Lines	Xóa đường dòng chảy
+	Rows follow lines:	Hàng theo đường:
+	Set Flow Lines	Đặt đường dòng chảy
+	Carving Stamps	Con dấu khắc
+	Carve Stamp	Khắc con dấu
+	Flower	Bông hoa
+	Sun	Mặt trời
+	Moon	Mặt trăng
+	Snowflake	Bông tuyết
+	Paw Print	Dấu chân thú
+	Swirl	Xoáy
+	Shell	Vỏ sò
+	Butterfly	Con bướm
+	Clover	Cỏ ba lá
+	Show Repeats	Hiện các lần lặp
+	Repeats across	Lặp theo chiều ngang
+	Repeats down	Lặp theo chiều dọc
+	Gap between repeats	Khoảng cách giữa các lần lặp
+	Stripes	Sọc
+	Slants	Sọc chéo
+	Pinstripes	Sọc nhỏ
+	Lattice	Mắt cáo
+	Arches	Vòm
+	Spirals	Xoắn ốc
+	Pyramids	Kim tự tháp
+	Ripples	Gợn sóng
+	Greek key	Hoa văn chữ khóa Hy Lạp
+	Crosses	Chữ thập
+	Quatrefoils	Hoa bốn cánh
+	Flowers	Hoa
+	Trefoils	Hoa ba cánh
+	Moons	Mặt trăng
+	Arrows	Mũi tên
+	Nested diamonds	Hình thoi lồng nhau
+	Argyle	Argyle
+	Wicker	Đan mây
+	Feathers	Lông vũ
+	Paisley	Paisley
+	Swirls	Xoáy
+	Snowflakes	Bông tuyết
+	Bubbles	Bong bóng
+	Sunbursts	Tia nắng
+	Motif Tool	Công cụ Mô-típ
+	Contour Split Lines	Đường chia theo đường viền
+	Keep Motif	Giữ mô-típ
+	Keep the motif in My Motifs, for any design	Giữ mô-típ trong Mô-típ của tôi, cho mọi mẫu thêu
+	My Motifs	Mô-típ của tôi
+	Forget Motif	Quên mô-típ
+	Buttonholes	Khuyết
+	Straight	Thẳng
+	Keyhole	Mắt phượng
+	Count	Số lượng
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Số hàng ngang qua hình: lên trên là dày hơn. Kéo một điểm; nhấp đúp để thêm; nhấp chuột phải vào một điểm để bỏ nó.
+	Embroidery Lettering	Chữ thêu
+	Load Embroidery Font	Tải phông chữ thêu
+	Embroidery Fonts	Phông chữ thêu
+	Load Embroidery Font…	Tải phông chữ thêu…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Một thư mục phông chữ theo định dạng của Ink/Stitch: font.json và các glyph của nó
+	Load an embroidery font to set text with it.	Tải một phông chữ thêu để đặt chữ bằng nó.
+	Sews well at	Thêu đẹp ở
+	Place Lettering	Đặt chữ thêu
+	Edit Lettering	Sửa chữ thêu
+	Update Lettering	Cập nhật chữ thêu
+	Load this lettering's font to change it:	Tải phông chữ của chữ thêu này để thay đổi nó:
+	Arch	Vòm
+	Valley	Thung lũng
+	Forget Font	Quên phông chữ
+	Unload the font and stop loading its folder	Gỡ phông chữ và ngừng tải thư mục của nó
+	Forget Embroidery Font	Quên phông chữ thêu
+	Team Names	Tên đội
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Chọn chữ thêu đặt bằng phông chữ thêu: mỗi tên được ghi thành một tệp máy thêu, với chữ thêu đặt theo tên đó.
+	One name a line	Mỗi dòng một tên
+	Import Names…	Nhập danh sách tên…
+	The first column of a CSV table, or a text file of one name a line	Cột đầu tiên của bảng CSV, hoặc tệp văn bản mỗi dòng một tên
+	Names	Tên
+	Export One File per Name…	Xuất mỗi tên một tệp…
+	Team name files written	Đã ghi tệp tên đội
+	Export Team Names	Xuất tên đội
+	Read Team Names	Đọc tên đội
+	Monogram	Chữ lồng
+	Load an embroidery font (Embroidery Lettering) to make monograms.	Tải một phông chữ thêu (Chữ thêu) để tạo chữ lồng.
+	Initials	Chữ cái đầu
+	In a line	Trên một hàng
+	Scallops	Vỏ sò
+	Border	Viền
+	Place Monogram	Đặt chữ lồng
+	New Embroidery Font	Phông chữ thêu mới
+	Save Embroidery Font…	Lưu phông chữ thêu…
+	Add Glyphs	Thêm glyph
+	Font Properties	Thuộc tính phông chữ
+	Kern Glyph Pair	Kerning cặp glyph
+	Font Info	Thông tin phông chữ
+	Save Embroidery Font	Lưu phông chữ thêu
+	Edit Embroidery Font	Sửa phông chữ thêu
+	Merge Embroidery Font	Hợp nhất phông chữ thêu
+	New Embroidery Font from Type	Phông chữ thêu mới từ phông chữ
+	Font Creator	Trình tạo phông chữ
+	Capitals' height	Chiều cao chữ hoa
+	Line spacing	Khoảng cách dòng
+	Space width	Chiều rộng dấu cách
+	As typed	Như đã gõ
+	Capitals	Chữ hoa
+	Small letters	Chữ thường
+	Letter case	Kiểu chữ hoa/thường
+	Sews well from	Thêu đẹp từ
+	Sews well up to	Thêu đẹp đến
+	Still to digitize	Còn phải số hóa
+	Show this glyph	Hiện glyph này
+	Not digitized yet: show its artboard	Chưa số hóa: hiện bảng vẽ của nó
+	Glyphs to add	Glyph cần thêm
+	Kerning (mm closer)	Kerning (mm sát lại)
+	Pair	Cặp
+	Kern	Kerning
+	Merge glyphs from	Hợp nhất glyph từ
+	Test text	Văn bản thử
+	Try in a New Document	Thử trong tài liệu mới
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Tạo phông chữ thêu: một tài liệu có một bảng vẽ cho mỗi glyph cần số hóa.
+	Type family	Họ phông chữ
+	New Font from Type	Phông chữ mới từ phông chữ
+	Edit Font	Sửa phông chữ
+	Assign to Glyph	Gán cho glyph
+	Selection to glyph	Vùng chọn thành glyph
+	The selected art becomes the glyph, moved onto its artboard	Tác phẩm đã chọn trở thành glyph, được chuyển lên bảng vẽ của nó
+	Sew order	Thứ tự thêu
+	Left to right	Trái sang phải
+	Right to left	Phải sang trái
+	Centre out	Từ giữa ra
+	Closest	Gần nhất
+	Along the baseline	Dọc đường cơ sở
+	Where needed	Khi cần
+	After each letter	Sau mỗi chữ cái
+	After each word	Sau mỗi từ
+	After each line	Sau mỗi dòng
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Ngoài các cỡ chữ mà phông chữ được tạo cho: mũi thêu có thể quá dày hoặc quá dài
+	Adjust Letter	Chỉnh chữ cái
+	One letter: moved, scaled or turned, kept when the lettering is set again	Một chữ cái: đã di chuyển, co giãn hoặc xoay, được giữ khi chữ thêu được đặt lại
+	Move along	Dời dọc theo
+	Move down	Dời xuống
+	Reset Letter	Đặt lại chữ cái
+	3D Puff	Thêu nổi 3D
+	3D puff	Thêu nổi 3D
+	Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop	Satin thêu trên xốp: dày, không lớp lót, hai đầu được bịt. Hãy thêu bằng một màu riêng, để đặt xốp tại điểm dừng
+	Sew Puff Last	Thêu nổi sau cùng
+	Click to Stitch	Nhấp để thêu
+	Click-to-Stitch Tool	Công cụ Nhấp để thêu
+	Fill without holes	Tô không có lỗ
+	Centre line	Đường tâm
+	Stitch as	Thêu dạng
+	Click a region of an image to stitch it	Nhấp vào một vùng của ảnh để thêu nó
+	Send to Machine	Gửi tới máy
+	Machine Folders	Thư mục máy
+	Add Machine Folder…	Thêm thư mục máy…
+	A USB stick, the machine's folder or a network share the machine reads	Một USB, thư mục của máy hoặc thư mục chia sẻ mạng mà máy đọc được
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Thêm thư mục mà máy của bạn đọc: một USB, thư mục của máy hoặc thư mục chia sẻ mạng.
+	Machine folder	Thư mục máy
+	Send	Gửi
+	Sent:	Đã gửi:
+	Forget Folder	Quên thư mục
+	Triple run	Mũi chạy ba lớp
+	Partial cover	Phủ một phần
+	Pfaff PCS (.pcs)…	Pfaff PCS (.pcs)…
+	Happy TAP (.tap)…	Happy TAP (.tap)…
+@msg	the machine file didn't encode	không mã hóa được tệp máy thêu
+	Worksheet	Phiếu thêu
+	Outline Around	Viền bao quanh
+	Oval	Bầu dục
+	Octagon	Bát giác
+	Shield	Khiên
+	Ornament	Đồ trang trí
+	Multi-Hooping	Thêu nhiều khung
+	Basting first	Lược trước
+	Basting round	Lược xung quanh
+	The design	Mẫu thêu
+	The hoop	Khung thêu
+	Basting margin	Lề mũi lược
+	Design notes	Ghi chú mẫu thêu
+	Printed on worksheets	In trên phiếu thêu
+	Cost a piece	Chi phí mỗi sản phẩm
+	Estimate cost	Ước tính chi phí
+	Cost settings	Cài đặt chi phí
+	Per 1000 stitches	Mỗi 1000 mũi thêu
+	Machine time an hour	Thời gian máy mỗi giờ
+	Thread per 1000 m	Chỉ mỗi 1000 m
+	Set-up an order	Chuẩn bị mỗi đơn hàng
+	Machine heads	Số đầu máy
+	Currency	Tiền tệ
+	Cost Estimate	Ước tính chi phí
+	Colorways	Phối màu
+	New Colorway	Phối màu mới
+	Use Colorway	Dùng phối màu
+	Colorway Thread	Chỉ của phối màu
+	Rename Colorway	Đổi tên phối màu
+	Delete Colorway	Xóa phối màu
+	Colorway	Phối màu
+	The design's own	Của chính mẫu thêu
+	Own colour block	Khối màu riêng
+	Where it falls	Tại vị trí của nó
+	Centre	Giữa
+	Top left	Trên bên trái
+	Top right	Trên bên phải
+	Bottom left	Dưới bên trái
+	Bottom right	Dưới bên phải
+	Start at	Bắt đầu tại
+	End at	Kết thúc tại
+	Stabiliser	Mếch lót
+	Tear-away	Mếch xé
+	Cut-away	Mếch cắt
+	No-show mesh	Mếch lưới mỏng
+	Wash-away	Mếch tan nước
+	Scatter Copies	Rải bản sao
+	Appliqué letters	Chữ đắp vải
+	Each letter a patch of fabric: placement line, tack-down and cover	Mỗi chữ cái là một miếng vải: đường định vị, mũi chặn và mũi phủ
+	Letters sewn	Chữ cái được thêu
+	As the font has them	Như trong phông chữ
+	Small text	Chữ nhỏ
+	Under 6 mm	Dưới 6 mm
+	Place Along Selected Line	Đặt dọc đường đã chọn
+	The text along the selected line or shape, from its start	Văn bản dọc theo đường hoặc hình đã chọn, từ điểm đầu của nó
+	Monogram Templates	Mẫu chữ lồng
+	Save Monogram Template	Lưu mẫu chữ lồng
+	Delete Monogram Template	Xóa mẫu chữ lồng
+	Template name	Tên mẫu
+	Delete Template	Xóa mẫu
+	Lay Out Team Names	Sắp xếp tên đội
+	Team Names Worksheet	Phiếu tên đội
+	Lay Out Together	Sắp xếp chung
+	Every name in one design, in rows and columns, for a large hoop or patches	Mọi tên trong một mẫu thêu, theo hàng và cột, cho khung thêu lớn hoặc miếng vá
+	Names Worksheet	Phiếu danh sách tên
+	Each name with its size, stitches and sewing time, and the totals	Mỗi tên với kích thước, số mũi thêu và thời gian thêu, cùng tổng cộng
+	Design Library	Thư viện mẫu thêu
+	Design Catalogue	Danh mục mẫu thêu
+	No folder chosen	Chưa chọn thư mục
+	Choose Folder…	Chọn thư mục…
+	Newest	Mới nhất
+	Most stitches	Nhiều mũi thêu nhất
+	Largest	Lớn nhất
+	Designs	Mẫu thêu
+	Couldn't be read	Không đọc được
+	stitches	mũi thêu
+	colours	màu
+	Print Catalogue	In danh mục
+	A sheet of the designs found, to print or save as PDF	Một trang các mẫu thêu tìm thấy, để in hoặc lưu thành PDF
+@msg	larger than {_1} MB	lớn hơn {_1} MB
+@msg	not a machine file: .{ext}	không phải tệp máy thêu: .{ext}
+	Batch Output	Xuất hàng loạt
+	Output Profiles	Hồ sơ xuất
+	Save Output Profile	Lưu hồ sơ xuất
+	Delete Output Profile	Xóa hồ sơ xuất
+	Batch Convert	Chuyển đổi hàng loạt
+	files written	tệp đã ghi
+	Machine formats (none ticked: the machine's)	Định dạng máy (không đánh dấu: định dạng của máy)
+	Production	Sản xuất
+	Approval	Duyệt mẫu
+	Placement template	Mẫu định vị
+	The design file too	Cả tệp mẫu thêu
+	Write to Folder…	Ghi vào thư mục…
+	Machine files, worksheet PDF and design, named alike	Tệp máy thêu, phiếu thêu PDF và mẫu thêu, đặt tên giống nhau
+	Write Again	Ghi lại
+	Profile name	Tên hồ sơ
+	Save Profile	Lưu hồ sơ
+	Profile	Hồ sơ
+	Convert to	Chuyển sang
+	Convert All	Chuyển đổi tất cả
+	Each design found written again in this format beside it	Mỗi mẫu thêu tìm thấy được ghi lại theo định dạng này bên cạnh nó
+	Converted:	Đã chuyển đổi:
+	couldn't be read:	không đọc được:
+	Product Visualizer	Xem trước trên sản phẩm
+@msg	product outline: {e}	đường viền sản phẩm: {e}
+	Exports	Lần xuất
+	Nothing exported yet in this session.	Chưa xuất gì trong phiên này.
+	Again	Lại
+	Export it again, as it was asked, from this document	Xuất lại như đã yêu cầu, từ tài liệu này
+	Export History	Lịch sử xuất
+	Clear Export History	Xóa lịch sử xuất
+	Export Again	Xuất lại
+	Export Stitch Image	Xuất ảnh mũi thêu
+	Export Stitch Image…	Xuất ảnh mũi thêu…
+	Stitch List CSV (.csv)…	Danh sách mũi thêu CSV (.csv)…
+	Stitch List JSON (.json)…	Danh sách mũi thêu JSON (.json)…
+	G-code (.gcode)…	G-code (.gcode)…
+	Stitch Image PNG (.png)…	Ảnh mũi thêu PNG (.png)…
+@msg	PNG encoding failed: {e}	Mã hóa PNG thất bại: {e}
+@msg	the design has no stitches	mẫu thêu không có mũi thêu
+@msg	the image would be {w} × {h} pixels: lower ppmm	ảnh sẽ có {w} × {h} điểm ảnh: hãy giảm ppmm
+	Smallest That Fits	Nhỏ nhất vừa mẫu
+	The smallest hoop that holds the design, turned if that fits better	Khung thêu nhỏ nhất chứa được mẫu thêu, được xoay nếu vừa hơn
+	Rotate Hoop	Xoay khung thêu
+	Custom Hoops	Khung thêu tùy chỉnh
+	Hoop name	Tên khung thêu
+	Save Hoop	Lưu khung thêu
+	Delete Hoop	Xóa khung thêu
+	Hoops	Khung thêu
+	Choose Smallest Hoop	Chọn khung thêu nhỏ nhất
+	Save Custom Hoop	Lưu khung thêu tùy chỉnh
+	Delete Custom Hoop	Xóa khung thêu tùy chỉnh
+	Turn the hue	Xoay sắc độ
+	One colour	Một màu
+	Grey	Xám
+	Inverted	Đảo ngược
+	Recolour	Tô màu lại
+	Recolour Threads	Tô màu lại chỉ
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Mọi màu chỉ được đổi theo phương án màu và khớp với bảng màu chỉ của mẫu thêu; hoàn tác sẽ trả lại chúng
+	Garment Background	Nền trang phục
+	Garment Photo…	Ảnh trang phục…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Ảnh trang phục phía sau mẫu thêu, kích thước thật, trên một lớp mẫu bị khóa không bao giờ được thêu
+	Import Chart…	Nhập bảng màu chỉ…
+	A thread chart of your own from a CSV file (code, name and colour a thread) or a GIMP palette (.gpl)	Bảng màu chỉ riêng của bạn từ tệp CSV (mã, tên và màu của mỗi chỉ) hoặc bảng màu GIMP (.gpl)
+	Export Chart…	Xuất bảng màu chỉ…
+	Thread Charts	Bảng màu chỉ
+	Import Thread Chart	Nhập bảng màu chỉ
+	Export Thread Chart	Xuất bảng màu chỉ
+	Save Thread Chart	Lưu bảng màu chỉ
+	Delete Thread Chart	Xóa bảng màu chỉ
+	Design Templates	Mẫu thiết kế
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	Giữ trang, tác phẩm, khung thêu, vải và cài đặt của mẫu thêu này để bắt đầu mẫu thêu mới từ đó
+	New from Design Template	Mới từ mẫu thiết kế
+	Save as Design Template	Lưu thành mẫu thiết kế
+	Delete Design Template	Xóa mẫu thiết kế
+	Print Stitch View	In chế độ xem mũi thêu
+	Job Orders	Đơn hàng
+	Customer	Khách hàng
+	Due (YYYY-MM-DD)	Hạn (YYYY-MM-DD)
+	New Job for This Design	Đơn hàng mới cho mẫu thêu này
+	In production	Đang sản xuất
+	Cancelled	Đã hủy
+	New Job Order	Đơn hàng mới
+	Update Job Order	Cập nhật đơn hàng
+	Delete Job Order	Xóa đơn hàng
+	Job Worksheet	Phiếu đơn hàng
+	Job Output	Đầu ra đơn hàng
+	Clipart	Hình mẫu
+	Click a motif to place it, digitized, in the middle of the page.	Nhấp vào một mô-típ để đặt nó, đã số hóa, vào giữa trang.
+	Embroidery Clipart	Hình mẫu thêu
+	Insert Clipart	Chèn hình mẫu
+	Send When Ready	Gửi khi sẵn sàng
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Xếp hàng mẫu thêu cho thư mục này: nó được ghi ngay nếu thư mục có mặt, nếu không thì ngay khi thư mục xuất hiện
+	Waiting for the folder	Đang chờ thư mục
+	Send queue	Hàng đợi gửi
+	waiting	đang chờ
+	sent	đã gửi
+	failed	thất bại
+	Clear Sent	Xóa mục đã gửi
+	Send Queue	Hàng đợi gửi
+	Add to Send Queue	Thêm vào hàng đợi gửi
+	Send Waiting Designs	Gửi các mẫu thêu đang chờ
+	Remove from Send Queue	Xóa khỏi hàng đợi gửi
+@msg	the queued file is damaged	tệp trong hàng đợi bị hỏng
+	Centred	Căn giữa
+	In the hoop	Trong khung thêu
+	Worksheet Setup	Thiết lập phiếu thêu
+	Merge Colours	Gộp màu
+	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Các chỉ cùng màu hoặc màu gần nhau được gộp làm một, và các khối màu của chúng được nối lại; hoàn tác sẽ trả lại chúng
+	Lettering Kiosk	Ki-ốt chữ thêu
+	Kiosk Lettering	Chữ thêu ki-ốt
+	Type a name and make the design	Gõ một tên và tạo mẫu thêu
+	No embroidery font is loaded: ask the shop to load one.	Chưa tải phông chữ thêu nào: hãy nhờ cửa hàng tải một phông.
+	As large as fits	Lớn nhất có thể
+	Make Design	Tạo mẫu thêu
+	T-shirt	Áo phông
+	Polo shirt	Áo polo
+	Hoodie	Áo hoodie
+	Tote bag	Túi tote
+	Towel	Khăn tắm
+	Product	Sản phẩm
+	Show on Product	Hiện trên sản phẩm
+	Back to the Design	Quay lại mẫu thêu
+	Save Machine File…	Lưu tệp máy thêu…
+	Next Name	Tên tiếp theo
+	PIN	Mã PIN
+	Leave Kiosk	Rời ki-ốt
+	Leaving the kiosk will take this PIN	Rời ki-ốt sẽ yêu cầu mã PIN này
+	Snapback	Mũ snapback
+	Trucker cap	Mũ lưới trucker
+	Dad cap	Mũ lưỡi trai mềm
+	Image Colours	Màu ảnh
+	Prepare Image	Chuẩn bị ảnh
+	Photo Stitch	Thêu ảnh
+	Convert Stitches to Objects	Chuyển mũi thêu thành đối tượng
+	Colour Preview	Xem trước màu
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Bản sao làm mượt của ảnh theo các màu này, đã làm sạch đốm, để số hóa hoặc nhấp để thêu
+	Colours	Màu
+	background, not sewn	nền, không thêu
+	thread changes	lần đổi chỉ
+	threads sewn	chỉ được thêu
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Thêu ảnh chồng lên chính nó bằng các đường zigzag, một đường chạy uốn lượn, hoặc theo các màu của nó
+	Sequins	Kim sa
+	Beads	Hạt cườm
+	Rhinestones	Đá đính
+	Cord	Dây viền
+	Boring	Đục lỗ
+	Along the line	Dọc theo đường
+	Fill the shape	Tô kín hình
+	Round the edge	Quanh mép
+	At each point	Tại mỗi điểm
+	Bead length	Độ dài hạt
+	Cord width	Chiều rộng dây
+	Edge width	Chiều rộng mép
+	Honeycomb	Tổ ong
+	Packing	Xếp dày
+	Three	Ba
+	Fixing	Cố định
+	Flip every other	Lật xen kẽ
+	Colour	Màu
+	Thread colour	Màu chỉ
+	Stop before	Dừng trước
+	Rhinestones aren't sewn: export their template to cut and set them	Đá đính không được thêu: hãy xuất mẫu của chúng để cắt và gắn
+	Decoration Sizes	Kích thước đồ trang trí
+	Count Decorations	Đếm đồ trang trí
+	Cut File	Tệp cắt
+	Sew the pieces together	Thêu các mảnh lại với nhau
+	Fabric colour	Màu vải
+	Plain	Trơn
+	Check	Kẻ ca rô
+	Denim	Denim
+	Felt	Nỉ
+	Fabric pattern	Họa tiết vải
+	Pattern colour	Màu họa tiết
+	Combine Appliqué	Kết hợp đắp vải
+	Prepare Appliqué	Chuẩn bị đắp vải
+	Coil	Lò xo
+	Square loop	Vòng vuông
+	Foil	Lá kim loại
+	Shown with the design, not sewn	Hiển thị cùng mẫu thêu, không thêu
+	StitchFoundry Help	Trợ giúp StitchFoundry
+	Guide	Hướng dẫn
+	Tips	Mẹo
+	Search help	Tìm trong trợ giúp
+	Nothing found	Không tìm thấy gì
+	Help Topics	Chủ đề trợ giúp
+	Help Topic	Chủ đề trợ giúp
+	Help for Tool	Trợ giúp cho công cụ
+	New Design for Hoop	Mẫu thêu mới cho khung thêu
+	Sample Designs	Mẫu thêu ví dụ
+	Open Sample Design	Mở mẫu thêu ví dụ
+	Start a design for your hoop	Bắt đầu một mẫu thêu cho khung thêu của bạn
+	Your first design	Mẫu thêu đầu tiên của bạn
+	Draw shapes, place a picture or type text.	Vẽ hình, đặt ảnh hoặc gõ chữ.
+	Choose how each part is stitched: satin, fill, run and more.	Chọn cách thêu từng phần: satin, tô, mũi chạy và nhiều hơn nữa.
+	Watch it sew with the stitch player and check it.	Xem nó được thêu bằng trình phát mũi thêu và kiểm tra nó.
+	Export the file for your machine.	Xuất tệp cho máy của bạn.
+	Learn how	Tìm hiểu cách làm
+	Try a sample	Thử một ví dụ
+	Heart patch	Miếng vá trái tim
+	Sun and moon	Mặt trời và mặt trăng
+	Appliqué star	Ngôi sao đắp vải
+	Tip:	Mẹo:
+	More tips	Thêm mẹo
+	A new design the size of this hoop's sewing field	Một mẫu thêu mới bằng kích thước vùng thêu của khung này
+	Draw an inclination line across a shape to set its stitch angle; two or more lines make the stitches turn.	Vẽ một đường hướng mũi ngang qua hình để đặt góc mũi thêu; hai đường trở lên làm mũi thêu xoay hướng.
+	Click a region of a placed image to stitch it; raise Tolerance to take in more of its shades.	Nhấp vào một vùng của ảnh đã đặt để thêu nó; tăng Dung sai để lấy thêm nhiều sắc độ.
+	Drag picked needle points to move them, Alt-click a stitch to add one, Delete removes them.	Kéo các điểm kim đã chọn để di chuyển, Alt-nhấp vào một mũi thêu để thêm, Delete để xóa.
+	Click on one side of the column, then the other, in turn; Enter or Escape ends it.	Nhấp lần lượt vào một bên của cột, rồi bên kia; Enter hoặc Escape để kết thúc.
+	The dial in the lower-left corner sets the brush, width, density, length and shape.	Vòng xoay ở góc dưới bên trái đặt cọ, chiều rộng, mật độ, độ dài và hình dạng.
+	Type your text, then choose an embroidery font in the Lettering panel so it sews cleanly.	Gõ văn bản, rồi chọn một phông chữ thêu trong bảng Chữ thêu để nó thêu sạch đẹp.
+	Select art and choose Embroidery › Convert Artwork to Embroidery to digitize it in one step.	Chọn tác phẩm và chọn Thêu › Chuyển tác phẩm thành mẫu thêu để số hóa trong một bước.
+	Satin suits shapes up to about 7 mm wide; wider areas sew better as tatami fill.	Satin hợp với hình rộng tới khoảng 7 mm; vùng rộng hơn thêu đẹp hơn bằng tô tatami.
+	Choose a hoop in the Embroidery panel to see the sewing field round the design.	Chọn khung thêu trong bảng Thêu để xem vùng thêu quanh mẫu thêu.
+	Check Design in the Embroidery menu finds dense layers, long stitches and text too small to sew.	Kiểm tra mẫu thêu trong menu Thêu tìm các lớp quá dày, mũi dài và chữ quá nhỏ để thêu.
+	Watch the design sew with the stitch player in Stitch Sequence before you send it.	Xem mẫu thêu được thêu bằng trình phát mũi thêu trong Thứ tự mũi thêu trước khi gửi.
+	Export with Embroidery › Export Machine File and pick your machine's format.	Xuất bằng Thêu › Xuất tệp máy thêu và chọn định dạng của máy bạn.
+	Save as Default	Lưu làm mặc định
+	Clear Default	Xóa mặc định
+	Every new design starts with these properties	Mọi mẫu thêu mới bắt đầu với các thuộc tính này
+	New designs take the built-in properties again	Mẫu thêu mới lại nhận các thuộc tính có sẵn
+	All Tools, Ungrouped	Tất cả công cụ, không nhóm
+	Toolbar: All Tools, Ungrouped	Thanh công cụ: Tất cả công cụ, không nhóm
+	Push compensation	Bù đẩy
+	{n} very short stitches can break the thread	{n} mũi rất ngắn có thể làm đứt chỉ
+	Satin only {n} mm wide sinks into the fabric	Satin chỉ rộng {n} mm sẽ lún vào vải
+	Fill stitches {n} mm long can ripple after washing	Mũi tô dài {n} mm có thể bị nhăn sau khi giặt
+	Sewn on clothing	Thêu trên quần áo
+	Long stitches catch from 7 mm on clothing, 12.1 mm on other items	Mũi dài dễ vướng từ 7 mm trên quần áo, 12,1 mm trên đồ khác
+	Short stitches under	Mũi ngắn dưới
+	Narrow satin under	Satin hẹp dưới
+	Short fill stitches under	Mũi tô ngắn dưới
+	Edge run and zigzag	Chạy viền và zigzag
+	Satin underlay	Lớp lót satin
+	Edge run under fills	Chạy viền dưới vùng tô
+	New to digitizing? Read the basics	Mới làm quen với số hóa? Đọc kiến thức cơ bản
+	Density Map	Bản đồ mật độ
+	Density map	Bản đồ mật độ
+	Colour the design by how deep the thread lies: blue one layer, red as dense as Check Design flags	Tô màu mẫu thêu theo độ dày của chỉ: xanh dương là một lớp, đỏ là dày đến mức Kiểm tra mẫu thêu cảnh báo
+	Calibrate Life Size…	Hiệu chỉnh kích thước thật…
+	Calibrate Life Size	Hiệu chỉnh kích thước thật
+	Hold a ruler, or a bank card, against the screen and change the size until the marks match. Actual Size then shows designs life size.	Áp một cây thước, hoặc thẻ ngân hàng, lên màn hình và thay đổi kích thước cho đến khi các vạch khớp nhau. Khi đó Kích thước thực sẽ hiển thị mẫu thêu đúng kích thước thật.
+	Bank card	Thẻ ngân hàng
+	Screen points per inch	Điểm màn hình mỗi inch
+	Use This Size	Dùng kích thước này
+	Screen Points per Inch at Life Size	Điểm màn hình mỗi inch ở kích thước thật
+@msg	`pointsPerInch` is a number from 40 to 400	`pointsPerInch` là một số từ 40 đến 400
+	Experience	Kinh nghiệm
+	New to Embroidery	Mới làm quen thêu
+	Digitizer	Người số hóa
+	Embroidery Business	Kinh doanh thêu
+	Everything	Tất cả
+	Showing the basics.	Đang hiển thị phần cơ bản.
+	Show everything	Hiện tất cả
+	New to embroidery	Mới làm quen thêu
+	I digitize designs	Tôi số hóa mẫu thêu
+	I run an embroidery business	Tôi kinh doanh thêu
+	The basic tools and everyday sections, nothing more	Các công cụ cơ bản và các mục dùng hằng ngày, không gì hơn
+	Every digitizing tool, rulers and the control bar	Mọi công cụ số hóa, thước và thanh điều khiển
+	Everything, with job orders and batch output	Tất cả, kèm đơn hàng và xuất hàng loạt
+	How do you work?	Bạn làm việc thế nào?
+@msg	`level` is beginner, digitizer, business or all	`level` là beginner, digitizer, business hoặc all
+	Echo Quilting	Chần bông lặp viền
+	Background Quilting	Chần bông nền
+	Remove Blend	Bỏ hòa trộn
+	Blend layers	Lớp hòa trộn
+	My Machine…	Máy của tôi…
+	Save for My Machine	Lưu cho máy của tôi
+	Which embroidery machine do you have?	Bạn có máy thêu nào?
+	Measure in	Đơn vị đo
+	Save designs to	Lưu mẫu thêu vào
+	No folder chosen yet	Chưa chọn thư mục
+	Plug in the USB stick you take to your machine, then choose it here.	Cắm USB bạn mang đến máy, rồi chọn nó ở đây.
+	Husqvarna Viking (other models)	Husqvarna Viking (các mẫu khác)
+	Brother or Baby Lock	Brother hoặc Baby Lock
+	Janome or Elna	Janome hoặc Elna
+	Another machine (DST)	Máy khác (DST)
+	My machine:	Máy của tôi:
+	Tell us your machine to see its hoops and save in its format.	Cho chúng tôi biết máy của bạn để xem khung thêu của nó và lưu theo định dạng của nó.
+	Choose My Machine	Chọn máy của tôi
+	Saved for your machine:	Đã lưu cho máy của bạn:
+	A fabric shape: the machine stops for you to lay the fabric, then sews it down	Một hình bằng vải: máy dừng để bạn đặt vải, rồi thêu chặn nó xuống
+	A heart, a star, a flower and more, ready to sew	Trái tim, ngôi sao, bông hoa và nhiều hơn nữa, sẵn sàng để thêu
+	A name or a few words, ready to sew	Một tên hoặc vài từ, sẵn sàng để thêu
+	A photo or drawing to turn into stitches	Một ảnh chụp hoặc hình vẽ để biến thành mũi thêu
+	A picture	Một bức ảnh
+	Add Appliqué	Thêm đắp vải
+	Add Appliqué…	Thêm đắp vải…
+	Add Words	Thêm chữ
+	Add Words…	Thêm chữ…
+	Add a Picture…	Thêm ảnh…
+	Add a Shape	Thêm hình
+	Add a Shape…	Thêm hình…
+	Bigger	Lớn hơn
+	Choose a shape	Chọn một hình
+	Click a part of the design to change how it sews.	Nhấp vào một phần của mẫu thêu để thay đổi cách thêu nó.
+	Click a part of the design to choose it, drag it to move it	Nhấp vào một phần của mẫu thêu để chọn nó, kéo để di chuyển nó
+	Crown	Vương miện
+	Filled	Tô kín
+	How tall	Cao bao nhiêu
+	Just the outline	Chỉ đường viền
+	Not sewn	Không thêu
+	Nothing to sew yet. Add words, a shape or a picture with the buttons on the left.	Chưa có gì để thêu. Thêm chữ, hình hoặc ảnh bằng các nút bên trái.
+	Paw	Dấu chân thú
+	See the design sew on screen, stitch by stitch	Xem mẫu thêu được thêu trên màn hình, từng mũi một
+	Sew it as	Thêu dạng
+	Smaller	Nhỏ hơn
+	Smooth edge (satin)	Mép mượt (satin)
+	Start a design from the Home screen.	Bắt đầu một mẫu thêu từ màn hình Trang chủ.
+	Take back the last change	Hoàn tác thay đổi cuối cùng
+	The chosen part	Phần đã chọn
+	The chosen parts	Các phần đã chọn
+	The design is bigger than the hoop: make it smaller before you sew.	Mẫu thêu lớn hơn khung thêu: hãy thu nhỏ trước khi thêu.
+	Thread colours	Màu chỉ
+	Turn Into Stitches	Biến thành mũi thêu
+	Turn it into stitches in your thread colours.	Biến nó thành mũi thêu bằng màu chỉ của bạn.
+	Watch It Sew	Xem thêu thử
+	What should it say?	Nội dung chữ là gì?
+	Write the design for your machine to its USB stick or folder	Ghi mẫu thêu cho máy của bạn vào USB hoặc thư mục của máy
+	Your design	Mẫu thêu của bạn
+	Show Everything	Hiện tất cả
+@msg	the design has no page	mẫu thêu không có trang
+@msg	open or start a design first	hãy mở hoặc bắt đầu một mẫu thêu trước
+	Set My Machine	Đặt máy của tôi
+	Make a Design	Tạo mẫu thêu
+	Make a Design…	Tạo mẫu thêu…
+	Make a Design, Step by Step	Tạo mẫu thêu từng bước
+	Step by step: words, a shape, appliqué, a picture or a sample	Từng bước: chữ, hình, đắp vải, ảnh hoặc ví dụ
+	What would you like to make?	Bạn muốn làm gì?
+	A name or some words	Một tên hoặc vài từ
+	For towels, bags, pillows and gifts	Cho khăn tắm, túi, gối và quà tặng
+	A shape	Một hình
+	A heart, a star, a flower and more	Trái tim, ngôi sao, bông hoa và nhiều hơn nữa
+	An appliqué	Một mẫu đắp vải
+	A shape cut from fabric and sewn down	Một hình cắt từ vải và thêu chặn xuống
+	A photo or a drawing turned into stitches	Một ảnh chụp hoặc hình vẽ biến thành mũi thêu
+	A sample to try	Một ví dụ để thử
+	A finished design to sew and learn from	Một mẫu thêu hoàn chỉnh để thêu và học hỏi
+	Which hoop will you use?	Bạn sẽ dùng khung thêu nào?
+	Tell us your machine to see its hoops.	Cho chúng tôi biết máy của bạn để xem khung thêu của nó.
+	Pick the hoop you will put the fabric in. The design is made to fit it.	Chọn khung thêu bạn sẽ căng vải vào. Mẫu thêu được tạo cho vừa khung.
+	Capital letters are this tall. 20 to 30 mm suits a towel; 10 to 15 mm a shirt.	Chữ hoa cao chừng này. 20 đến 30 mm hợp với khăn tắm; 10 đến 15 mm hợp với áo.
+	Make It	Tạo
+	Which shape of fabric?	Miếng vải hình gì?
+	Which shape?	Hình nào?
+	The machine sews where the fabric goes and stops; you lay the fabric on, it tacks it down and stops again for you to trim; then it sews the edge.	Máy thêu đường định vị vải rồi dừng; bạn đặt vải lên, máy thêu chặn rồi dừng lại để bạn cắt vải; sau đó máy thêu viền mép.
+	Choose a picture	Chọn một ảnh
+	Simple pictures with a few flat colours and clear edges work best: a cartoon, a logo, clipart.	Ảnh đơn giản với vài màu phẳng và đường nét rõ thì tốt nhất: tranh hoạt hình, logo, hình mẫu.
+	Choose a Picture…	Chọn ảnh…
+	Which sample?	Ví dụ nào?
+	Your thread colours	Màu chỉ của bạn
+	These are sewn in this order. Click a colour to match a thread you have.	Các màu này được thêu theo thứ tự này. Nhấp vào một màu để khớp với chỉ bạn có.
+	Watch it sew	Xem thêu thử
+	See the needle go stitch by stitch, in the order your machine will sew it.	Xem kim đi từng mũi, theo thứ tự máy của bạn sẽ thêu.
+	Save it	Lưu lại
+	Save for My Machine writes the file your machine sews, to its USB stick.	Lưu cho máy của tôi ghi tệp mà máy bạn thêu vào USB của nó.
+	Save Design keeps a copy you can open and change later.	Lưu mẫu thêu giữ một bản sao mà bạn có thể mở và thay đổi sau.
+	Save Design…	Lưu mẫu thêu…
+	Put back what Undo took back	Khôi phục những gì Hoàn tác đã lấy lại
+	Start Over…	Bắt đầu lại…
+	Clear the design and begin again	Xóa mẫu thêu và bắt đầu lại
+	Text size	Cỡ chữ
+	Saved for you automatically in My Designs:	Đã tự động lưu cho bạn trong Mẫu thêu của tôi:
+	Start Over	Bắt đầu lại
+	Clear everything in this design and begin again?	Xóa mọi thứ trong mẫu thêu này và bắt đầu lại?
+	You can still get it back with Undo.	Bạn vẫn có thể lấy lại bằng Hoàn tác.
+	Keep It	Giữ lại
+	Keep Design Safe	Giữ an toàn mẫu thêu
+	In-the-Hoop Projects	Dự án thêu trong khung
+	Make In-the-Hoop Project	Tạo dự án thêu trong khung
+	Steps	Các bước
+	The machine also stops where you lay or trim fabric.	Máy cũng dừng ở những chỗ bạn đặt hoặc cắt vải.
+	Print the Steps…	In các bước…
+	Change the Size?	Thay đổi kích thước?
+	This design stops for fabric you cut to size. Made bigger or smaller, the pieces may no longer fit.	Mẫu thêu này dừng để đặt vải bạn cắt theo kích thước. Nếu phóng to hoặc thu nhỏ, các mảnh vải có thể không còn vừa.
+	Keep the Size	Giữ kích thước
+	Change It Anyway	Vẫn thay đổi
+	An in-the-hoop project	Một dự án thêu trong khung
+	A little pillow front, a mug rug, a coaster or an ornament	Mặt gối nhỏ, lót cốc lớn, lót ly hoặc đồ trang trí
+	Which project?	Dự án nào?
+	Sewn in a 5×7 hoop, borders and back sewn on after	Thêu trong khung 5×7, viền và mặt sau may vào sau
+	Finished in the hoop: batting, backing and a satin edge	Hoàn thiện trong khung: bông lót, vải lót sau và viền satin
+	Words (you can leave this empty)	Chữ (có thể để trống)
+	Little pillow front, 8″ square	Mặt gối nhỏ, vuông 8″
+	Little pillow front, 9½ × 5½″	Mặt gối nhỏ, 9½ × 5½″
+	Mug rug, 6½ × 4½″	Lót cốc lớn, 6½ × 4½″
+	Coaster, 3¾″ square	Lót ly, vuông 3¾″
+	Round ornament, 3½″	Đồ trang trí tròn, 3½″
+	Quilting for a tile	Chần bông cho một ô
+	Background quilting the size of a quilting tile, block by block	Chần bông nền theo kích thước một ô chần, từng khối một
+	What size is the tile?	Ô có kích thước bao nhiêu?
+	Read the size in the tile's window. The block is quilted edge to edge, the size of the tile.	Đọc kích thước trong cửa sổ của ô. Khối được chần từ mép đến mép, bằng kích thước của ô.
+	Lines apart	Khoảng cách đường
+	Keep the same pattern and spacing for every block of a quilt, so the blocks flow into each other.	Giữ cùng họa tiết và khoảng cách cho mọi khối của tấm chăn, để các khối liền mạch với nhau.
+	Make Every Size…	Tạo mọi kích thước…
+	One file for each usual tile size, in a folder or on the USB stick	Một tệp cho mỗi kích thước ô thông dụng, trong một thư mục hoặc trên USB
+	Quilt blocks saved:	Đã lưu các khối chần:
+	Stipple	Chần chấm
+	Squares spiral	Xoắn ốc vuông
+	Quilt Block Patterns	Họa tiết khối chần
+	Quilt Block	Khối chần
+	Quilt Block Set	Bộ khối chần
+	Loops	Vòng lặp
+	Pebbles	Sỏi
+	A block	Một khối
+	A border strip	Một dải viền
+	A corner	Một góc
+	In the middle (you can leave this empty)	Ở giữa (có thể để trống)
+	Words	Chữ
+	No shape	Không có hình
+	Sew the shape as appliqué	Thêu hình theo kiểu đắp vải
+	Add a ribbon band across it	Thêm một dải ruy băng ngang qua
+	Add a ribbon loop to hang it	Thêm một vòng ruy băng để treo
+	Clear vinyl on top (wipe-clean)	Phủ nhựa vinyl trong lên trên (lau sạch được)
+	Mark where a button goes	Đánh dấu chỗ đính cúc
+	Print the Cutting Templates…	In mẫu cắt…
+	In-the-Hoop Cutting Templates	Mẫu cắt thêu trong khung
+	Downloaded for your machine:	Đã tải xuống cho máy của bạn:
+	Save for My Machine downloads the design: copy it to the USB stick you take to your machine.	Lưu cho máy của tôi sẽ tải mẫu thêu xuống: hãy chép nó vào USB bạn mang đến máy.
+	Downloaded:	Đã tải xuống:
+	Save for My Machine downloads the file your machine sews: copy it to its USB stick.	Lưu cho máy của tôi sẽ tải xuống tệp mà máy bạn thêu: hãy chép nó vào USB của máy.
+@msg	{_1} {name}	{_1} {name}
+	Blend from Gradient	Hòa trộn từ chuyển sắc
+	Sew the gradient's colours blended the way it runs	Thêu các màu của chuyển sắc hòa trộn theo hướng của nó
+	Cutwork	Thêu khoét (cutwork)
+	Tartan Fill	Tô kẻ ô tartan
+	Test Sew-Out	Thêu thử
+	Test Sew-Outs	Các lần thêu thử
+	Cross Stitch	Thêu chữ thập
+	Cross Stitch Tool	Công cụ Thêu chữ thập
+	Cross Stitch from Image…	Thêu chữ thập từ ảnh…
+	Cross-Stitch Pattern Info	Thông tin mẫu thêu chữ thập
+	Cross-Stitch Pattern Settings	Cài đặt mẫu thêu chữ thập
+	New Cross-Stitch Pattern…	Mẫu thêu chữ thập mới…
+	Paint Cross Stitches	Tô mũi chữ thập
+	Brush (squares)	Cọ (ô vuông)
+	Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase	Nhấp hoặc kéo trên lưới thêu chữ thập để tô các ô; giữ Alt để xóa
+	Erase	Xóa
+	Pattern colours	Màu của mẫu
+	Add My Hoop	Thêm khung thêu của tôi
+	Brother or Baby Lock multi-needle	Brother hoặc Baby Lock nhiều kim
+	Commercial multi-needle (DST)	Máy công nghiệp nhiều kim (DST)
+	Give the hoop a name	Đặt tên cho khung thêu
+	Hoop not listed? Add its sewing field here.	Khung thêu không có trong danh sách? Thêm vùng thêu của nó ở đây.
+	My hoop	Khung thêu của tôi
+	My own hoops	Khung thêu riêng của tôi
+	Square corners	Góc vuông
+	Type the hoop's width and height as numbers	Nhập chiều rộng và chiều cao của khung thêu bằng số
+	in	in
+	Chenille	Chenille
+	Chenille Stitch	Mũi chenille
+	Chenille Stops	Điểm dừng chenille
+	Compound Chenille…	Chenille phức hợp…
+	A moss fill with chain borders sewn before and after it, in a group in the shape's place	Tô mũi rêu với viền mũi xích thêu trước và sau, trong một nhóm thay cho hình
+	Chain	Mũi xích
+	Chenille stops	Điểm dừng chenille
+	Lockstitch	Mũi khóa
+	Moss	Mũi rêu
+	Moss pattern	Họa tiết mũi rêu
+	Needle height	Độ cao kim
+	Start	Bắt đầu
+@msg	moss sews fills and runs: give the satin a fill or run stitch first	mũi rêu thêu vùng tô và mũi chạy: hãy gán cho satin kiểu tô hoặc mũi chạy trước
+	Get Embroidery Fonts…	Lấy phông chữ thêu…
+	About the library	Giới thiệu thư viện
+	Download Again	Tải xuống lại
+	Download fonts from an embroidery font library, ready for lettering	Tải phông chữ từ thư viện phông chữ thêu, sẵn sàng cho chữ thêu
+	Downloading	Đang tải xuống
+	Each font comes with its own licence, in its folder.	Mỗi phông chữ đi kèm giấy phép riêng, trong thư mục của nó.
+	Fonts are kept in	Phông chữ được lưu trong
+	Get Embroidery Fonts	Lấy phông chữ thêu
+	Listing the fonts…	Đang liệt kê phông chữ…
+	Try Again	Thử lại
+	fonts	phông chữ
+	is ready for lettering	đã sẵn sàng cho chữ thêu
+@msg	a file of the font has an unsafe name: {path}	một tệp của phông chữ có tên không an toàn: {path}
+@msg	can't reach the font library: {e}	không thể kết nối thư viện phông chữ: {e}
+@msg	downloading embroidery fonts works in the desktop app	tải phông chữ thêu chỉ hoạt động trong ứng dụng máy tính
+@msg	the font library answered {status} for {path}	thư viện phông chữ trả về {status} cho {path}
+@msg	the font library answered {status}: try again later	thư viện phông chữ trả về {status}: hãy thử lại sau
+@msg	{_1} isn't published yet	{_1} chưa được phát hành
+	Border or Corner…	Viền hoặc góc…
+	Check Continuous Line	Kiểm tra đường liền mạch
+	Continuous Fill	Tô liền mạch
+	Continuous Fill…	Tô liền mạch…
+	Crib (36 × 52″)	Nôi trẻ em (36 × 52″)
+	DXF Lines (.dxf)…	Đường DXF (.dxf)…
+	Echo	Lặp viền
+	Edge-to-Edge Rows	Hàng từ mép đến mép
+	Edge-to-Edge Rows…	Hàng từ mép đến mép…
+	Export Quilting Lines	Xuất đường chần bông
+	Export Quilting Lines…	Xuất đường chần bông…
+	HP-GL Plot (.plt)…	Bản vẽ HP-GL (.plt)…
+	Join into One Line	Nối thành một đường
+	King (108 × 108″)	King (108 × 108″)
+	Longarm Quilting	Chần bông máy tay dài
+	Meander	Uốn lượn
+	Queen (90 × 108″)	Queen (90 × 108″)
+	SVG Lines (.svg)…	Đường SVG (.svg)…
+	Start and End on the Edges	Bắt đầu và kết thúc trên mép
+	Stitch in the Ditch	Chần theo đường nối
+	Throw (50 × 65″)	Chăn phủ (50 × 65″)
+	Twin (70 × 90″)	Twin (70 × 90″)
+	A border of the selected line	Đường viền từ đường đã chọn
+	Border depth	Độ sâu viền
+	Border length	Độ dài viền
+	Corner leg (0: no corner)	Cạnh góc (0: không có góc)
+	Edge-to-edge rows of the selected line	Hàng từ mép đến mép của đường đã chọn
+	Make Border	Tạo viền
+	Make Rows	Tạo hàng
+	Nest the rows	Lồng các hàng
+	One continuous line, ready for a longarm	Một đường liền mạch, sẵn sàng cho máy chần tay dài
+	Quilt height	Chiều cao tấm chăn
+	Quilt width	Chiều rộng tấm chăn
+	Row spacing (0: the line's height)	Khoảng cách hàng (0: chiều cao của đường)
+	joins needed: Join into One Line makes them	cần nối: Nối thành một đường sẽ tạo chúng
+	longest	dài nhất
+@msg	nothing to add	không có gì để thêm
+	Download All	Tải xuống tất cả
+	Every font not downloaded yet, one after another	Mọi phông chữ chưa tải xuống, lần lượt từng cái
+	Fonts downloaded:	Phông chữ đã tải xuống:
+	failed:	thất bại:
+	fonts downloaded, ready for lettering	phông chữ đã tải xuống, sẵn sàng cho chữ thêu
+	Compare Designs	So sánh mẫu thêu
+	Compare Designs…	So sánh mẫu thêu…
+	Average stitch (mm)	Mũi trung bình (mm)
+	Bobbin thread (m)	Chỉ suốt (m)
+	Choose a machine file or the design open now	Chọn một tệp máy thêu hoặc mẫu thêu đang mở
+	Choose both designs to compare them	Chọn cả hai mẫu thêu để so sánh
+	Colour changes	Lần đổi màu
+	Differences of 10% or more are highlighted. The real test is sewing both.	Chênh lệch từ 10% trở lên được tô sáng. Phép thử thật là thêu cả hai.
+	First design	Mẫu thêu thứ nhất
+	Height (mm)	Chiều cao (mm)
+	Jumps	Mũi nhảy
+	Longest stitch (mm)	Mũi dài nhất (mm)
+	Open File…	Mở tệp…
+	Second	Thứ hai
+	Second design	Mẫu thêu thứ hai
+	Stitches over 7 mm	Mũi trên 7 mm
+	Stitches under 1 mm	Mũi dưới 1 mm
+	Stops	Lần dừng
+	This Design	Mẫu thêu này
+	This design	Mẫu thêu này
+	Top thread (m)	Chỉ trên (m)
+	Width (mm)	Chiều rộng (mm)
+	same	giống nhau
+	X:	X:
+	Y:	Y:
+	Direction	Hướng
+	Along the selected line	Dọc theo đường đã chọn
+	Add to Design	Thêm vào mẫu thêu
+	Colors and Order	Màu và thứ tự
+	Paint	Tô màu
+	Print and Export	In và xuất
+	Special Machines	Máy đặc biệt
+	Split Lines	Đường chia
+	Stitch Direction	Hướng mũi thêu
+	Use Line as Direction	Dùng đường làm hướng
+	Arc Up	Vòm lên
+	Arc Down	Vòm xuống
+	To follow a line of your own, draw it first, select it, then Add Words.	Để chữ theo một đường của riêng bạn, hãy vẽ nó trước, chọn nó, rồi Thêm chữ.
+	Ask About Embroidery…	Hỏi về thêu…
+	Ask About Embroidery	Hỏi về thêu
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Hỏi bất cứ điều gì về thêu máy hoặc StitchFoundry: dùng mếch nào, vì sao chỉ bị đứt, làm sao để chữ thêu sạch hơn, một tính năng nằm ở đâu. Claude cũng có thể thay đổi mẫu thêu khi bạn yêu cầu, sau khi bạn cho phép.
+	Thinking…	Đang suy nghĩ…
+	Type your question, then press Enter	Gõ câu hỏi, rồi nhấn Enter
+	Ask	Hỏi
+	New Conversation	Cuộc trò chuyện mới
+	Include my design	Kèm mẫu thêu của tôi
+	Answers come from Claude with your own Anthropic API key, billed to your Anthropic account. They can be wrong: try a test sew before an important piece.	Câu trả lời đến từ Claude bằng khóa API Anthropic của riêng bạn, tính phí vào tài khoản Anthropic của bạn. Chúng có thể sai: hãy thêu thử trước một sản phẩm quan trọng.
+	Change key	Đổi khóa
+@msg	Type a question first.	Hãy gõ câu hỏi trước.
+@msg	The question is too long: keep it under 2,000 characters.	Câu hỏi quá dài: hãy giữ dưới 2.000 ký tự.
+@msg	The AI declined to answer this: ask another way.	AI từ chối trả lời câu này: hãy hỏi theo cách khác.
+@msg	The reply had no answer: try again, or ask something narrower.	Câu trả lời không có nội dung: hãy thử lại, hoặc hỏi điều gì đó hẹp hơn.
+@msg	Ask About Embroidery needs the desktop app for now	Hỏi về thêu hiện cần ứng dụng máy tính
+@msg	already asking: wait for the answer	đang hỏi: hãy chờ câu trả lời
+	Claude wants to change your design:	Claude muốn thay đổi mẫu thêu của bạn:
+	Allow	Cho phép
+	Don't Allow	Không cho phép
+	Edit › Undo takes each change back.	Chỉnh sửa › Hoàn tác lấy lại từng thay đổi.
+	Changed:	Đã thay đổi:
+	Couldn't change:	Không thể thay đổi:
+	Not changed:	Không thay đổi:
+@msg	This conversation is long: start a New Conversation.	Cuộc trò chuyện này đã dài: hãy bắt đầu Cuộc trò chuyện mới.
+@msg	Claude took too many steps: ask again, more simply.	Claude đã thực hiện quá nhiều bước: hãy hỏi lại, đơn giản hơn.
