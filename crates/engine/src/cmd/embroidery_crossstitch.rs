@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Cross-Stitch Pattern…",
             ["Embroidery", "Cross Stitch"],
             None,
-            "{cols?: (40; 1 to 300), rows?: (40; 1 to 300), cell?: mm (2.5; 1 to 10, the side of one X), style?: full | half | upright | double (full), at?: [x, y] points (the grid's top left; default: centred on the page)} an empty cross-stitch grid, ready to paint with the Cross Stitch tool; it is selected → {id, cols, rows, cell}",
+            "{cols?: (40; 1 to 300), rows?: (40; 1 to 300), cell?: mm (2.5; 1 to 10, the side of one X), count?: fabric count (3 to 25 stitches an inch, instead of cell: 14 is 14-count Aida, 1.81 mm), style?: full | half | upright | double (full), at?: [x, y] points (the grid's top left; default: centred on the page)} an empty cross-stitch grid, ready to paint with the Cross Stitch tool; it is selected → {id, cols, rows, cell}",
             has_doc,
             new_pattern
         ),
@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cross Stitch from Image…",
             ["Embroidery", "Cross Stitch"],
             None,
-            "{id?: an image (the selected one), cols?: (60; 4 to 300), colors?: (8; 2 to 32), cell?: mm (1 to 10; default the image's width over `cols`), style?: full | half | upright | double, background?: bool (false: the colour round the edges is left unsewn), chart?: a thread chart's name} the image as a cross-stitch pattern over it: its main colours matched to threads, a colour a cell, specks cleaned → {id, cols, rows, cell, colors}",
+            "{id?: an image (the selected one), cols?: (60; 4 to 300), colors?: (8; 2 to 32), cell?: mm (1 to 10; default the image's width over `cols`), count?: fabric count instead of cell (3 to 25), style?: full | half | upright | double, background?: bool (false: the colour round the edges is left unsewn), chart?: a thread chart's name} the image as a cross-stitch pattern over it: its main colours matched to threads, a colour a cell, specks cleaned → {id, cols, rows, cell, colors}",
             has_doc,
             from_image
         ),
@@ -75,16 +75,34 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cross-Stitch Pattern Settings",
             [],
             None,
-            "{id?: the pattern (the selected one), cell?: mm (1 to 10; the grid grows or shrinks from its top left), style?: full | half | upright | double} change a pattern's cell size or how its cells are sewn → {id, cell, style}",
+            "{id?: the pattern (the selected one), cell?: mm (1 to 10; the grid grows or shrinks from its top left), count?: fabric count instead of cell (3 to 25), style?: full | half | upright | double} change a pattern's cell size or how its cells are sewn → {id, cell, style}",
             has_doc,
             set_pattern
+        ),
+        cmd!(
+            "embroidery.crossStitch.fill",
+            "Fill Cross Stitches",
+            [],
+            None,
+            "{id?: the pattern (default: the selected one, else the one under `at`), at?: [x, y] points | cell?: [col, row], color?: \"#rrggbb\" (needed unless erasing), erase?: bool} fill the patch of touching squares the same as the one clicked (all empty, or all one colour, side by side) with `color`, or clear it → {id, cells}",
+            has_doc,
+            fill
+        ),
+        cmd!(
+            "embroidery.crossStitch.replace",
+            "Replace Cross-Stitch Colour",
+            [],
+            None,
+            "{id?: the pattern (the selected one), from: \"#rrggbb\" (a colour of the pattern), to?: \"#rrggbb\" (needed unless erasing), erase?: bool} every square of one colour in another colour, or cleared → {id, cells}",
+            has_doc,
+            replace
         ),
         cmd!(
             query "embroidery.crossStitch.info",
             "Cross-Stitch Pattern Info",
             [],
             None,
-            "{id?: the pattern (the selected one)} → {id, cols, rows, cell (mm), style, size: [w, h] mm, colors: [{color, name, cells}]} (colours in sewing order)",
+            "{id?: the pattern (the selected one)} → {id, cols, rows, cell (mm), count (stitches an inch), style, size: [w, h] mm, colors: [{color, name, code, cells}]} (colours in sewing order)",
             has_doc,
             info
         ),
@@ -92,24 +110,24 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// A pattern read from the document: its grid and each colour's cells.
-struct Pattern {
-    group: NodeId,
-    cols: u32,
-    rows: u32,
-    style: CrossStyle,
+pub(super) struct Pattern {
+    pub(super) group: NodeId,
+    pub(super) cols: u32,
+    pub(super) rows: u32,
+    pub(super) style: CrossStyle,
     /// The grid's top left (points).
-    origin: kurbo::Point,
+    pub(super) origin: kurbo::Point,
     /// A cell's side (points).
-    cell: f64,
+    pub(super) cell: f64,
     /// The colour objects in sewing order, each with its colour and thread.
-    colors: Vec<(Option<NodeId>, Rgb, Option<Thread>)>,
+    pub(super) colors: Vec<(Option<NodeId>, Rgb, Option<Thread>)>,
     /// Each cell's colour (index into `colors`), row by row.
-    cells: Vec<Option<usize>>,
+    pub(super) cells: Vec<Option<usize>>,
     /// The colours whose cells changed since the pattern was read (their objects are rebuilt).
     dirty: Vec<bool>,
 }
 
-fn style_name(s: CrossStyle) -> &'static str {
+pub(super) fn style_name(s: CrossStyle) -> &'static str {
     match s {
         CrossStyle::Full => "full",
         CrossStyle::Half => "half",
@@ -139,7 +157,18 @@ fn side(p: &Value, key: &str, default: u32, lo: u32, cmd: &str) -> Result<u32> {
     }
 }
 
+/// Fabric counts (stitches an inch) a pattern may be sized by: 25.4 / count mm a cell.
+const COUNT: (f64, f64) = (3.0, 25.0);
+
+/// The cell size asked for (mm): `cell`, or a fabric `count` (14-count Aida: 25.4 / 14 mm).
 fn cell_mm(p: &Value, cmd: &str) -> Result<Option<f64>> {
+    if let Some(v) = p.get("count").filter(|v| !v.is_null()) {
+        let count = v
+            .as_f64()
+            .filter(|c| (COUNT.0..=COUNT.1).contains(c))
+            .ok_or_else(|| bad(cmd, format!("`count` is {} to {} stitches an inch", COUNT.0, COUNT.1)))?;
+        return Ok(Some(25.4 / count));
+    }
     match p.get("cell") {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
@@ -175,7 +204,7 @@ fn pattern_of(d: &Document, id: NodeId) -> Option<NodeId> {
 }
 
 /// The pattern named by `id`, else the selected one.
-fn chosen(s: &Session, p: &Value) -> Option<NodeId> {
+pub(super) fn chosen(s: &Session, p: &Value) -> Option<NodeId> {
     let st = s.doc().ok()?;
     match p.get("id").and_then(Value::as_u64) {
         Some(id) => pattern_of(&st.doc, NodeId(id)),
@@ -204,7 +233,7 @@ fn rgb_of(v: &str) -> Option<Rgb> {
 
 impl Pattern {
     /// Reads pattern `group`: its grid's place and size, and which cells each colour covers.
-    fn read(d: &Document, group: NodeId) -> Option<Pattern> {
+    pub(super) fn read(d: &Document, group: NodeId) -> Option<Pattern> {
         let g = d.node(group)?;
         let mut words = data(g, PATTERN_KEY)?.split_whitespace();
         let cols: u32 = words.next()?.parse().ok().filter(|c| (1..=MAX_SIDE).contains(c))?;
@@ -279,7 +308,7 @@ impl Pattern {
         Some(pattern)
     }
 
-    fn cell_mm(&self) -> f64 {
+    pub(super) fn cell_mm(&self) -> f64 {
         self.cell * MM_PER_PT
     }
 
@@ -327,7 +356,7 @@ impl Pattern {
     }
 
     /// Cells of each colour, counted.
-    fn counts(&self) -> Vec<usize> {
+    pub(super) fn counts(&self) -> Vec<usize> {
         let mut n = vec![0usize; self.colors.len()];
         for k in self.cells.iter().flatten() {
             if let Some(c) = n.get_mut(*k) {
@@ -763,6 +792,114 @@ fn set_pattern(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": group.0, "cell": pattern.cell_mm(), "style": style_name(pattern.style) }))
 }
 
+/// The colour asked for (`color`), or none when erasing.
+fn paint_color(p: &Value, key: &str, cmd: &str) -> Result<Option<Rgb>> {
+    let erase = bool_or(p, "erase", false);
+    match str_param(p, key) {
+        Some(_) if erase => Ok(None),
+        Some(c) => Ok(Some(rgb_of(c).ok_or_else(|| bad(cmd, format!("`{key}` is \"#rrggbb\"")))?)),
+        None if erase => Ok(None),
+        None => Err(bad(cmd, format!("give the `{key}` to paint with, or `erase: true`"))),
+    }
+}
+
+fn fill(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.crossStitch.fill";
+    let color = paint_color(p, "color", CMD)?;
+    let at = match p.get("at") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(point(v).ok_or_else(|| bad(CMD, "`at` is [x, y] in points"))?),
+    };
+    let listed = match p.get("cell") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let c = v.get(0).and_then(Value::as_u64).and_then(|c| u32::try_from(c).ok());
+            let r = v.get(1).and_then(Value::as_u64).and_then(|r| u32::try_from(r).ok());
+            Some(c.zip(r).ok_or_else(|| bad(CMD, "`cell` is [col, row]"))?)
+        }
+    };
+    let d = &s.doc()?.doc;
+    let group = chosen(s, p)
+        .or_else(|| at.and_then(|q| all_patterns(d).into_iter().find(|g| Pattern::read(d, *g).is_some_and(|pat| pat.contains(q)))))
+        .ok_or_else(|| bad(CMD, "fill on a cross-stitch pattern (Embroidery › Cross Stitch › New Cross-Stitch Pattern)"))?;
+    let mut pattern = Pattern::read(d, group).ok_or_else(|| bad(CMD, "that cross-stitch pattern can't be read"))?;
+    let (c0, r0) = match (listed, at) {
+        (Some(cell), _) => cell,
+        (None, Some(q)) => pattern.cell_at(q).ok_or_else(|| bad(CMD, "`at` is off the pattern's grid"))?,
+        (None, None) => return Err(bad(CMD, "give the square to fill from: `at` or `cell`")),
+    };
+    let (cols, rows) = (pattern.cols, pattern.rows);
+    let start = pattern.cells.get((r0 * cols + c0) as usize).copied().ok_or_else(|| bad(CMD, "`cell` is off the pattern's grid"))?;
+    let thread = color.map(|c| nearest_thread(s, c));
+    let value = match color {
+        Some(c) => Some(pattern.color_index(c, thread)?),
+        None => None,
+    };
+    // the squares side by side with the first that are as it is (4-connected)
+    let mut patch = Vec::new();
+    let mut seen = vec![false; pattern.cells.len()];
+    let mut todo = vec![(c0, r0)];
+    while let Some((c, r)) = todo.pop() {
+        let i = (r * cols + c) as usize;
+        if seen.get(i).copied().unwrap_or(true) || pattern.cells.get(i).copied() != Some(start) {
+            continue;
+        }
+        if let Some(v) = seen.get_mut(i) {
+            *v = true;
+        }
+        patch.push((c, r));
+        if c > 0 {
+            todo.push((c - 1, r));
+        }
+        if r > 0 {
+            todo.push((c, r - 1));
+        }
+        if c + 1 < cols {
+            todo.push((c + 1, r));
+        }
+        if r + 1 < rows {
+            todo.push((c, r + 1));
+        }
+    }
+    let mut changed = 0usize;
+    for (c, r) in patch {
+        if pattern.set(c, r, value) {
+            changed += 1;
+        }
+    }
+    if changed > 0 {
+        s.edit(if value.is_some() { "Fill Cross Stitches" } else { "Erase Cross Stitches" }, |d, _| pattern.write(d, false))?;
+    }
+    Ok(json!({ "id": group.0, "cells": changed }))
+}
+
+fn replace(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.crossStitch.replace";
+    let group = chosen(s, p).ok_or_else(|| bad(CMD, "select a cross-stitch pattern"))?;
+    let from = str_param(p, "from").and_then(rgb_of).ok_or_else(|| bad(CMD, "`from` is the colour to replace, \"#rrggbb\""))?;
+    let to = paint_color(p, "to", CMD)?;
+    let mut pattern = Pattern::read(&s.doc()?.doc, group).ok_or_else(|| bad(CMD, "that cross-stitch pattern can't be read"))?;
+    let k =
+        pattern.colors.iter().position(|(_, c, _)| *c == from).ok_or_else(|| bad(CMD, format!("the pattern has no {} squares", from.to_hex())))?;
+    let thread = to.map(|c| nearest_thread(s, c));
+    let value = match to {
+        Some(c) => Some(pattern.color_index(c, thread)?),
+        None => None,
+    };
+    let mut changed = 0usize;
+    for r in 0..pattern.rows {
+        for c in 0..pattern.cols {
+            if pattern.cells.get((r * pattern.cols + c) as usize).copied().flatten() == Some(k) && pattern.set(c, r, value) {
+                changed += 1;
+            }
+        }
+    }
+    if changed > 0 {
+        s.edit("Replace Cross-Stitch Colour", |d, _| pattern.write(d, false))?;
+    }
+    Ok(json!({ "id": group.0, "cells": changed }))
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.crossStitch.info";
     let group = chosen(s, p).ok_or_else(|| bad(CMD, "select a cross-stitch pattern"))?;
@@ -773,7 +910,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .zip(&counts)
         .filter(|(_, n)| **n > 0)
-        .map(|((_, c, t), n)| json!({ "color": c.to_hex(), "name": t.as_ref().map_or("", |t| t.name.as_str()), "cells": n }))
+        .map(|((_, c, t), n)| {
+            json!({ "color": c.to_hex(), "name": t.as_ref().map_or("", |t| t.name.as_str()), "code": t.as_ref().map_or("", |t| t.code.as_str()), "cells": n })
+        })
         .collect();
     let cell = pattern.cell_mm();
     Ok(json!({
@@ -781,6 +920,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "cols": pattern.cols,
         "rows": pattern.rows,
         "cell": cell,
+        "count": (254.0 / cell).round() / 10.0,
         "style": style_name(pattern.style),
         "size": [f64::from(pattern.cols) * cell, f64::from(pattern.rows) * cell],
         "colors": colors,
@@ -949,6 +1089,14 @@ mod tests {
         // one stroke, one Undo step
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(cells(&mut s), Some(8));
+        // with Fill on, a click on an empty square fills the empty patch round it
+        s.set_tool_options(Some("embroideryCrossStitch"), json!({"fill": true, "color": "#aa3300"}).as_object().unwrap());
+        s.pointer(&ev(PointerKind::Down, at(10.0), false), v).unwrap();
+        s.pointer(&ev(PointerKind::Up, at(10.0), false), v).unwrap();
+        let info = s.execute("embroidery.crossStitch.info", &json!({"id": id})).unwrap();
+        assert_eq!(info["colors"][1]["cells"], 48 - 8, "every empty square: they all touch");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.execute("embroidery.crossStitch.info", &json!({"id": id})).unwrap()["colors"].as_array().map(Vec::len), Some(1));
     }
 
     #[test]
@@ -974,5 +1122,62 @@ mod tests {
         let r = s.execute("embroidery.crossStitch.paint", &json!({"cells": [[-1, 0], [5, 5], [99, 2]], "color": "#ff0000"})).unwrap();
         assert_eq!(r["cells"], 0);
         assert!(s.execute("embroidery.crossStitch.fromImage", &json!({})).is_err(), "no image");
+    }
+
+    /// CH-04: the fill bucket fills the patch of touching squares alike, empty or of one colour.
+    #[test]
+    fn the_fill_bucket_fills_a_patch_of_touching_squares() {
+        let mut s = session();
+        s.execute("embroidery.crossStitch.new", &json!({"cols": 6, "rows": 4, "cell": 3, "at": [72, 72]})).unwrap();
+        // a red wall down column 2 splits the grid: the empty left side fills, the right doesn't
+        let wall: Vec<Value> = (0..4).map(|r| json!([2, r])).collect();
+        s.execute("embroidery.crossStitch.paint", &json!({"cells": wall, "color": "#cc0000"})).unwrap();
+        let r = s.execute("embroidery.crossStitch.fill", &json!({"cell": [0, 0], "color": "#0000cc"})).unwrap();
+        assert_eq!(r["cells"], 8, "columns 0 and 1, every row");
+        // by a point on the canvas: the wall turns green, as one patch
+        let cell = 3.0 * PT_PER_MM;
+        let r = s.execute("embroidery.crossStitch.fill", &json!({"at": [72.0 + 2.5 * cell, 72.0 + 0.5 * cell], "color": "#00aa00"})).unwrap();
+        assert_eq!(r["cells"], 4);
+        // erasing a patch, and one Undo for it
+        let r = s.execute("embroidery.crossStitch.fill", &json!({"cell": [1, 3], "erase": true})).unwrap();
+        assert_eq!(r["cells"], 8);
+        s.execute("edit.undo", &json!({})).unwrap();
+        let info = s.execute("embroidery.crossStitch.info", &json!({})).unwrap();
+        let counts: Vec<u64> = info["colors"].as_array().unwrap().iter().map(|c| c["cells"].as_u64().unwrap()).collect();
+        assert_eq!(counts, [8, 4], "the blue left side, then the green wall (in sewing order)");
+        assert!(s.execute("embroidery.crossStitch.fill", &json!({"cell": [9, 9], "color": "#000000"})).is_err(), "off the grid");
+        assert!(s.execute("embroidery.crossStitch.fill", &json!({"cell": [0, 0]})).is_err(), "no colour");
+    }
+
+    /// CH-04: Replace Colour turns every square of one colour into another (merging with it when the
+    /// pattern has it), or clears them.
+    #[test]
+    fn a_colour_is_replaced_everywhere() {
+        let mut s = session();
+        s.execute("embroidery.crossStitch.new", &json!({"cols": 5, "rows": 5})).unwrap();
+        s.execute("embroidery.crossStitch.paint", &json!({"cells": [[0, 0], [1, 1], [4, 4]], "color": "#cc0000"})).unwrap();
+        s.execute("embroidery.crossStitch.paint", &json!({"cells": [[2, 2]], "color": "#0000cc"})).unwrap();
+        let r = s.execute("embroidery.crossStitch.replace", &json!({"from": "#cc0000", "to": "#0000cc"})).unwrap();
+        assert_eq!(r["cells"], 3);
+        let info = s.execute("embroidery.crossStitch.info", &json!({})).unwrap();
+        let colors = info["colors"].as_array().unwrap();
+        assert_eq!((colors.len(), colors[0]["color"].as_str(), colors[0]["cells"].as_u64()), (1, Some("#0000cc"), Some(4)));
+        let r = s.execute("embroidery.crossStitch.replace", &json!({"from": "#0000cc", "erase": true})).unwrap();
+        assert_eq!(r["cells"], 4);
+        assert!(s.execute("embroidery.crossStitch.replace", &json!({"from": "#0000cc", "to": "#ffffff"})).is_err(), "no such colour left");
+    }
+
+    /// CH-04: a pattern sized by its fabric count: 14-count Aida is 25.4 / 14 mm a square.
+    #[test]
+    fn patterns_are_sized_by_fabric_count() {
+        let mut s = session();
+        s.execute("embroidery.crossStitch.new", &json!({"cols": 10, "rows": 10, "count": 14})).unwrap();
+        let info = s.execute("embroidery.crossStitch.info", &json!({})).unwrap();
+        assert!((info["cell"].as_f64().unwrap() - 25.4 / 14.0).abs() < 1e-9);
+        assert_eq!(info["count"], 14.0);
+        s.execute("embroidery.crossStitch.set", &json!({"count": 11})).unwrap();
+        let info = s.execute("embroidery.crossStitch.info", &json!({})).unwrap();
+        assert_eq!(info["count"], 11.0);
+        assert!(s.execute("embroidery.crossStitch.set", &json!({"count": 40})).is_err());
     }
 }

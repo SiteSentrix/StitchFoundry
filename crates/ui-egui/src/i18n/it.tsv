@@ -5844,3 +5844,15 @@ machine	Stop	Arresto
 	Not changed:	Non modificato:
 @msg	This conversation is long: start a New Conversation.	Questa conversazione è lunga: inizia una nuova conversazione.
 @msg	Claude took too many steps: ask again, more simply.	Claude ha avuto bisogno di troppi passaggi: chiedi di nuovo, in modo più semplice.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Riempi un'area
+	Click a square to fill every touching square like it; hold Alt to clear them	Fai clic su un quadretto per riempire tutti i quadretti uguali adiacenti; tieni premuto Alt per svuotarli
+	With the Thread Colour	Con il colore del filo
+	{n}-count Aida	Aida {n} punti
+	Print Chart…	Stampa schema…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Il motivo come schema contato da ricamare: un simbolo per quadretto, numerato ogni 10, e una legenda dei fili
+	Print Cross-Stitch Chart…	Stampa schema punto croce…
+	Print Cross-Stitch Chart	Stampa schema punto croce
+	Fill Cross Stitches	Riempi punti croce
+	Replace Cross-Stitch Colour	Sostituisci colore punto croce

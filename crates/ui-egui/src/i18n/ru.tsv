@@ -5840,3 +5840,15 @@ machine	Stop	Остановка
 	Not changed:	Не изменено:
 @msg	This conversation is long: start a New Conversation.	Разговор слишком длинный: начните новый разговор.
 @msg	Claude took too many steps: ask again, more simply.	Claude понадобилось слишком много шагов: спросите ещё раз, попроще.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Заливка области
+	Click a square to fill every touching square like it; hold Alt to clear them	Щёлкните клетку, чтобы залить все соседние такие же клетки; с Alt — очистить их
+	With the Thread Colour	Цветом нити
+	{n}-count Aida	Канва Aida {n}
+	Print Chart…	Печать схемы…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Узор как счётная схема для вышивки: символ в каждой клетке, нумерация через 10 и ключ с нитками
+	Print Cross-Stitch Chart…	Печать схемы вышивки крестом…
+	Print Cross-Stitch Chart	Печать схемы вышивки крестом
+	Fill Cross Stitches	Залить крестики
+	Replace Cross-Stitch Colour	Заменить цвет крестиков

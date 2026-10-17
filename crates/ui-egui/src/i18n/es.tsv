@@ -6194,3 +6194,15 @@ mark-style	Japanese	Japonesas
 	Not changed:	Sin cambiar:
 @msg	This conversation is long: start a New Conversation.	Esta conversación es larga: empiece una nueva conversación.
 @msg	Claude took too many steps: ask again, more simply.	Claude necesitó demasiados pasos: pregunte de nuevo, de forma más sencilla.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Rellenar una zona
+	Click a square to fill every touching square like it; hold Alt to clear them	Haga clic en un cuadro para rellenar todos los cuadros iguales que lo tocan; mantenga Alt para vaciarlos
+	With the Thread Colour	Por el color del hilo
+	{n}-count Aida	Aida de {n} puntos
+	Print Chart…	Imprimir gráfico…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	El patrón como gráfico contado para bordar: un símbolo por cuadro, numerado cada 10, y una leyenda de los hilos
+	Print Cross-Stitch Chart…	Imprimir gráfico de punto de cruz…
+	Print Cross-Stitch Chart	Imprimir gráfico de punto de cruz
+	Fill Cross Stitches	Rellenar puntos de cruz
+	Replace Cross-Stitch Colour	Reemplazar color de punto de cruz

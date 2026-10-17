@@ -549,6 +549,15 @@ charted, and sews as X stitches that sit exactly in their squares.
   a block of 1 to 9 squares across. A square has one colour: painting it again changes it. A
   whole stroke is one step, so Undo takes it back. The Embroidery panel shows the tool's colour
   (the pattern's colours are one click away), Erase and Brush.
+- **Fill a patch** (in the Embroidery panel, with the Cross Stitch tool) makes a click fill every
+  square touching the one clicked that is like it (all empty, or all one colour, side by side,
+  not corner to corner) in the tool's colour, or clear them with Alt
+  (`embroidery.crossStitch.fill {at? | cell?, color?, erase?}`): a background filled in one go.
+- **Replace … With the Thread Colour** swaps one colour of the selected pattern for the tool's
+  colour everywhere (`embroidery.crossStitch.replace {from, to?, erase?}`); when the pattern has
+  that colour already, the two become one.
+- **Fabric** sets the square size by the fabric's count: 11-, 14-, 16- or 18-count Aida (a 14-count
+  square is 25.4 / 14 = 1.81 mm). `count` works wherever `cell` does (`new`, `fromImage`, `set`).
 - **Embroidery › Create › Cross Stitch › Cross Stitch from Image…** (`embroidery.crossStitch.fromImage
   {cols?, colors?, cell?, style?, background?}`) turns the selected picture into a pattern over it:
   60 squares across and 8 colours unless you choose, each colour matched to a thread of the
@@ -562,6 +571,15 @@ charted, and sews as X stitches that sit exactly in their squares.
   double (X and +). `embroidery.crossStitch.info` lists its size and each colour's squares.
 - Move the pattern as a whole (select the group); its squares and stitches move with it. Resize
   it with the square size rather than by scaling.
+- **Embroidery › Create › Cross Stitch › Print Cross-Stitch Chart…** (or **Print Chart…** in the
+  panel; `embroidery.crossStitch.chart {page?, square?, colors?}`) prints the pattern as a counted
+  chart to stitch from by hand or to check against: a symbol in every square (each colour its
+  own; up to 64 told apart by shape and fill) on its colour, heavier lines every 10 squares with
+  their numbers along the top and left, as many A4 or Letter pages as it takes (each page says
+  which columns and rows it shows), then a key: each symbol with its colour, thread and number
+  of stitches, and the pattern's size in stitches, as sewn and on 14-count Aida. It opens as a new
+  document to print or export as PDF; `colors: false` prints black symbols on white to save
+  ink.
 
 ## Clipart
 

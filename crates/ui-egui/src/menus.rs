@@ -130,6 +130,7 @@ fn embroidery_menu() -> Vec<Item> {
                     vec![
                         c("New Cross-Stitch Pattern…", "embroidery.crossStitch.new"),
                         c("Cross Stitch from Image…", "embroidery.crossStitch.fromImage"),
+                        c("Print Cross-Stitch Chart…", "embroidery.crossStitch.chart"),
                     ],
                 ),
                 cp("Lettering Kiosk", "embroidery.kiosk", json!({ "on": true })),

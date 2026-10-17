@@ -5824,3 +5824,15 @@ machine	Stop	Зупинка
 	Not changed:	Не змінено:
 @msg	This conversation is long: start a New Conversation.	Розмова задовга: почніть нову розмову.
 @msg	Claude took too many steps: ask again, more simply.	Claude знадобилося забагато кроків: запитайте ще раз, простіше.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Заливка ділянки
+	Click a square to fill every touching square like it; hold Alt to clear them	Клацніть клітинку, щоб залити всі сусідні такі самі клітинки; з Alt — очистити їх
+	With the Thread Colour	Кольором нитки
+	{n}-count Aida	Канва Aida {n}
+	Print Chart…	Друк схеми…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Візерунок як рахункова схема для вишивання: символ у кожній клітинці, нумерація через 10 і ключ із нитками
+	Print Cross-Stitch Chart…	Друк схеми вишивки хрестиком…
+	Print Cross-Stitch Chart	Друк схеми вишивки хрестиком
+	Fill Cross Stitches	Залити хрестики
+	Replace Cross-Stitch Colour	Замінити колір хрестиків

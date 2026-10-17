@@ -6219,3 +6219,15 @@ machine	Stop	Megállás
 	Not changed:	Nem módosult:
 @msg	This conversation is long: start a New Conversation.	Ez a beszélgetés hosszú: kezdj egy új beszélgetést.
 @msg	Claude took too many steps: ask again, more simply.	Claude túl sok lépést tett: kérdezz újra, egyszerűbben.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Terület kitöltése
+	Click a square to fill every touching square like it; hold Alt to clear them	Kattintson egy négyzetre a vele érintkező összes egyforma négyzet kitöltéséhez; Alt lenyomásával törli őket
+	With the Thread Colour	A cérnaszínnel
+	{n}-count Aida	{n}-es Aida
+	Print Chart…	Minta nyomtatása…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	A minta számolt mintaként a hímzéshez: minden négyzetben egy jel, tízesével számozva, és a cérnák jelmagyarázata
+	Print Cross-Stitch Chart…	Keresztszemes minta nyomtatása…
+	Print Cross-Stitch Chart	Keresztszemes minta nyomtatása
+	Fill Cross Stitches	Keresztszemek kitöltése
+	Replace Cross-Stitch Colour	Keresztszem színének cseréje

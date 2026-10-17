@@ -6253,3 +6253,15 @@ theme	Appearance	Apparence
 	Not changed:	Non modifié :
 @msg	This conversation is long: start a New Conversation.	Cette conversation est longue : commencez une nouvelle conversation.
 @msg	Claude took too many steps: ask again, more simply.	Claude a eu besoin de trop d'étapes : reposez la question plus simplement.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Remplir une zone
+	Click a square to fill every touching square like it; hold Alt to clear them	Cliquez sur une case pour remplir toutes les cases voisines identiques ; maintenez Alt pour les vider
+	With the Thread Colour	Par la couleur du fil
+	{n}-count Aida	Aida {n} points
+	Print Chart…	Imprimer la grille…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Le motif en grille comptée pour broder : un symbole par case, numérotée tous les 10, et une légende des fils
+	Print Cross-Stitch Chart…	Imprimer la grille de point de croix…
+	Print Cross-Stitch Chart	Imprimer la grille de point de croix
+	Fill Cross Stitches	Remplir des points de croix
+	Replace Cross-Stitch Colour	Remplacer une couleur de point de croix

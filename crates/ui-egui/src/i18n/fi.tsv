@@ -6229,3 +6229,15 @@ machine	Stop	Pysäytys
 	Not changed:	Ei muutettu:
 @msg	This conversation is long: start a New Conversation.	Tämä keskustelu on pitkä: aloita uusi keskustelu.
 @msg	Claude took too many steps: ask again, more simply.	Claude otti liian monta vaihetta: kysy uudelleen yksinkertaisemmin.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Täytä alue
+	Click a square to fill every touching square like it; hold Alt to clear them	Napsauta ruutua täyttääksesi kaikki viereiset samanlaiset ruudut; pidä Alt painettuna tyhjentääksesi ne
+	With the Thread Colour	Langan värillä
+	{n}-count Aida	{n} ruudun Aida
+	Print Chart…	Tulosta kaavio…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Kuvio laskettavana kaaviona kirjontaa varten: symboli joka ruudussa, numerointi 10 ruudun välein ja lankojen selite
+	Print Cross-Stitch Chart…	Tulosta ristipistokaavio…
+	Print Cross-Stitch Chart	Tulosta ristipistokaavio
+	Fill Cross Stitches	Täytä ristipistoilla
+	Replace Cross-Stitch Colour	Korvaa ristipiston väri

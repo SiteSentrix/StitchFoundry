@@ -5826,3 +5826,15 @@ machine	Stop	정지
 	Not changed:	변경 안 됨:
 @msg	This conversation is long: start a New Conversation.	대화가 깁니다: 새 대화를 시작하세요.
 @msg	Claude took too many steps: ask again, more simply.	Claude가 너무 많은 단계를 거쳤습니다: 더 간단하게 다시 질문하세요.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	영역 채우기
+	Click a square to fill every touching square like it; hold Alt to clear them	칸을 클릭하면 맞닿은 같은 칸을 모두 채웁니다. Alt 키를 누른 채 클릭하면 지웁니다
+	With the Thread Colour	실 색상으로
+	{n}-count Aida	{n}카운트 아이다
+	Print Chart…	도안 인쇄…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	수놓을 때 보는 카운트 도안으로 인쇄합니다: 칸마다 기호, 10칸마다 번호, 실 범례 포함
+	Print Cross-Stitch Chart…	십자수 도안 인쇄…
+	Print Cross-Stitch Chart	십자수 도안 인쇄
+	Fill Cross Stitches	십자수 채우기
+	Replace Cross-Stitch Colour	십자수 색상 바꾸기

@@ -6217,3 +6217,15 @@ machine	Stop	Στάση
 	Not changed:	Δεν άλλαξαν:
 @msg	This conversation is long: start a New Conversation.	Αυτή η συνομιλία είναι μεγάλη: ξεκινήστε μια Νέα συνομιλία.
 @msg	Claude took too many steps: ask again, more simply.	Ο Claude έκανε υπερβολικά πολλά βήματα: ρωτήστε ξανά, πιο απλά.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Γέμισμα περιοχής
+	Click a square to fill every touching square like it; hold Alt to clear them	Κάντε κλικ σε ένα τετράγωνο για να γεμίσετε όλα τα γειτονικά ίδια τετράγωνα· κρατήστε πατημένο το Alt για να τα καθαρίσετε
+	With the Thread Colour	Με το χρώμα της κλωστής
+	{n}-count Aida	Αΐντα {n} πόντων
+	Print Chart…	Εκτύπωση σχεδίου…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Το μοτίβο ως μετρημένο σχέδιο για κέντημα: ένα σύμβολο σε κάθε τετράγωνο, αρίθμηση ανά 10 και υπόμνημα κλωστών
+	Print Cross-Stitch Chart…	Εκτύπωση σχεδίου σταυροβελονιάς…
+	Print Cross-Stitch Chart	Εκτύπωση σχεδίου σταυροβελονιάς
+	Fill Cross Stitches	Γέμισμα σταυροβελονιών
+	Replace Cross-Stitch Colour	Αντικατάσταση χρώματος σταυροβελονιάς

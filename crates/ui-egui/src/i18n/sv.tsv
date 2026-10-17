@@ -6221,3 +6221,15 @@ machine	Stop	Stopp
 	Not changed:	Inte ändrat:
 @msg	This conversation is long: start a New Conversation.	Den här konversationen är lång: starta en ny konversation.
 @msg	Claude took too many steps: ask again, more simply.	Claude tog för många steg: fråga igen, enklare.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Fyll ett område
+	Click a square to fill every touching square like it; hold Alt to clear them	Klicka på en ruta för att fylla alla angränsande likadana rutor; håll ned Alt för att tömma dem
+	With the Thread Colour	Med trådfärgen
+	{n}-count Aida	Aida {n} rutor/tum
+	Print Chart…	Skriv ut mönster…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Mönstret som räknemönster att brodera efter: en symbol per ruta, numrerat var tionde och en teckenförklaring för trådarna
+	Print Cross-Stitch Chart…	Skriv ut korsstygnsmönster…
+	Print Cross-Stitch Chart	Skriv ut korsstygnsmönster
+	Fill Cross Stitches	Fyll korsstygn
+	Replace Cross-Stitch Colour	Ersätt korsstygnsfärg

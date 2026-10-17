@@ -6247,3 +6247,15 @@ machine	Stop	Спиране
 @msg	Claude took too many steps: ask again, more simply.	Claude направи твърде много стъпки: попитайте отново, по-просто.
 	Digitizing	Дигитализиране
 	Embroidery Basics	Основи на бродерията
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Запълване на област
+	Click a square to fill every touching square like it; hold Alt to clear them	Щракнете върху квадратче, за да запълните всички съседни еднакви квадратчета; със задържан Alt ги изчиствате
+	With the Thread Colour	С цвета на конеца
+	{n}-count Aida	Аида {n} бода на инч
+	Print Chart…	Печат на схема…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Шарката като схема за броене при бродиране: символ във всяко квадратче, номерация през 10 и легенда на конците
+	Print Cross-Stitch Chart…	Печат на схема за кръстат бод…
+	Print Cross-Stitch Chart	Печат на схема за кръстат бод
+	Fill Cross Stitches	Запълване с кръстати бодове
+	Replace Cross-Stitch Colour	Замяна на цвят на кръстатите бодове

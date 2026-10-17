@@ -6101,3 +6101,15 @@ machine	Stop	Zatrzymanie
 	Not changed:	Bez zmian:
 @msg	This conversation is long: start a New Conversation.	Ta rozmowa jest długa: rozpocznij Nową rozmowę.
 @msg	Claude took too many steps: ask again, more simply.	Claude wykonał zbyt wiele kroków: zapytaj ponownie, prościej.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Wypełnij obszar
+	Click a square to fill every touching square like it; hold Alt to clear them	Kliknij kratkę, aby wypełnić wszystkie stykające się z nią takie same kratki; z klawiszem Alt – wyczyścić je
+	With the Thread Colour	Kolorem nici
+	{n}-count Aida	Kanwa Aida {n}
+	Print Chart…	Drukuj schemat…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Wzór jako schemat do haftu z liczeniem: symbol w każdej kratce, numeracja co 10 i legenda nici
+	Print Cross-Stitch Chart…	Drukuj schemat haftu krzyżykowego…
+	Print Cross-Stitch Chart	Drukuj schemat haftu krzyżykowego
+	Fill Cross Stitches	Wypełnij krzyżykami
+	Replace Cross-Stitch Colour	Zamień kolor krzyżyków

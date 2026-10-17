@@ -6241,3 +6241,15 @@ mark-style	Japanese	Japonské
 	Not changed:	Nezměněno:
 @msg	This conversation is long: start a New Conversation.	Tato konverzace je dlouhá: začněte novou konverzaci.
 @msg	Claude took too many steps: ask again, more simply.	Claude potřeboval příliš mnoho kroků: zeptejte se znovu a jednodušeji.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Vyplnit plochu
+	Click a square to fill every touching square like it; hold Alt to clear them	Klepnutím na čtverec vyplníte všechny sousední stejné čtverce; s klávesou Alt je vymažete
+	With the Thread Colour	Barvou nitě
+	{n}-count Aida	Kanava {n} čtverečků na palec
+	Print Chart…	Vytisknout předlohu…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Vzor jako počítaná předloha k vyšívání: symbol v každém čtverci, číslování po 10 a legenda nití
+	Print Cross-Stitch Chart…	Vytisknout předlohu křížkového stehu…
+	Print Cross-Stitch Chart	Vytisknout předlohu křížkového stehu
+	Fill Cross Stitches	Vyplnit křížkové stehy
+	Replace Cross-Stitch Colour	Nahradit barvu křížkového stehu

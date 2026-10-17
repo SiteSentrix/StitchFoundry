@@ -2526,7 +2526,7 @@ fn placement_text(id: &str) -> Option<&'static str> {
 }
 
 /// Straight lines (points, page space) in `color`, `width` wide.
-fn sheet_lines(doc: &mut Document, lines: &[Vec<(f64, f64)>], color: Color, width: f64) -> Result<()> {
+pub(super) fn sheet_lines(doc: &mut Document, lines: &[Vec<(f64, f64)>], color: Color, width: f64) -> Result<()> {
     use vectorcraft_geom::path::{PathData, SubPath};
     let subpaths: Vec<SubPath> = lines
         .iter()

@@ -5884,3 +5884,15 @@ machine	Stop	停止
 	Not changed:	変更しませんでした：
 @msg	This conversation is long: start a New Conversation.	会話が長くなりました：新しい会話を始めてください。
 @msg	Claude took too many steps: ask again, more simply.	Claude の手順が多すぎました：もっと簡単に、もう一度質問してください。
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	範囲を塗りつぶす
+	Click a square to fill every touching square like it; hold Alt to clear them	マス目をクリックすると、隣り合う同じマス目をすべて塗りつぶします。Alt キーを押しながらクリックすると消去します
+	With the Thread Colour	糸の色に
+	{n}-count Aida	{n} カウントのアイーダ
+	Print Chart…	図案を印刷…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	刺しゅうするための図案として印刷します：マス目ごとに記号、10 マスごとに番号、糸の凡例付き
+	Print Cross-Stitch Chart…	クロスステッチ図案を印刷…
+	Print Cross-Stitch Chart	クロスステッチ図案を印刷
+	Fill Cross Stitches	クロスステッチを塗りつぶす
+	Replace Cross-Stitch Colour	クロスステッチの色を置換

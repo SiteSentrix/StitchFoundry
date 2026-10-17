@@ -5803,3 +5803,15 @@ machine	Stop	Stopp
 	Not changed:	Nicht geändert:
 @msg	This conversation is long: start a New Conversation.	Dieses Gespräch ist lang: Beginnen Sie ein neues Gespräch.
 @msg	Claude took too many steps: ask again, more simply.	Claude hat zu viele Schritte gebraucht: Fragen Sie noch einmal, einfacher.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Fläche füllen
+	Click a square to fill every touching square like it; hold Alt to clear them	Klicken Sie auf ein Kästchen, um alle angrenzenden gleichen Kästchen zu füllen; mit Alt werden sie geleert
+	With the Thread Colour	Durch die Garnfarbe
+	{n}-count Aida	Aida {n}-fädig
+	Print Chart…	Vorlage drucken…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Das Muster als Zählvorlage zum Sticken: ein Symbol je Kästchen, alle 10 nummeriert, dazu eine Legende der Garne
+	Print Cross-Stitch Chart…	Kreuzstichvorlage drucken…
+	Print Cross-Stitch Chart	Kreuzstichvorlage drucken
+	Fill Cross Stitches	Kreuzstiche füllen
+	Replace Cross-Stitch Colour	Kreuzstichfarbe ersetzen

@@ -5825,3 +5825,15 @@ machine	Stop	Dừng máy
 	Not changed:	Không thay đổi:
 @msg	This conversation is long: start a New Conversation.	Cuộc trò chuyện này đã dài: hãy bắt đầu Cuộc trò chuyện mới.
 @msg	Claude took too many steps: ask again, more simply.	Claude đã thực hiện quá nhiều bước: hãy hỏi lại, đơn giản hơn.
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	Tô một vùng
+	Click a square to fill every touching square like it; hold Alt to clear them	Bấm vào một ô để tô mọi ô giống nó nằm liền kề; giữ Alt để xóa chúng
+	With the Thread Colour	Bằng màu chỉ
+	{n}-count Aida	Vải Aida {n} ô
+	Print Chart…	In sơ đồ…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	Mẫu thành sơ đồ đếm ô để thêu theo: mỗi ô một ký hiệu, đánh số mỗi 10 ô, kèm chú giải màu chỉ
+	Print Cross-Stitch Chart…	In sơ đồ thêu chữ thập…
+	Print Cross-Stitch Chart	In sơ đồ thêu chữ thập
+	Fill Cross Stitches	Tô mũi chữ thập
+	Replace Cross-Stitch Colour	Thay màu mũi chữ thập

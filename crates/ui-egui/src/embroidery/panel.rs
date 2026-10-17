@@ -1972,13 +1972,69 @@ fn cross_stitch_tool_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(v) = check(ui, tl!("Erase"), opts["erase"].as_bool().unwrap_or(false)) {
         set_opt(app, "erase", json!(v));
     }
-    let size = opts["size"].as_f64().unwrap_or(1.0);
-    if let Some(v) = num(ui, tl!("Brush (squares)"), "cross-size", size, "", 0) {
-        set_opt(app, "size", json!(v.clamp(1.0, 9.0).round() as u64));
+    let filling = opts["fill"].as_bool().unwrap_or(false);
+    if let Some(v) = check(ui, tl!("Fill a patch"), filling) {
+        set_opt(app, "fill", json!(v));
     }
-    ui.label(tl!("Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase"));
-    if info.is_none() && button(ui, tl!("New Cross-Stitch Pattern…")).clicked() {
-        app.run("embroidery.crossStitch.new", json!({})).ok();
+    if !filling {
+        let size = opts["size"].as_f64().unwrap_or(1.0);
+        if let Some(v) = num(ui, tl!("Brush (squares)"), "cross-size", size, "", 0) {
+            set_opt(app, "size", json!(v.clamp(1.0, 9.0).round() as u64));
+        }
+    }
+    ui.label(if filling {
+        tl!("Click a square to fill every touching square like it; hold Alt to clear them")
+    } else {
+        tl!("Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase")
+    });
+    let Some(info) = info else {
+        if button(ui, tl!("New Cross-Stitch Pattern…")).clicked() {
+            app.run("embroidery.crossStitch.new", json!({})).ok();
+        }
+        return;
+    };
+    // the selected pattern: a colour swapped for the thread colour, its fabric, its chart
+    if !used.is_empty() {
+        let key = egui::Id::new("cross-replace-from");
+        let mut from: String = ui.ctx().data(|d| d.get_temp(key)).filter(|c| used.contains(c)).unwrap_or_else(|| used[0].clone());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tl!("Replace"));
+            egui::ComboBox::from_id_salt("cross-replace").selected_text(from.as_str()).show_ui(ui, |ui| {
+                for c in &used {
+                    ui.selectable_value(&mut from, c.clone(), c.as_str());
+                }
+            });
+            if ui.button(tl!("With the Thread Colour")).clicked()
+                && !from.eq_ignore_ascii_case(&color)
+                && let Err(e) = app.run("embroidery.crossStitch.replace", json!({ "from": from, "to": color }))
+            {
+                app.status(e);
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(key, from));
+    }
+    let count = info["count"].as_f64().unwrap_or(0.0);
+    ui.horizontal(|ui| {
+        ui.label(tl!("Fabric"));
+        let shown = [11.0, 14.0, 16.0, 18.0].into_iter().find(|c| (c - count).abs() < 0.05).map_or_else(
+            || format!("{} mm", (info["cell"].as_f64().unwrap_or(0.0) * 100.0).round() / 100.0),
+            |c| crate::i18n::fmt(tl!("{n}-count Aida"), &[("n", &format!("{c:.0}"))]),
+        );
+        egui::ComboBox::from_id_salt("cross-count").selected_text(shown).show_ui(ui, |ui| {
+            for c in [11u32, 14, 16, 18] {
+                let label = crate::i18n::fmt(tl!("{n}-count Aida"), &[("n", &c.to_string())]);
+                if ui.selectable_label((f64::from(c) - count).abs() < 0.05, label).clicked() {
+                    app.run("embroidery.crossStitch.set", json!({ "count": c })).ok();
+                }
+            }
+        });
+    });
+    if button(ui, tl!("Print Chart…"))
+        .on_hover_text(tl!("The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads"))
+        .clicked()
+        && let Err(e) = app.run("embroidery.crossStitch.chart", json!({}))
+    {
+        app.status(e);
     }
 }
 

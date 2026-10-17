@@ -848,11 +848,13 @@ impl Tool for ClickStitchTool {
 
 /// Cross Stitch tool: paint a cross-stitch pattern's cells by clicking or dragging over its grid
 /// (`embroidery.crossStitch.paint`), in the tool's colour; with `erase` on, or Alt held, the
-/// cells are cleared instead. A whole stroke is one step (Undo takes it back). Options: `color`
-/// (`#rrggbb`), `erase` and `size` (a square brush, 1 to 9 cells).
+/// cells are cleared instead. A whole stroke is one step (Undo takes it back). With `fill` on, a
+/// click fills the patch of touching squares alike instead (`embroidery.crossStitch.fill`).
+/// Options: `color` (`#rrggbb`), `erase`, `fill` and `size` (a square brush, 1 to 9 cells).
 pub struct CrossStitchTool {
     pub color: String,
     pub erase: bool,
+    pub fill: bool,
     pub size: u8,
     stroke: Vec<Point>,
     erasing: bool,
@@ -860,7 +862,7 @@ pub struct CrossStitchTool {
 
 impl Default for CrossStitchTool {
     fn default() -> Self {
-        CrossStitchTool { color: "#c0392b".into(), erase: false, size: 1, stroke: Vec::new(), erasing: false }
+        CrossStitchTool { color: "#c0392b".into(), erase: false, fill: false, size: 1, stroke: Vec::new(), erasing: false }
     }
 }
 
@@ -886,6 +888,15 @@ impl Tool for CrossStitchTool {
     fn pointer(&mut self, _cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         const CMD: &str = "embroidery.crossStitch.paint";
         match ev.kind {
+            PointerKind::Down if self.fill => {
+                let erasing = self.erase || ev.mods.alt;
+                let mut p = json!({ "at": [ev.pos.x, ev.pos.y], "erase": erasing });
+                if !erasing {
+                    p["color"] = json!(self.color);
+                }
+                let label = if erasing { "Erase Cross Stitches" } else { "Fill Cross Stitches" };
+                vec![Action::Begin(label.into()), Action::Preview("embroidery.crossStitch.fill".into(), p), Action::Commit]
+            }
             PointerKind::Down => {
                 self.erasing = self.erase || ev.mods.alt;
                 self.stroke = vec![ev.pos];
@@ -923,7 +934,7 @@ impl Tool for CrossStitchTool {
     }
 
     fn options(&self) -> Value {
-        json!({ "color": self.color, "erase": self.erase, "size": self.size })
+        json!({ "color": self.color, "erase": self.erase, "fill": self.fill, "size": self.size })
     }
 
     fn set_option(&mut self, key: &str, value: &Value) {
@@ -938,6 +949,11 @@ impl Tool for CrossStitchTool {
             "erase" => {
                 if let Some(v) = value.as_bool() {
                     self.erase = v;
+                }
+            }
+            "fill" => {
+                if let Some(v) = value.as_bool() {
+                    self.fill = v;
                 }
             }
             "size" => {

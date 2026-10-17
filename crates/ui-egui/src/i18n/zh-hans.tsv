@@ -5342,3 +5342,15 @@ machine	Stop	停止
 	Not changed:	未修改：
 @msg	This conversation is long: start a New Conversation.	此对话已很长：请开始新对话。
 @msg	Claude took too many steps: ask again, more simply.	Claude 用了太多步骤：请更简单地再问一次。
+
+# Embroidery (StitchFoundry): cross-stitch fill, colour replace, fabric count and chart
+	Fill a patch	填充区域
+	Click a square to fill every touching square like it; hold Alt to clear them	单击一个格子，填充所有相连的相同格子；按住 Alt 键则清除它们
+	With the Thread Colour	为线的颜色
+	{n}-count Aida	{n} 格十字绣布
+	Print Chart…	打印图纸…
+	The pattern as a counted chart to stitch from: a symbol a square, numbered every 10, and a key of the threads	将图案打印为计数绣图：每格一个符号，每 10 格编号，并附线的图例
+	Print Cross-Stitch Chart…	打印十字绣图纸…
+	Print Cross-Stitch Chart	打印十字绣图纸
+	Fill Cross Stitches	填充十字绣
+	Replace Cross-Stitch Colour	替换十字绣颜色
