@@ -193,7 +193,11 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
     let chart_pages = pages_x as usize * pages_y as usize;
     // key rows a page holds
     let key_rows = (((ph - MARGIN - 110.0) / 18.0).floor() as usize).max(1);
-    let key_pages = used.len().div_ceil(key_rows);
+    // a chart of one page has its key under it when there is room
+    let under_chart = (chart_pages == 1)
+        .then(|| TOP + f64::from(pattern.rows.min(down)) * sq + 44.0)
+        .filter(|y| y + 12.0 + used.len() as f64 * 18.0 <= ph - MARGIN);
+    let key_pages = if under_chart.is_some() { 0 } else { used.len().div_ceil(key_rows) };
     let pages = chart_pages + key_pages;
     if pages > MAX_PAGES {
         return Err(bad(CMD, format!("the chart would take {pages} pages: use larger chart squares or print a smaller pattern")));
@@ -290,22 +294,32 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
                     sheet_text(&mut doc, gx - LABELS + 1.0, y + 2.5, &r.to_string(), 7.0, grey)?;
                 }
             }
-            sheet_lines(&mut doc, &thin, light, 0.3)?;
+            sheet_lines(&mut doc, &thin, light, 0.5)?;
             sheet_lines(&mut doc, &bold, black, 0.9)?;
             page += 1;
         }
     }
     // the key: symbol, colour, thread, squares
-    for (i, chunk) in used.chunks(key_rows).enumerate() {
-        let x0 = page as f64 * (pw + PAGE_GAP);
-        let heading = if key_pages > 1 { format!("Key ({} of {key_pages})", i + 1) } else { "Key".to_string() };
-        sheet_text(&mut doc, x0 + MARGIN, 40.0, &format!("{title}: {heading}"), 13.0, black)?;
-        sheet_text(&mut doc, x0 + MARGIN, 56.0, &summary, 7.5, grey)?;
-        sheet_text(&mut doc, x0 + MARGIN, 84.0, "Symbol", 8.0, grey)?;
-        sheet_text(&mut doc, x0 + MARGIN + 60.0, 84.0, "Thread", 8.0, grey)?;
-        sheet_text(&mut doc, x0 + pw - MARGIN - 80.0, 84.0, "Stitches", 8.0, grey)?;
+    let chunks: Vec<&[usize]> = if under_chart.is_some() { vec![used.as_slice()] } else { used.chunks(key_rows).collect() };
+    for (i, chunk) in chunks.into_iter().enumerate() {
+        let (x0, top) = match under_chart {
+            Some(y) => {
+                sheet_text(&mut doc, MARGIN, y - 14.0, "Key", 11.0, black)?;
+                (0.0, y)
+            }
+            None => {
+                let x0 = page as f64 * (pw + PAGE_GAP);
+                let heading = if key_pages > 1 { format!("Key ({} of {key_pages})", i + 1) } else { "Key".to_string() };
+                sheet_text(&mut doc, x0 + MARGIN, 40.0, &format!("{title}: {heading}"), 13.0, black)?;
+                sheet_text(&mut doc, x0 + MARGIN, 56.0, &summary, 7.5, grey)?;
+                (x0, 84.0)
+            }
+        };
+        sheet_text(&mut doc, x0 + MARGIN, top, "Symbol", 8.0, grey)?;
+        sheet_text(&mut doc, x0 + MARGIN + 60.0, top, "Thread", 8.0, grey)?;
+        sheet_text(&mut doc, x0 + pw - MARGIN - 80.0, top, "Stitches", 8.0, grey)?;
         for (j, &k) in chunk.iter().enumerate() {
-            let y = 96.0 + j as f64 * 18.0;
+            let y = top + 12.0 + j as f64 * 18.0;
             let (_, rgb, thread) = match pattern.colors.get(k) {
                 Some(c) => c,
                 None => continue,
@@ -344,7 +358,9 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
             let n = counts.get(k).copied().unwrap_or(0);
             sheet_text(&mut doc, x0 + pw - MARGIN - 80.0, by + 10.5, &n.to_string(), 9.0, black)?;
         }
-        page += 1;
+        if under_chart.is_none() {
+            page += 1;
+        }
     }
     s.add_document(doc, None);
     Ok(json!({ "pages": pages, "colors": used.len(), "squares": counts.iter().sum::<usize>() }))
@@ -396,6 +412,11 @@ mod tests {
         assert!(texts.iter().any(|t| t.starts_with("Page 1 of 3: columns 1–")), "{texts:?}");
         assert!(texts.iter().any(|t| t.ends_with("Key")), "{texts:?}");
         assert!(texts.iter().any(|t| t == "#cc0000") && texts.iter().any(|t| t == "3"), "the key: each thread and its squares: {texts:?}");
+        // a small pattern: one page, its key under the chart
+        s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        s.execute("embroidery.crossStitch.new", &json!({"cols": 20, "rows": 20})).unwrap();
+        s.execute("embroidery.crossStitch.paint", &json!({"cells": [[0, 0]], "color": "#cc0000"})).unwrap();
+        assert_eq!(s.execute("embroidery.crossStitch.chart", &json!({})).unwrap()["pages"], 1);
         // an empty pattern has nothing to chart; a pattern is needed
         s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
         assert!(s.execute("embroidery.crossStitch.chart", &json!({})).is_err());
