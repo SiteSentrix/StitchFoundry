@@ -5837,3 +5837,6 @@ machine	Stop	Зупинка
 	Fill Cross Stitches	Залити хрестики
 	Replace Cross-Stitch Colour	Замінити колір хрестиків
 @msg	this needs a connection to the AI service, which this build doesn't have	для цього потрібне з'єднання зі службою ШІ, якого в цій збірці немає
+	Backstitch Lines	Лінії «назад голку»
+	Backstitch lines	Лінії «назад голку»
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	Перетягніть від кута до кута клітинок, щоб провести лінію «назад голку»; клацання з Alt по лінії прибирає її

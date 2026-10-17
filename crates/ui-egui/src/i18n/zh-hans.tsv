@@ -5354,3 +5354,6 @@ machine	Stop	停止
 	Print Cross-Stitch Chart	打印十字绣图纸
 	Fill Cross Stitches	填充十字绣
 	Replace Cross-Stitch Colour	替换十字绣颜色
+	Backstitch Lines	回针绣线条
+	Backstitch lines	回针绣线条
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	在格子的角与角之间拖动，绘制回针绣线条；按住 Alt 键单击线条可将其移除

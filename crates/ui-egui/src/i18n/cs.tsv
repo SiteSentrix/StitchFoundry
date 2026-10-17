@@ -6254,3 +6254,6 @@ mark-style	Japanese	Japonské
 	Fill Cross Stitches	Vyplnit křížkové stehy
 	Replace Cross-Stitch Colour	Nahradit barvu křížkového stehu
 @msg	this needs a connection to the AI service, which this build doesn't have	to vyžaduje připojení ke službě AI, které tato verze nemá
+	Backstitch Lines	Čáry zpětného stehu
+	Backstitch lines	Čáry zpětného stehu
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	Tažením od rohu k rohu čtverců nakreslíte čáru zpětného stehu; klepnutím s klávesou Alt na čáru ji odstraníte

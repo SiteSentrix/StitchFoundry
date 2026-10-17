@@ -6241,3 +6241,6 @@ machine	Stop	Pysäytys
 	Print Cross-Stitch Chart	Tulosta ristipistokaavio
 	Fill Cross Stitches	Täytä ristipistoilla
 	Replace Cross-Stitch Colour	Korvaa ristipiston väri
+	Backstitch Lines	Jälkipistoviivat
+	Backstitch lines	Jälkipistoviivat
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	Vedä ruutujen kulmasta kulmaan piirtääksesi jälkipistoviivan; Alt-napsauta viivaa poistaaksesi sen

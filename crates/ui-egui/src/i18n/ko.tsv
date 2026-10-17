@@ -5838,3 +5838,6 @@ machine	Stop	정지
 	Print Cross-Stitch Chart	십자수 도안 인쇄
 	Fill Cross Stitches	십자수 채우기
 	Replace Cross-Stitch Colour	십자수 색상 바꾸기
+	Backstitch Lines	되박음질 선
+	Backstitch lines	되박음질 선
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	칸의 모서리에서 모서리로 드래그하면 되박음질 선을 그립니다. Alt 키를 누른 채 선을 클릭하면 지웁니다

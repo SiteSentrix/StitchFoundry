@@ -6266,3 +6266,6 @@ theme	Appearance	Apparence
 	Fill Cross Stitches	Remplir des points de croix
 	Replace Cross-Stitch Colour	Remplacer une couleur de point de croix
 @msg	this needs a connection to the AI service, which this build doesn't have	cela demande une connexion au service d'IA, que cette version n'a pas
+	Backstitch Lines	Lignes de point arrière
+	Backstitch lines	Lignes de point arrière
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	Faites glisser d'un coin à l'autre des cases pour tracer une ligne de point arrière ; Alt-clic sur une ligne pour l'enlever

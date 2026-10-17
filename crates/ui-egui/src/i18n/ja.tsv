@@ -5897,3 +5897,6 @@ machine	Stop	停止
 	Fill Cross Stitches	クロスステッチを塗りつぶす
 	Replace Cross-Stitch Colour	クロスステッチの色を置換
 @msg	this needs a connection to the AI service, which this build doesn't have	これには AI サービスへの接続が必要ですが、このビルドにはありません
+	Backstitch Lines	返し縫いの線
+	Backstitch lines	返し縫いの線
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	マス目の角から角へドラッグすると返し縫いの線を描きます。Alt キーを押しながら線をクリックすると取り除きます

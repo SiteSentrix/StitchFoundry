@@ -5853,3 +5853,6 @@ machine	Stop	Остановка
 	Fill Cross Stitches	Залить крестики
 	Replace Cross-Stitch Colour	Заменить цвет крестиков
 @msg	this needs a connection to the AI service, which this build doesn't have	для этого нужно подключение к службе ИИ, которого в этой сборке нет
+	Backstitch Lines	Линии «назад иголку»
+	Backstitch lines	Линии «назад иголку»
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	Перетащите от угла к углу клеток, чтобы провести линию «назад иголку»; щелчок с Alt по линии убирает её

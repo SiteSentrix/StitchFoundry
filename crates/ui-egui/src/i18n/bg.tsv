@@ -6259,3 +6259,6 @@ machine	Stop	Спиране
 	Print Cross-Stitch Chart	Печат на схема за кръстат бод
 	Fill Cross Stitches	Запълване с кръстати бодове
 	Replace Cross-Stitch Colour	Замяна на цвят на кръстатите бодове
+	Backstitch Lines	Линии с обратен бод
+	Backstitch lines	Линии с обратен бод
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	Плъзнете от ъгъл до ъгъл на квадратчетата, за да начертаете линия с обратен бод; Alt-щракване върху линия я премахва

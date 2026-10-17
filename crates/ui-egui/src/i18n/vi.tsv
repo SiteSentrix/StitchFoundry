@@ -5837,3 +5837,6 @@ machine	Stop	Dừng máy
 	Print Cross-Stitch Chart	In sơ đồ thêu chữ thập
 	Fill Cross Stitches	Tô mũi chữ thập
 	Replace Cross-Stitch Colour	Thay màu mũi chữ thập
+	Backstitch Lines	Đường mũi lại
+	Backstitch lines	Đường mũi lại
+	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	Kéo từ góc này sang góc kia của các ô để vẽ đường mũi lại; giữ Alt và bấm vào đường để xóa nó
