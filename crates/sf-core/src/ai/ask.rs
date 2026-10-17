@@ -1,49 +1,35 @@
-//! Ask About Embroidery: a question about machine embroidery or about using StitchFoundry, sent to
-//! Claude with the conversation so far and, when the user allows it, a short summary of the design
-//! open now. As with [`super::ArtRequest`], no network code lives here: the app sends the
-//! [`HttpRequest`] that [`AskRequest::http`] builds and hands the answer to [`parse_answer`].
+//! Ask About Embroidery: questions about machine embroidery or about using StitchFoundry, answered
+//! by Claude, which can also look at the design open now and, with the user's leave, change it by
+//! running StitchFoundry's commands (its two tools, [`tools`]). As with [`super::ArtRequest`], no
+//! network code lives here: the app sends the [`HttpRequest`] that [`request`] builds, reads the
+//! answer with [`parse_reply`], runs the commands asked for and sends their results back
+//! ([`tool_results`]) until Claude has answered.
+//!
+//! The conversation is kept as the API's own messages and only ever added to: replies go back
+//! exactly as they came (thinking blocks included), and the design summary rides in each question
+//! rather than in the instructions, which stay the same for the whole conversation.
 
 use serde_json::{Value, json};
 
 use super::{API_URL, API_VERSION, ArtError, FALLBACK_BETA, HttpRequest, MODEL, check_status, clean_key, reply_text};
 
-/// The most tokens an answer (thinking included) may use.
-pub const MAX_TOKENS: u32 = 8_000;
+/// The most tokens one reply (thinking included) may use.
+pub const MAX_TOKENS: u32 = 16_000;
 /// The longest question sent, in characters.
 pub const MAX_QUESTION: usize = 2_000;
-/// The earlier questions and answers sent along: the latest ones.
-pub const MAX_TURNS: usize = 8;
-/// The longest earlier answer sent along, in characters (the start of it).
-pub const MAX_ANSWER: usize = 4_000;
+/// The most questions one conversation holds (then: New Conversation).
+pub const MAX_QUESTIONS: usize = 30;
+/// The most requests one question may take (each command round is one).
+pub const MAX_ROUNDS: usize = 16;
 /// The longest design summary sent, in characters.
-pub const MAX_DESIGN: usize = 4_000;
+pub const MAX_DESIGN: usize = 6_000;
+/// The longest command result sent back, in characters (the start of it).
+pub const MAX_RESULT: usize = 20_000;
 
-/// A question asked earlier and its answer.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Turn {
-    pub question: String,
-    pub answer: String,
-}
-
-/// A question to ask.
-#[derive(Clone, Debug, PartialEq)]
-pub struct AskRequest {
-    /// The question, in the user's words.
-    pub question: String,
-    /// The conversation so far, oldest first.
-    pub history: Vec<Turn>,
-    /// What the design open now holds, in plain lines (see the app's summary), if the user lets
-    /// it go along.
-    pub design: Option<String>,
-}
-
-/// An answer.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Answer {
-    pub text: String,
-    /// The model that answered (another one when the request fell back).
-    pub model: String,
-}
+/// The tool that searches the commands.
+pub const FIND: &str = "find_commands";
+/// The tool that runs one.
+pub const RUN: &str = "run_command";
 
 /// How StitchFoundry is laid out, so answers can name the right menu items.
 const APP_GUIDE: &str = "\
@@ -73,113 +59,194 @@ tie-ins. The Stitch Sequence and Stitch List panels order and edit the stitches.
 machine, its hoops and file format (VP3, PES, JEF, EXP, XXX, DST and more).
 - Edit › Undo undoes any step. Help › StitchFoundry Help… (F1) opens the user guide.";
 
-impl AskRequest {
-    /// The request with its question trimmed and the conversation cut to the latest turns.
-    pub fn new(question: &str, history: &[Turn], design: Option<String>) -> Self {
-        let skip = history.len().saturating_sub(MAX_TURNS);
-        let history = history.iter().skip(skip).cloned().collect();
-        let design = design.map(|d| d.trim().chars().take(MAX_DESIGN).collect::<String>()).filter(|d| !d.is_empty());
-        Self { question: question.trim().to_string(), history, design }
-    }
-
-    /// The instructions: who the model is helping, how to answer, and the design open now.
-    pub fn system_prompt(&self) -> String {
-        let mut s = String::from(
-            "You answer questions inside StitchFoundry, an embroidery digitizing app, for people \
-who sew on home and small-business embroidery machines; many are beginners and not at home with \
+/// The instructions, the same for every request of a conversation.
+pub fn system_prompt() -> String {
+    format!(
+        "You answer questions inside StitchFoundry, an embroidery digitizing app, for people who \
+sew on home and small-business embroidery machines; many are beginners and not at home with \
 computers. Answer what was asked, in plain words, as briefly as the question allows: a few \
 sentences, or a short list of steps. Write plain text only: no headings, tables, bold or code, \
 and \"- \" for list items. Name StitchFoundry's menu items exactly as listed below when one does \
 what the user needs; when you are not sure the app has something, say so rather than inventing \
 a menu item. Give measurements in millimetres with inches in brackets. When a problem could \
 damage the machine or the fabric, say so first. For questions that have nothing to do with \
-embroidery, sewing or this app, say briefly that you can only help with embroidery.\n\n",
-        );
-        s.push_str(APP_GUIDE);
-        if let Some(d) = &self.design {
-            s.push_str("\n\nThe design open now (from the app, not from the user):\n");
-            s.push_str(d);
-        }
-        s
-    }
-
-    /// The Messages API request body: the earlier turns, then the question.
-    pub fn body(&self) -> Value {
-        let mut messages: Vec<Value> = Vec::with_capacity(self.history.len() * 2 + 1);
-        for t in &self.history {
-            let answer: String = t.answer.chars().take(MAX_ANSWER).collect();
-            messages.push(json!({ "role": "user", "content": t.question }));
-            messages.push(json!({ "role": "assistant", "content": answer }));
-        }
-        messages.push(json!({ "role": "user", "content": self.question }));
-        json!({
-            "model": MODEL,
-            "max_tokens": MAX_TOKENS,
-            "fallbacks": "default",
-            "output_config": { "effort": "low" },
-            "system": self.system_prompt(),
-            "messages": messages,
-        })
-    }
-
-    /// The HTTP request to send with API key `key`.
-    pub fn http(&self, key: &str) -> Result<HttpRequest, ArtError> {
-        let key = clean_key(key)?;
-        if self.question.is_empty() {
-            return Err(ArtError::NoQuestion);
-        }
-        if self.question.chars().count() > MAX_QUESTION {
-            return Err(ArtError::LongQuestion);
-        }
-        Ok(HttpRequest {
-            url: API_URL,
-            headers: vec![
-                ("content-type", "application/json".to_string()),
-                ("x-api-key", key.to_string()),
-                ("anthropic-version", API_VERSION.to_string()),
-                ("anthropic-beta", FALLBACK_BETA.to_string()),
-            ],
-            body: self.body().to_string(),
-        })
-    }
+embroidery, sewing or this app, say briefly that you can only help with embroidery.\n\n\
+Each question may start with a summary of the design open now, written by the app; objects are \
+named by their ids (#12). You can look at the design and change it with your tools: \
+{FIND} finds StitchFoundry's commands and how to call them, and {RUN} runs one. Commands that \
+only read (embroidery.info, embroidery.check, document.node and the like) run at once. Change \
+the design only when the user asks for a change or agrees to one you suggested: each change is \
+shown to the user, who allows or declines it; a declined change comes back as an error, so \
+don't try it again, and say what you would have done instead. Most commands act on the selected \
+objects, so select them first (select.set {{\"ids\": [12]}}). Document positions and sizes are in \
+points (1 mm = 2.835 pt) unless a command's parameters say mm. After changing the design, say \
+in one or two sentences what changed; Edit › Undo takes each change back.\n\n{APP_GUIDE}"
+    )
 }
 
-/// The answer in a reply with HTTP status `status` and body `body`. An answer cut off by its
-/// length is kept, ending in "…".
-pub fn parse_answer(status: u16, body: &str) -> Result<Answer, ArtError> {
+/// The two tools: finding commands and running one.
+pub fn tools() -> Value {
+    json!([
+        {
+            "name": FIND,
+            "description": "Search StitchFoundry's commands by a few words, such as \"satin width\", \"underlay\", \"trim\", \"stitch type\" or \"hoop\". Returns up to 20 commands, best first, each with its id, its label and menu, whether it can run now, and its parameters as \"{key, key?: …} what it does → result\" (a ? marks an optional key).",
+            "input_schema": {
+                "type": "object",
+                "properties": { "query": { "type": "string", "description": "Words to look for in command ids, labels and menus" } },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": RUN,
+            "description": "Run one StitchFoundry command, by its id from find_commands, with its parameters. Commands that only read run at once and return their result as JSON. Commands that change the design wait until the user allows them; one the user declines returns an error. File, export, preference and window commands can't be run from here.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "command": { "type": "string", "description": "The command id, such as embroidery.set" },
+                    "params": { "type": "object", "description": "The command's parameters (an empty object when it takes none)" },
+                },
+                "required": ["command"],
+            },
+        },
+    ])
+}
+
+/// A question as the user message it is sent as: the design summary (if the user lets it go
+/// along), then the question. Trimmed and checked first.
+pub fn question(question: &str, design: Option<&str>) -> Result<Value, ArtError> {
+    let q = question.trim();
+    if q.is_empty() {
+        return Err(ArtError::NoQuestion);
+    }
+    if q.chars().count() > MAX_QUESTION {
+        return Err(ArtError::LongQuestion);
+    }
+    let mut blocks = Vec::new();
+    if let Some(d) = design.map(str::trim).filter(|d| !d.is_empty()) {
+        let d: String = d.chars().take(MAX_DESIGN).collect();
+        blocks.push(json!({ "type": "text", "text": format!("The design open now (from the app, not from the user):\n{d}") }));
+    }
+    blocks.push(json!({ "type": "text", "text": q }));
+    Ok(json!({ "role": "user", "content": blocks }))
+}
+
+/// A command's result for Claude: `Ok` text or the error why it didn't run.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToolResult {
+    pub id: String,
+    pub result: Result<String, String>,
+}
+
+/// The results of every tool call of one reply, as the one user message they go back in.
+pub fn tool_results(results: &[ToolResult]) -> Value {
+    let blocks: Vec<Value> = results
+        .iter()
+        .map(|r| match &r.result {
+            Ok(text) => {
+                let text: String = text.chars().take(MAX_RESULT).collect();
+                json!({ "type": "tool_result", "tool_use_id": r.id, "content": text })
+            }
+            Err(e) => json!({ "type": "tool_result", "tool_use_id": r.id, "content": e, "is_error": true }),
+        })
+        .collect();
+    json!({ "role": "user", "content": blocks })
+}
+
+/// The HTTP request for the conversation `messages` (the API's messages, oldest first, ending
+/// with a question or tool results), with API key `key`.
+pub fn request(key: &str, messages: &[Value]) -> Result<HttpRequest, ArtError> {
+    let key = clean_key(key)?;
+    let body = json!({
+        "model": MODEL,
+        "max_tokens": MAX_TOKENS,
+        "fallbacks": "default",
+        "output_config": { "effort": "medium" },
+        "system": system_prompt(),
+        "tools": tools(),
+        "messages": messages,
+    });
+    Ok(HttpRequest {
+        url: API_URL,
+        headers: vec![
+            ("content-type", "application/json".to_string()),
+            ("x-api-key", key.to_string()),
+            ("anthropic-version", API_VERSION.to_string()),
+            ("anthropic-beta", FALLBACK_BETA.to_string()),
+        ],
+        body: body.to_string(),
+    })
+}
+
+/// A tool call in a reply.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub input: Value,
+}
+
+/// A reply: the assistant message to keep, its text and the tool calls to answer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Reply {
+    /// The reply as the assistant message added to the conversation, unchanged.
+    pub message: Value,
+    /// Its text blocks joined (cut-off text ends in "…").
+    pub text: String,
+    /// The tools to run before Claude can go on; empty once it has answered.
+    pub calls: Vec<ToolCall>,
+    /// The model that answered (another one when the request fell back).
+    pub model: String,
+}
+
+/// The reply with HTTP status `status` and body `body`.
+pub fn parse_reply(status: u16, body: &str) -> Result<Reply, ArtError> {
     check_status(status, body)?;
     let v: Value = serde_json::from_str(body).map_err(|_| ArtError::NoAnswer)?;
     let stop = v.get("stop_reason").and_then(Value::as_str);
     if stop == Some("refusal") {
         return Err(ArtError::RefusedAnswer);
     }
+    let content = v.get("content").filter(|c| c.is_array()).cloned().ok_or(ArtError::NoAnswer)?;
+    let calls: Vec<ToolCall> = if stop == Some("tool_use") {
+        content
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|b| b.get("type").and_then(Value::as_str) == Some("tool_use"))
+            .filter_map(|b| {
+                Some(ToolCall {
+                    id: b.get("id")?.as_str()?.to_string(),
+                    name: b.get("name")?.as_str()?.to_string(),
+                    input: b.get("input").cloned().unwrap_or_else(|| json!({})),
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let mut text = reply_text(&v).trim().to_string();
-    if text.is_empty() {
+    if text.is_empty() && calls.is_empty() {
         return Err(ArtError::NoAnswer);
     }
-    if stop == Some("max_tokens") {
+    if stop == Some("max_tokens") && !text.is_empty() {
         text.push('…');
     }
     let model = v.get("model").and_then(Value::as_str).unwrap_or(MODEL).to_string();
-    Ok(Answer { text, model })
+    Ok(Reply { message: json!({ "role": "assistant", "content": content }), text, calls, model })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn reply(stop: &str, text: &str) -> String {
-        json!({"type": "message", "model": MODEL, "content": [{"type": "thinking", "thinking": "", "signature": "x"}, {"type": "text", "text": text}], "stop_reason": stop}).to_string()
-    }
-
-    fn turn(q: &str, a: &str) -> Turn {
-        Turn { question: q.into(), answer: a.into() }
+    fn reply(stop: &str, content: Value) -> String {
+        json!({"type": "message", "model": MODEL, "content": content, "stop_reason": stop}).to_string()
     }
 
     #[test]
-    fn the_request_sends_the_conversation_then_the_question() {
-        let r = AskRequest::new("  and on towels?  ", &[turn("What density for satin?", "About 0.4 mm.")], None);
-        let http = r.http(" sk-ant-test ").unwrap();
+    fn the_request_holds_the_tools_the_instructions_and_the_conversation() {
+        let q = question("  Which stabilizer for a T-shirt?  ", Some("Size 80 × 60 mm")).unwrap();
+        let http = request(" sk-ant-test ", std::slice::from_ref(&q)).unwrap();
         assert_eq!(http.url, API_URL);
         let header = |k: &str| http.headers.iter().find(|h| h.0 == k).map(|h| h.1.as_str());
         assert_eq!(header("x-api-key"), Some("sk-ant-test"));
@@ -188,53 +255,69 @@ mod tests {
         assert_eq!(body["model"], MODEL);
         assert_eq!(body["max_tokens"], MAX_TOKENS);
         assert_eq!(body["fallbacks"], "default");
-        assert_eq!(body["output_config"]["effort"], "low");
+        assert_eq!(body["output_config"]["effort"], "medium");
+        assert!(body.get("tool_choice").is_none() && body.get("thinking").is_none());
+        let names: Vec<&str> = body["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(names, [FIND, RUN]);
+        let system = body["system"].as_str().unwrap();
+        assert!(system.contains("Use Line as Direction") && system.contains("plain text only") && system.contains("select.set"), "{system}");
+        // the design rides in the question, before it
         assert_eq!(
             body["messages"],
-            json!([
-                {"role": "user", "content": "What density for satin?"},
-                {"role": "assistant", "content": "About 0.4 mm."},
-                {"role": "user", "content": "and on towels?"},
-            ])
+            json!([{"role": "user", "content": [
+                {"type": "text", "text": "The design open now (from the app, not from the user):\nSize 80 × 60 mm"},
+                {"type": "text", "text": "Which stabilizer for a T-shirt?"},
+            ]}])
         );
-        let system = body["system"].as_str().unwrap();
-        assert!(system.contains("Use Line as Direction") && system.contains("plain text only"), "{system}");
-        assert!(!system.contains("The design open now"), "no design sent: {system}");
+        // the instructions don't change with the design: the conversation is only added to
+        assert_eq!(system, system_prompt());
     }
 
     #[test]
-    fn the_design_goes_in_the_instructions_and_long_conversations_are_cut() {
-        let history: Vec<Turn> = (0..12).map(|i| turn(&format!("q{i}"), &"a".repeat(MAX_ANSWER + 50))).collect();
-        let r = AskRequest::new("why so many trims?", &history, Some("Stitches: 12,400\nTrims: 31".into()));
-        assert_eq!(r.history.len(), MAX_TURNS);
-        assert_eq!(r.history[0].question, "q4");
-        let body = r.body();
-        let messages = body["messages"].as_array().unwrap();
-        assert_eq!(messages.len(), MAX_TURNS * 2 + 1);
-        assert_eq!(messages[1]["content"].as_str().unwrap().chars().count(), MAX_ANSWER);
-        assert!(body["system"].as_str().unwrap().ends_with("The design open now (from the app, not from the user):\nStitches: 12,400\nTrims: 31"));
-        // an empty summary is left out
-        assert_eq!(AskRequest::new("q", &[], Some("  ".into())).design, None);
+    fn questions_and_keys_are_checked_before_sending() {
+        assert_eq!(question("  ", None), Err(ArtError::NoQuestion));
+        assert_eq!(question(&"x".repeat(MAX_QUESTION + 1), None), Err(ArtError::LongQuestion));
+        assert_eq!(question("q", Some("  ")).unwrap()["content"].as_array().unwrap().len(), 1, "an empty summary is left out");
+        assert_eq!(request(" ", &[]), Err(ArtError::NoKey));
+        assert_eq!(request("sk ant", &[]), Err(ArtError::BadKey));
     }
 
     #[test]
-    fn questions_are_checked_before_sending() {
-        assert_eq!(AskRequest::new("q", &[], None).http(" "), Err(ArtError::NoKey));
-        assert_eq!(AskRequest::new("q", &[], None).http("sk ant"), Err(ArtError::BadKey));
-        assert_eq!(AskRequest::new("  ", &[], None).http("k"), Err(ArtError::NoQuestion));
-        assert_eq!(AskRequest::new(&"x".repeat(MAX_QUESTION + 1), &[], None).http("k"), Err(ArtError::LongQuestion));
+    fn a_reply_with_tool_calls_is_kept_whole_and_its_calls_listed() {
+        let content = json!([
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": "Let me look."},
+            {"type": "tool_use", "id": "toolu_1", "name": RUN, "input": {"command": "embroidery.info", "params": {}}},
+            {"type": "tool_use", "id": "toolu_2", "name": FIND, "input": {"query": "satin width"}},
+        ]);
+        let r = parse_reply(200, &reply("tool_use", content.clone())).unwrap();
+        assert_eq!(r.message, json!({"role": "assistant", "content": content}), "thinking blocks go back unchanged");
+        assert_eq!(r.text, "Let me look.");
+        assert_eq!(r.calls.len(), 2);
+        assert_eq!(r.calls[0], ToolCall { id: "toolu_1".into(), name: RUN.into(), input: json!({"command": "embroidery.info", "params": {}}) });
+        // their results go back in one message, an error marked as one
+        let m = tool_results(&[
+            ToolResult { id: "toolu_1".into(), result: Ok("x".repeat(MAX_RESULT + 10)) },
+            ToolResult { id: "toolu_2".into(), result: Err("the user declined this change".into()) },
+        ]);
+        assert_eq!(m["role"], "user");
+        assert_eq!(m["content"][0]["content"].as_str().unwrap().len(), MAX_RESULT);
+        assert_eq!(
+            m["content"][1],
+            json!({"type": "tool_result", "tool_use_id": "toolu_2", "content": "the user declined this change", "is_error": true})
+        );
     }
 
     #[test]
     fn answers_and_their_errors() {
-        let a = parse_answer(200, &reply("end_turn", "  Use a tear-away stabilizer.  ")).unwrap();
-        assert_eq!(a, Answer { text: "Use a tear-away stabilizer.".into(), model: MODEL.into() });
-        assert_eq!(parse_answer(200, &reply("max_tokens", "First,")).unwrap().text, "First,…");
-        assert_eq!(parse_answer(200, &reply("max_tokens", "")), Err(ArtError::NoAnswer));
-        assert_eq!(parse_answer(200, &reply("refusal", "")), Err(ArtError::RefusedAnswer));
-        assert_eq!(parse_answer(200, "not json"), Err(ArtError::NoAnswer));
-        assert_eq!(parse_answer(429, ""), Err(ArtError::Busy));
-        assert!(matches!(parse_answer(401, r#"{"error": {"message": "invalid x-api-key"}}"#), Err(ArtError::Key(m)) if m == "invalid x-api-key"));
+        let a = parse_reply(200, &reply("end_turn", json!([{"type": "text", "text": "  Use a cut-away stabilizer.  "}]))).unwrap();
+        assert_eq!((a.text.as_str(), a.calls.len(), a.model.as_str()), ("Use a cut-away stabilizer.", 0, MODEL));
+        assert_eq!(parse_reply(200, &reply("max_tokens", json!([{"type": "text", "text": "First,"}]))).unwrap().text, "First,…");
+        assert_eq!(parse_reply(200, &reply("end_turn", json!([]))), Err(ArtError::NoAnswer));
+        assert_eq!(parse_reply(200, &reply("refusal", json!([]))), Err(ArtError::RefusedAnswer));
+        assert_eq!(parse_reply(200, "not json"), Err(ArtError::NoAnswer));
+        assert_eq!(parse_reply(429, ""), Err(ArtError::Busy));
+        assert!(matches!(parse_reply(401, r#"{"error": {"message": "invalid x-api-key"}}"#), Err(ArtError::Key(m)) if m == "invalid x-api-key"));
         assert!(ArtError::NoAnswer.retryable());
     }
 }

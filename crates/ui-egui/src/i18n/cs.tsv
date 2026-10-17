@@ -6218,7 +6218,7 @@ mark-style	Japanese	Japonské
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	Zeptat se na vyšívání…
 	Ask About Embroidery	Zeptat se na vyšívání
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Zeptejte se na cokoli o strojovém vyšívání nebo o StitchFoundry: jaký stabilizátor použít, proč se trhá nit, jak vyšít čistší písmena, kde najít funkci.
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Zeptejte se na cokoli o strojovém vyšívání nebo o StitchFoundry: jaký stabilizátor použít, proč se trhá nit, jak vyšít čistší písmena, kde najít funkci. Claude může na vaše přání také změnit váš vzor, až to povolíte.
 	Thinking…	Přemýšlí…
 	Type your question, then press Enter	Napište otázku a stiskněte Enter
 	Ask	Zeptat se
@@ -6232,3 +6232,12 @@ mark-style	Japanese	Japonské
 @msg	The reply had no answer: try again, or ask something narrower.	Odpověď byla prázdná: zkuste to znovu nebo se zeptejte konkrétněji.
 @msg	Ask About Embroidery needs the desktop app for now	Zeptat se na vyšívání zatím vyžaduje desktopovou aplikaci
 @msg	already asking: wait for the answer	otázka už se odesílá: počkejte na odpověď
+	Claude wants to change your design:	Claude chce změnit váš vzor:
+	Allow	Povolit
+	Don't Allow	Nepovolit
+	Edit › Undo takes each change back.	Úpravy › Zpět vrátí každou změnu.
+	Changed:	Změněno:
+	Couldn't change:	Nelze změnit:
+	Not changed:	Nezměněno:
+@msg	This conversation is long: start a New Conversation.	Tato konverzace je dlouhá: začněte novou konverzaci.
+@msg	Claude took too many steps: ask again, more simply.	Claude potřeboval příliš mnoho kroků: zeptejte se znovu a jednodušeji.

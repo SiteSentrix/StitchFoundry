@@ -1,8 +1,11 @@
 //! Ask About Embroidery (Help and Embroidery menus): a window where the user asks Claude about
 //! machine embroidery or about StitchFoundry, with their own Anthropic API key (the one Design
-//! from Prompt keeps). The conversation goes along with each question, and, unless the user turns
-//! it off, a short summary of the design open now ([`design_summary`]). The request goes out on a
-//! thread of its own through the host's `http_post` service; [`poll`] picks the answer up.
+//! from Prompt keeps). Unless the user turns it off, a summary of the design open now goes with
+//! each question ([`design_summary`]), and Claude can look at the design and change it through
+//! StitchFoundry's commands ([`ask::tools`]): commands that only read run at once ([`access`]);
+//! changes wait for the user's Allow ([`decide`]); files, preferences, plug-ins and windows are
+//! out of its reach. Each request goes out on a thread of its own through the host's `http_post`
+//! service; [`poll`] picks the reply up and runs the round of commands it asks for.
 
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
@@ -10,31 +13,51 @@ use egui::RichText;
 use serde_json::{Value, json};
 use vectorcraft_embroidery::MM_PER_PT;
 use vectorcraft_embroidery::sf_core::ai::ArtError;
-use vectorcraft_embroidery::sf_core::ai::ask::{self, Answer, AskRequest, Turn};
+use vectorcraft_embroidery::sf_core::ai::ask::{self, Reply, ToolCall, ToolResult};
+use vectorcraft_engine::CommandSpec;
 
 use super::prompt;
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 
-/// The most selected objects the summary lists.
-const MAX_LISTED: usize = 12;
+/// The most objects the summary lists.
+const MAX_LISTED: usize = 40;
 /// The most Check Design findings the summary lists.
 const MAX_FINDINGS: usize = 12;
+/// The most commands one search returns.
+const MAX_FOUND: usize = 20;
+
+/// What the window shows of the conversation.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Entry {
+    Question(String),
+    Answer(String),
+    /// A change to the design, made or declined, or a command that couldn't run.
+    Note(String),
+}
 
 /// Ask About Embroidery between frames. Not saved: a conversation ends with the app.
 pub struct AskState {
     pub open: bool,
     /// The question being typed.
     pub input: String,
-    /// The questions asked and their answers, oldest first.
-    pub turns: Vec<Turn>,
+    /// The conversation as shown.
+    pub entries: Vec<Entry>,
+    /// The conversation as the API's messages, only ever added to (but for a question that got
+    /// no answer, taken back whole).
+    messages: Vec<Value>,
     /// Send a summary of the design open now with each question.
     pub include_design: bool,
     /// Keep the API key once Anthropic takes it.
     pub remember: bool,
     /// Show the API key row (it shows by itself while there is no key).
     pub show_key: bool,
+    /// The question being answered.
+    current: Option<Current>,
+    /// The request on its way.
     pending: Option<Pending>,
+    /// Changes waiting for the user's Allow.
+    pub approval: Option<Approval>,
     /// Why the last question got no answer.
     pub error: Option<String>,
 }
@@ -44,30 +67,155 @@ impl Default for AskState {
         Self {
             open: false,
             input: String::new(),
-            turns: Vec::new(),
+            entries: Vec::new(),
+            messages: Vec::new(),
             include_design: true,
             remember: true,
             show_key: false,
+            current: None,
             pending: None,
+            approval: None,
             error: None,
         }
     }
 }
 
-struct Pending {
-    rx: Receiver<Result<Answer, ArtError>>,
+struct Current {
     question: String,
+    /// The conversation's length before the question (taken back to it when no answer comes).
+    start: usize,
+    /// The requests sent for it so far.
+    rounds: usize,
     /// The key sent, kept once Anthropic takes it.
     keep: Option<String>,
+}
+
+struct Pending {
+    rx: Receiver<Result<Reply, ArtError>>,
     /// When it was sent (egui time, seconds).
     since: f64,
 }
 
+/// A round of tool calls waiting for the user: the changes to allow, and the results of the
+/// calls that already ran.
+pub struct Approval {
+    /// The changes asked for: (call, command id, params, what the window shows).
+    pub changes: Vec<(String, String, Value, String)>,
+    /// The results so far, in the order of the reply's calls; `None` for the changes.
+    results: Vec<(String, Option<Result<String, String>>)>,
+}
+
 impl AskState {
-    /// Whether a question is on its way.
+    /// Whether a question is being answered (sent, or waiting for the user's Allow).
     pub fn asking(&self) -> bool {
-        self.pending.is_some()
+        self.current.is_some()
     }
+
+    /// Seconds since the request on its way was sent.
+    pub fn waiting_for(&self, now: f64) -> Option<f64> {
+        self.pending.as_ref().map(|p| (now - p.since).max(0.0))
+    }
+}
+
+/// What Claude may do with a command.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Access {
+    /// It only reads: it runs at once.
+    Read,
+    /// It changes the design: it waits for the user's Allow.
+    Change,
+    /// Out of reach: files, preferences, plug-ins, windows and the like.
+    Blocked,
+}
+
+/// Command families Claude can't run: they reach outside the design (files, the machine folder,
+/// preferences, plug-ins, libraries, the clipboard) or the app's windows.
+const BLOCKED: &[&str] = &[
+    "file.",
+    "export.",
+    "print.",
+    "prefs.",
+    "plugin.",
+    "script.",
+    "links.",
+    "library.",
+    "clipboard.",
+    "pdf.",
+    "webExport.",
+    "flattener.",
+    "shortcutSet.",
+    "dataset.",
+    "help.",
+    "ui.",
+    "app.",
+    "window.",
+    "command.",
+    "document.export",
+    "document.save",
+    "document.serialize",
+    "document.json",
+    "text.addFontFiles",
+    "text.findFontFiles",
+    "embroidery.send",
+    "embroidery.export",
+    "embroidery.queue",
+    "embroidery.jobs",
+    "embroidery.library",
+    "embroidery.output",
+    "embroidery.font.save",
+    "embroidery.fontDoc.save",
+    "quilt.export",
+];
+
+/// Endings of commands that only read.
+const READS: &[&str] = &[
+    ".info",
+    ".list",
+    ".get",
+    ".check",
+    ".node",
+    ".find",
+    ".inspect",
+    ".current",
+    ".stitches",
+    ".hoops",
+    ".charts",
+    ".samples",
+    ".cost",
+    ".plan",
+    ".fonts",
+    ".fontList",
+    ".count",
+];
+
+/// What Claude may do with `spec`.
+pub fn access(spec: &CommandSpec) -> Access {
+    let id = spec.id;
+    if blocked(id) {
+        return Access::Blocked;
+    }
+    // selecting, and queries (not journalled) that read; a query that sets something still waits
+    // for the user
+    let reads = id.starts_with("select.") || (!spec.journal && READS.iter().any(|e| id.ends_with(e)));
+    if reads { Access::Read } else { Access::Change }
+}
+
+/// Whether command `id` is out of Claude's reach (whether or not the engine has it: the file
+/// commands of the menus are the app's own).
+pub fn blocked(id: &str) -> bool {
+    let lower = id.to_ascii_lowercase();
+    let reaches_out = ["export", ".save", ".import", ".delete", ".install", "folder", "presets"].iter().any(|w| lower.contains(w));
+    reaches_out || BLOCKED.iter().any(|p| id.starts_with(p))
+}
+
+/// A command's failure as Claude is told it (in English: it isn't shown to the user).
+fn to_claude(why: String) -> Result<String, String> {
+    Err(why)
+}
+
+/// Whether `params` name a file or folder (never run from here, whatever the command).
+fn names_a_file(params: &Value) -> bool {
+    params.as_object().is_some_and(|o| o.keys().any(|k| matches!(k.as_str(), "path" | "paths" | "folder" | "file" | "files" | "dir" | "url")))
 }
 
 /// Open the window (`ui.askAboutEmbroidery`); with `{question}`, ask it at once.
@@ -86,8 +234,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(json!({ "open": true, "asking": asking }))
 }
 
-/// A short plain-text summary of the design open now, for the model: its size, stitches, threads,
-/// hoop, machine, what Check Design finds and what is selected. `None` without a document.
+/// A plain-text summary of the design open now, for the model: its size, stitches, threads,
+/// hoop, machine, what Check Design finds and its objects in sewing order with their ids (the
+/// selected ones marked). `None` without a document.
 pub fn design_summary(app: &mut VectorcraftApp) -> Option<String> {
     app.session.active()?;
     let info = app.session.execute("embroidery.info", &json!({})).ok()?;
@@ -128,10 +277,7 @@ pub fn design_summary(app: &mut VectorcraftApp) -> Option<String> {
     }
     let mut setup = Vec::new();
     if let Some(h) = text("hoop") {
-        let fits = match info.get("fits").and_then(Value::as_bool) {
-            Some(false) => ", and the design does not fit it",
-            _ => "",
-        };
+        let fits = if info.get("fits").and_then(Value::as_bool) == Some(false) { ", and the design does not fit it" } else { "" };
         setup.push(format!("hoop {h}{fits}"));
     }
     if let Some(f) = text("fabric") {
@@ -159,68 +305,155 @@ pub fn design_summary(app: &mut VectorcraftApp) -> Option<String> {
             lines.extend(findings);
         }
     }
+    // the stitched objects in sewing order, then any other selected object
+    let sewn: Vec<vectorcraft_doc::NodeId> = app.session.embroidery_plan().map(|p| p.nodes.clone()).unwrap_or_default();
     let st = app.session.active()?;
-    let selected: Vec<String> = st
-        .selection
-        .objects
+    let selected = &st.selection.objects;
+    let mut ids = sewn.clone();
+    ids.extend(selected.iter().filter(|id| !sewn.contains(id)));
+    let mut seen = std::collections::HashSet::new();
+    let listed: Vec<String> = ids
         .iter()
-        .filter_map(|id| st.doc.node(*id))
+        .filter(|id| seen.insert(**id))
+        .filter_map(|id| st.doc.node(*id).map(|n| (id, n)))
         .take(MAX_LISTED)
-        .map(|n| {
+        .map(|(id, n)| {
             let stitch = n.embroidery.as_deref().map_or("no stitches", |e| e.stitch.label());
             let size = n.geometric_bounds().map(|b| format!(", {:.0} × {:.0} mm", b.width() * MM_PER_PT, b.height() * MM_PER_PT)).unwrap_or_default();
-            format!("- {}: {stitch}{size}", n.display_name())
+            let mark = if selected.contains(id) { " (selected)" } else { "" };
+            format!("- #{} {}: {stitch}{size}{mark}", id.0, n.display_name())
         })
         .collect();
-    if !selected.is_empty() {
-        lines.push(format!("Selected ({}):", st.selection.objects.len()));
-        lines.extend(selected);
+    if !listed.is_empty() {
+        lines.push(format!("Objects in sewing order ({} selected):", selected.len()));
+        lines.extend(listed);
     }
     Some(lines.join("\n"))
 }
 
+/// The commands matching `query`'s words, best first, as find_commands returns them.
+pub fn find(app: &VectorcraftApp, query: &str) -> Value {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let mut found: Vec<(usize, &CommandSpec)> = vectorcraft_engine::command_specs()
+        .iter()
+        .filter(|c| !vectorcraft_engine::cmd::is_alias(c.id) && access(c) != Access::Blocked)
+        .filter_map(|c| {
+            let hay = format!("{} {} {}", c.id, c.label, c.menu.join(" ")).to_lowercase();
+            let score = words.iter().filter(|w| hay.contains(w.as_str())).count();
+            (score > 0).then_some((score, c))
+        })
+        .collect();
+    // most words matched first, in the registry's order otherwise
+    found.sort_by_key(|f| std::cmp::Reverse(f.0));
+    let list: Vec<Value> = found
+        .into_iter()
+        .take(MAX_FOUND)
+        .map(|(_, c)| {
+            let info = c.info(&app.session);
+            json!({
+                "id": c.id,
+                "label": c.label,
+                "menu": c.menu.join(" › "),
+                "canRunNow": info.enabled,
+                "whyNot": info.disabled_reason,
+                "changesTheDesign": access(c) == Access::Change,
+                "params": c.params,
+            })
+        })
+        .collect();
+    json!(list)
+}
+
+/// How a command shows in the window: its label and menu.
+fn describe(spec: &CommandSpec) -> String {
+    let menu: Vec<&str> = spec.menu.iter().copied().filter(|m| !m.is_empty()).collect();
+    if menu.is_empty() { spec.label.to_string() } else { format!("{} › {}", menu.join(" › "), spec.label) }
+}
+
 /// Send the question typed (Ask). It stays in the box until the answer comes.
 pub fn send(app: &mut VectorcraftApp) -> Result<(), String> {
-    if app.embroidery.ask.pending.is_some() {
+    if app.embroidery.ask.asking() {
         return Err("already asking: wait for the answer".into());
     }
-    let design = if app.embroidery.ask.include_design { design_summary(app) } else { None };
-    let st = &app.embroidery.ask;
-    let request = AskRequest::new(&st.input, &st.turns, design);
-    let http = match request.http(&app.embroidery.prompt.key) {
-        Ok(h) => h,
-        Err(e) => {
-            let m = e.to_string();
-            app.embroidery.ask.show_key |= matches!(e, ArtError::NoKey | ArtError::BadKey);
-            app.embroidery.ask.error = Some(m.clone());
-            return Err(m);
-        }
+    let fail = |app: &mut VectorcraftApp, e: ArtError| {
+        let m = e.to_string();
+        app.embroidery.ask.show_key |= matches!(e, ArtError::NoKey | ArtError::BadKey);
+        app.embroidery.ask.error = Some(m.clone());
+        Err(m)
     };
-    let post = app.services.http_post.clone().ok_or("Ask About Embroidery needs the desktop app for now")?;
+    let asked = app.embroidery.ask.entries.iter().filter(|e| matches!(e, Entry::Question(_))).count();
+    if asked >= ask::MAX_QUESTIONS {
+        let m = "This conversation is long: start a New Conversation.".to_string();
+        app.embroidery.ask.error = Some(m.clone());
+        return Err(m);
+    }
+    if let Err(e) = vectorcraft_embroidery::sf_core::ai::clean_key(&app.embroidery.prompt.key) {
+        return fail(app, e);
+    }
+    let design = if app.embroidery.ask.include_design { design_summary(app) } else { None };
+    let message = match ask::question(&app.embroidery.ask.input, design.as_deref()) {
+        Ok(m) => m,
+        Err(e) => return fail(app, e),
+    };
     let keep = app.embroidery.ask.remember.then(|| app.embroidery.prompt.key.trim().to_string());
     if keep.is_none() {
         prompt::keep_key(app.services.secrets.as_deref(), None);
     }
-    let (tx, rx) = channel();
-    std::thread::Builder::new()
-        .name("ask-about-embroidery".into())
-        .spawn(move || {
-            let r = vectorcraft_engine::guard::catch_panic(|| post(&http))
-                .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")))
-                .map_err(ArtError::Network)
-                .and_then(|(status, body)| ask::parse_answer(status, &body));
-            // Nothing waits any more once the conversation was cleared.
-            let _ = tx.send(r);
-        })
-        .map_err(|e| format!("can't send the question: {e}"))?;
-    let since = app.embroidery.prompt.now;
     let st = &mut app.embroidery.ask;
+    let question = st.input.trim().to_string();
+    st.current = Some(Current { question: question.clone(), start: st.messages.len(), rounds: 0, keep });
+    st.messages.push(message);
+    st.entries.push(Entry::Question(question));
     st.error = None;
-    st.pending = Some(Pending { rx, question: request.question, keep, since });
+    request(app)
+}
+
+/// Send the conversation as it stands; the reply comes in through [`poll`].
+fn request(app: &mut VectorcraftApp) -> Result<(), String> {
+    let http = match ask::request(&app.embroidery.prompt.key, &app.embroidery.ask.messages) {
+        Ok(h) => h,
+        Err(e) => return give_up(app, e.to_string()),
+    };
+    let Some(post) = app.services.http_post.clone() else {
+        return give_up(app, "Ask About Embroidery needs the desktop app for now".into());
+    };
+    if let Some(c) = app.embroidery.ask.current.as_mut() {
+        c.rounds += 1;
+    }
+    let (tx, rx) = channel();
+    let spawned = std::thread::Builder::new().name("ask-about-embroidery".into()).spawn(move || {
+        let r = vectorcraft_engine::guard::catch_panic(|| post(&http))
+            .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")))
+            .map_err(ArtError::Network)
+            .and_then(|(status, body)| ask::parse_reply(status, &body));
+        // Nothing waits any more once the conversation was cleared.
+        let _ = tx.send(r);
+    });
+    if let Err(e) = spawned {
+        return give_up(app, format!("can't send the question: {e}"));
+    }
+    app.embroidery.ask.pending = Some(Pending { rx, since: app.embroidery.prompt.now });
     Ok(())
 }
 
-/// Each frame: take in the answer that arrived, or why none did.
+/// The question got no answer: the conversation goes back to before it (its question stays in
+/// the box to ask again; changes already made stay, each undoable), and `m` is shown.
+fn give_up(app: &mut VectorcraftApp, m: String) -> Result<(), String> {
+    let st = &mut app.embroidery.ask;
+    st.pending = None;
+    st.approval = None;
+    if let Some(c) = st.current.take() {
+        st.messages.truncate(c.start);
+        st.input = c.question;
+        if let Some(i) = st.entries.iter().rposition(|e| matches!(e, Entry::Question(_))) {
+            st.entries.remove(i);
+        }
+    }
+    st.error = Some(m.clone());
+    Err(m)
+}
+
+/// Each frame: take in the reply that arrived, or why none did.
 pub fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(p) = app.embroidery.ask.pending.as_ref() else { return };
     let r = match p.rx.try_recv() {
@@ -232,29 +465,120 @@ pub fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         Err(TryRecvError::Disconnected) => Err(ArtError::Network("the request stopped".into())),
     };
-    let Some(p) = app.embroidery.ask.pending.take() else { return };
-    if let Some(key) = p.keep.as_deref().filter(|_| !matches!(r, Err(ArtError::Key(_)))) {
-        prompt::keep_key(app.services.secrets.as_deref(), Some(key));
+    app.embroidery.ask.pending = None;
+    // Anthropic took the key unless it said otherwise.
+    let keep = app.embroidery.ask.current.as_ref().and_then(|c| c.keep.clone());
+    if let Some(key) = keep.filter(|_| !matches!(r, Err(ArtError::Key(_)))) {
+        prompt::keep_key(app.services.secrets.as_deref(), Some(&key));
     }
-    let st = &mut app.embroidery.ask;
-    match r {
-        Ok(a) => {
-            st.turns.push(Turn { question: p.question, answer: a.text });
-            st.input.clear();
-        }
+    let reply = match r {
+        Ok(reply) => reply,
         Err(e) => {
-            st.show_key |= matches!(e, ArtError::Key(_));
-            st.error = Some(e.to_string());
+            app.embroidery.ask.show_key |= matches!(e, ArtError::Key(_));
+            let _ = give_up(app, e.to_string()); // (shown in the window)
+            return;
+        }
+    };
+    let st = &mut app.embroidery.ask;
+    st.messages.push(reply.message);
+    if !reply.text.is_empty() {
+        st.entries.push(Entry::Answer(reply.text));
+    }
+    if reply.calls.is_empty() {
+        st.current = None;
+        st.input.clear();
+        return;
+    }
+    if st.current.as_ref().is_some_and(|c| c.rounds >= ask::MAX_ROUNDS) {
+        let _ = give_up(app, "Claude took too many steps: ask again, more simply.".into());
+        return;
+    }
+    run_calls(app, &reply.calls);
+}
+
+/// Answer one reply's tool calls: searches and reads at once, changes after the user's Allow.
+fn run_calls(app: &mut VectorcraftApp, calls: &[ToolCall]) {
+    let mut results = Vec::new();
+    let mut changes = Vec::new();
+    for call in calls {
+        let result = match call.name.as_str() {
+            ask::FIND => {
+                let q = call.input.get("query").and_then(Value::as_str).unwrap_or_default();
+                Some(Ok(find(app, q).to_string()))
+            }
+            ask::RUN => {
+                let id = call.input.get("command").and_then(Value::as_str).unwrap_or_default();
+                let params = call.input.get("params").cloned().unwrap_or_else(|| json!({}));
+                match vectorcraft_engine::find_command(id).filter(|_| !blocked(id)) {
+                    None if blocked(id) => Some(to_claude(format!(
+                        "{id} can't be run from here: files, preferences, plug-ins and windows are out of reach; tell the user where to find it instead"
+                    ))),
+                    None => Some(to_claude(format!("there is no command {id:?}: look for one with {}", ask::FIND))),
+                    Some(_) if !params.is_object() => Some(to_claude("params must be an object".to_string())),
+                    Some(spec) if access(spec) == Access::Blocked || names_a_file(&params) => Some(to_claude(format!(
+                        "{id} can't be run from here: files, preferences, plug-ins and windows are out of reach; tell the user where to find it instead"
+                    ))),
+                    Some(spec) if access(spec) == Access::Read => {
+                        Some(app.session.execute(id, &params).map(|v| v.to_string()).map_err(|e| e.to_string()))
+                    }
+                    Some(spec) => {
+                        changes.push((call.id.clone(), id.to_string(), params, describe(spec)));
+                        None
+                    }
+                }
+            }
+            other => Some(to_claude(format!("there is no tool {other:?}"))),
+        };
+        results.push((call.id.clone(), result));
+    }
+    if changes.is_empty() {
+        send_results(app, results);
+    } else {
+        app.embroidery.ask.approval = Some(Approval { changes, results });
+    }
+}
+
+/// The user's answer to the changes waiting (Allow / Don't Allow): made or declined, then the
+/// results go back to Claude.
+pub fn decide(app: &mut VectorcraftApp, allow: bool) {
+    let Some(Approval { changes, mut results }) = app.embroidery.ask.approval.take() else { return };
+    for (call, id, params, label) in changes {
+        let r = if allow {
+            let r = app.run(&id, params);
+            let note = match &r {
+                Ok(_) => format!("{} {label}", tl!("Changed:")),
+                Err(e) => format!("{} {label}: {}", tl!("Couldn't change:"), crate::i18n::msg(e)),
+            };
+            app.embroidery.ask.entries.push(Entry::Note(note));
+            r.map(|v| v.to_string())
+        } else {
+            app.embroidery.ask.entries.push(Entry::Note(format!("{} {label}", tl!("Not changed:"))));
+            to_claude("The user declined this change.".to_string())
+        };
+        if let Some(slot) = results.iter_mut().find(|(c, _)| *c == call) {
+            slot.1 = Some(r);
         }
     }
+    send_results(app, results);
+}
+
+/// Send a round's results back and wait for Claude to go on.
+fn send_results(app: &mut VectorcraftApp, results: Vec<(String, Option<Result<String, String>>)>) {
+    let results: Vec<ToolResult> =
+        results.into_iter().map(|(id, r)| ToolResult { id, result: r.unwrap_or_else(|| to_claude("not run".to_string())) }).collect();
+    app.embroidery.ask.messages.push(ask::tool_results(&results));
+    let _ = request(app); // (a failure is shown in the window)
 }
 
 /// Start a new conversation (New Conversation): the answers so far, and any question on its way,
 /// are dropped.
 pub fn clear(app: &mut VectorcraftApp) {
     let st = &mut app.embroidery.ask;
-    st.turns.clear();
+    st.entries.clear();
+    st.messages.clear();
+    st.current = None;
     st.pending = None;
+    st.approval = None;
     st.error = None;
 }
 
@@ -269,6 +593,7 @@ pub fn window(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut open = true;
     let mut ask_now = false;
     let mut new_conversation = false;
+    let mut decision = None;
     egui::Window::new(tl!("Ask About Embroidery"))
         .open(&mut open)
         .collapsible(false)
@@ -285,21 +610,45 @@ pub fn window(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 .stick_to_bottom(true)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    if st.turns.is_empty() && st.pending.is_none() {
-                        ui.label(RichText::new(tl!("Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.")).color(t.text_dim));
+                    if st.entries.is_empty() {
+                        ui.label(RichText::new(tl!("Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.")).color(t.text_dim));
                     }
-                    for turn in &st.turns {
-                        ui.add_space(6.0);
-                        ui.label(RichText::new(&turn.question).strong());
-                        ui.add_space(2.0);
-                        ui.label(&turn.answer);
+                    for e in &st.entries {
+                        ui.add_space(4.0);
+                        match e {
+                            Entry::Question(q) => {
+                                ui.add_space(4.0);
+                                ui.label(RichText::new(q).strong());
+                            }
+                            Entry::Answer(a) => {
+                                ui.label(a);
+                            }
+                            Entry::Note(n) => {
+                                ui.label(RichText::new(n).size(12.0).color(t.text_dim));
+                            }
+                        }
                     }
-                    if let Some(p) = &st.pending {
+                    if let Some(a) = &st.approval {
                         ui.add_space(6.0);
-                        ui.label(RichText::new(&p.question).strong());
+                        egui::Frame::group(ui.style()).show(ui, |ui| {
+                            ui.label(RichText::new(tl!("Claude wants to change your design:")).strong());
+                            for (_, _, _, label) in &a.changes {
+                                ui.label(format!("- {label}"));
+                            }
+                            ui.horizontal(|ui| {
+                                if crate::widgets::primary_button(ui, tl!("Allow")).clicked() {
+                                    decision = Some(true);
+                                }
+                                if ui.button(tl!("Don't Allow")).clicked() {
+                                    decision = Some(false);
+                                }
+                            });
+                            ui.label(RichText::new(tl!("Edit › Undo takes each change back.")).size(11.0).color(t.text_dim));
+                        });
+                    } else if let Some(secs) = st.waiting_for(now) {
                         ui.horizontal(|ui| {
                             ui.add(egui::Spinner::new());
-                            ui.label(format!("{} {:.0} s", tl!("Thinking…"), (now - p.since).max(0.0)));
+                            ui.label(format!("{} {:.0} s", tl!("Thinking…"), secs));
                         });
                     }
                 });
@@ -320,7 +669,8 @@ pub fn window(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ask_now = true;
             }
             ui.horizontal(|ui| {
-                if crate::widgets::primary_button(ui, tl!("Ask")).clicked() {
+                let can = !st.asking();
+                if ui.add_enabled_ui(can, |ui| crate::widgets::primary_button(ui, tl!("Ask"))).inner.clicked() {
                     ask_now = true;
                 }
                 if ui.button(tl!("New Conversation")).clicked() {
@@ -347,10 +697,13 @@ pub fn window(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             });
         });
+    if let Some(allow) = decision {
+        decide(app, allow);
+    }
     if new_conversation {
         clear(app);
     }
-    if ask_now {
+    if ask_now && !app.embroidery.ask.asking() {
         // (a failure is shown in the window)
         let _ = send(app);
     }

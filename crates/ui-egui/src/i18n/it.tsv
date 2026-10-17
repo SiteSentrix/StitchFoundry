@@ -5821,7 +5821,7 @@ machine	Stop	Arresto
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	Domande sul ricamo…
 	Ask About Embroidery	Domande sul ricamo
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Chiedi qualsiasi cosa sul ricamo a macchina o su StitchFoundry: quale stabilizzatore usare, perché il filo si rompe, come ricamare lettere più pulite, dove si trova una funzione.
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Chiedi qualsiasi cosa sul ricamo a macchina o su StitchFoundry: quale stabilizzatore usare, perché il filo si rompe, come ricamare lettere più pulite, dove si trova una funzione. Claude può anche modificare il tuo disegno quando lo chiedi, dopo che l'hai permesso.
 	Thinking…	Sto pensando…
 	Type your question, then press Enter	Scrivi la domanda, poi premi Invio
 	Ask	Chiedi
@@ -5835,3 +5835,12 @@ machine	Stop	Arresto
 @msg	The reply had no answer: try again, or ask something narrower.	La risposta era vuota: riprova, o fai una domanda più precisa.
 @msg	Ask About Embroidery needs the desktop app for now	Domande sul ricamo richiede per ora l'app desktop
 @msg	already asking: wait for the answer	domanda già in corso: attendi la risposta
+	Claude wants to change your design:	Claude vuole modificare il tuo disegno:
+	Allow	Consenti
+	Don't Allow	Non consentire
+	Edit › Undo takes each change back.	Modifica › Annulla annulla ogni modifica.
+	Changed:	Modificato:
+	Couldn't change:	Impossibile modificare:
+	Not changed:	Non modificato:
+@msg	This conversation is long: start a New Conversation.	Questa conversazione è lunga: inizia una nuova conversazione.
+@msg	Claude took too many steps: ask again, more simply.	Claude ha avuto bisogno di troppi passaggi: chiedi di nuovo, in modo più semplice.

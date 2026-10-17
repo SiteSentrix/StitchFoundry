@@ -657,25 +657,59 @@ fn the_colour_count_is_previewed_with_its_threads_before_digitizing() {
 }
 
 mod ask_about_embroidery {
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 
-    use super::design_from_prompt::app;
-    use crate::embroidery::{ask, prompt};
-    use crate::{SecretStore, Services, VectorcraftApp};
+    use super::design_from_prompt::Keys;
+    use crate::embroidery::ask::{self, Access, Entry};
+    use crate::embroidery::prompt;
+    use crate::{HttpRequest, SecretStore, Services, VectorcraftApp};
 
-    fn answer(text: &str) -> String {
-        json!({"type": "message", "model": "claude-opus-5-5", "content": [{"type": "text", "text": text}], "stop_reason": "end_turn"}).to_string()
+    type Sent = Arc<Mutex<Vec<HttpRequest>>>;
+
+    /// An app whose AI service answers with `replies` in turn, recording what it was sent, with an
+    /// API key kept.
+    fn app(replies: Vec<(u16, String)>) -> (VectorcraftApp, Sent, Keys) {
+        let sent: Sent = Arc::default();
+        let keys = Keys::default();
+        keys.save(prompt::KEY_NAME, Some("sk-ant-test")).unwrap();
+        let queue = Arc::new(Mutex::new(VecDeque::from(replies)));
+        let log = sent.clone();
+        let services = Services {
+            http_post: Some(Arc::new(move |r: &HttpRequest| {
+                log.lock().unwrap().push(r.clone());
+                Ok(queue.lock().unwrap().pop_front().unwrap_or((500, String::new())))
+            })),
+            secrets: Some(Box::new(keys.clone())),
+            ..Default::default()
+        };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        (app, sent, keys)
     }
 
-    /// Poll as frames do until the answer is in.
+    fn reply(stop: &str, content: Value) -> (u16, String) {
+        (200, json!({"type": "message", "model": "claude-opus-5-5", "content": content, "stop_reason": stop}).to_string())
+    }
+
+    fn answer(text: &str) -> (u16, String) {
+        reply("end_turn", json!([{"type": "text", "text": text}]))
+    }
+
+    fn body(sent: &Sent, i: usize) -> Value {
+        serde_json::from_str(&sent.lock().unwrap()[i].body).unwrap()
+    }
+
+    /// Poll as frames do until the reply is in (or a change waits for the user).
     fn wait(app: &mut VectorcraftApp) {
         let ctx = egui::Context::default();
         for _ in 0..1000 {
             ask::poll(app, &ctx);
-            if !app.embroidery.ask.asking() {
+            if app.embroidery.ask.waiting_for(0.0).is_none() {
                 return;
             }
             std::thread::sleep(Duration::from_millis(5));
@@ -706,47 +740,161 @@ mod ask_about_embroidery {
         texts
     }
 
+    fn rectangle(app: &mut VectorcraftApp) -> u64 {
+        let r = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+        app.run("embroidery.set", json!({"type": "fill"})).unwrap();
+        r["id"].as_u64().or_else(|| r["ids"][0].as_u64()).unwrap_or_else(|| app.session.active().unwrap().selection.objects[0].0)
+    }
+
     #[test]
     fn a_question_is_answered_with_the_conversation_and_the_design() {
-        let (mut app, sent, keys) = app(200, answer("Use a cut-away stabilizer on knits."), Duration::ZERO);
-        keys.save(prompt::KEY_NAME, Some("sk-ant-test")).unwrap();
+        let (mut app, sent, _) = app(vec![answer("Use a cut-away stabilizer on knits."), answer("A tear-away one.")]);
         assert!(crate::menus::enabled(&app, "ui.askAboutEmbroidery"));
-        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
-        app.run("embroidery.set", json!({"type": "tatami"})).unwrap();
+        let id = rectangle(&mut app);
         let r = app.run("ui.askAboutEmbroidery", json!({"question": "Which stabilizer for a T-shirt?"})).unwrap();
         assert_eq!(r, json!({"open": true, "asking": true}));
         wait(&mut app);
         let st = &app.embroidery.ask;
-        assert!(st.open && st.input.is_empty() && st.error.is_none(), "{:?}", st.error);
-        assert_eq!(st.turns.len(), 1);
-        assert_eq!(st.turns[0].answer, "Use a cut-away stabilizer on knits.");
+        assert!(st.open && st.input.is_empty() && st.error.is_none() && !st.asking(), "{:?}", st.error);
+        assert_eq!(
+            st.entries,
+            [Entry::Question("Which stabilizer for a T-shirt?".into()), Entry::Answer("Use a cut-away stabilizer on knits.".into())]
+        );
         let texts = window_text(&mut app);
         for want in ["Ask About Embroidery", "Which stabilizer for a T-shirt?", "Use a cut-away stabilizer on knits.", "Ask", "Include my design"] {
             assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
         }
         assert!(!texts.iter().any(|t| t == "Anthropic API key:"), "a kept key isn't asked for: {texts:?}");
-        // the design went along: its stitches and the selected fill
-        let body: Value = serde_json::from_str(&sent.lock().unwrap()[0].body).unwrap();
-        let system = body["system"].as_str().unwrap();
-        assert!(system.contains("The design open now") && system.contains("stitches;") && system.contains(": Tatami"), "{system}");
-        // a second question carries the first with it; without the design this time
+        // the design went along in the question, its object by id
+        let b = body(&sent, 0);
+        let summary = b["messages"][0]["content"][0]["text"].as_str().unwrap();
+        assert!(summary.starts_with("The design open now") && summary.contains("stitches;") && summary.contains(&format!("#{id} ")), "{summary}");
+        assert!(summary.contains("(selected)"), "{summary}");
+        // a second question carries the first and its answer exactly; without the design this time
         app.embroidery.ask.include_design = false;
         app.embroidery.ask.input = "And on a towel?".into();
         ask::send(&mut app).unwrap();
         wait(&mut app);
-        let body: Value = serde_json::from_str(&sent.lock().unwrap()[1].body).unwrap();
-        assert_eq!(body["messages"].as_array().unwrap().len(), 3);
-        assert_eq!(body["messages"][1]["content"], "Use a cut-away stabilizer on knits.");
-        assert!(!body["system"].as_str().unwrap().contains("The design open now"));
+        let b2 = body(&sent, 1);
+        let m = b2["messages"].as_array().unwrap();
+        assert_eq!(m.len(), 3);
+        assert_eq!(
+            m[..2],
+            b["messages"].as_array().unwrap()[..1]
+                .iter()
+                .cloned()
+                .chain([json!({"role": "assistant", "content": [{"type": "text", "text": "Use a cut-away stabilizer on knits."}]})])
+                .collect::<Vec<_>>()[..]
+        );
+        assert_eq!(m[2]["content"], json!([{"type": "text", "text": "And on a towel?"}]));
+        assert_eq!(b2["system"], b["system"], "the instructions stay the same");
         // New Conversation starts over
         ask::clear(&mut app);
-        assert!(app.embroidery.ask.turns.is_empty());
+        assert!(app.embroidery.ask.entries.is_empty());
+    }
+
+    #[test]
+    fn claude_reads_at_once_and_changes_the_design_once_allowed() {
+        let (mut app, sent, _) = app(vec![
+            reply(
+                "tool_use",
+                json!([
+                    {"type": "thinking", "thinking": "", "signature": "s1"},
+                    {"type": "tool_use", "id": "t1", "name": "find_commands", "input": {"query": "stitch type"}},
+                    {"type": "tool_use", "id": "t2", "name": "run_command", "input": {"command": "embroidery.info", "params": {}}},
+                ]),
+            ),
+            reply(
+                "tool_use",
+                json!([
+                    {"type": "text", "text": "I'll make it satin."},
+                    {"type": "tool_use", "id": "t3", "name": "run_command", "input": {"command": "embroidery.set", "params": {"type": "satin"}}},
+                    {"type": "tool_use", "id": "t4", "name": "run_command", "input": {"command": "file.save", "params": {}}},
+                ]),
+            ),
+            answer("Done: the rectangle is satin now."),
+        ]);
+        let id = rectangle(&mut app);
+        app.run("ui.askAboutEmbroidery", json!({"question": "Make it satin"})).unwrap();
+        wait(&mut app);
+        // the search and the read ran at once and went back; the change waits
+        let b = body(&sent, 1);
+        let results = b["messages"][2]["content"].as_array().unwrap();
+        assert_eq!(b["messages"][1]["content"][0]["signature"], "s1", "the reply went back unchanged");
+        let found: Value = serde_json::from_str(results[0]["content"].as_str().unwrap()).unwrap();
+        assert!(found.as_array().unwrap().iter().any(|c| c["id"] == "embroidery.set" && c["changesTheDesign"] == true), "{found}");
+        assert!(results[1]["content"].as_str().unwrap().contains("\"stitches\""));
+        let st = &app.embroidery.ask;
+        let a = st.approval.as_ref().expect("the change waits for the user");
+        assert_eq!(a.changes.len(), 1);
+        assert_eq!(a.changes[0].1, "embroidery.set");
+        let texts = window_text(&mut app);
+        assert!(texts.iter().any(|t| t == "Claude wants to change your design:") && texts.iter().any(|t| t == "Allow"), "{texts:?}");
+        let stitch = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().embroidery.as_deref().unwrap().stitch.id().to_string()
+        };
+        assert_eq!(stitch(&app), "fill", "nothing changes before Allow");
+        ask::decide(&mut app, true);
+        wait(&mut app);
+        assert_eq!(stitch(&app), "satin");
+        // the change's result and the blocked file command went back together
+        let b = body(&sent, 2);
+        let results = b["messages"][4]["content"].as_array().unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results[0].get("is_error").is_none(), "{results:?}");
+        assert_eq!(results[1]["is_error"], true);
+        assert!(results[1]["content"].as_str().unwrap().contains("can't be run from here"));
+        let st = &app.embroidery.ask;
+        assert!(!st.asking());
+        assert!(st.entries.iter().any(|e| matches!(e, Entry::Note(n) if n.starts_with("Changed:"))), "{:?}", st.entries);
+        assert_eq!(st.entries.last(), Some(&Entry::Answer("Done: the rectangle is satin now.".into())));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(stitch(&app), "fill", "one undo takes it back");
+    }
+
+    #[test]
+    fn a_declined_change_is_not_made() {
+        let (mut app, sent, _) = app(vec![
+            reply(
+                "tool_use",
+                json!([{"type": "tool_use", "id": "t1", "name": "run_command", "input": {"command": "embroidery.set", "params": {"type": "satin"}}}]),
+            ),
+            answer("Then I'll leave it as it is."),
+        ]);
+        rectangle(&mut app);
+        app.run("ui.askAboutEmbroidery", json!({"question": "Make it satin"})).unwrap();
+        wait(&mut app);
+        ask::decide(&mut app, false);
+        wait(&mut app);
+        let b = body(&sent, 1);
+        assert_eq!(b["messages"][2]["content"][0]["content"], "The user declined this change.");
+        assert!(app.embroidery.ask.entries.iter().any(|e| matches!(e, Entry::Note(n) if n.starts_with("Not changed:"))));
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.node(st.selection.objects[0]).unwrap().embroidery.as_deref().unwrap().stitch.id(), "fill");
+    }
+
+    #[test]
+    fn what_claude_may_run() {
+        let access = |id: &str| ask::access(vectorcraft_engine::find_command(id).unwrap());
+        for id in ["embroidery.info", "embroidery.check", "document.node", "select.all"] {
+            assert_eq!(access(id), Access::Read, "{id}");
+        }
+        for id in ["embroidery.set", "shape.rectangle", "edit.undo", "embroidery.setParams"] {
+            assert_eq!(access(id), Access::Change, "{id}");
+        }
+        for id in ["prefs.set", "plugin.install", "embroidery.export", "embroidery.send", "text.addFontFiles", "document.exportForScreens"] {
+            assert_eq!(access(id), Access::Blocked, "{id}");
+        }
+        // the menus' own file commands too
+        assert!(ask::blocked("file.save") && ask::blocked("ui.saveForMyMachine") && !ask::blocked("embroidery.set"));
     }
 
     #[test]
     fn without_a_key_or_a_question_nothing_is_sent() {
         let err = json!({"type": "error", "error": {"message": "invalid x-api-key"}}).to_string();
-        let (mut app, sent, keys) = app(401, err, Duration::ZERO);
+        let (mut app, sent, keys) = app(vec![(401, err)]);
+        keys.save(prompt::KEY_NAME, None).unwrap();
         app.run("ui.askAboutEmbroidery", json!({})).unwrap();
         assert!(window_text(&mut app).iter().any(|t| t == "Anthropic API key:"), "no key yet: its row shows");
         app.embroidery.ask.input = "Why does my thread break?".into();
@@ -762,7 +910,7 @@ mod ask_about_embroidery {
         let st = &app.embroidery.ask;
         assert_eq!(st.error.as_deref(), Some("Anthropic refused the API key: invalid x-api-key"));
         assert_eq!(st.input, "Why does my thread break?", "the question stays to ask again");
-        assert!(st.turns.is_empty());
+        assert!(st.entries.is_empty() && !st.asking(), "{:?}", st.entries);
         assert_eq!(keys.load(prompt::KEY_NAME), None, "a refused key isn't remembered");
         assert!(window_text(&mut app).iter().any(|t| t == "Anthropic refused the API key: invalid x-api-key"));
         // the web has no service yet

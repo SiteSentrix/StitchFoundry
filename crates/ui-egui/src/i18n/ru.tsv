@@ -5817,7 +5817,7 @@ machine	Stop	Остановка
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	Вопрос о вышивке…
 	Ask About Embroidery	Вопрос о вышивке
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Спросите что угодно о машинной вышивке или StitchFoundry: какой стабилизатор выбрать, почему рвётся нить, как вышить буквы аккуратнее, где найти функцию.
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Спросите что угодно о машинной вышивке или StitchFoundry: какой стабилизатор выбрать, почему рвётся нить, как вышить буквы аккуратнее, где найти функцию. По вашей просьбе Claude также может изменить дизайн — после вашего разрешения.
 	Thinking…	Думаю…
 	Type your question, then press Enter	Введите вопрос и нажмите Enter
 	Ask	Спросить
@@ -5831,3 +5831,12 @@ machine	Stop	Остановка
 @msg	The reply had no answer: try again, or ask something narrower.	Ответ пуст: попробуйте снова или задайте более узкий вопрос.
 @msg	Ask About Embroidery needs the desktop app for now	«Вопрос о вышивке» пока работает только в настольном приложении
 @msg	already asking: wait for the answer	вопрос уже отправлен: дождитесь ответа
+	Claude wants to change your design:	Claude хочет изменить ваш дизайн:
+	Allow	Разрешить
+	Don't Allow	Не разрешать
+	Edit › Undo takes each change back.	Редактирование › Отменить отменяет каждое изменение.
+	Changed:	Изменено:
+	Couldn't change:	Не удалось изменить:
+	Not changed:	Не изменено:
+@msg	This conversation is long: start a New Conversation.	Разговор слишком длинный: начните новый разговор.
+@msg	Claude took too many steps: ask again, more simply.	Claude понадобилось слишком много шагов: спросите ещё раз, попроще.

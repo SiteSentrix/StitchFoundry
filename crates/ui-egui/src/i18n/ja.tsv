@@ -5861,7 +5861,7 @@ machine	Stop	停止
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	刺しゅうについて質問…
 	Ask About Embroidery	刺しゅうについて質問
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	ミシン刺しゅうや StitchFoundry について何でも質問できます：どの接着芯を使うか、糸が切れる理由、文字をきれいに縫う方法、機能の場所など。
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	ミシン刺しゅうや StitchFoundry について何でも質問できます：どの接着芯を使うか、糸が切れる理由、文字をきれいに縫う方法、機能の場所など。ご依頼があれば、許可をいただいたうえで Claude がデザインを変更することもできます。
 	Thinking…	考え中…
 	Type your question, then press Enter	質問を入力して Enter キーを押してください
 	Ask	質問する
@@ -5875,3 +5875,12 @@ machine	Stop	停止
 @msg	The reply had no answer: try again, or ask something narrower.	回答が空でした：もう一度試すか、より具体的に質問してください。
 @msg	Ask About Embroidery needs the desktop app for now	「刺しゅうについて質問」は現在デスクトップアプリでのみ使用できます
 @msg	already asking: wait for the answer	質問中です：回答をお待ちください
+	Claude wants to change your design:	Claude がデザインを変更しようとしています：
+	Allow	許可
+	Don't Allow	許可しない
+	Edit › Undo takes each change back.	編集 › 取り消しで各変更を元に戻せます。
+	Changed:	変更しました：
+	Couldn't change:	変更できませんでした：
+	Not changed:	変更しませんでした：
+@msg	This conversation is long: start a New Conversation.	会話が長くなりました：新しい会話を始めてください。
+@msg	Claude took too many steps: ask again, more simply.	Claude の手順が多すぎました：もっと簡単に、もう一度質問してください。

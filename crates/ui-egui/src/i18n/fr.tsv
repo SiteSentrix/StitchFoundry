@@ -6230,7 +6230,7 @@ theme	Appearance	Apparence
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	Questions sur la broderie…
 	Ask About Embroidery	Questions sur la broderie
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Posez n'importe quelle question sur la broderie machine ou StitchFoundry : quel entoilage choisir, pourquoi le fil casse, comment rendre les lettres plus nettes, où trouver une fonction.
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Posez n'importe quelle question sur la broderie machine ou StitchFoundry : quel entoilage choisir, pourquoi le fil casse, comment rendre les lettres plus nettes, où trouver une fonction. Claude peut aussi modifier votre motif quand vous le demandez, après votre accord.
 	Thinking…	Réflexion…
 	Type your question, then press Enter	Tapez votre question, puis appuyez sur Entrée
 	Ask	Demander
@@ -6244,3 +6244,12 @@ theme	Appearance	Apparence
 @msg	The reply had no answer: try again, or ask something narrower.	La réponse était vide : réessayez, ou posez une question plus précise.
 @msg	Ask About Embroidery needs the desktop app for now	Questions sur la broderie nécessite pour l'instant l'application de bureau
 @msg	already asking: wait for the answer	question déjà en cours : attendez la réponse
+	Claude wants to change your design:	Claude souhaite modifier votre motif :
+	Allow	Autoriser
+	Don't Allow	Ne pas autoriser
+	Edit › Undo takes each change back.	Édition › Annuler annule chaque modification.
+	Changed:	Modifié :
+	Couldn't change:	Modification impossible :
+	Not changed:	Non modifié :
+@msg	This conversation is long: start a New Conversation.	Cette conversation est longue : commencez une nouvelle conversation.
+@msg	Claude took too many steps: ask again, more simply.	Claude a eu besoin de trop d'étapes : reposez la question plus simplement.

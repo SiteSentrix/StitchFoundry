@@ -1351,14 +1351,23 @@ menu) and type a question about machine embroidery or about StitchFoundry: which
 a T-shirt, why the thread keeps breaking, how to make small letters sew cleaner, where a feature
 is. Press Enter (Shift+Enter starts a new line) or **Ask**; Claude's answer appears in the window,
 in plain words, naming StitchFoundry's menu items where one does what you need. Ask a follow-up
-and the conversation so far goes along (its latest eight questions); **New Conversation** starts
-over. Nothing of it is saved.
+and the whole conversation goes along (up to 30 questions); **New Conversation** starts over.
+Nothing of it is saved.
+
+**Changing the design.** Ask for a change ("make the border satin", "fewer trims please", "make
+the letters 15 mm tall") and Claude does it with StitchFoundry's own commands. It looks at the
+design by itself (Design Information, Check Design, an object's settings), but every change waits
+for you: the window lists what Claude wants to do, as the menus name it, with **Allow** and
+**Don't Allow**. Each change is one step that Edit › Undo takes back. Claude can't open, save,
+export or send files, change preferences, install anything, or use the app's windows: for those
+it tells you where to go.
 
 With **Include my design** on (the default), a short summary of the design open now goes with each
 question, so "why does this design have so many trims?" can be answered: its size, stitches,
 trims, jumps, colour changes and sewing time, its threads in order, the hoop (and whether the
-design fits), fabric, machine and file format, what Check Design finds, and the selected objects
-with their stitch types and sizes. The design itself, its artwork and its file are never sent.
+design fits), fabric, machine and file format, what Check Design finds, and its objects in sewing
+order with their stitch types and sizes (the selected ones marked). What Claude looks at with its
+commands goes too; the design's file is never sent.
 
 It uses the same Anthropic API key as Design from Prompt, billed to your Anthropic account; the key
 row shows while there is none (or after **Change key**). Answers can be wrong: try a test sew

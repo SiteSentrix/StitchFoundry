@@ -6171,7 +6171,7 @@ mark-style	Japanese	Japonesas
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	Preguntar sobre bordado…
 	Ask About Embroidery	Preguntar sobre bordado
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Pregunte lo que quiera sobre bordado a máquina o StitchFoundry: qué entretela usar, por qué se rompe el hilo, cómo bordar letras más limpias, dónde está una función.
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Pregunte lo que quiera sobre bordado a máquina o StitchFoundry: qué entretela usar, por qué se rompe el hilo, cómo bordar letras más limpias, dónde está una función. Claude también puede cambiar su diseño cuando lo pida, después de que usted lo permita.
 	Thinking…	Pensando…
 	Type your question, then press Enter	Escriba su pregunta y pulse Intro
 	Ask	Preguntar
@@ -6185,3 +6185,12 @@ mark-style	Japanese	Japonesas
 @msg	The reply had no answer: try again, or ask something narrower.	La respuesta llegó vacía: inténtelo de nuevo o haga una pregunta más concreta.
 @msg	Ask About Embroidery needs the desktop app for now	Preguntar sobre bordado necesita por ahora la aplicación de escritorio
 @msg	already asking: wait for the answer	ya se está preguntando: espere la respuesta
+	Claude wants to change your design:	Claude quiere cambiar su diseño:
+	Allow	Permitir
+	Don't Allow	No permitir
+	Edit › Undo takes each change back.	Edición › Deshacer revierte cada cambio.
+	Changed:	Cambiado:
+	Couldn't change:	No se pudo cambiar:
+	Not changed:	Sin cambiar:
+@msg	This conversation is long: start a New Conversation.	Esta conversación es larga: empiece una nueva conversación.
+@msg	Claude took too many steps: ask again, more simply.	Claude necesitó demasiados pasos: pregunte de nuevo, de forma más sencilla.

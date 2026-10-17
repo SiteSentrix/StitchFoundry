@@ -5111,7 +5111,7 @@ machine	Stop	停止
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	詢問刺繡問題…
 	Ask About Embroidery	詢問刺繡問題
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	可以詢問任何關於機器刺繡或 StitchFoundry 的問題：用哪種襯布、為什麼斷線、怎樣讓字母繡得更整齊、某個功能在哪裡。
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	可以詢問任何關於機器刺繡或 StitchFoundry 的問題：用哪種襯布、為什麼斷線、怎樣讓字母繡得更整齊、某個功能在哪裡。在您要求並允許後，Claude 也可以修改您的設計。
 	Thinking…	思考中…
 	Type your question, then press Enter	輸入問題，然後按 Enter
 	Ask	提問
@@ -5125,3 +5125,12 @@ machine	Stop	停止
 @msg	The reply had no answer: try again, or ask something narrower.	回覆中沒有回答：請重試，或問得更具體些。
 @msg	Ask About Embroidery needs the desktop app for now	「詢問刺繡問題」目前需要桌面應用程式
 @msg	already asking: wait for the answer	正在提問：請等待回答
+	Claude wants to change your design:	Claude 想要修改您的設計：
+	Allow	允許
+	Don't Allow	不允許
+	Edit › Undo takes each change back.	編輯 › 還原可復原每項修改。
+	Changed:	已修改：
+	Couldn't change:	無法修改：
+	Not changed:	未修改：
+@msg	This conversation is long: start a New Conversation.	此對話已很長：請開始新對話。
+@msg	Claude took too many steps: ask again, more simply.	Claude 用了太多步驟：請更簡單地再問一次。

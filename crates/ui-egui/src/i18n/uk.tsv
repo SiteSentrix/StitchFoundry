@@ -5801,7 +5801,7 @@ machine	Stop	Зупинка
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	Запитати про вишивку…
 	Ask About Embroidery	Запитати про вишивку
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Запитайте будь-що про машинну вишивку або StitchFoundry: який стабілізатор обрати, чому рветься нитка, як вишити літери охайніше, де знайти функцію.
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Запитайте будь-що про машинну вишивку або StitchFoundry: який стабілізатор обрати, чому рветься нитка, як вишити літери охайніше, де знайти функцію. На ваше прохання Claude також може змінити дизайн — після вашого дозволу.
 	Thinking…	Думаю…
 	Type your question, then press Enter	Введіть запитання й натисніть Enter
 	Ask	Запитати
@@ -5815,3 +5815,12 @@ machine	Stop	Зупинка
 @msg	The reply had no answer: try again, or ask something narrower.	Відповідь порожня: спробуйте ще раз або поставте вужче запитання.
 @msg	Ask About Embroidery needs the desktop app for now	«Запитати про вишивку» поки що працює лише в настільному застосунку
 @msg	already asking: wait for the answer	запитання вже надіслано: дочекайтеся відповіді
+	Claude wants to change your design:	Claude хоче змінити ваш дизайн:
+	Allow	Дозволити
+	Don't Allow	Не дозволяти
+	Edit › Undo takes each change back.	Редагування › Скасувати скасовує кожну зміну.
+	Changed:	Змінено:
+	Couldn't change:	Не вдалося змінити:
+	Not changed:	Не змінено:
+@msg	This conversation is long: start a New Conversation.	Розмова задовга: почніть нову розмову.
+@msg	Claude took too many steps: ask again, more simply.	Claude знадобилося забагато кроків: запитайте ще раз, простіше.

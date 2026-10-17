@@ -5780,7 +5780,7 @@ machine	Stop	Stopp
 # Embroidery (StitchFoundry): Ask About Embroidery
 	Ask About Embroidery…	Fragen zur Stickerei…
 	Ask About Embroidery	Fragen zur Stickerei
-	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is.	Fragen Sie alles über Maschinenstickerei oder StitchFoundry: welches Stickvlies passt, warum der Faden reißt, wie Buchstaben sauberer gestickt werden, wo eine Funktion zu finden ist.
+	Ask anything about machine embroidery or StitchFoundry: which stabilizer to use, why thread breaks, how to make letters sew cleaner, where a feature is. Claude can also change your design when you ask, after you allow it.	Fragen Sie alles über Maschinenstickerei oder StitchFoundry: welches Stickvlies passt, warum der Faden reißt, wie Buchstaben sauberer gestickt werden, wo eine Funktion zu finden ist. Claude kann Ihr Stickmuster auf Wunsch auch ändern, nachdem Sie es erlaubt haben.
 	Thinking…	Denkt nach…
 	Type your question, then press Enter	Geben Sie Ihre Frage ein und drücken Sie die Eingabetaste
 	Ask	Fragen
@@ -5794,3 +5794,12 @@ machine	Stop	Stopp
 @msg	The reply had no answer: try again, or ask something narrower.	Die Antwort war leer: Versuchen Sie es erneut oder stellen Sie eine engere Frage.
 @msg	Ask About Embroidery needs the desktop app for now	„Fragen zur Stickerei“ erfordert vorerst die Desktop-App
 @msg	already asking: wait for the answer	es wird bereits gefragt: Warten Sie auf die Antwort
+	Claude wants to change your design:	Claude möchte Ihr Stickmuster ändern:
+	Allow	Erlauben
+	Don't Allow	Nicht erlauben
+	Edit › Undo takes each change back.	Bearbeiten › Rückgängig nimmt jede Änderung zurück.
+	Changed:	Geändert:
+	Couldn't change:	Nicht änderbar:
+	Not changed:	Nicht geändert:
+@msg	This conversation is long: start a New Conversation.	Dieses Gespräch ist lang: Beginnen Sie ein neues Gespräch.
+@msg	Claude took too many steps: ask again, more simply.	Claude hat zu viele Schritte gebraucht: Fragen Sie noch einmal, einfacher.
