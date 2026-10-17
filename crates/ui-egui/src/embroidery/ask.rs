@@ -7,7 +7,7 @@
 //! out of its reach. Each request goes out on a thread of its own through the host's `http_post`
 //! service; [`poll`] picks the reply up and runs the round of commands it asks for.
 
-use std::sync::mpsc::{Receiver, TryRecvError, channel};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 use egui::RichText;
 use serde_json::{Value, json};
@@ -414,24 +414,13 @@ fn request(app: &mut VectorcraftApp) -> Result<(), String> {
         Ok(h) => h,
         Err(e) => return give_up(app, e.to_string()),
     };
-    let Some(post) = app.services.http_post.clone() else {
-        return give_up(app, "Ask About Embroidery needs the desktop app for now".into());
-    };
     if let Some(c) = app.embroidery.ask.current.as_mut() {
         c.rounds += 1;
     }
-    let (tx, rx) = channel();
-    let spawned = std::thread::Builder::new().name("ask-about-embroidery".into()).spawn(move || {
-        let r = vectorcraft_engine::guard::catch_panic(|| post(&http))
-            .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")))
-            .map_err(ArtError::Network)
-            .and_then(|(status, body)| ask::parse_reply(status, &body));
-        // Nothing waits any more once the conversation was cleared.
-        let _ = tx.send(r);
-    });
-    if let Err(e) = spawned {
-        return give_up(app, format!("can't send the question: {e}"));
-    }
+    let rx = match prompt::post(app, http, "ask-about-embroidery", ask::parse_reply) {
+        Ok(rx) => rx,
+        Err(e) => return give_up(app, e),
+    };
     app.embroidery.ask.pending = Some(Pending { rx, since: app.embroidery.prompt.now });
     Ok(())
 }

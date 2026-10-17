@@ -874,6 +874,37 @@ mod ask_about_embroidery {
         assert_eq!(st.doc.node(st.selection.objects[0]).unwrap().embroidery.as_deref().unwrap().stitch.id(), "fill");
     }
 
+    /// The web: the browser's fetch answers later, on the UI thread, and the key stays in its store.
+    #[test]
+    fn the_web_sends_through_the_browser() {
+        let sent: Sent = Arc::default();
+        let log = sent.clone();
+        let later: std::rc::Rc<std::cell::RefCell<Vec<Box<dyn FnOnce(Result<(u16, String), String>)>>>> = Default::default();
+        let queue = later.clone();
+        let keys = Keys::default();
+        let services = Services {
+            http_post_async: Some(std::rc::Rc::new(move |r: HttpRequest, done| {
+                log.lock().unwrap().push(r);
+                queue.borrow_mut().push(done);
+            })),
+            secrets: Some(Box::new(keys.clone())),
+            ..Default::default()
+        };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        assert!(crate::menus::enabled(&app, "ui.askAboutEmbroidery") && crate::menus::enabled(&app, "ui.designFromPrompt"));
+        app.embroidery.prompt.key = "sk-ant-web".into();
+        app.run("ui.askAboutEmbroidery", json!({"question": "Which needle for denim?"})).unwrap();
+        assert_eq!(sent.lock().unwrap().len(), 1);
+        assert!(app.embroidery.ask.waiting_for(0.0).is_some(), "waiting for the browser");
+        // the browser answers
+        let done = later.borrow_mut().pop().unwrap();
+        done(Ok(answer("A 90/14 or 100/16 jeans needle.")));
+        ask::poll(&mut app, &egui::Context::default());
+        assert_eq!(app.embroidery.ask.entries.last(), Some(&Entry::Answer("A 90/14 or 100/16 jeans needle.".into())));
+        assert_eq!(keys.load(prompt::KEY_NAME).as_deref(), Some("sk-ant-web"), "remembered in the browser's store");
+    }
+
     #[test]
     fn what_claude_may_run() {
         let access = |id: &str| ask::access(vectorcraft_engine::find_command(id).unwrap());

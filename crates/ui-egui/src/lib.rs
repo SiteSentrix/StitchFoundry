@@ -214,6 +214,10 @@ pub use vectorcraft_embroidery::sf_core::ai::HttpRequest;
 /// from a thread of its own.
 pub type HttpPostFn = Arc<dyn Fn(&HttpRequest) -> Result<(u16, String), String> + Send + Sync>;
 
+/// Starts an HTTPS POST and hands the answer → (HTTP status, body), or why none came, to the
+/// callback later, on the UI thread (the web: the browser's fetch).
+pub type HttpPostAsyncFn = std::rc::Rc<dyn Fn(HttpRequest, Box<dyn FnOnce(Result<(u16, String), String>)>)>;
+
 /// Fetches a URL with an HTTPS GET and waits for it → (HTTP status, body, at most `limit` bytes),
 /// or why it didn't come. Called from a thread of its own.
 pub type HttpGetFn = Arc<dyn Fn(&str, u64) -> Result<(u16, Vec<u8>), String> + Send + Sync>;
@@ -299,6 +303,8 @@ pub struct Services {
     /// Send Design from Prompt's request to the AI service (desktop). Without it (the web, for
     /// now) Design from Prompt is unavailable.
     pub http_post: Option<HttpPostFn>,
+    /// Send an HTTPS POST without waiting (the web), when there is no [`Services::http_post`].
+    pub http_post_async: Option<HttpPostAsyncFn>,
     /// Fetch a file over HTTPS (desktop): the embroidery font library downloads with it. Without
     /// it (the web demo, which has no server to keep fonts on) fonts aren't downloaded.
     pub http_get: Option<HttpGetFn>,

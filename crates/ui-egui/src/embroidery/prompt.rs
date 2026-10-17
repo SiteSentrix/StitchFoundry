@@ -59,7 +59,41 @@ impl PromptState {
 
 /// Whether this build can send the request (the web can't yet).
 pub fn available(app: &VectorcraftApp) -> bool {
-    app.services.http_post.is_some()
+    app.services.http_post.is_some() || app.services.http_post_async.is_some()
+}
+
+/// Sends `http` with the host's service and reads the answer with `parse`: on the desktop on a
+/// thread named `thread`, on the web through the browser. The result arrives on the receiver;
+/// nothing waits for it once the receiver is dropped.
+pub(crate) fn post<T: Send + 'static>(
+    app: &VectorcraftApp,
+    http: crate::HttpRequest,
+    thread: &str,
+    parse: fn(u16, &str) -> Result<T, ArtError>,
+) -> Result<Receiver<Result<T, ArtError>>, String> {
+    let (tx, rx) = channel();
+    if let Some(post) = app.services.http_post.clone() {
+        std::thread::Builder::new()
+            .name(thread.into())
+            .spawn(move || {
+                let r = vectorcraft_engine::guard::catch_panic(|| post(&http))
+                    .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")))
+                    .map_err(ArtError::Network)
+                    .and_then(|(status, body)| parse(status, &body));
+                let _ = tx.send(r); // (nothing may wait any more)
+            })
+            .map_err(|e| format!("can't send the request: {e}"))?;
+    } else if let Some(post) = app.services.http_post_async.clone() {
+        post(
+            http,
+            Box::new(move |r| {
+                let _ = tx.send(r.map_err(ArtError::Network).and_then(|(status, body)| parse(status, &body))); // (nothing may wait any more)
+            }),
+        );
+    } else {
+        return Err("this needs a connection to the AI service, which this build doesn't have".into());
+    }
+    Ok(rx)
 }
 
 /// The size new art is drawn at by default (mm): 90% of the hoop's shorter side, else 100.
@@ -196,24 +230,12 @@ pub fn start(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         Ok(h) => h,
         Err(e) => return fail(app, e.to_string()),
     };
-    let post = app.services.http_post.clone().ok_or("Design from Prompt needs the desktop app for now")?;
     // Remember off forgets a kept key now; on, the key is kept once Anthropic takes it ([`poll`]).
     let keep = d.bool("remember").then(|| app.embroidery.prompt.key.trim().to_string());
     if keep.is_none() {
         keep_key(app.services.secrets.as_deref(), None);
     }
-    let (tx, rx) = channel();
-    std::thread::Builder::new()
-        .name("design-from-prompt".into())
-        .spawn(move || {
-            let r = vectorcraft_engine::guard::catch_panic(|| post(&http))
-                .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")))
-                .map_err(ArtError::Network)
-                .and_then(|(status, body)| ai::parse_reply(status, &body));
-            // Nothing waits any more once the dialog was cancelled.
-            let _ = tx.send(r);
-        })
-        .map_err(|e| format!("can't send the request: {e}"))?;
+    let rx = post(app, http, "design-from-prompt", ai::parse_reply)?;
     let name: String = if frame.is_some() { "Redrawn image".to_string() } else { request.prompt.chars().take(60).collect() };
     let st = &mut app.embroidery.prompt;
     st.error = None;

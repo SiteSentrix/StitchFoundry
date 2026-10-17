@@ -1336,9 +1336,10 @@ can read. Turn the option off and Generate to forget a kept key. Without a kept 
 Only your description, the size and the colour count are sent (and, to redraw an image, the
 image: see below), to `api.anthropic.com` over HTTPS, and only when you click Generate; nothing
 else from your design leaves the computer. Certificates are checked against the system's trusted
-ones, and a proxy set in the usual environment variables (`HTTPS_PROXY`…) is used. Design from
-Prompt needs the desktop app: the web app can't send the request yet. Agents don't need it: an
-agent that draws can hand its own SVG to `embroidery.placeArt`, which does the rest.
+ones, and a proxy set in the usual environment variables (`HTTPS_PROXY`…) is used. In the web
+app the browser sends the request straight to Anthropic (nothing passes through StitchFoundry's
+site), and Remember the key keeps it in this browser's storage for the site. Agents don't need
+it: an agent that draws can hand its own SVG to `embroidery.placeArt`, which does the rest.
 
 ## Redraw Image with Claude
 
@@ -1389,8 +1390,8 @@ commands goes too; the design's file is never sent.
 
 It uses the same Anthropic API key as Design from Prompt, billed to your Anthropic account; the key
 row shows while there is none (or after **Change key**). Answers can be wrong: try a test sew
-before an important piece. Like Design from Prompt it needs the desktop app for now, and agents
-can open it with a question (`ui.askAboutEmbroidery {question}`).
+before an important piece. It works in the desktop and the web app, as Design from Prompt does,
+and agents can open it with a question (`ui.askAboutEmbroidery {question}`).
 
 ## Design settings: hoop, fabric, threads
 
@@ -1927,7 +1928,8 @@ From the control channel (`stitchfoundry --control 7979`, one JSON object per li
 | `vectorcraft-engine` | 5 | the `embroidery.*` commands and machine-file open/place |
 | `vectorcraft-tools` | 4 | the Embroidery Brush and Inclination tools |
 | `vectorcraft-ui-egui` | 6 | canvas overlay (TrueView mesh, hoop, beads, player), panels, widget, menus, the Design from Prompt dialog, the Ask About Embroidery window |
-| `vectorcraft` (the desktop app) | 7 | sends Design from Prompt's request (ureq, rustls) and keeps the API key |
+| `vectorcraft` (the desktop app) | 7 | sends Design from Prompt's and Ask About Embroidery's requests (ureq, rustls) and keeps the API key |
+| `vectorcraft-web` (the web app) | 7 | sends them with the browser's fetch and keeps the key in the browser's local storage |
 
 Documents store embroidery as an optional attribute on each node (`Node.embroidery`) and on
 the document (`Document.embroidery`: hoop, fabric, chart). Older documents and documents without
@@ -1951,7 +1953,7 @@ round trips and robustness tests in the repository.
 - Auto-Digitize works best on flat-colour logos; photos and gradients need tracing by hand
   first.
 - Design from Prompt and Redraw Image work with your own Anthropic API key only (StitchFoundry
-  accounts and AI credits aren't built yet), and only in the desktop app. The drawing follows the
+  accounts and AI credits aren't built yet). The drawing follows the
   description or the image loosely and can use more colours than asked (colours close enough to
   share a thread are merged), and a drawing is billed even when it comes out unusable.
 - Branching orders objects closest-first rather than searching for the best tour, and only

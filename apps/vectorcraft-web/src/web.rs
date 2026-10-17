@@ -411,6 +411,7 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
     let screen_color = eye_dropper(ctx.clone());
+    let ai_ctx = ctx.clone();
     Services {
         // File → Place…: the picked files go to the Place dialog.
         place_async: Some(Box::new(move || {
@@ -456,7 +457,65 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
         recovery_store: Some(Arc::new(BrowserStore { locks })),
         // File → Print: the browser's print dialog.
         print: Some(Box::new(BrowserPrint)),
+        // Design from Prompt and Ask About Embroidery: the browser's fetch, the key kept by it.
+        http_post_async: Some(http_post_async(ai_ctx)),
+        secrets: Some(Box::new(BrowserSecrets)),
         ..Default::default()
+    }
+}
+
+/// HTTPS POSTs (Design from Prompt, Ask About Embroidery) with the browser's fetch, straight to
+/// Anthropic with the user's own key: Anthropic answers a web page only when it says it means to
+/// (`anthropic-dangerous-direct-browser-access`), as a page holding its user's own key does.
+fn http_post_async(ctx: egui::Context) -> vectorcraft_ui_egui::HttpPostAsyncFn {
+    Rc::new(move |request, done| {
+        let ctx = ctx.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            done(post(&request).await);
+            ctx.request_repaint();
+        });
+    })
+}
+
+async fn post(request: &vectorcraft_ui_egui::HttpRequest) -> Result<(u16, String), String> {
+    use wasm_bindgen_futures::JsFuture;
+    let window = web_sys::window().ok_or("no window")?;
+    let headers = web_sys::Headers::new().map_err(js_err)?;
+    for (k, v) in &request.headers {
+        headers.set(k, v).map_err(js_err)?;
+    }
+    if request.url.starts_with("https://api.anthropic.com/") {
+        headers.set("anthropic-dangerous-direct-browser-access", "true").map_err(js_err)?;
+    }
+    let init = web_sys::RequestInit::new();
+    init.set_method("POST");
+    init.set_headers(&headers);
+    init.set_body(&wasm_bindgen::JsValue::from_str(&request.body));
+    let response: web_sys::Response =
+        JsFuture::from(window.fetch_with_str_and_init(request.url, &init)).await.map_err(js_err)?.dyn_into().map_err(js_err)?;
+    let status = response.status();
+    let text = JsFuture::from(response.text().map_err(js_err)?).await.map_err(js_err)?.as_string().unwrap_or_default();
+    Ok((status, text))
+}
+
+/// The API key Design from Prompt and Ask About Embroidery keep, in the browser's local storage
+/// (this browser only; Remember the key off forgets it).
+struct BrowserSecrets;
+
+const SECRET_PREFIX: &str = "stitchfoundry.secret/";
+
+impl vectorcraft_ui_egui::SecretStore for BrowserSecrets {
+    fn load(&self, name: &str) -> Option<String> {
+        local_storage().ok()?.get_item(&format!("{SECRET_PREFIX}{name}")).ok().flatten()
+    }
+
+    fn save(&self, name: &str, value: Option<&str>) -> Result<(), String> {
+        let store = local_storage()?;
+        let key = format!("{SECRET_PREFIX}{name}");
+        match value {
+            Some(v) => store.set_item(&key, v).map_err(js_err),
+            None => store.remove_item(&key).map_err(js_err),
+        }
     }
 }
 
