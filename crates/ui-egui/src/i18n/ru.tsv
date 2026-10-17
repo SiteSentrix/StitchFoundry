@@ -5852,3 +5852,4 @@ machine	Stop	Остановка
 	Print Cross-Stitch Chart	Печать схемы вышивки крестом
 	Fill Cross Stitches	Залить крестики
 	Replace Cross-Stitch Colour	Заменить цвет крестиков
+@msg	this needs a connection to the AI service, which this build doesn't have	для этого нужно подключение к службе ИИ, которого в этой сборке нет

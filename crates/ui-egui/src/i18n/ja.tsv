@@ -5896,3 +5896,4 @@ machine	Stop	停止
 	Print Cross-Stitch Chart	クロスステッチ図案を印刷
 	Fill Cross Stitches	クロスステッチを塗りつぶす
 	Replace Cross-Stitch Colour	クロスステッチの色を置換
+@msg	this needs a connection to the AI service, which this build doesn't have	これには AI サービスへの接続が必要ですが、このビルドにはありません

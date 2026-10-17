@@ -5856,3 +5856,4 @@ machine	Stop	Arresto
 	Print Cross-Stitch Chart	Stampa schema punto croce
 	Fill Cross Stitches	Riempi punti croce
 	Replace Cross-Stitch Colour	Sostituisci colore punto croce
+@msg	this needs a connection to the AI service, which this build doesn't have	serve una connessione al servizio di IA, che questa versione non ha

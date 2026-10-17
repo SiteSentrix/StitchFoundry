@@ -5815,3 +5815,4 @@ machine	Stop	Stopp
 	Print Cross-Stitch Chart	Kreuzstichvorlage drucken
 	Fill Cross Stitches	Kreuzstiche füllen
 	Replace Cross-Stitch Colour	Kreuzstichfarbe ersetzen
+@msg	this needs a connection to the AI service, which this build doesn't have	dafür ist eine Verbindung zum KI-Dienst nötig, die diese Version nicht hat

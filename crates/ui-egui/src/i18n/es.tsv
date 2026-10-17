@@ -6206,3 +6206,4 @@ mark-style	Japanese	Japonesas
 	Print Cross-Stitch Chart	Imprimir gráfico de punto de cruz
 	Fill Cross Stitches	Rellenar puntos de cruz
 	Replace Cross-Stitch Colour	Reemplazar color de punto de cruz
+@msg	this needs a connection to the AI service, which this build doesn't have	esto necesita una conexión con el servicio de IA, que esta versión no tiene

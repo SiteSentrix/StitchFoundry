@@ -5836,3 +5836,4 @@ machine	Stop	Зупинка
 	Print Cross-Stitch Chart	Друк схеми вишивки хрестиком
 	Fill Cross Stitches	Залити хрестики
 	Replace Cross-Stitch Colour	Замінити колір хрестиків
+@msg	this needs a connection to the AI service, which this build doesn't have	для цього потрібне з'єднання зі службою ШІ, якого в цій збірці немає

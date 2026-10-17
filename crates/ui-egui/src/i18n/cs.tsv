@@ -6253,3 +6253,4 @@ mark-style	Japanese	Japonské
 	Print Cross-Stitch Chart	Vytisknout předlohu křížkového stehu
 	Fill Cross Stitches	Vyplnit křížkové stehy
 	Replace Cross-Stitch Colour	Nahradit barvu křížkového stehu
+@msg	this needs a connection to the AI service, which this build doesn't have	to vyžaduje připojení ke službě AI, které tato verze nemá
