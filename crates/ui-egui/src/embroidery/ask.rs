@@ -273,10 +273,12 @@ pub fn window(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .open(&mut open)
         .collapsible(false)
         .resizable(true)
-        .default_size([460.0, 520.0])
+        .default_size([460.0, 560.0])
+        .default_pos(ctx.content_rect().center() - egui::vec2(230.0, 280.0))
         .show(ctx, |ui| {
             let st = &app.embroidery.ask;
-            let footer = 190.0;
+            // room under the conversation for the question box, its buttons, the key and the note
+            let footer = if st.show_key || app.embroidery.prompt.key.trim().is_empty() { 270.0 } else { 210.0 };
             egui::ScrollArea::vertical()
                 .id_salt("ask-conversation")
                 .max_height((ui.available_height() - footer).max(120.0))
