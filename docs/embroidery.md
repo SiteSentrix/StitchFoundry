@@ -1674,6 +1674,11 @@ design against another made from the same art, here or in another program, or tw
 design, before sewing both (`embroidery.compare {a, b}`; each side `"design"`, `{path}` or
 `{dataBase64, name}`).
 
+**One over the Other** draws both on one picture instead: at the same scale, centred on each
+other, the first design in blue and the second in red, so a part one of them leaves out, a fill
+that goes the other way or a design that came out larger shows at a glance
+(`ui.compareDesigns {overlay: true}`).
+
 ## Embroidery fonts
 
 Lettering can use embroidery fonts in Ink/Stitch's font format: a folder with `font.json` and

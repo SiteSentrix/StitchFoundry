@@ -5841,3 +5841,6 @@ machine	Stop	정지
 	Backstitch Lines	되박음질 선
 	Backstitch lines	되박음질 선
 	Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away	칸의 모서리에서 모서리로 드래그하면 되박음질 선을 그립니다. Alt 키를 누른 채 선을 클릭하면 지웁니다
+	Side by Side	나란히
+	One over the Other	겹쳐서
+	The first design in blue, the second in red, at the same scale and centred on each other	첫 번째 디자인은 파란색, 두 번째는 빨간색으로, 같은 비율로 가운데를 맞춰 겹칩니다

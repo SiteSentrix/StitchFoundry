@@ -1,6 +1,7 @@
 //! Compare Designs (CMP-01): two designs side by side, each a machine file or the design open
 //! now: a picture of each and their figures (`embroidery.compare`), with how much the second
-//! differs from the first.
+//! differs from the first. Overlay draws the two on one picture at the same scale, centred on
+//! each other, the first in blue and the second in red, so where they differ shows.
 
 use serde_json::{Value, json};
 
@@ -31,11 +32,13 @@ pub struct CompareState {
     pub open: bool,
     pub a: Option<Side>,
     pub b: Option<Side>,
+    /// Both designs on one picture instead of side by side.
+    pub overlay: bool,
     /// The comparison of `a` and `b`, or why there is none; worked out when either changes.
     result: Option<Result<Value, String>>,
 }
 
-/// `ui.compareDesigns {a?, b?}`: opens the window, a side each as `"design"` or a path.
+/// `ui.compareDesigns {a?, b?, overlay?}`: opens the window, a side each as `"design"` or a path.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let side = |v: &Value| match v {
         Value::String(s) if s == "design" => Some(Side::Design),
@@ -44,6 +47,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let st = &mut app.embroidery.compare;
     st.open = true;
+    if let Some(o) = p.get("overlay").and_then(Value::as_bool) {
+        st.overlay = o;
+    }
     if let Some(a) = p.get("a").and_then(side) {
         st.a = Some(a);
         st.result = None;
@@ -71,6 +77,54 @@ fn refresh(app: &mut VectorcraftApp) {
     app.embroidery.compare.result = Some(r);
 }
 
+/// The colours the overlay draws the first and the second design in.
+const OVERLAY: [egui::Color32; 2] = [egui::Color32::from_rgb(31, 111, 235), egui::Color32::from_rgb(214, 48, 49)];
+
+/// A design's preview runs (mm from its top left), `k` points a millimetre from `off`, in their
+/// thread colours or all in `color`.
+fn draw_runs(painter: &egui::Painter, figures: &Value, off: egui::Pos2, k: f32, color: Option<egui::Color32>) {
+    for block in figures["preview"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        let c = block["color"]
+            .as_str()
+            .and_then(vectorcraft_embroidery::sf_core::Rgb::from_hex)
+            .unwrap_or(vectorcraft_embroidery::sf_core::Rgb::new(0, 0, 0));
+        let stroke = egui::Stroke::new(1.0, color.unwrap_or(egui::Color32::from_rgb(c.r, c.g, c.b)));
+        for run in block["runs"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            let pts: Vec<egui::Pos2> = run
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|q| Some(off + egui::vec2(q.get(0)?.as_f64()? as f32 * k, q.get(1)?.as_f64()? as f32 * k)))
+                .collect();
+            if pts.len() >= 2 {
+                painter.add(egui::Shape::line(pts, stroke));
+            }
+        }
+    }
+}
+
+/// Both designs on one picture `size` across: the same scale, centred on each other, the first
+/// in blue and the second in red (half see-through, so both show where they cross).
+fn overlay(ui: &mut egui::Ui, a: &Value, b: &Value, size: egui::Vec2) {
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let t = Tokens::get(ui.ctx());
+    ui.painter().rect_filled(rect, 4.0, egui::Color32::from_rgb(250, 248, 242));
+    ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+    let dims = |f: &Value| (f["widthMm"].as_f64().unwrap_or(0.0), f["heightMm"].as_f64().unwrap_or(0.0));
+    let ((wa, ha), (wb, hb)) = (dims(a), dims(b));
+    let (w, h) = (wa.max(wb), ha.max(hb));
+    if !(w > 0.0 && h > 0.0) {
+        return;
+    }
+    let inner = rect.shrink(10.0);
+    let k = (f64::from(inner.width()) / w).min(f64::from(inner.height()) / h) as f32;
+    for (f, (fw, fh), color) in [(a, (wa, ha), OVERLAY[0]), (b, (wb, hb), OVERLAY[1])] {
+        let off = inner.center() - egui::vec2(fw as f32 * k, fh as f32 * k) * 0.5;
+        draw_runs(ui.painter(), f, off, k, Some(color.gamma_multiply(0.6)));
+    }
+}
+
 /// A design's picture: its preview runs (mm from its top left) fitted into `rect`.
 fn picture(ui: &mut egui::Ui, figures: &Value, size: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
@@ -93,25 +147,7 @@ fn picture(ui: &mut egui::Ui, figures: &Value, size: f32) {
     let inner = rect.shrink(8.0);
     let k = (f64::from(inner.width()) / w).min(f64::from(inner.height()) / h) as f32;
     let off = inner.center() - egui::vec2(w as f32 * k, h as f32 * k) * 0.5;
-    for block in figures["preview"].as_array().map(Vec::as_slice).unwrap_or_default() {
-        let c = block["color"]
-            .as_str()
-            .and_then(vectorcraft_embroidery::sf_core::Rgb::from_hex)
-            .unwrap_or(vectorcraft_embroidery::sf_core::Rgb::new(0, 0, 0));
-        let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(c.r, c.g, c.b));
-        for run in block["runs"].as_array().map(Vec::as_slice).unwrap_or_default() {
-            let pts: Vec<egui::Pos2> = run
-                .as_array()
-                .map(Vec::as_slice)
-                .unwrap_or_default()
-                .iter()
-                .filter_map(|q| Some(off + egui::vec2(q.get(0)?.as_f64()? as f32 * k, q.get(1)?.as_f64()? as f32 * k)))
-                .collect();
-            if pts.len() >= 2 {
-                ui.painter().add(egui::Shape::line(pts, stroke));
-            }
-        }
-    }
+    draw_runs(ui.painter(), figures, off, k, None);
 }
 
 /// The figure `key`'s row label.
@@ -144,8 +180,17 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let has_design = app.session.embroidery_plan().is_some_and(|p| !p.is_empty());
     egui::Window::new(tl!("Compare Designs")).open(&mut open).collapsible(false).default_size([620.0, 640.0]).show(ctx, |ui| {
         let t = Tokens::get(ui.ctx());
+        let both = app.embroidery.compare.result.as_ref().is_some_and(Result::is_ok);
+        if both {
+            ui.horizontal(|ui| {
+                let o = &mut app.embroidery.compare.overlay;
+                ui.selectable_value(o, false, tl!("Side by Side"));
+                ui.selectable_value(o, true, tl!("One over the Other"));
+            });
+        }
         let st = &app.embroidery.compare;
         let result = st.result.as_ref();
+        let overlaid = st.overlay && both;
         ui.columns(2, |cols| {
             for (k, col) in cols.iter_mut().enumerate() {
                 let first = k == 0;
@@ -165,8 +210,13 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         col.label(egui::RichText::new(tl!("Choose a machine file or the design open now")).color(t.text_dim));
                     }
                     (Some(_), Some(f)) => {
-                        col.label(f["name"].as_str().unwrap_or_default());
-                        picture(col, f, 240.0);
+                        if overlaid {
+                            // its colour in the overlay below
+                            col.label(egui::RichText::new(format!("■ {}", f["name"].as_str().unwrap_or_default())).color(OVERLAY[k]));
+                        } else {
+                            col.label(f["name"].as_str().unwrap_or_default());
+                            picture(col, f, 240.0);
+                        }
                     }
                     (Some(Side::File(p)), None) => {
                         col.label(p.as_str());
@@ -177,6 +227,15 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             }
         });
+        if overlaid && let Some(Ok(v)) = result {
+            let w = ui.available_width().min(520.0);
+            overlay(ui, &v["a"], &v["b"], egui::vec2(w, w * 0.75));
+            ui.label(
+                egui::RichText::new(tl!("The first design in blue, the second in red, at the same scale and centred on each other"))
+                    .size(11.0)
+                    .color(t.text_dim),
+            );
+        }
         ui.separator();
         match result {
             None => {
@@ -280,6 +339,29 @@ mod tests {
         let res = &r["result"];
         assert_eq!(res["a"]["name"], "first.dst");
         assert!(res["b"]["stitches"].as_u64() > res["a"]["stitches"].as_u64());
+        // overlaid: the window draws one picture of both
+        app.run("ui.compareDesigns", json!({"overlay": true})).unwrap();
+        assert!(app.embroidery.compare.overlay);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut texts = Vec::new();
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() },
+                |ui| show(&mut app, &ui.ctx().clone()),
+            );
+            out.textures_delta.clear();
+            fn walk(s: &egui::Shape, into: &mut Vec<String>) {
+                match s {
+                    egui::Shape::Text(t) => into.push(t.galley.text().to_string()),
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, into)),
+                    _ => {}
+                }
+            }
+            texts.clear();
+            out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        }
+        assert!(texts.iter().any(|t| t == "One over the Other") && texts.iter().any(|t| t == "■ first.dst"), "{texts:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
