@@ -879,7 +879,8 @@ mod ask_about_embroidery {
     fn the_web_sends_through_the_browser() {
         let sent: Sent = Arc::default();
         let log = sent.clone();
-        let later: std::rc::Rc<std::cell::RefCell<Vec<Box<dyn FnOnce(Result<(u16, String), String>)>>>> = Default::default();
+        type Done = Box<dyn FnOnce(Result<(u16, String), String>)>;
+        let later: std::rc::Rc<std::cell::RefCell<Vec<Done>>> = Default::default();
         let queue = later.clone();
         let keys = Keys::default();
         let services = Services {
