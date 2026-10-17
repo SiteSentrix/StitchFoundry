@@ -12,7 +12,7 @@ use kurbo::BezPath;
 use serde_json::{Value, json};
 use sf_core::Rgb;
 use sf_core::attr::{Embroidery, StitchType};
-use sf_core::model::{CrossStyle, FillKind, FillParams, FillUnderlay};
+use sf_core::model::{CrossStyle, FillKind, FillParams, FillUnderlay, RunKind, RunParams};
 use sf_core::threads::Thread;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, ObjectAttributes};
@@ -30,6 +30,13 @@ const GRID_KEY: &str = "crossStitchGrid";
 const COLOR_KEY: &str = "crossStitchColor";
 /// The data key holding one colour's cells: runs `row,col,count` apart by spaces.
 const CELLS_KEY: &str = "crossStitchCells";
+/// The data key marking one colour's backstitch lines: its colour `#rrggbb`.
+const BACK_KEY: &str = "crossStitchBack";
+/// The data key holding one colour's backstitch lines: `col,row,col,row` from corner to corner
+/// of the grid, apart by spaces.
+const LINES_KEY: &str = "crossStitchLines";
+/// Most backstitch lines in one pattern.
+const MAX_LINES: usize = 20_000;
 /// Most cells along a side.
 const MAX_SIDE: u32 = 300;
 /// Cell sizes (mm): the X stitches' side.
@@ -98,11 +105,20 @@ pub fn specs() -> Vec<CommandSpec> {
             replace
         ),
         cmd!(
+            "embroidery.crossStitch.backstitch",
+            "Backstitch Lines",
+            [],
+            None,
+            "{id?: the pattern (default: the selected one, else the one under `at`), at?: [[x, y], [x, y]] points (a line's two ends, each taken to the nearest grid corner) | from?: [col, row], to?: [col, row] (grid corners, 0 to cols and rows), color?: \"#rrggbb\" (needed unless erasing), erase?: bool (with `at` [[x, y]]: the lines passing within half a square of the point go)} a backstitch line from corner to corner of the grid, straight or slanted, sewn over the crosses as a running stitch in its thread, or lines taken away → {id, lines}",
+            has_doc,
+            backstitch
+        ),
+        cmd!(
             query "embroidery.crossStitch.info",
             "Cross-Stitch Pattern Info",
             [],
             None,
-            "{id?: the pattern (the selected one)} → {id, cols, rows, cell (mm), count (stitches an inch), style, size: [w, h] mm, colors: [{color, name, code, cells}]} (colours in sewing order)",
+            "{id?: the pattern (the selected one)} → {id, cols, rows, cell (mm), count (stitches an inch), style, size: [w, h] mm, colors: [{color, name, code, cells}], backstitch: [{color, name, code, lines}]} (colours in sewing order)",
             has_doc,
             info
         ),
@@ -125,6 +141,9 @@ pub(super) struct Pattern {
     pub(super) cells: Vec<Option<usize>>,
     /// The colours whose cells changed since the pattern was read (their objects are rebuilt).
     dirty: Vec<bool>,
+    /// Backstitch: each colour's lines from grid corner to grid corner (`[col, row, col, row]`,
+    /// the smaller corner first), sewn after the crosses, over them.
+    pub(super) backs: Vec<(Option<NodeId>, Rgb, Option<Thread>, Vec<[u32; 4]>)>,
 }
 
 pub(super) fn style_name(s: CrossStyle) -> &'static str {
@@ -259,8 +278,25 @@ impl Pattern {
             colors: Vec::new(),
             cells: vec![None; cols as usize * rows as usize],
             dirty: Vec::new(),
+            backs: Vec::new(),
         };
         for c in children.iter() {
+            if let Some(color) = data(c, BACK_KEY).and_then(rgb_of) {
+                let mut lines = Vec::new();
+                for l in data(c, LINES_KEY).unwrap_or_default().split_whitespace() {
+                    let v: Vec<u32> = l.split(',').filter_map(|v| v.parse().ok()).collect();
+                    if let [c0, r0, c1, r1] = v[..]
+                        && c0.max(c1) <= cols
+                        && r0.max(r1) <= rows
+                        && lines.len() < MAX_LINES
+                    {
+                        lines.push(line(c0, r0, c1, r1));
+                    }
+                }
+                let thread = c.embroidery.as_deref().and_then(|e| e.thread.clone());
+                pattern.backs.push((Some(c.id), color, thread, lines));
+                continue;
+            }
             let Some(color) = data(c, COLOR_KEY).and_then(rgb_of) else { continue };
             if pattern.colors.len() >= MAX_COLORS {
                 break;
@@ -469,6 +505,52 @@ impl Pattern {
         Some(node)
     }
 
+    /// Grid corner `(col, row)` in document points.
+    pub(super) fn corner(&self, c: u32, r: u32) -> kurbo::Point {
+        kurbo::Point::new(self.origin.x + f64::from(c) * self.cell, self.origin.y + f64::from(r) * self.cell)
+    }
+
+    /// The grid corner nearest document point `q`, if it is on (or by) the grid.
+    fn corner_at(&self, q: kurbo::Point) -> Option<(u32, u32)> {
+        let c = ((q.x - self.origin.x) / self.cell).round();
+        let r = ((q.y - self.origin.y) / self.cell).round();
+        (c.is_finite() && r.is_finite() && c >= 0.0 && r >= 0.0 && c <= f64::from(self.cols) && r <= f64::from(self.rows))
+            .then_some((c as u32, r as u32))
+    }
+
+    /// Backstitch colour `k`'s object: its lines joined where they meet, sewn as a running stitch
+    /// a square long (its needle points on the grid's corners) in its thread.
+    fn back_node(&self, k: usize) -> Option<Node> {
+        let (_, color, thread, lines) = self.backs.get(k)?;
+        if lines.is_empty() {
+            return None;
+        }
+        let mut bp = BezPath::new();
+        for chain in chains(lines) {
+            for (i, (c, r)) in chain.iter().enumerate() {
+                let p = self.corner(*c, *r);
+                if i == 0 {
+                    bp.move_to(p);
+                } else {
+                    bp.line_to(p);
+                }
+            }
+        }
+        let paint = Paint::solid(Color::rgb8(color.r, color.g, color.b));
+        let mut node = Node::path(NodeId(0), PathData::from_bezpath(&bp), Appearance::basic(Paint::None, paint, 1.0));
+        // a hair over a square, so a line of whole squares splits into exactly that many stitches
+        let run = RunParams { kind: RunKind::Single, stitch_length: self.cell_mm() * 1.001, ..RunParams::default() };
+        let mut e = Embroidery::new(StitchType::Run(run));
+        e.auto_direction = false;
+        e.thread = Some(thread.clone().unwrap_or_else(|| Thread::new(*color, "")));
+        node.embroidery = Some(Box::new(e));
+        node.name = Some(format!("Backstitch {}", color.to_hex()));
+        with_data(&mut node, BACK_KEY, color.to_hex());
+        let list: Vec<String> = lines.iter().map(|l| format!("{},{},{},{}", l[0], l[1], l[2], l[3])).collect();
+        with_data(&mut node, LINES_KEY, list.join(" "));
+        Some(node)
+    }
+
     fn grid_node(&self) -> Node {
         let stroke = Paint::solid(Color::rgb8(GRID_COLOR[0], GRID_COLOR[1], GRID_COLOR[2]));
         let mut n = Node::path(NodeId(0), PathData::from_bezpath(&self.grid_path()), Appearance::basic(Paint::None, stroke, 0.25));
@@ -492,7 +574,7 @@ impl Pattern {
         grid.id = old.iter().find(|c| data(c, GRID_KEY).is_some()).map_or_else(|| d.alloc_id(), |c| c.id);
         kids.push(Arc::new(grid));
         for c in &old {
-            if data(c, GRID_KEY).is_none() && data(c, COLOR_KEY).is_none() {
+            if data(c, GRID_KEY).is_none() && data(c, COLOR_KEY).is_none() && data(c, BACK_KEY).is_none() {
                 kids.push(c.clone());
             }
         }
@@ -519,6 +601,21 @@ impl Pattern {
             }
             kids.push(Arc::new(n));
         }
+        // backstitch last: sewn over the crosses
+        for k in 0..self.backs.len() {
+            let Some(mut n) = self.back_node(k) else { continue };
+            let before = self.backs.get(k).and_then(|b| b.0).and_then(|id| old.iter().find(|o| o.id == id));
+            match before {
+                Some(o) => {
+                    n.id = o.id;
+                    n.visible = o.visible;
+                    n.locked = o.locked;
+                    n.name = o.name.clone().or(n.name);
+                }
+                None => n.id = d.alloc_id(),
+            }
+            kids.push(Arc::new(n));
+        }
         let header = self.header();
         let g = d.node_mut(self.group).ok_or(EngineError::NoNode(self.group))?;
         with_data(g, PATTERN_KEY, header);
@@ -527,6 +624,30 @@ impl Pattern {
         }
         Ok(())
     }
+}
+
+/// A backstitch line from corner to corner, the smaller corner first (so a line drawn either way is
+/// the same line).
+fn line(c0: u32, r0: u32, c1: u32, r1: u32) -> [u32; 4] {
+    if (r0, c0) <= (r1, c1) { [c0, r0, c1, r1] } else { [c1, r1, c0, r0] }
+}
+
+/// `lines` joined into chains of corners where they meet end to end, so each chain sews in one go.
+fn chains(lines: &[[u32; 4]]) -> Vec<Vec<(u32, u32)>> {
+    let mut left: Vec<[u32; 4]> = lines.to_vec();
+    let mut out = Vec::new();
+    while let Some(first) = left.pop() {
+        let mut chain = vec![(first[0], first[1]), (first[2], first[3])];
+        // grow the chain at its end while a line starts or ends there
+        loop {
+            let Some(&end) = chain.last() else { break };
+            let Some(i) = left.iter().position(|l| (l[0], l[1]) == end || (l[2], l[3]) == end) else { break };
+            let l = left.swap_remove(i);
+            chain.push(if (l[0], l[1]) == end { (l[2], l[3]) } else { (l[0], l[1]) });
+        }
+        out.push(chain);
+    }
+    out
 }
 
 /// The page's centre (points).
@@ -578,6 +699,7 @@ fn new_pattern(s: &mut Session, p: &Value) -> Result<Value> {
             colors: Vec::new(),
             cells: vec![None; cols as usize * rows as usize],
             dirty: Vec::new(),
+            backs: Vec::new(),
         };
         new_group(d, sel, &mut pattern, "Cross Stitch", (parent, usize::MAX))
     })?;
@@ -767,7 +889,7 @@ fn from_image(s: &mut Session, p: &Value) -> Result<Value> {
         .collect();
     let cells: Vec<Option<usize>> = cells.into_iter().map(|c| c.and_then(|i| rank.get(i).copied())).collect();
     let dirty = vec![true; colors.len()];
-    let mut pattern = Pattern { group: NodeId(0), cols, rows, style, origin, cell, colors, cells, dirty };
+    let mut pattern = Pattern { group: NodeId(0), cols, rows, style, origin, cell, colors, cells, dirty, backs: Vec::new() };
     if pattern.cells.iter().all(Option::is_none) {
         return Err(bad(CMD, "the image is all background: try `background: true`"));
     }
@@ -900,6 +1022,90 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": group.0, "cells": changed }))
 }
 
+fn backstitch(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.crossStitch.backstitch";
+    let erase = bool_or(p, "erase", false);
+    let color = paint_color(p, "color", CMD)?;
+    let at: Vec<kurbo::Point> = match p.get("at") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(list)) if list.len() <= 2 => {
+            list.iter().map(|v| point(v).ok_or_else(|| bad(CMD, "`at` is [[x, y], [x, y]] in points"))).collect::<Result<_>>()?
+        }
+        Some(_) => return Err(bad(CMD, "`at` is [[x, y], [x, y]] in points")),
+    };
+    let corner = |key: &str| -> Result<Option<(u32, u32)>> {
+        match p.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => {
+                let c = v.get(0).and_then(Value::as_u64).and_then(|c| u32::try_from(c).ok());
+                let r = v.get(1).and_then(Value::as_u64).and_then(|r| u32::try_from(r).ok());
+                Ok(Some(c.zip(r).ok_or_else(|| bad(CMD, format!("`{key}` is [col, row]")))?))
+            }
+        }
+    };
+    let (from, to) = (corner("from")?, corner("to")?);
+    let d = &s.doc()?.doc;
+    let group = chosen(s, p)
+        .or_else(|| {
+            at.first().and_then(|q| all_patterns(d).into_iter().find(|g| Pattern::read(d, *g).is_some_and(|pat| pat.corner_at(*q).is_some())))
+        })
+        .ok_or_else(|| bad(CMD, "draw on a cross-stitch pattern (Embroidery › Cross Stitch › New Cross-Stitch Pattern)"))?;
+    let mut pattern = Pattern::read(d, group).ok_or_else(|| bad(CMD, "that cross-stitch pattern can't be read"))?;
+    let off = || bad(CMD, "the line's ends are off the pattern's grid");
+    if erase {
+        let q = at.first().copied().ok_or_else(|| bad(CMD, "give the point to erase at: `at` [[x, y]]"))?;
+        let mut gone = 0usize;
+        let reach = pattern.cell * 0.5;
+        for (_, _, _, lines) in &mut pattern.backs {
+            let before = lines.len();
+            let origin = pattern.origin;
+            let cell = pattern.cell;
+            let pt = |c: u32, r: u32| kurbo::Point::new(origin.x + f64::from(c) * cell, origin.y + f64::from(r) * cell);
+            lines
+                .retain(|l| kurbo::ParamCurveNearest::nearest(&kurbo::Line::new(pt(l[0], l[1]), pt(l[2], l[3])), q, 1e-9).distance_sq.sqrt() > reach);
+            gone += before - lines.len();
+        }
+        if gone > 0 {
+            s.edit("Erase Backstitch", |d, _| pattern.write(d, false))?;
+        }
+        return Ok(json!({ "id": group.0, "lines": gone }));
+    }
+    let (a, b) = match (from, to, at.as_slice()) {
+        (Some(a), Some(b), _) => (a, b),
+        (_, _, [qa, qb]) => (pattern.corner_at(*qa).ok_or_else(off)?, pattern.corner_at(*qb).ok_or_else(off)?),
+        _ => return Err(bad(CMD, "give the line's ends: `from` and `to`, or `at` [[x, y], [x, y]]")),
+    };
+    if a.0 > pattern.cols || b.0 > pattern.cols || a.1 > pattern.rows || b.1 > pattern.rows {
+        return Err(off());
+    }
+    if a == b {
+        return Ok(json!({ "id": group.0, "lines": 0 }));
+    }
+    let Some(color) = color else { return Err(bad(CMD, "give the `color` to sew the line in")) };
+    let total: usize = pattern.backs.iter().map(|b| b.3.len()).sum();
+    if total >= MAX_LINES {
+        return Err(bad(CMD, format!("a pattern has at most {MAX_LINES} backstitch lines")));
+    }
+    let l = line(a.0, a.1, b.0, b.1);
+    // a line drawn again in another colour changes colour
+    for b in &mut pattern.backs {
+        b.3.retain(|x| *x != l);
+    }
+    let k = match pattern.backs.iter().position(|b| b.1 == color) {
+        Some(k) => k,
+        None => {
+            let thread = nearest_thread(s, color);
+            pattern.backs.push((None, color, Some(thread), Vec::new()));
+            pattern.backs.len() - 1
+        }
+    };
+    if let Some(b) = pattern.backs.get_mut(k) {
+        b.3.push(l);
+    }
+    s.edit("Backstitch Line", |d, _| pattern.write(d, false))?;
+    Ok(json!({ "id": group.0, "lines": 1 }))
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.crossStitch.info";
     let group = chosen(s, p).ok_or_else(|| bad(CMD, "select a cross-stitch pattern"))?;
@@ -914,9 +1120,18 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             json!({ "color": c.to_hex(), "name": t.as_ref().map_or("", |t| t.name.as_str()), "code": t.as_ref().map_or("", |t| t.code.as_str()), "cells": n })
         })
         .collect();
+    let back: Vec<Value> = pattern
+        .backs
+        .iter()
+        .filter(|b| !b.3.is_empty())
+        .map(|(_, c, t, lines)| {
+            json!({ "color": c.to_hex(), "name": t.as_ref().map_or("", |t| t.name.as_str()), "code": t.as_ref().map_or("", |t| t.code.as_str()), "lines": lines.len() })
+        })
+        .collect();
     let cell = pattern.cell_mm();
     Ok(json!({
         "id": group.0,
+        "backstitch": back,
         "cols": pattern.cols,
         "rows": pattern.rows,
         "cell": cell,
@@ -1179,5 +1394,79 @@ mod tests {
         let info = s.execute("embroidery.crossStitch.info", &json!({})).unwrap();
         assert_eq!(info["count"], 11.0);
         assert!(s.execute("embroidery.crossStitch.set", &json!({"count": 40})).is_err());
+    }
+
+    /// CH-05: backstitch lines from grid corner to corner, joined where they meet, sewn as a run
+    /// over the crosses with its needle on the corners; drawn again in another colour they change
+    /// colour, and an erase near a line takes it away.
+    #[test]
+    fn backstitch_lines_run_from_corner_to_corner_over_the_crosses() {
+        let mut s = session();
+        let id = s.execute("embroidery.crossStitch.new", &json!({"cols": 10, "rows": 10, "cell": 3, "at": [72, 72]})).unwrap()["id"].clone();
+        s.execute("embroidery.crossStitch.paint", &json!({"cells": [[1, 1], [2, 1]], "color": "#cccc00"})).unwrap();
+        s.execute("embroidery.crossStitch.backstitch", &json!({"from": [0, 0], "to": [3, 0], "color": "#202020"})).unwrap();
+        s.execute("embroidery.crossStitch.backstitch", &json!({"from": [3, 3], "to": [3, 0], "color": "#202020"})).unwrap();
+        // by points near the corners
+        let cell = 3.0 * PT_PER_MM;
+        let near = |c: f64, r: f64| json!([72.0 + c * cell + 1.0, 72.0 + r * cell - 1.0]);
+        s.execute("embroidery.crossStitch.backstitch", &json!({"id": id, "at": [near(5.0, 5.0), near(7.0, 6.0)], "color": "#0000aa"})).unwrap();
+        let info = s.execute("embroidery.crossStitch.info", &json!({})).unwrap();
+        let lines: Vec<(String, u64)> =
+            info["backstitch"].as_array().unwrap().iter().map(|b| (b["color"].as_str().unwrap().to_string(), b["lines"].as_u64().unwrap())).collect();
+        assert_eq!(lines, [("#202020".to_string(), 2), ("#0000aa".to_string(), 1)]);
+        // the backstitch sews last, its needle on the corners: (0,0) (1,0) (2,0) (3,0) … (3,3)
+        let plan = s.embroidery_plan().unwrap();
+        let st = s.doc().unwrap();
+        let last = plan.nodes.last().and_then(|n| st.doc.node(*n)).unwrap();
+        assert!(last.name.as_deref().unwrap_or_default().starts_with("Backstitch"), "{:?}", last.name);
+        let pts = needle_points(&s);
+        let mm = 72.0 * MM_PER_PT;
+        for (c, r) in [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0), (3.0, 1.0), (3.0, 2.0), (3.0, 3.0)] {
+            let want = sf_core::Point::new(mm + c * 3.0, mm + r * 3.0);
+            assert!(pts.iter().any(|p| p.distance(want) < 0.05), "a needle point on corner ({c}, {r})");
+        }
+        // the same line in another colour moves to it
+        s.execute("embroidery.crossStitch.backstitch", &json!({"from": [3, 0], "to": [0, 0], "color": "#0000aa"})).unwrap();
+        let info = s.execute("embroidery.crossStitch.info", &json!({})).unwrap();
+        assert_eq!(info["backstitch"][0]["lines"], 1);
+        assert_eq!(info["backstitch"][1]["lines"], 2);
+        // erasing near the slanted line takes only it away; Undo brings it back
+        let mid = json!([72.0 + 6.0 * cell, 72.0 + 5.5 * cell]);
+        let r = s.execute("embroidery.crossStitch.backstitch", &json!({"at": [mid], "erase": true})).unwrap();
+        assert_eq!(r["lines"], 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.execute("embroidery.crossStitch.info", &json!({})).unwrap()["backstitch"][1]["lines"], 2);
+        // off the grid, and nothing to draw with
+        assert!(s.execute("embroidery.crossStitch.backstitch", &json!({"from": [0, 0], "to": [11, 0], "color": "#000000"})).is_err());
+        assert!(s.execute("embroidery.crossStitch.backstitch", &json!({"from": [0, 0], "to": [1, 0]})).is_err());
+        // the cell size changes: the lines stay on their corners
+        s.execute("embroidery.crossStitch.set", &json!({"cell": 4})).unwrap();
+        let pts = needle_points(&s);
+        assert!(pts.iter().any(|p| p.distance(sf_core::Point::new(mm + 12.0, mm + 12.0)) < 0.05), "corner (3, 3) at 4 mm squares");
+    }
+
+    /// The Cross Stitch tool's Backstitch: a drag draws a line between the corners nearest its ends,
+    /// an Alt-click takes it away.
+    #[test]
+    fn the_tool_draws_backstitch_by_dragging() {
+        use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+        let mut s = session();
+        s.execute("embroidery.crossStitch.new", &json!({"cols": 8, "rows": 8, "cell": 4, "at": [100, 100]})).unwrap();
+        let v = crate::ViewInfo::default();
+        s.select_tool("embroideryCrossStitch", v).unwrap();
+        s.set_tool_options(Some("embroideryCrossStitch"), json!({"line": true, "color": "#112233"}).as_object().unwrap());
+        let cell = 4.0 * PT_PER_MM;
+        let at = |c: f64, r: f64, alt: bool| {
+            PointerEvent::new(PointerKind::Down, 100.0 + c * cell, 100.0 + r * cell).with_mods(Mods { alt, ..Mods::default() })
+        };
+        let with = |e: PointerEvent, kind| PointerEvent { kind, ..e };
+        s.pointer(&at(1.1, 1.0, false), v).unwrap();
+        s.pointer(&with(at(3.0, 2.0, false), PointerKind::Drag), v).unwrap();
+        s.pointer(&with(at(4.9, 4.1, false), PointerKind::Up), v).unwrap();
+        let lines = |s: &mut Session| s.execute("embroidery.crossStitch.info", &json!({})).unwrap()["backstitch"].as_array().map_or(0, Vec::len);
+        assert_eq!(lines(&mut s), 1, "one line, (1,1) to (5,4)");
+        s.pointer(&at(3.0, 2.5, true), v).unwrap();
+        s.pointer(&with(at(3.0, 2.5, true), PointerKind::Up), v).unwrap();
+        assert_eq!(lines(&mut s), 0);
     }
 }

@@ -849,12 +849,16 @@ impl Tool for ClickStitchTool {
 /// Cross Stitch tool: paint a cross-stitch pattern's cells by clicking or dragging over its grid
 /// (`embroidery.crossStitch.paint`), in the tool's colour; with `erase` on, or Alt held, the
 /// cells are cleared instead. A whole stroke is one step (Undo takes it back). With `fill` on, a
-/// click fills the patch of touching squares alike instead (`embroidery.crossStitch.fill`).
-/// Options: `color` (`#rrggbb`), `erase`, `fill` and `size` (a square brush, 1 to 9 cells).
+/// click fills the patch of touching squares alike instead (`embroidery.crossStitch.fill`); with
+/// `line` on, a drag draws a backstitch line from grid corner to grid corner, and an Alt-click
+/// takes the lines there away (`embroidery.crossStitch.backstitch`). Options: `color`
+/// (`#rrggbb`), `erase`, `fill`, `line` and `size` (a square brush, 1 to 9 cells).
 pub struct CrossStitchTool {
     pub color: String,
     pub erase: bool,
     pub fill: bool,
+    pub line: bool,
+    line_start: Option<Point>,
     pub size: u8,
     stroke: Vec<Point>,
     erasing: bool,
@@ -862,7 +866,16 @@ pub struct CrossStitchTool {
 
 impl Default for CrossStitchTool {
     fn default() -> Self {
-        CrossStitchTool { color: "#c0392b".into(), erase: false, fill: false, size: 1, stroke: Vec::new(), erasing: false }
+        CrossStitchTool {
+            color: "#c0392b".into(),
+            erase: false,
+            fill: false,
+            line: false,
+            line_start: None,
+            size: 1,
+            stroke: Vec::new(),
+            erasing: false,
+        }
     }
 }
 
@@ -887,7 +900,25 @@ impl Tool for CrossStitchTool {
 
     fn pointer(&mut self, _cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         const CMD: &str = "embroidery.crossStitch.paint";
+        const LINE: &str = "embroidery.crossStitch.backstitch";
+        let line = |start: Point, end: Point, color: &str| json!({ "at": [[start.x, start.y], [end.x, end.y]], "color": color });
         match ev.kind {
+            PointerKind::Down if self.line && (self.erase || ev.mods.alt) => {
+                let p = json!({ "at": [[ev.pos.x, ev.pos.y]], "erase": true });
+                vec![Action::Begin("Erase Backstitch".into()), Action::Preview(LINE.into(), p), Action::Commit]
+            }
+            PointerKind::Down if self.line => {
+                self.line_start = Some(ev.pos);
+                vec![Action::Begin("Backstitch Line".into()), Action::Preview(LINE.into(), line(ev.pos, ev.pos, &self.color))]
+            }
+            PointerKind::Drag if self.line_start.is_some() => match self.line_start {
+                Some(start) => vec![Action::Preview(LINE.into(), line(start, ev.pos, &self.color))],
+                None => vec![],
+            },
+            PointerKind::Up if self.line_start.is_some() => match self.line_start.take() {
+                Some(start) => vec![Action::Preview(LINE.into(), line(start, ev.pos, &self.color)), Action::Commit],
+                None => vec![],
+            },
             PointerKind::Down if self.fill => {
                 let erasing = self.erase || ev.mods.alt;
                 let mut p = json!({ "at": [ev.pos.x, ev.pos.y], "erase": erasing });
@@ -922,8 +953,9 @@ impl Tool for CrossStitchTool {
     }
 
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
-        if key == ToolKey::Escape && !self.stroke.is_empty() {
+        if key == ToolKey::Escape && (!self.stroke.is_empty() || self.line_start.is_some()) {
             self.stroke.clear();
+            self.line_start = None;
             return vec![Action::Cancel];
         }
         vec![]
@@ -934,7 +966,7 @@ impl Tool for CrossStitchTool {
     }
 
     fn options(&self) -> Value {
-        json!({ "color": self.color, "erase": self.erase, "fill": self.fill, "size": self.size })
+        json!({ "color": self.color, "erase": self.erase, "fill": self.fill, "line": self.line, "size": self.size })
     }
 
     fn set_option(&mut self, key: &str, value: &Value) {
@@ -956,6 +988,11 @@ impl Tool for CrossStitchTool {
                     self.fill = v;
                 }
             }
+            "line" => {
+                if let Some(v) = value.as_bool() {
+                    self.line = v;
+                }
+            }
             "size" => {
                 if let Some(v) = value.as_u64().filter(|v| (1..=9).contains(v)) {
                     self.size = v as u8;
@@ -966,14 +1003,15 @@ impl Tool for CrossStitchTool {
     }
 
     fn busy(&self) -> bool {
-        !self.stroke.is_empty()
+        !self.stroke.is_empty() || self.line_start.is_some()
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        if self.stroke.is_empty() {
+        if self.stroke.is_empty() && self.line_start.is_none() {
             return vec![];
         }
         self.stroke.clear();
+        self.line_start = None;
         vec![Action::Cancel]
     }
 }

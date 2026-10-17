@@ -553,6 +553,12 @@ charted, and sews as X stitches that sit exactly in their squares.
   square touching the one clicked that is like it (all empty, or all one colour, side by side,
   not corner to corner) in the tool's colour, or clear them with Alt
   (`embroidery.crossStitch.fill {at? | cell?, color?, erase?}`): a background filled in one go.
+- **Backstitch lines** (in the Embroidery panel, with the Cross Stitch tool): drag from one corner
+  of the squares to another to draw a backstitch outline, straight or slanted, in the tool's
+  colour; Alt-click a line to take it away (`embroidery.crossStitch.backstitch {from?, to? | at?,
+  color?, erase?}`). Each colour's lines are one object, joined where they meet, sewn last (over
+  the crosses) as a running stitch a square long, so the needle goes in at the corners. A line
+  drawn again in another colour changes colour.
 - **Replace … With the Thread Colour** swaps one colour of the selected pattern for the tool's
   colour everywhere (`embroidery.crossStitch.replace {from, to?, erase?}`); when the pattern has
   that colour already, the two become one.
@@ -576,8 +582,8 @@ charted, and sews as X stitches that sit exactly in their squares.
   chart to stitch from by hand or to check against: a symbol in every square (each colour its
   own; up to 64 told apart by shape and fill) on its colour, heavier lines every 10 squares with
   their numbers along the top and left, as many A4 or Letter pages as it takes (each page says
-  which columns and rows it shows), then a key: each symbol with its colour, thread and number
-  of stitches, and the pattern's size in stitches, as sewn and on 14-count Aida. It opens as a new
+  which columns and rows it shows), backstitch drawn over the squares in its colours, then a key:
+  each symbol with its colour, thread and number of stitches, each backstitch colour and its lines, and the pattern's size in stitches, as sewn and on 14-count Aida. It opens as a new
   document to print or export as PDF; `colors: false` prints black symbols on white to save
   ink.
 

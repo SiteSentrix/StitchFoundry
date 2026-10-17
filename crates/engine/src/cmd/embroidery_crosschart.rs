@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Print Cross-Stitch Chart",
         ["Embroidery", "Cross Stitch"],
         None,
-        "{id?: the pattern (the selected one), page?: a4|letter (a4), square?: pt (10; 6 to 24, a chart square), colors?: bool (true: each square in its thread colour under its symbol; false: black symbols on white, to save ink)} the pattern as a counted chart to stitch from: a symbol a square, heavier lines every 10 squares, numbered, on as many pages as it takes, then a key of the symbols with each thread and its square count; opens as a new document to print or export as PDF → {pages, colors, squares}",
+        "{id?: the pattern (the selected one), page?: a4|letter (a4), square?: pt (10; 6 to 24, a chart square), colors?: bool (true: each square in its thread colour under its symbol; false: black symbols on white, to save ink)} the pattern as a counted chart to stitch from: a symbol a square, heavier lines every 10 squares, numbered, on as many pages as it takes, then a key of the symbols with each thread and its square count; opens as a new document to print or export as PDF; backstitch lines are drawn over the squares in their colours and listed in the key → {pages, colors, squares, backstitch}",
         has_doc,
         chart
     )]
@@ -161,6 +161,47 @@ fn rect_path(bp: &mut BezPath, x0: f64, y0: f64, x1: f64, y1: f64) {
     bp.close_path();
 }
 
+/// A row of the key: a colour of crosses, or of backstitch (indices into the pattern's lists).
+#[derive(Clone, Copy)]
+enum Row {
+    Cross(usize),
+    Back(usize),
+}
+
+/// A thread as the key names it: its chart, number and name, then its colour.
+fn thread_name(rgb: Rgb, thread: Option<&sf_core::threads::Thread>) -> String {
+    match thread {
+        Some(t) if !t.name.is_empty() || !t.code.is_empty() => {
+            let words: Vec<&str> = [t.chart.as_str(), t.code.as_str(), t.name.as_str()].into_iter().filter(|w| !w.is_empty()).collect();
+            format!("{} ({})", words.join(" "), rgb.to_hex())
+        }
+        _ => rgb.to_hex(),
+    }
+}
+
+/// Backstitch line `l` (grid corners) cut to the corners from `lo` to `hi` (Liang–Barsky), if any
+/// of it is there.
+fn clip(l: &[u32; 4], lo: (f64, f64), hi: (f64, f64)) -> Option<((f64, f64), (f64, f64))> {
+    let (x0, y0, x1, y1) = (f64::from(l[0]), f64::from(l[1]), f64::from(l[2]), f64::from(l[3]));
+    let (dx, dy) = (x1 - x0, y1 - y0);
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    for (p, q) in [(-dx, x0 - lo.0), (dx, hi.0 - x0), (-dy, y0 - lo.1), (dy, hi.1 - y0)] {
+        if p == 0.0 {
+            if q < 0.0 {
+                return None;
+            }
+            continue;
+        }
+        let t = q / p;
+        if p < 0.0 {
+            t0 = t0.max(t);
+        } else {
+            t1 = t1.min(t);
+        }
+    }
+    (t1 - t0 > 1e-9).then(|| ((x0 + t0 * dx, y0 + t0 * dy), (x0 + t1 * dx, y0 + t1 * dy)))
+}
+
 fn chart(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.crossStitch.chart";
     let group = chosen(s, p).ok_or_else(|| bad(CMD, "select a cross-stitch pattern"))?;
@@ -182,9 +223,13 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
     let counts = pattern.counts();
     // the colours used, in sewing order; each its symbol
     let used: Vec<usize> = (0..pattern.colors.len()).filter(|k| counts.get(*k).copied().unwrap_or(0) > 0).collect();
-    if used.is_empty() {
+    // the backstitch colours with lines
+    let backs: Vec<usize> = (0..pattern.backs.len()).filter(|b| pattern.backs.get(*b).is_some_and(|b| !b.3.is_empty())).collect();
+    if used.is_empty() && backs.is_empty() {
         return Err(bad(CMD, "the pattern has no squares yet: paint some first"));
     }
+    // the key's rows: the crosses' colours, then the backstitch
+    let rows: Vec<Row> = used.iter().map(|k| Row::Cross(*k)).chain(backs.iter().map(|b| Row::Back(*b))).collect();
     let symbol_of = |k: usize| used.iter().position(|u| *u == k).unwrap_or(0);
     // squares a page holds, and the pages across and down
     let across = (((pw - MARGIN - (MARGIN + LABELS)) / sq).floor() as u32).max(1);
@@ -196,8 +241,8 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
     // a chart of one page has its key under it when there is room
     let under_chart = (chart_pages == 1)
         .then(|| TOP + f64::from(pattern.rows.min(down)) * sq + 44.0)
-        .filter(|y| y + 12.0 + used.len() as f64 * 18.0 <= ph - MARGIN);
-    let key_pages = if under_chart.is_some() { 0 } else { used.len().div_ceil(key_rows) };
+        .filter(|y| y + 12.0 + rows.len() as f64 * 18.0 <= ph - MARGIN);
+    let key_pages = if under_chart.is_some() { 0 } else { rows.len().div_ceil(key_rows) };
     let pages = chart_pages + key_pages;
     if pages > MAX_PAGES {
         return Err(bad(CMD, format!("the chart would take {pages} pages: use larger chart squares or print a smaller pattern")));
@@ -296,11 +341,25 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
             }
             sheet_lines(&mut doc, &thin, light, 0.5)?;
             sheet_lines(&mut doc, &bold, black, 0.9)?;
+            // the backstitch over it, each line cut to the page
+            for &b in &backs {
+                let Some((_, rgb, _, lines)) = pattern.backs.get(b) else { continue };
+                let on_page: Vec<Vec<(f64, f64)>> = lines
+                    .iter()
+                    .filter_map(|l| clip(l, (f64::from(c0), f64::from(r0)), (f64::from(c1), f64::from(r1))))
+                    .map(|((ca, ra), (cb, rb))| {
+                        let at = |c: f64, r: f64| (gx + (c - f64::from(c0)) * sq, gy + (r - f64::from(r0)) * sq);
+                        vec![at(ca, ra), at(cb, rb)]
+                    })
+                    .collect();
+                let ink = if in_color { color(*rgb) } else { black };
+                sheet_lines(&mut doc, &on_page, ink, (sq * 0.2).max(1.2))?;
+            }
             page += 1;
         }
     }
     // the key: symbol, colour, thread, squares
-    let chunks: Vec<&[usize]> = if under_chart.is_some() { vec![used.as_slice()] } else { used.chunks(key_rows).collect() };
+    let chunks: Vec<&[Row]> = if under_chart.is_some() { vec![rows.as_slice()] } else { rows.chunks(key_rows).collect() };
     for (i, chunk) in chunks.into_iter().enumerate() {
         let (x0, top) = match under_chart {
             Some(y) => {
@@ -318,14 +377,25 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
         sheet_text(&mut doc, x0 + MARGIN, top, "Symbol", 8.0, grey)?;
         sheet_text(&mut doc, x0 + MARGIN + 60.0, top, "Thread", 8.0, grey)?;
         sheet_text(&mut doc, x0 + pw - MARGIN - 80.0, top, "Stitches", 8.0, grey)?;
-        for (j, &k) in chunk.iter().enumerate() {
+        for (j, row) in chunk.iter().enumerate() {
             let y = top + 12.0 + j as f64 * 18.0;
+            let (bx, by) = (x0 + MARGIN, y);
+            let k = match *row {
+                Row::Cross(k) => k,
+                Row::Back(b) => {
+                    let Some((_, rgb, thread, lines)) = pattern.backs.get(b) else { continue };
+                    let ink = if in_color { color(*rgb) } else { black };
+                    sheet_lines(&mut doc, &[vec![(bx, by + 7.0), (bx + 50.0, by + 7.0)]], ink, 2.0)?;
+                    sheet_text(&mut doc, bx + 60.0, by + 10.5, &format!("Backstitch: {}", thread_name(*rgb, thread.as_ref())), 9.0, black)?;
+                    sheet_text(&mut doc, x0 + pw - MARGIN - 80.0, by + 10.5, &format!("{} lines", lines.len()), 9.0, black)?;
+                    continue;
+                }
+            };
             let (_, rgb, thread) = match pattern.colors.get(k) {
                 Some(c) => c,
                 None => continue,
             };
             let box_ = 14.0;
-            let (bx, by) = (x0 + MARGIN, y);
             let mut b = BezPath::new();
             rect_path(&mut b, bx, by, bx + box_, by + box_);
             let under = in_color.then_some(*rgb);
@@ -338,23 +408,7 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
             let mut sw = BezPath::new();
             rect_path(&mut sw, bx + 22.0, by, bx + 22.0 + 28.0, by + box_);
             put(&mut doc, &sw, Paint::solid(color(*rgb)), Paint::solid(light), 0.4)?;
-            let name = match thread {
-                Some(t) if !t.name.is_empty() || !t.code.is_empty() => {
-                    let mut n = String::new();
-                    if !t.chart.is_empty() {
-                        n.push_str(&t.chart);
-                        n.push(' ');
-                    }
-                    if !t.code.is_empty() {
-                        n.push_str(&t.code);
-                        n.push(' ');
-                    }
-                    n.push_str(&t.name);
-                    format!("{} ({})", n.trim(), rgb.to_hex())
-                }
-                _ => rgb.to_hex(),
-            };
-            sheet_text(&mut doc, bx + 60.0, by + 10.5, &name, 9.0, black)?;
+            sheet_text(&mut doc, bx + 60.0, by + 10.5, &thread_name(*rgb, thread.as_ref()), 9.0, black)?;
             let n = counts.get(k).copied().unwrap_or(0);
             sheet_text(&mut doc, x0 + pw - MARGIN - 80.0, by + 10.5, &n.to_string(), 9.0, black)?;
         }
@@ -363,12 +417,21 @@ fn chart(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     s.add_document(doc, None);
-    Ok(json!({ "pages": pages, "colors": used.len(), "squares": counts.iter().sum::<usize>() }))
+    let lines: usize = backs.iter().filter_map(|b| pattern.backs.get(*b)).map(|b| b.3.len()).sum();
+    Ok(json!({ "pages": pages, "colors": used.len(), "squares": counts.iter().sum::<usize>(), "backstitch": lines }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backstitch_is_cut_to_each_page() {
+        assert_eq!(clip(&[0, 0, 10, 0], (0.0, 0.0), (5.0, 5.0)), Some(((0.0, 0.0), (5.0, 0.0))));
+        assert_eq!(clip(&[0, 0, 10, 10], (5.0, 0.0), (10.0, 10.0)), Some(((5.0, 5.0), (10.0, 10.0))));
+        assert_eq!(clip(&[0, 8, 4, 8], (5.0, 0.0), (10.0, 10.0)), None);
+        assert_eq!(clip(&[5, 0, 5, 3], (5.0, 0.0), (10.0, 10.0)), Some(((5.0, 0.0), (5.0, 3.0))), "along a page's edge: on both pages");
+    }
 
     #[test]
     fn every_colour_of_a_pattern_has_its_own_symbol() {
@@ -393,9 +456,11 @@ mod tests {
         s.execute("embroidery.crossStitch.new", &json!({"cols": 100, "rows": 30, "cell": 2, "at": [10, 10]})).unwrap();
         s.execute("embroidery.crossStitch.paint", &json!({"cells": [[0, 0], [1, 0], [60, 5]], "color": "#cc0000"})).unwrap();
         s.execute("embroidery.crossStitch.paint", &json!({"cells": [[2, 0], [99, 29]], "color": "#002288"})).unwrap();
+        // backstitch: drawn over the squares, listed in the key with its lines
+        s.execute("embroidery.crossStitch.backstitch", &json!({"from": [0, 0], "to": [90, 20], "color": "#000000"})).unwrap();
         let docs = s.documents().len();
         let r = s.execute("embroidery.crossStitch.chart", &json!({})).unwrap();
-        assert_eq!(r, json!({"pages": 3, "colors": 2, "squares": 5}));
+        assert_eq!(r, json!({"pages": 3, "colors": 2, "squares": 5, "backstitch": 1}));
         assert_eq!(s.documents().len(), docs + 1, "the chart opens as a document of its own");
         let d = &s.doc().unwrap().doc;
         assert_eq!(d.artboards.len(), 3);
@@ -412,6 +477,7 @@ mod tests {
         assert!(texts.iter().any(|t| t.starts_with("Page 1 of 3: columns 1–")), "{texts:?}");
         assert!(texts.iter().any(|t| t.ends_with("Key")), "{texts:?}");
         assert!(texts.iter().any(|t| t == "#cc0000") && texts.iter().any(|t| t == "3"), "the key: each thread and its squares: {texts:?}");
+        assert!(texts.iter().any(|t| t == "Backstitch: #000000") && texts.iter().any(|t| t == "1 lines"), "{texts:?}");
         // a small pattern: one page, its key under the chart
         s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
         s.execute("embroidery.crossStitch.new", &json!({"cols": 20, "rows": 20})).unwrap();

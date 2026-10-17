@@ -1973,16 +1973,28 @@ fn cross_stitch_tool_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_opt(app, "erase", json!(v));
     }
     let filling = opts["fill"].as_bool().unwrap_or(false);
+    let lining = opts["line"].as_bool().unwrap_or(false);
     if let Some(v) = check(ui, tl!("Fill a patch"), filling) {
         set_opt(app, "fill", json!(v));
+        if v {
+            set_opt(app, "line", json!(false));
+        }
     }
-    if !filling {
+    if let Some(v) = check(ui, tl!("Backstitch lines"), lining) {
+        set_opt(app, "line", json!(v));
+        if v {
+            set_opt(app, "fill", json!(false));
+        }
+    }
+    if !filling && !lining {
         let size = opts["size"].as_f64().unwrap_or(1.0);
         if let Some(v) = num(ui, tl!("Brush (squares)"), "cross-size", size, "", 0) {
             set_opt(app, "size", json!(v.clamp(1.0, 9.0).round() as u64));
         }
     }
-    ui.label(if filling {
+    ui.label(if lining {
+        tl!("Drag from corner to corner of the squares to draw a backstitch line; Alt-click a line to take it away")
+    } else if filling {
         tl!("Click a square to fill every touching square like it; hold Alt to clear them")
     } else {
         tl!("Click or drag on a cross-stitch grid to fill its squares; hold Alt to erase")
